@@ -1,0 +1,35 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DateEverythingAccess", "DateEverythingAccess.csproj", "{999DACCC-814B-DAFE-EF6B-68AFF9202F9F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "decompiled", "decompiled", "{025CD755-29FC-D5EE-43B4-AF1FEEC65CD0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Assembly-CSharp", "decompiled\Assembly-CSharp.csproj", "{F19CF8AF-686F-162A-6DE1-28F8A884B637}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{999DACCC-814B-DAFE-EF6B-68AFF9202F9F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{999DACCC-814B-DAFE-EF6B-68AFF9202F9F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{999DACCC-814B-DAFE-EF6B-68AFF9202F9F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{999DACCC-814B-DAFE-EF6B-68AFF9202F9F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F19CF8AF-686F-162A-6DE1-28F8A884B637}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F19CF8AF-686F-162A-6DE1-28F8A884B637}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F19CF8AF-686F-162A-6DE1-28F8A884B637}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F19CF8AF-686F-162A-6DE1-28F8A884B637}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{F19CF8AF-686F-162A-6DE1-28F8A884B637} = {025CD755-29FC-D5EE-43B4-AF1FEEC65CD0}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E91DE5CF-F4BB-4B6A-8399-C1BD13707C73}
+	EndGlobalSection
+EndGlobal
