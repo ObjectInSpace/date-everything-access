@@ -88,6 +88,7 @@
 
 ## Recent Test Results
 
+- Passed locally on 2026-03-25: initialized a local git repository in `c:\Users\amock\mod template`, updated `.gitignore` to exclude local `.dotnet` caches, created the initial commit, and renamed the default branch to `main`.
 - Passed locally on 2026-03-25: `.\scripts\Build-Mod.ps1` succeeded after the SPECS source-map refinement pass and copied `DateEverythingAccess.dll` to the BepInEx plugins folder.
 - Passed locally on 2026-03-25: `.\scripts\Build-Mod.ps1` succeeded after extending first-time SPECS suppression across the tutorial dialog sequence and preventing phone-app fallback from reading underlying SPECS text while that sequence is pending, and copied `DateEverythingAccess.dll` to the BepInEx plugins folder.
 - Passed locally on 2026-03-25: `.\scripts\Build-Mod.ps1` succeeded after adding an initial SPECS-open grace window so first-time `UIDialog` tutorial alerts are not raced by immediate SPECS summary or glossary announcements, and copied `DateEverythingAccess.dll` to the BepInEx plugins folder.
@@ -145,6 +146,7 @@
 
 ## Notes for Next Session
 
+- Local git repository now exists with an initial commit on branch `main`; GitHub CLI is authenticated as `ObjectInSpace`, so only the target repository name and public/private choice are still needed before creating the remote and pushing.
 - Spoken settings menu input is now processed from `AccessibilityWatcher.Update()` instead of `Main.Update()`.
 - The spoken settings menu now uses a Win32 key-state fallback for arrows and also accepts `Enter` and `Space` to toggle the current option.
 - While the spoken settings menu is open, the mod pushes the game's input stack to `None` so Rewired gameplay and UI actions do not consume those keys.
