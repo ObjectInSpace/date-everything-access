@@ -91,6 +91,7 @@
 
 ## Recent Test Results
 
+- Published on GitHub on 2026-03-26: uploaded a second release asset, `DateEverythingAccess-portable-v0.1.0.zip`, to `https://github.com/ObjectInSpace/date-everything-access/releases/tag/v0.1.0`; it contains the tested BepInEx bootstrap files (`winhttp.dll`, `doorstop_config.ini`, `.doorstop_version`), `BepInEx\core`, `BepInEx\plugins\DateEverythingAccess.dll`, `Tolk.dll`, `nvdaControllerClient64.dll`, `README.txt`, `Install-DateEverythingAccess.ps1`, and `THIRD-PARTY-NOTICES.txt`.
 - Published on GitHub on 2026-03-26: created release `v0.1.0 - Initial Release` at `https://github.com/ObjectInSpace/date-everything-access/releases/tag/v0.1.0` with asset `DateEverythingAccess-v0.1.0.zip` containing `BepInEx\plugins\DateEverythingAccess.dll`, `Tolk.dll`, `nvdaControllerClient64.dll`, and `README.txt`.
 - Passed locally on 2026-03-26: `.\scripts\Build-Mod.ps1` succeeded after extending `Ctrl+F1` again so it can rebuild the current chat reply selection or chat-contact selection directly and so spoken chat selection announcements are remembered as repeatable speech, then copied `DateEverythingAccess.dll` into the BepInEx plugins folder.
 - Passed locally on 2026-03-26: `.\scripts\Build-Mod.ps1` succeeded after extending the `Ctrl+F1` repeat path to check `TryBuildChatAppAnnouncement(...)` directly before generic phone-app content, so active Wrkspace, Thiscord, and Canopy chats can be repeated even when they are not only reachable through the phone-app content route, and copied `DateEverythingAccess.dll` into the BepInEx plugins folder.
@@ -173,6 +174,8 @@
 
 ## Notes for Next Session
 
+- Portable release packaging now lives in `.\scripts\Build-PortableRelease.ps1` and `artifacts\release-src\v0.1.0\portable\`; use that path when rebuilding or revising the self-contained loader bundle.
+- The public `v0.1.0` release now has both a minimal mod zip and a portable zip; if one changes, keep the asset names and README contents aligned so users can tell which package already includes BepInEx.
 - Public release `v0.1.0` is now live at `https://github.com/ObjectInSpace/date-everything-access/releases/tag/v0.1.0`; if the package layout changes later, rebuild the zip so it still contains `BepInEx\plugins\DateEverythingAccess.dll`, `Tolk.dll`, `nvdaControllerClient64.dll`, and an updated plain-text `README.txt`.
 - If chat repeat still fails after the current selection-aware pass, the next step is targeted runtime logging around `RequestRepeatLastSpeech()`, the selected-object branch inside `TryBuildCurrentRepeatableAnnouncement()`, and the final text handed to `ScreenReader.Say(...)` so the mismatch can be narrowed to state detection versus repeat-memory handling.
 - `Ctrl+F1` now checks active chat UI through `TryBuildChatAppAnnouncement(...)` before falling back to generic phone-app content, so if chat repeat still fails, inspect whether `ChatMaster` is active in the affected screen and whether the visible transcript or options are actually being built from that path.

@@ -33,6 +33,35 @@ YourModName-v1.0.0.zip
 
 **Why include Tolk DLLs?** Most users won't have Tolk installed. Including the DLLs makes installation much easier - they just copy everything to the game folder.
 
+### Portable Release Package
+
+If you want a release that users can install without fetching BepInEx separately, publish a second ZIP that already includes the tested loader files.
+
+Recommended portable ZIP layout:
+
+```
+YourModName-portable-v1.0.0.zip
+├── .doorstop_version
+├── doorstop_config.ini
+├── winhttp.dll
+├── BepInEx/
+│   ├── core/                     (tested BepInEx runtime files)
+│   └── plugins/
+│       └── YourModName.dll
+├── Tolk.dll
+├── nvdaControllerClient64.dll    (or 32-bit version)
+├── README.txt
+├── Install-YourModName.ps1       (optional, recommended)
+└── THIRD-PARTY-NOTICES.txt
+```
+
+Practical guidance:
+
+- Include only the BepInEx runtime files needed to launch the mod, not logs or caches.
+- Do not ship user-specific config files unless you intentionally want those defaults.
+- Keep the simple mod-only ZIP as well if advanced users may already have BepInEx installed.
+- If you redistribute BepInEx or Tolk, include clear third-party notices and link users to the upstream projects and licenses.
+
 ### End-User README Template
 
 Write a simple README.txt (plain text, no markdown - accessible to everyone):
