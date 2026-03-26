@@ -138,6 +138,17 @@ namespace DateEverythingAccess
             Add("realized_ending_recorded", "Realized-Ende gespeichert. {0} insgesamt.", "Realized ending recorded. {0} total.");
             Add("choice_announcement", "Option {0} von {1}. {2}", "Choice {0} of {1}. {2}");
             Add("apply_display_settings", "Anzeigeeinstellungen anwenden", "Apply display settings");
+            Add("new_game_field_name", "Name", "Name");
+            Add("new_game_field_town", "Wohnort", "Town");
+            Add("new_game_field_favorite_thing", "Lieblingssache", "Favorite thing");
+            Add("new_game_field_pronouns", "Pronomen", "Pronouns");
+            Add("new_game_field_confirmation", "Bestaetigung", "Confirmation");
+            Add("new_game_field_empty", "Leer", "Empty");
+            Add("new_game_toggle_selected", "Ausgewaehlt", "Selected");
+            Add("new_game_toggle_not_selected", "Nicht ausgewaehlt", "Not selected");
+            Add("new_game_pronoun_he_him", "Er/Ihn", "He/Him");
+            Add("new_game_pronoun_she_her", "Sie/Ihr", "She/Her");
+            Add("new_game_pronoun_they_them", "They/Them", "They/Them");
             Add("phone_app_open_generic", "Telefon-App geoeffnet.", "Phone app open.");
             Add("screen_open", "{0} geoeffnet.", "{0} open.");
             Add("roomers_character", "Charakter: {0}", "Character: {0}");

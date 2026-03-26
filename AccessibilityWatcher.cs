@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using TMPro;
@@ -33,6 +34,12 @@ namespace DateEverythingAccess
         private const float DateADexOpenEntryMaximumSuppressionSeconds = 8f;
         private const float EstimatedSpeechWordsPerMinute = 185f;
         private const float EstimatedSpeechLeadInSeconds = 0.75f;
+        private const int VkUp = 0x26;
+        private const int VkDown = 0x28;
+        private const int VkLeft = 0x25;
+        private const int VkRight = 0x27;
+        private const int VkReturn = 0x0D;
+        private const int VkSpace = 0x20;
 
         private static readonly Regex RichTextRegex = new Regex("<[^>]+>", RegexOptions.Compiled);
 
@@ -76,6 +83,15 @@ namespace DateEverythingAccess
         private static float _suppressDateADexOpenEntrySelectionUntil;
         private static float _suppressInitialSpecsAnnouncementsUntil;
         private static bool _awaitingSpecsTutorialDialogs;
+        private static bool _choiceUpWasDown;
+        private static bool _choiceDownWasDown;
+        private static bool _choiceLeftWasDown;
+        private static bool _choiceRightWasDown;
+        private static bool _choiceReturnWasDown;
+        private static bool _choiceSpaceWasDown;
+
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
 
         private string _lastAnnouncedSelection;
         private int _lastSelectedObjectId;
@@ -167,7 +183,7 @@ namespace DateEverythingAccess
             }
             else
             {
-                HandleDialogueChoiceKeyboardInput();
+                HandleChoiceKeyboardInput();
             }
 
             if (Time.unscaledTime < _nextPollTime)
@@ -280,32 +296,59 @@ namespace DateEverythingAccess
             ScreenReader.Say(Loc.Get("repeat_last_unavailable"), remember: false);
         }
 
-        private void HandleDialogueChoiceKeyboardInput()
+        private void HandleChoiceKeyboardInput()
         {
-            IList<Button> choices = GetActiveDialogueChoices();
-            if (choices == null || choices.Count == 0)
+            if (HandleChoiceKeyboardInput(GetActiveChatChoices()))
                 return;
 
-            int currentIndex = GetCurrentDialogueChoiceIndex(choices);
-            if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.LeftArrow))
+            HandleChoiceKeyboardInput(GetActiveDialogueChoices());
+        }
+
+        private bool HandleChoiceKeyboardInput(IList<Button> choices)
+        {
+            if (choices == null || choices.Count == 0)
+                return false;
+
+            int currentIndex = GetCurrentChoiceIndex(choices);
+            bool hasMultipleChoices = choices.Count > 1;
+            if (hasMultipleChoices && WasChoiceKeyPressed(KeyCode.UpArrow, VkUp, ref _choiceUpWasDown))
             {
                 int targetIndex = currentIndex >= 0 ? (currentIndex + choices.Count - 1) % choices.Count : choices.Count - 1;
-                FocusChoice(choices[targetIndex]);
-                return;
+                FocusChoice(choices[targetIndex], ControllerMenuUI.Direction.Up);
+                return true;
             }
 
-            if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.RightArrow))
+            if (hasMultipleChoices && WasChoiceKeyPressed(KeyCode.LeftArrow, VkLeft, ref _choiceLeftWasDown))
+            {
+                int targetIndex = currentIndex >= 0 ? (currentIndex + choices.Count - 1) % choices.Count : choices.Count - 1;
+                FocusChoice(choices[targetIndex], ControllerMenuUI.Direction.Left);
+                return true;
+            }
+
+            if (hasMultipleChoices && WasChoiceKeyPressed(KeyCode.DownArrow, VkDown, ref _choiceDownWasDown))
             {
                 int targetIndex = currentIndex >= 0 ? (currentIndex + 1) % choices.Count : 0;
-                FocusChoice(choices[targetIndex]);
-                return;
+                FocusChoice(choices[targetIndex], ControllerMenuUI.Direction.Down);
+                return true;
             }
 
-            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space))
+            if (hasMultipleChoices && WasChoiceKeyPressed(KeyCode.RightArrow, VkRight, ref _choiceRightWasDown))
+            {
+                int targetIndex = currentIndex >= 0 ? (currentIndex + 1) % choices.Count : 0;
+                FocusChoice(choices[targetIndex], ControllerMenuUI.Direction.Right);
+                return true;
+            }
+
+            if (WasChoiceKeyPressed(KeyCode.Return, VkReturn, ref _choiceReturnWasDown) ||
+                WasChoiceKeyPressed(KeyCode.KeypadEnter, VkReturn, ref _choiceReturnWasDown) ||
+                WasChoiceKeyPressed(KeyCode.Space, VkSpace, ref _choiceSpaceWasDown))
             {
                 int targetIndex = currentIndex >= 0 ? currentIndex : 0;
                 ActivateChoice(choices[targetIndex]);
+                return true;
             }
+
+            return false;
         }
 
         private void AnnounceScreenSummaryIfNeeded()
@@ -513,6 +556,12 @@ namespace DateEverythingAccess
                 return;
             }
 
+            if (branch == "new_game_input" && objectId == _lastSelectedObjectId)
+            {
+                TraceSelectionDebug(rawSelectedObject, selectedObject, selectionSource, branch, announcement, "suppressed_live_input_echo");
+                return;
+            }
+
             if (objectId == _lastSelectedObjectId && announcement == _lastAnnouncedSelection)
             {
                 TraceSelectionDebug(rawSelectedObject, selectedObject, selectionSource, branch, announcement, "duplicate");
@@ -522,7 +571,8 @@ namespace DateEverythingAccess
             _lastSelectedObjectId = objectId;
             _lastAnnouncedSelection = announcement;
             TraceSelectionDebug(rawSelectedObject, selectedObject, selectionSource, branch, announcement, "spoken");
-            ScreenReader.Say(announcement);
+            bool isRepeatableChatSelection = branch == "chat" || branch == "chat_choice";
+            ScreenReader.Say(announcement, rememberAsRepeatable: isRepeatableChatSelection);
         }
 
         private void AnnounceRoomersDetailIfNeeded()
@@ -618,6 +668,9 @@ namespace DateEverythingAccess
             if (selectedObject == null)
                 return false;
 
+            if (IsChatChoiceObject(selectedObject))
+                return false;
+
             if (selectedObject.GetComponentInParent<ChatButton>() != null)
                 return false;
 
@@ -639,6 +692,9 @@ namespace DateEverythingAccess
         {
             if (selectedObject == null || ChatMaster.Instance == null)
                 return false;
+
+            if (IsChatChoiceObject(selectedObject))
+                return true;
 
             if (selectedObject.GetComponentInParent<ChatButton>() != null)
                 return true;
@@ -829,7 +885,8 @@ namespace DateEverythingAccess
                 _suppressDateADexSelectionUntil = Time.unscaledTime + 0.75f;
             }
 
-            ScreenReader.Say(announcement);
+            bool isChatAnnouncement = contentKey.IndexOf("|chat|", StringComparison.Ordinal) >= 0;
+            ScreenReader.Say(announcement, rememberAsRepeatable: isChatAnnouncement);
         }
 
         private static bool TryGetCurrentPhoneAppKey(out string contentKey)
@@ -1141,6 +1198,27 @@ namespace DateEverythingAccess
         {
             announcement = null;
 
+            GameObject selectedObject = GetCurrentSelectedObject();
+            int choiceIndex;
+            int choiceCount;
+            if (selectedObject != null &&
+                TryGetChatChoiceAnnouncement(selectedObject, out choiceIndex, out choiceCount))
+            {
+                string choiceText = ExtractTextFromObject(selectedObject);
+                if (!string.IsNullOrEmpty(choiceText))
+                {
+                    announcement = Loc.Get("choice_announcement", choiceIndex, choiceCount, choiceText);
+                    return true;
+                }
+            }
+
+            if (selectedObject != null &&
+                TryBuildChatSelectionAnnouncement(selectedObject, out announcement) &&
+                !string.IsNullOrEmpty(announcement))
+            {
+                return true;
+            }
+
             if (TryBuildCurrentDialogueAnnouncement(out announcement) ||
                 TryBuildPopupAnnouncement(out announcement) ||
                 TryBuildTutorialAnnouncement(out announcement) ||
@@ -1150,6 +1228,7 @@ namespace DateEverythingAccess
                 TryBuildExamineAnnouncement(out announcement) ||
                 TryBuildUIDialogAnnouncement(out announcement) ||
                 TryBuildSpecsAnnouncement(out announcement, out SpecsAnnouncementMode _) ||
+                TryBuildChatAppAnnouncement(out announcement) ||
                 TryBuildPhoneAppContentAnnouncement(out announcement, out string _) ||
                 TryBuildCreditsAnnouncement(out announcement) ||
                 TryBuildResultAnnouncement(out announcement))
@@ -1330,6 +1409,9 @@ namespace DateEverythingAccess
                 return specialAnnouncement;
             }
 
+            if (TryBuildValidateQuestionsSelectionAnnouncement(selectedObject, out specialAnnouncement, out branch))
+                return specialAnnouncement;
+
             if (TryBuildUIDialogSelectionAnnouncement(selectedObject, out specialAnnouncement, out branch))
                 return specialAnnouncement;
 
@@ -1342,6 +1424,19 @@ namespace DateEverythingAccess
                 return specialAnnouncement;
             }
 
+            int choiceIndex;
+            int choiceCount;
+            if (TryGetChatChoiceAnnouncement(selectedObject, out choiceIndex, out choiceCount))
+            {
+                branch = "chat_choice";
+                if (!ModConfig.ReadFocusedItems && !ModConfig.ReadDialogueChoices)
+                    return null;
+
+                string choiceText = ExtractTextFromObject(selectedObject);
+                if (!string.IsNullOrEmpty(choiceText))
+                    return Loc.Get("choice_announcement", choiceIndex, choiceCount, choiceText);
+            }
+
             if (TryBuildChatSelectionAnnouncement(selectedObject, out specialAnnouncement))
             {
                 branch = "chat";
@@ -1351,8 +1446,6 @@ namespace DateEverythingAccess
             if (TryBuildSaveSelectionAnnouncement(selectedObject, out specialAnnouncement, out branch))
                 return specialAnnouncement;
 
-            int choiceIndex;
-            int choiceCount;
             if (TryGetDialogueChoiceAnnouncement(selectedObject, out choiceIndex, out choiceCount))
             {
                 branch = "dialogue_choice";
@@ -1522,6 +1615,138 @@ namespace DateEverythingAccess
             }
 
             return false;
+        }
+
+        private static bool TryBuildValidateQuestionsSelectionAnnouncement(GameObject selectedObject, out string announcement, out string branch)
+        {
+            announcement = null;
+            branch = null;
+
+            if (selectedObject == null || !IsValidateQuestionsActive() || !IsValidateQuestionsSelectionObject(selectedObject))
+                return false;
+
+            TMP_InputField inputField = selectedObject.GetComponentInParent<TMP_InputField>();
+            if (IsValidateQuestionsField(inputField))
+            {
+                announcement = BuildValidateQuestionsInputAnnouncement(inputField);
+                branch = "new_game_input";
+                return !string.IsNullOrEmpty(announcement);
+            }
+
+            Toggle toggle = selectedObject.GetComponentInParent<Toggle>();
+            if (toggle != null)
+            {
+                announcement = BuildValidateQuestionsToggleAnnouncement(toggle);
+                branch = "new_game_toggle";
+                return !string.IsNullOrEmpty(announcement);
+            }
+
+            return false;
+        }
+
+        private static bool IsValidateQuestionsActive()
+        {
+            return ValidateQuestions.Instance != null &&
+                ValidateQuestions.Instance.gameObject != null &&
+                ValidateQuestions.Instance.gameObject.activeInHierarchy;
+        }
+
+        private static bool IsValidateQuestionsSelectionObject(GameObject selectedObject)
+        {
+            return selectedObject != null &&
+                ValidateQuestions.Instance != null &&
+                selectedObject.transform.IsChildOf(ValidateQuestions.Instance.transform);
+        }
+
+        private static bool IsValidateQuestionsField(TMP_InputField inputField)
+        {
+            if (inputField == null || ValidateQuestions.Instance == null)
+                return false;
+
+            return inputField == ValidateQuestions.Instance.nameTextField ||
+                inputField == ValidateQuestions.Instance.townTextField ||
+                inputField == ValidateQuestions.Instance.favThingTextField;
+        }
+
+        private static string BuildValidateQuestionsInputAnnouncement(TMP_InputField inputField)
+        {
+            string label = GetValidateQuestionsFieldLabel(inputField);
+            string value = NormalizeText(inputField != null ? inputField.text : null);
+            if (string.IsNullOrEmpty(value))
+                value = Loc.Get("new_game_field_empty");
+
+            if (string.IsNullOrEmpty(label))
+                return value;
+
+            return label + ". " + value;
+        }
+
+        private static string GetValidateQuestionsFieldLabel(TMP_InputField inputField)
+        {
+            if (inputField == null || ValidateQuestions.Instance == null)
+                return null;
+
+            if (inputField == ValidateQuestions.Instance.nameTextField)
+                return Loc.Get("new_game_field_name");
+
+            if (inputField == ValidateQuestions.Instance.townTextField)
+                return Loc.Get("new_game_field_town");
+
+            if (inputField == ValidateQuestions.Instance.favThingTextField)
+                return Loc.Get("new_game_field_favorite_thing");
+
+            return NormalizeIdentifierName(inputField.gameObject.name);
+        }
+
+        private static string BuildValidateQuestionsToggleAnnouncement(Toggle toggle)
+        {
+            if (toggle == null || ValidateQuestions.Instance == null)
+                return null;
+
+            if (IsValidateQuestionsPronounToggle(toggle))
+            {
+                string optionLabel = GetValidateQuestionsPronounOptionLabel(toggle);
+                string state = Loc.Get(toggle.isOn ? "new_game_toggle_selected" : "new_game_toggle_not_selected");
+                if (string.IsNullOrEmpty(optionLabel))
+                    return Loc.Get("new_game_field_pronouns") + ". " + state;
+
+                return Loc.Get("new_game_field_pronouns") + ". " + optionLabel + ". " + state;
+            }
+
+            if (toggle == ValidateQuestions.Instance.mandatoryToggle)
+            {
+                string state = Loc.Get(toggle.isOn ? "settings_value_on" : "settings_value_off");
+                return Loc.Get("new_game_field_confirmation") + ". " + state;
+            }
+
+            return null;
+        }
+
+        private static bool IsValidateQuestionsPronounToggle(Toggle toggle)
+        {
+            if (toggle == null || ValidateQuestions.Instance == null || ValidateQuestions.Instance.defaultPronoun == null)
+                return false;
+
+            ToggleGroup group = ValidateQuestions.Instance.defaultPronoun.group;
+            return group != null && toggle.group == group;
+        }
+
+        private static string GetValidateQuestionsPronounOptionLabel(Toggle toggle)
+        {
+            string toggleName = NormalizeIdentifierName(toggle != null ? toggle.gameObject.name : null);
+            if (string.IsNullOrEmpty(toggleName))
+                return null;
+
+            if (string.Equals(toggleName, "He/Him", StringComparison.OrdinalIgnoreCase))
+                return Loc.Get("new_game_pronoun_he_him");
+
+            if (string.Equals(toggleName, "She/Her", StringComparison.OrdinalIgnoreCase))
+                return Loc.Get("new_game_pronoun_she_her");
+
+            if (string.Equals(toggleName, "They/Them", StringComparison.OrdinalIgnoreCase))
+                return Loc.Get("new_game_pronoun_they_them");
+
+            return toggleName;
         }
 
         private static bool TryBuildUIDialogSelectionAnnouncement(GameObject selectedObject, out string announcement, out string branch)
@@ -2727,11 +2952,20 @@ namespace DateEverythingAccess
 
         private static bool TryGetDialogueChoiceAnnouncement(GameObject selectedObject, out int choiceIndex, out int choiceCount)
         {
+            return TryGetChoiceAnnouncement(selectedObject, GetActiveDialogueChoices(), out choiceIndex, out choiceCount);
+        }
+
+        private static bool TryGetChatChoiceAnnouncement(GameObject selectedObject, out int choiceIndex, out int choiceCount)
+        {
+            return TryGetChoiceAnnouncement(selectedObject, GetActiveChatChoices(), out choiceIndex, out choiceCount);
+        }
+
+        private static bool TryGetChoiceAnnouncement(GameObject selectedObject, IList<Button> choices, out int choiceIndex, out int choiceCount)
+        {
             choiceIndex = 0;
             choiceCount = 0;
 
-            var choices = GetActiveDialogueChoices();
-            if (choices == null || choices.Count == 0)
+            if (selectedObject == null || choices == null || choices.Count == 0)
                 return false;
 
             for (int i = 0; i < choices.Count; i++)
@@ -2775,7 +3009,59 @@ namespace DateEverythingAccess
             return activeChoices;
         }
 
-        private static int GetCurrentDialogueChoiceIndex(IList<Button> choices)
+        private static IList<Button> GetActiveChatChoices()
+        {
+            if (ChatMaster.Instance == null)
+                return null;
+
+            ChatType activeChatType;
+            List<ParallelChat> chats;
+            ParallelChat activeChat;
+            string appName;
+            GameObject activePanelNameObject;
+            GameObject secondaryPanelObject;
+            if (!TryGetActiveChatContext(out activeChatType, out chats, out activeChat, out appName, out activePanelNameObject, out secondaryPanelObject) ||
+                activeChat == null ||
+                activeChat.Options == null ||
+                activeChat.Options.Length == 0)
+            {
+                return null;
+            }
+
+            var activeChoices = new List<Button>();
+            for (int i = 0; i < activeChat.Options.Length; i++)
+            {
+                Button option = activeChat.Options[i];
+                if (option != null && option.gameObject.activeInHierarchy && option.interactable)
+                    activeChoices.Add(option);
+            }
+
+            return activeChoices.Count > 0 ? activeChoices : null;
+        }
+
+        private static bool IsChatChoiceObject(GameObject selectedObject)
+        {
+            if (selectedObject == null)
+                return false;
+
+            IList<Button> choices = GetActiveChatChoices();
+            if (choices == null || choices.Count == 0)
+                return false;
+
+            for (int i = 0; i < choices.Count; i++)
+            {
+                Button button = choices[i];
+                if (button == null)
+                    continue;
+
+                if (selectedObject == button.gameObject || selectedObject.transform.IsChildOf(button.transform))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static int GetCurrentChoiceIndex(IList<Button> choices)
         {
             GameObject selectedObject = GetCurrentSelectedObject();
             if (selectedObject == null)
@@ -2794,12 +3080,12 @@ namespace DateEverythingAccess
             return -1;
         }
 
-        private static void FocusChoice(Button choice)
+        private static void FocusChoice(Button choice, ControllerMenuUI.Direction direction)
         {
             if (choice == null)
                 return;
 
-            ControllerMenuUI.SetCurrentlySelected(choice.gameObject, ControllerMenuUI.Direction.Down, manualSelected: true, isViaPointer: true);
+            ControllerMenuUI.SetCurrentlySelected(choice.gameObject, direction, manualSelected: true, isViaPointer: true);
         }
 
         private static void ActivateChoice(Button choice)
@@ -2808,6 +3094,14 @@ namespace DateEverythingAccess
                 return;
 
             choice.onClick.Invoke();
+        }
+
+        private static bool WasChoiceKeyPressed(KeyCode keyCode, int virtualKey, ref bool wasDown)
+        {
+            bool isDown = (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+            bool pressed = Input.GetKeyDown(keyCode) || (isDown && !wasDown);
+            wasDown = isDown;
+            return pressed;
         }
 
         private static bool TryGetCurrentDialogue(out string speakerName, out string dialogText)

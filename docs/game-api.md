@@ -292,6 +292,7 @@ Important consequence:
 - `ParallelChat.screct.viewport` is the relevant visible window for accessibility summaries
 - Reply choices come from `InkController.story.currentChoices`
   - `ParallelChat.Options[i].GetComponentInChildren<TextMeshProUGUI>().text`
+  - `ParallelChat.Options` are wired as quick-response UI and `ControllerMenuUI.IsAllowedToNavigateTo(...)` blocks manual focus on `QuickResponseButton` targets unless accessibility uses `SetCurrentlySelected(..., isViaPointer: true)`
   - Save data keeps structure, not a ready-made rendered transcript
     - `Save.AppMessage.Name`
     - `Save.AppMessage.NodePrefix`
@@ -300,6 +301,7 @@ Important consequence:
   - Important consequence:
     - For full text coverage, the best live source is the active `ParallelChat` UI plus Ink `currentText/currentChoices`, not only the saved `AppMessage` data
     - Accessibility summaries should read only the `ChatTextBox` entries that overlap the current `ScrollRect` viewport, because the full chat history remains mounted in the hierarchy even when older messages are scrolled off-screen
+    - Accessibility focus fallback for chat replies should treat `ParallelChat.Options` like dialogue choices, not like generic chat-panel focus, or the spoken result collapses to the chat header instead of the selected reply text
 
 - `MusicPlayer`
   - Each list row is a `MusicEntryButton`
@@ -324,6 +326,19 @@ Important consequence:
   - `SettingsMenu`
     - Slider value text lives in the explicit fields such as `MasterVolumeSliderValue`, `SFXVolumeSliderValue`, `MusicVolumeSliderValue`, `VoiceVolumeSliderValue`, `CameraSensitivitySliderValue`, `CameraFieldOfViewSliderValue`, and `MovementSpeedSliderValue`
     - The selected control label itself still follows the general focus-text path
+  - `ValidateQuestions`
+    - Main-menu new-game questionnaire controller
+    - Public interactive fields found in decompiled source:
+      - `nameTextField`
+      - `townTextField`
+      - `favThingTextField`
+      - `defaultPronoun`
+      - `mandatoryToggle`
+      - `nextButton`
+    - A decompiled source search did not find the printed form copy such as `APPLICATION FOR EMPLOYMENT`, `PERSONAL INFORMATION`, `CONTACT INFORMATION`, `Preferred Pronouns`, `E-mail Address`, or `Date of Birth`
+    - Practical consequence:
+      - the large printed questionnaire copy is probably scene art or another non-code asset rather than live text defined in C#
+      - wiring that copy to accessibility will need asset or runtime-object inspection, not just source-string lookup
   - `SaveScreenManager` / `SaveSlot`
     - Each save slot exposes visible text through `Name`, `Date`, `Time`, `playTime`, `daysPlayed`, `activatedCharacters`, and `realisedCharacters`
     - `SaveScreenManager` keeps the special `newSaveSlot` entry in a private field and focuses its child button, not the container text object
