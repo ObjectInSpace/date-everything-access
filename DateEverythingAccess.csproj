@@ -19,6 +19,10 @@
       <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\core\BepInEx.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\core\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>

@@ -1,5 +1,6 @@
 using BepInEx;
 using BepInEx.Logging;
+using HarmonyLib;
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -26,6 +27,7 @@ namespace DateEverythingAccess
         private uint _hotkeyThreadId;
         private bool _applicationQuitting;
         private bool _cleanupCompleted;
+        private Harmony _harmony;
 
         public static bool DebugMode { get; private set; }
         public static ManualLogSource Log { get; private set; }
@@ -54,6 +56,8 @@ namespace DateEverythingAccess
             ScreenReader.Initialize();
             Loc.Initialize();
             ModConfig.Initialize(Config);
+            _harmony = new Harmony("com.amock.dateeverythingaccess");
+            _harmony.PatchAll();
 
             Application.quitting += OnApplicationQuitting;
             StartHotkeyThread();
@@ -93,6 +97,8 @@ namespace DateEverythingAccess
             _cleanupCompleted = true;
             Application.quitting -= OnApplicationQuitting;
             StopHotkeyThread();
+            _harmony?.UnpatchSelf();
+            _harmony = null;
             ScreenReader.Stop();
             ScreenReader.Shutdown();
         }

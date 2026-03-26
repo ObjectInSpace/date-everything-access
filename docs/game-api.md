@@ -469,6 +469,9 @@ Good Harmony targets for future feature work:
 
 - `DateADex` entry/screen update methods
   - likely better than polling once entry-specific features begin
+  - `OpenEntry(int)` populates `MainEntryScreen`, hides `RecipeScreen`, fills `Item`, `Desc`, `VoActor`, `Likes`, and `Dislikes`, resets `DescScroll`, and refreshes collectables before focus later lands on `CollectableButton`
+  - accessibility implication:
+    - the initial Date A Dex bio announcement is more reliable from an `OpenEntry(int)` postfix than from focus polling alone, because the game commits the entry data before the default button focus takes over
 
 - `BetterPlayerControl.Update()`
   - only for carefully scoped observation; avoid heavy patching here unless needed

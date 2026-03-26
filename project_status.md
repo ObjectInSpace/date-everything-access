@@ -88,6 +88,17 @@
 
 ## Recent Test Results
 
+- Passed in game on 2026-03-25: Date A Dex list focus now reads only the datable name, and opening a datable now speaks the visible biography without being cut off by the initial `Collectables` focus announcement.
+- Passed locally on 2026-03-25: cleaned up the temporary Date A Dex and Wrkspace diagnostic instrumentation after the working fix was confirmed, while keeping the Harmony `DateADex.OpenEntry(int)` hook and the final focus-suppression behavior in place.
+- Passed locally on 2026-03-25: `.\scripts\Build-Mod.ps1` succeeded after the first Date A Dex post-open suppression pass, which now suppresses `DexEntryButton` and `CollectablesButton` focus speech for a short window immediately after the `OpenEntry(int)` hook speaks the bio.
+- Failed in game on 2026-03-25: the new `DateADex.OpenEntry(int)` hook does fire and announces the correct Skylar bio, but the game then immediately re-announces `SKYLAR SPECS. 1`, shifts focus to `Collectables. 1 / 3`, and later repeats the bio again from polling. The initial-open problem is therefore no longer missing bio data; it is competing post-open speech from list-entry and default-button focus after the hook fires.
+- Passed locally on 2026-03-25: `.\scripts\Build-Mod.ps1` succeeded after adding Harmony patching to the mod, hooking `DateADex.OpenEntry(int)` in a postfix, and routing that event into a watcher-side one-shot Date A Dex announcement path so the entry bio can be spoken when the game finishes populating the screen instead of waiting on focus polling.
+- Failed in game on 2026-03-25: Date A Dex still does not read the biography when opening a datable from the list. The current behavior is that entry-open first speaks an unrelated placeholder or fallback line, but after returning to the datable entry screen later, moving focus between entry controls can speak that datable's bio. This points to an entry-transition timing issue rather than a steady-state detail-reader failure.
+- Passed locally on 2026-03-25: `.\scripts\Build-Mod.ps1` succeeded after the follow-up Date A Dex fix that makes bio detail detection use the actual `MainEntryScreen` visibility, suppresses post-bio `Collectables` focus briefly after a Date A Dex detail announcement, and blocks the noisy Date A Dex full-window visible-text fallback when no dedicated detail reader has won yet.
+- Passed locally on 2026-03-25: `.\scripts\Build-Mod.ps1` succeeded after using the runtime logs to make two evidence-based fixes: Wrkspace `ChatButton` focus now bypasses chat-detail suppression, and `CollectablesScreen` speech now only activates when the current focus is actually inside the collectables UI, so it should stop hijacking normal Date A Dex bio announcements.
+- Passed locally on 2026-03-25: `.\scripts\Build-Mod.ps1` succeeded after adding targeted debug-only logging for Wrkspace selection, Date A Dex detail assembly, phone-app content routing, and selection tracing in those phone-app contexts, and copied `DateEverythingAccess.dll` into the BepInEx plugins folder.
+- Passed locally on 2026-03-25: `dotnet build .\DateEverythingAccess.csproj --no-restore -p:SkipCopyToPlugins=true` succeeded after adding targeted debug-only logging for Wrkspace selection, Date A Dex detail assembly, phone-app content routing, and selection tracing in those phone-app contexts.
+- Reverted locally on 2026-03-25: rolled back the unsuccessful Wrkspace and Date A Dex watcher experiments after they produced no in-game change; the next step is targeted runtime logging rather than further blind focus or suppression changes.
 - Passed locally on 2026-03-25: created the public GitHub repository `https://github.com/ObjectInSpace/date-everything-access`, added `origin`, and pushed branch `main`.
 - Passed locally on 2026-03-25: initialized a local git repository in `c:\Users\amock\mod template`, updated `.gitignore` to exclude local `.dotnet` caches, created the initial commit, and renamed the default branch to `main`.
 - Passed locally on 2026-03-25: `.\scripts\Build-Mod.ps1` succeeded after the SPECS source-map refinement pass and copied `DateEverythingAccess.dll` to the BepInEx plugins folder.
@@ -147,6 +158,8 @@
 
 ## Notes for Next Session
 
+- Date A Dex now uses a Harmony `DateADex.OpenEntry(int)` hook plus watcher-side entry suppression so opening a datable speaks the visible biography before entry controls such as `Collectables` are allowed to interrupt.
+- Wrkspace contact navigation is currently working again, and the temporary debug-only logging used to track the regressions has been removed from the live build.
 - Public GitHub repository is now available at `https://github.com/ObjectInSpace/date-everything-access` and `main` tracks `origin/main`.
 - Local git repository now exists with an initial commit on branch `main`; GitHub CLI is authenticated as `ObjectInSpace`, so only the target repository name and public/private choice are still needed before creating the remote and pushing.
 - Spoken settings menu input is now processed from `AccessibilityWatcher.Update()` instead of `Main.Update()`.
@@ -222,5 +235,11 @@
 - Nearby interactable naming now uses the object-facing label while `Save.GetDateStatus(...)` is `Unmet`, then switches to the resolved character name after the player has met that datable.
 - Add richer coverage for more gameplay states and visible UI text.
 - Music and art screens were not discoverable during the 2026-03-25 runtime pass, so their phone coverage remains unverified but is no longer blocking the confirmed watcher fixes.
+- Latest Date A Dex focus fix:
+  the `OpenEntry(int)` hook now starts the Date A Dex open-entry focus suppression window immediately so the first bio announcement is less likely to be interrupted by the focused entry or collectables control,
+  and generic phone-app content speech now skips Date A Dex list-entry focus so selecting a datable in the list should speak only the datable name instead of stale placeholder entry text such as `Something's Wrong here`.
+- Latest Date A Dex timing hardening:
+  the open-entry suppression window now expands to the whole visible Date A Dex entry screen instead of only the original narrow button check,
+  and its duration is now estimated from the spoken bio length so a long entry should finish before `Collectables` focus speech is allowed to interrupt it.
 - Decide which gameplay events should become interrupting announcements versus passive status speech.
 - Expand analysis only where the next feature needs it, especially tutorial flows and message log extraction.

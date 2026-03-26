@@ -28,6 +28,11 @@ namespace DateEverythingAccess
         private const float SpecsInitialAnnouncementGraceSeconds = 1f;
         private const float SpecsTutorialDialogStartTimeoutSeconds = 3f;
         private const float SpecsTutorialDialogTransitionGraceSeconds = 0.5f;
+        private const float DateADexOpenEntryInitialSuppressionSeconds = 3f;
+        private const float DateADexOpenEntryMinimumSuppressionSeconds = 2.5f;
+        private const float DateADexOpenEntryMaximumSuppressionSeconds = 8f;
+        private const float EstimatedSpeechWordsPerMinute = 185f;
+        private const float EstimatedSpeechLeadInSeconds = 0.75f;
 
         private static readonly Regex RichTextRegex = new Regex("<[^>]+>", RegexOptions.Compiled);
 
@@ -65,6 +70,10 @@ namespace DateEverythingAccess
         private static Type _engagementType;
         private static Type _loadingFactsType;
         private static int _repeatLastSpeechRequested;
+        private static int _pendingDateADexEntryAnnouncementRequested;
+        private static float _pendingDateADexEntryAnnouncementNotBefore;
+        private static float _pendingDateADexEntryAnnouncementExpiresAt;
+        private static float _suppressDateADexOpenEntrySelectionUntil;
         private static float _suppressInitialSpecsAnnouncementsUntil;
         private static bool _awaitingSpecsTutorialDialogs;
 
@@ -135,6 +144,15 @@ namespace DateEverythingAccess
             Interlocked.Exchange(ref _repeatLastSpeechRequested, 1);
         }
 
+        internal static void RequestDateADexEntryAnnouncement()
+        {
+            EnsureCreated();
+            Interlocked.Exchange(ref _pendingDateADexEntryAnnouncementRequested, 1);
+            _pendingDateADexEntryAnnouncementNotBefore = Time.unscaledTime + 0.05f;
+            _pendingDateADexEntryAnnouncementExpiresAt = Time.unscaledTime + 1.5f;
+            _suppressDateADexOpenEntrySelectionUntil = Time.unscaledTime + DateADexOpenEntryInitialSuppressionSeconds;
+        }
+
         private void Update()
         {
             if (Main.IsShuttingDown)
@@ -171,6 +189,7 @@ namespace DateEverythingAccess
             AnnounceUIDialogIfNeeded();
             AnnounceSpecsDetailIfNeeded();
             AnnounceCreditsIfNeeded();
+            HandlePendingDateADexEntryAnnouncement();
             if (!isSettingsMenuOpen)
             {
                 AnnounceSelectionIfNeeded();
@@ -179,6 +198,70 @@ namespace DateEverythingAccess
             AnnounceResultScreenIfNeeded();
             AnnounceTimeChangeIfNeeded();
             AnnounceProgressionChangesIfNeeded();
+        }
+
+        private void HandlePendingDateADexEntryAnnouncement()
+        {
+            if (Interlocked.CompareExchange(ref _pendingDateADexEntryAnnouncementRequested, 0, 0) == 0)
+                return;
+
+            if (Time.unscaledTime < _pendingDateADexEntryAnnouncementNotBefore)
+                return;
+
+            if (Time.unscaledTime > _pendingDateADexEntryAnnouncementExpiresAt)
+            {
+                Interlocked.Exchange(ref _pendingDateADexEntryAnnouncementRequested, 0);
+                return;
+            }
+
+            if (!TryBuildDateADexDetailAnnouncement(out string announcement) || string.IsNullOrEmpty(announcement))
+                return;
+
+            Interlocked.Exchange(ref _pendingDateADexEntryAnnouncementRequested, 0);
+            _lastDateADexDetail = announcement;
+            _pendingDateADexDetail = null;
+            _pendingDateADexDetailSince = 0f;
+            float openEntrySuppressionSeconds = EstimateSpeechSuppressionSeconds(
+                announcement,
+                DateADexOpenEntryMinimumSuppressionSeconds,
+                DateADexOpenEntryMaximumSuppressionSeconds);
+            _suppressDateADexSelectionUntil = Time.unscaledTime + Mathf.Min(1.5f, openEntrySuppressionSeconds);
+            _suppressDateADexOpenEntrySelectionUntil = Time.unscaledTime + openEntrySuppressionSeconds;
+
+            if (TryGetCurrentPhoneAppKey(out string contentKey))
+            {
+                _lastPhoneAppContentKey = contentKey;
+                _lastPhoneAppContentAnnouncement = announcement;
+            }
+
+            ScreenReader.Say(announcement);
+        }
+
+        private static bool ShouldSuppressDateADexOpenEntrySelection(GameObject selectedObject)
+        {
+            if (selectedObject == null || Time.unscaledTime >= _suppressDateADexOpenEntrySelectionUntil)
+                return false;
+
+            if (DateADex.Instance == null || DateADex.Instance.DateADexWindow == null || !DateADex.Instance.DateADexWindow.activeInHierarchy)
+                return false;
+
+            bool isEntryVisible = DateADex.Instance.MainEntryScreen != null && DateADex.Instance.MainEntryScreen.activeInHierarchy;
+            bool isRecipeVisible = DateADex.Instance.RecipeScreen != null && DateADex.Instance.RecipeScreen.activeInHierarchy;
+            if (!isEntryVisible && !isRecipeVisible)
+                return false;
+
+            return selectedObject == DateADex.Instance.DateADexWindow ||
+                selectedObject.transform.IsChildOf(DateADex.Instance.DateADexWindow.transform);
+        }
+
+        private static float EstimateSpeechSuppressionSeconds(string announcement, float minimumSeconds, float maximumSeconds)
+        {
+            if (string.IsNullOrWhiteSpace(announcement))
+                return minimumSeconds;
+
+            string[] words = announcement.Split(new[] { ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            float estimatedSeconds = (words.Length / EstimatedSpeechWordsPerMinute) * 60f + EstimatedSpeechLeadInSeconds;
+            return Mathf.Clamp(estimatedSeconds, minimumSeconds, maximumSeconds);
         }
 
         private void HandleRepeatLastSpeechRequest()
@@ -383,6 +466,12 @@ namespace DateEverythingAccess
             if (TryPreemptSingleButtonUIDialogSelection(rawSelectedObject, selectedObject, selectionSource))
                 return;
 
+            if (ShouldSuppressDateADexOpenEntrySelection(selectedObject))
+            {
+                TraceSelectionDebug(rawSelectedObject, selectedObject, selectionSource, "dateadex_open_entry_focus", null, "suppressed_dateadex_open");
+                return;
+            }
+
             if (ShouldSuppressDateADexSelection(selectedObject))
             {
                 TraceSelectionDebug(rawSelectedObject, selectedObject, selectionSource, "dateadex_pending_detail", null, "suppressed_dateadex");
@@ -527,6 +616,9 @@ namespace DateEverythingAccess
                 return false;
 
             if (selectedObject == null)
+                return false;
+
+            if (selectedObject.GetComponentInParent<ChatButton>() != null)
                 return false;
 
             if (Time.unscaledTime < _suppressChatSelectionUntil)
@@ -731,7 +823,32 @@ namespace DateEverythingAccess
 
             _lastPhoneAppContentKey = contentKey;
             _lastPhoneAppContentAnnouncement = announcement;
+            if (TryBuildDateADexDetailAnnouncement(out string currentDateADexDetail) &&
+                string.Equals(currentDateADexDetail, announcement, StringComparison.Ordinal))
+            {
+                _suppressDateADexSelectionUntil = Time.unscaledTime + 0.75f;
+            }
+
             ScreenReader.Say(announcement);
+        }
+
+        private static bool TryGetCurrentPhoneAppKey(out string contentKey)
+        {
+            contentKey = null;
+
+            if (Singleton<PhoneManager>.Instance == null ||
+                !Singleton<PhoneManager>.Instance.IsPhoneMenuOpened() ||
+                !Singleton<PhoneManager>.Instance.IsPhoneAppOpened())
+            {
+                return false;
+            }
+
+            GameObject currentApp = Singleton<PhoneManager>.Instance.GetCurrentApp();
+            if (currentApp == null || !currentApp.activeInHierarchy)
+                return false;
+
+            contentKey = currentApp.GetInstanceID().ToString();
+            return true;
         }
 
         private void AnnouncePopupIfNeeded()
@@ -1860,7 +1977,7 @@ namespace DateEverythingAccess
             if (DateADex.Instance == null || DateADex.Instance.DateADexWindow == null || !DateADex.Instance.DateADexWindow.activeInHierarchy)
                 return false;
 
-            bool isEntryVisible = DateADex.Instance.IsInEntryScreen;
+            bool isEntryVisible = DateADex.Instance.MainEntryScreen != null && DateADex.Instance.MainEntryScreen.activeInHierarchy;
             bool isRecipeVisible = DateADex.Instance.RecipeScreen != null && DateADex.Instance.RecipeScreen.activeInHierarchy;
             if (!isEntryVisible && !isRecipeVisible)
                 return false;
@@ -1905,9 +2022,7 @@ namespace DateEverythingAccess
             AddAnnouncementPart(parts, recipe);
 
             announcement = JoinAnnouncementParts(parts);
-            if (string.IsNullOrEmpty(announcement))
-                return false;
-            return true;
+            return !string.IsNullOrEmpty(announcement);
         }
 
         private static string GetActiveDateADexText(TMP_Text textComponent)
@@ -2069,6 +2184,14 @@ namespace DateEverythingAccess
             string visibleChoices = GetVisibleChatChoices(activeChat);
             string header = BuildChatAnnouncement(appName, name, null);
 
+            if (activeChat == null &&
+                string.IsNullOrEmpty(header) &&
+                string.IsNullOrEmpty(transcript) &&
+                string.IsNullOrEmpty(visibleChoices))
+            {
+                return false;
+            }
+
             var parts = new List<string>();
             AddAnnouncementPart(parts, header);
             if (!string.Equals(secondary, name, StringComparison.Ordinal))
@@ -2077,10 +2200,7 @@ namespace DateEverythingAccess
             AddAnnouncementPart(parts, BuildLabeledValue("chat_options", visibleChoices));
 
             announcement = JoinAnnouncementParts(parts);
-            if (!string.IsNullOrEmpty(announcement))
-                return true;
-
-            return false;
+            return !string.IsNullOrEmpty(announcement);
         }
 
         private static bool TryBuildMusicAnnouncement(out string announcement)
@@ -2459,6 +2579,10 @@ namespace DateEverythingAccess
             if (collectables == null || !collectables.gameObject.activeInHierarchy)
                 return false;
 
+            GameObject selectedObject = GetCurrentSelectedObject();
+            if (selectedObject == null || !selectedObject.transform.IsChildOf(collectables.transform))
+                return false;
+
             EnsureReflectionCache();
             TMP_Text nameText = _collectablesScreenNameField != null ? _collectablesScreenNameField.GetValue(collectables) as TMP_Text : null;
             TMP_Text descText = _collectablesScreenDescField != null ? _collectablesScreenDescField.GetValue(collectables) as TMP_Text : null;
@@ -2501,6 +2625,10 @@ namespace DateEverythingAccess
 
             string appName = NormalizeIdentifierName(currentApp.name);
             contentKey = currentApp.GetInstanceID().ToString();
+            bool isDateADexApp = !string.IsNullOrEmpty(appName) &&
+                (appName.IndexOf("date a dex", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 appName.IndexOf("dateadex", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 appName.IndexOf("dexscreens", StringComparison.OrdinalIgnoreCase) >= 0);
 
             bool isSpecsApp = !string.IsNullOrEmpty(appName) && appName.IndexOf("spec", StringComparison.OrdinalIgnoreCase) >= 0;
             if (isSpecsApp && (ShouldSuppressSpecsAnnouncements() ||
@@ -2515,15 +2643,52 @@ namespace DateEverythingAccess
                 return !string.IsNullOrEmpty(announcement);
             }
 
-            if (TryBuildCollectableAnnouncement(out announcement) ||
-                TryBuildRoomersDetailAnnouncement(out announcement) ||
-                TryBuildDateADexDetailAnnouncement(out announcement) ||
-                TryBuildMusicAnnouncement(out announcement) ||
-                TryBuildArtAnnouncement(out announcement) ||
-                TryBuildSpecsAnnouncement(out announcement, out SpecsAnnouncementMode _) ||
-                TryBuildCreditsAnnouncement(out announcement))
+            if (TryBuildCollectableAnnouncement(out announcement))
             {
                 return !string.IsNullOrEmpty(announcement);
+            }
+
+            if (TryBuildRoomersDetailAnnouncement(out announcement))
+            {
+                return !string.IsNullOrEmpty(announcement);
+            }
+
+            GameObject selectedObject = GetCurrentSelectedObject();
+            if (isDateADexApp &&
+                selectedObject != null &&
+                selectedObject.GetComponentInParent<DexEntryButton>() != null)
+            {
+                return false;
+            }
+
+            if (TryBuildDateADexDetailAnnouncement(out announcement))
+            {
+                return !string.IsNullOrEmpty(announcement);
+            }
+
+            if (TryBuildMusicAnnouncement(out announcement))
+            {
+                return !string.IsNullOrEmpty(announcement);
+            }
+
+            if (TryBuildArtAnnouncement(out announcement))
+            {
+                return !string.IsNullOrEmpty(announcement);
+            }
+
+            if (TryBuildSpecsAnnouncement(out announcement, out SpecsAnnouncementMode _))
+            {
+                return !string.IsNullOrEmpty(announcement);
+            }
+
+            if (TryBuildCreditsAnnouncement(out announcement))
+            {
+                return !string.IsNullOrEmpty(announcement);
+            }
+
+            if (isDateADexApp)
+            {
+                return false;
             }
 
             announcement = BuildPhoneAppVisibleTextFallback(currentApp, appName);
