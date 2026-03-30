@@ -72,7 +72,9 @@
 - Automatic speech for active dialogue lines
 - Automatic speech for dialogue choice focus
 - Arrow-key dialogue choice navigation
+- Arrow-key chat reply navigation for active `ParallelChat.Options`
 - `Enter` / `Space` choice activation
+- `ValidateQuestions` focus speech for name, town, favorite thing, pronoun toggles, and confirmation toggle
 - Automatic screen summaries for phone/menu contexts
 - Automatic phone app content announcements with visible-text fallback
 - Automatic object examination text announcements
@@ -187,11 +189,11 @@
 - Chat-app reply navigation now has a dedicated watcher path that targets `ParallelChat.Options`; if runtime testing still misses focus changes or announcements in Wrkspace, Thiscord, or Canopy, inspect the live selected object and whether another phone-app control is stealing focus after `ControllerMenuUI.SetCurrentlySelected(..., isViaPointer: true)`.
 - `ValidateQuestions` now has a narrow, evidence-based focus path again: it reads only the decompiled interactive controls, not the missing printed form art, so future work on that screen should keep the focused-field and pronoun support unless runtime testing disproves it.
 - The main-menu `ValidateQuestions` screen exposes its interactive controls in decompiled C#, but the large printed employment-form copy does not appear in the decompiled source; if this screen is revisited, inspect scene assets or runtime-rendered objects instead of retrying watcher-only string extraction.
-- Once the current chat-repeat, chat-reply, and `ValidateQuestions` changes are committed, push them to `origin/main` even if the remaining runtime checks are still pending, so GitHub stays aligned with the latest local watcher and documentation work.
+- `main` is currently aligned with `origin/main`; keep pushing watcher and documentation updates promptly even if some runtime checks are still pending.
 - Date A Dex now uses a Harmony `DateADex.OpenEntry(int)` hook plus watcher-side entry suppression so opening a datable speaks the visible biography before entry controls such as `Collectables` are allowed to interrupt.
 - Wrkspace contact navigation is currently working again, and the temporary debug-only logging used to track the regressions has been removed from the live build.
 - Public GitHub repository is now available at `https://github.com/ObjectInSpace/date-everything-access` and `main` tracks `origin/main`.
-- Local git repository now exists with an initial commit on branch `main`; GitHub CLI is authenticated as `ObjectInSpace`, so only the target repository name and public/private choice are still needed before creating the remote and pushing.
+- Local and remote git setup are complete; future work can use the normal `git status`, `git commit`, and `git push` flow.
 - Spoken settings menu input is now processed from `AccessibilityWatcher.Update()` instead of `Main.Update()`.
 - The spoken settings menu now uses a Win32 key-state fallback for arrows and also accepts `Enter` and `Space` to toggle the current option.
 - While the spoken settings menu is open, the mod pushes the game's input stack to `None` so Rewired gameplay and UI actions do not consume those keys.
