@@ -147,6 +147,7 @@
 - Passed in game on 2026-03-25: popup and alert speech reads the title and body before the auto-focused confirmation button, and button focus still announces correctly afterward.
 - Passed in game on 2026-03-25: disabling dialogue text and dialogue choices suppresses their speech without breaking dialogue navigation.
 - Passed in game on 2026-03-25: Roomers, Date A Dex, chat apps, save or load slot speech, and `Ctrl+F1` on-demand screen reading all behaved correctly in runtime verification.
+- Passed locally on 2026-03-26: decoupled extraction tool from mod by updating `.gitignore` to exclude `tools/` directory and `.nuget/` packages, ensuring the extraction tool and its dependencies are not tracked in version control and will not be bundled with the mod. The tools directory was never committed to the repository (already untracked), so only `.gitignore` changes were needed. Committed with message "Decouple extraction tool: exclude tools/ and .nuget/ from tracking" and successfully pushed to GitHub.
 
 ## Known Issues
 
