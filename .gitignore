@@ -6,6 +6,7 @@ bin/
 obj/
 .dotnet/
 .dotnet-cli/
+.nuget/
 
 # Decompiled game code (large, user-specific)
 decompiled/
@@ -29,3 +30,6 @@ age-of-decadence-analyse.txt
 nul
 *.zip
 artifacts/release-staging/
+
+# Development tools (extraction tool, build artifacts, dependencies)
+tools/
