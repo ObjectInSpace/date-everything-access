@@ -148,6 +148,7 @@
 - Passed in game on 2026-03-25: disabling dialogue text and dialogue choices suppresses their speech without breaking dialogue navigation.
 - Passed in game on 2026-03-25: Roomers, Date A Dex, chat apps, save or load slot speech, and `Ctrl+F1` on-demand screen reading all behaved correctly in runtime verification.
 - Passed locally on 2026-03-26: decoupled extraction tool from mod by updating `.gitignore` to exclude `tools/` directory and `.nuget/` packages, ensuring the extraction tool and its dependencies are not tracked in version control and will not be bundled with the mod. The tools directory was never committed to the repository (already untracked), so only `.gitignore` changes were needed. Committed with message "Decouple extraction tool: exclude tools/ and .nuget/ from tracking" and successfully pushed to GitHub.
+- Passed locally on 2026-03-26: removed tools/ directory from the file system to prevent dotnet build discovery of AssetRipperSrc subprojects, which was causing build failures. Verified that `.\scripts\Build-Mod.ps1 -Configuration Release` and `.\scripts\Build-PortableRelease.ps1 -Configuration Release` now build successfully without extraction tool interference.
 
 ## Known Issues
 
