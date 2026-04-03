@@ -2,9 +2,9 @@
 
 ## Unity-Versionen und Mod-Loader-Kompatibilität
 
-- **Unity 2019+**: MelonLoader, BepInEx, Doorstop - alle funktionieren
-- **Unity 2017-2018**: MelonLoader, BepInEx, Doorstop - alle funktionieren
-- **Unity 5.x**: Teilweise MelonLoader, teilweise BepInEx, evtl. Doorstop, Assembly-Patch als Fallback
+- **Unity 2019+**: BepInEx und Doorstop funktionieren meist gut
+- **Unity 2017-2018**: BepInEx und Doorstop funktionieren oft
+- **Unity 5.x**: BepInEx 5.x teilweise, evtl. Doorstop, Assembly-Patch als Fallback
 - **Unity 4.x oder älter**: Nur Assembly-Patching funktioniert
 
 ## Vor dem Setup prüfen
@@ -14,7 +14,7 @@
 Die Unity-Version steht in:
 - `[Game]_Data/output_log.txt` (erste Zeile: "Initialize engine version: X.X.X")
 - Oder im Crash-Log
-- Oder im MelonLoader-Log nach erstem Start
+- Oder im BepInEx-Log nach erstem Start
 
 ### 2. Architektur prüfen
 
@@ -32,7 +32,6 @@ Die Unity-Version steht in:
 **Suchbegriffe:**
 - "[Spielname] modding guide"
 - "[Spielname] BepInEx"
-- "[Spielname] MelonLoader"
 - "[Spielname] dll mod"
 
 **Wo suchen:**
@@ -46,9 +45,9 @@ Die Unity-Version steht in:
 
 ### Bei Unity 2017+
 
-1. **MelonLoader** - Einfachste Option für Unity-Spiele
-2. **BepInEx** - Sehr verbreitet, gute Dokumentation
-3. **Doorstop** - Falls andere nicht funktionieren
+1. **BepInEx** - Sehr verbreitet, gute Dokumentation
+2. **Doorstop** - Falls BepInEx nicht funktioniert
+3. **Andere Community-Lösung** - Falls das Spiel eine spezielle ältere Loader-Kombination braucht
 
 ### Bei Unity 5.x
 
@@ -109,9 +108,9 @@ Den Mod-Code direkt in die Spiel-DLL (`Assembly-CSharp.dll`) einfügen.
 
 ### "Hooked into null"
 
-- MelonLoader kann sich nicht einhaken
+- Der gewählte Loader kann sich nicht einhaken
 - Unity-Version nicht unterstützt
-- Lösung: Anderes Framework oder Assembly-Patching
+- Lösung: BepInEx-Version wechseln, anderen Loader prüfen, oder Assembly-Patching
 
 ### Spiel startet nicht (0xc0000142)
 

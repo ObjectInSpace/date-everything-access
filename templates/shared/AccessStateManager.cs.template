@@ -86,7 +86,7 @@ namespace NAMESPACE
         /// <summary>
         /// Set the current context. Resets state when context changes.
         /// Call this from Main when detecting section changes
-        /// (e.g., in OnSceneWasLoaded or by checking game singletons).
+        /// (e.g., from a scene-loaded callback or by checking game singletons).
         /// </summary>
         public static void SetContext(Context context)
         {

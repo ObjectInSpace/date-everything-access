@@ -32,8 +32,8 @@
 ## Current Phase
 
 **Phase:** Early Feature Work
-**Currently working on:** Most recent watcher and UI speech fixes have passed in game, and the remaining work is concentrated on broader gameplay/system coverage, spatial room cues, and unresolved edge-case validation.
-**Blocked by:** Broader gameplay/system coverage, spatial navigation cues for rooms, explicit runtime testing for unseen or unspoken interactables, and optional later verification for music or art screens if they become available in the current save.
+**Currently working on:** Navigation is now implemented in code with room-target cycling, objective routing, and auto-walk control. The remaining work is concentrated on runtime validation of path quality plus broader gameplay/system coverage.
+**Blocked by:** In-game testing for navigation and auto-walk behavior, explicit runtime testing for unseen or unspoken interactables, and optional later verification for music or art screens if they become available in the current save.
 
 ## Codebase Analysis Progress
 
@@ -65,6 +65,9 @@
 - Startup announcement through Tolk/NVDA
 - `F1` help hotkey
 - `Ctrl+F1` repeat-last-spoken hotkey for tips and dialogue lines
+- `Ctrl+F6` navigation-to-objective or selected-room hotkey
+- `Ctrl+Shift+F6` room-navigation target cycling hotkey
+- `Ctrl+Alt+F6` auto-walk toggle hotkey
 - `F9` debug toggle hotkey
 - `Ctrl+F9` accessibility settings hotkey
 - Spoken accessibility settings menu with persistent toggles for focused items, dialogue text, dialogue choices, screen text, phone app text, room changes, nearby objects, and status changes
@@ -76,23 +79,33 @@
 - `Enter` / `Space` choice activation
 - `ValidateQuestions` focus speech for name, town, favorite thing, pronoun toggles, and confirmation toggle
 - Automatic screen summaries for phone/menu contexts
-- Automatic phone app content announcements with visible-text fallback
+- Consolidated phone app content announcements through one current-app reader with visible-text fallback
 - Automatic object examination text announcements
 - Automatic room announcements in house exploration
 - Automatic nearby interactable announcements
 - Automatic Dateviators equip/charge state announcements
+- Room navigation routing based on `navigation_graph.json` links plus live `CameraSpaces` zone positions
+- Auto-walk guidance and directional object-tracker beeps for the next navigation step
 
 ## Pending Tests
 
 - Verify in runtime that pressing `Ctrl+F1` while a chat app is open repeats the latest spoken visible chat transcript or options instead of falling back to an older dialogue or non-chat repeatable line.
 - Verify chat apps in runtime: when `ParallelChat` reply options are visible in Wrkspace, Thiscord, or Canopy, `Up` and `Down` arrows should move focus between the reply buttons, and each focused reply should announce as `Choice x of y` plus the visible option text instead of collapsing to the chat header.
 - Verify the main-menu `ValidateQuestions` screen again in runtime: focused input fields should announce stable labels plus current values, pronoun toggles should announce `Pronouns` plus the specific option name and selected state, and staying inside a text field should not re-speak the full field on every poll while typing.
+- Verify in runtime that `Ctrl+Shift+F6` cycles through the expected room targets and announces the selected target clearly.
+- Verify in runtime that `Ctrl+F6` routes to the current tutorial objective when available and otherwise starts navigation to the selected room target.
+- Verify in runtime that `Ctrl+Alt+F6` can start and stop auto-walk cleanly, advances between rooms, and stops with the expected arrival or blocked announcements.
+- Verify in runtime that phone app speech still behaves correctly after removing the redundant per-app watcher detail paths.
 - Test how nearby interactable announcements behave for objects the player has not scanned or spoken to yet, especially that unmet datables use object names and met datables switch to character names.
 - Identify more gameplay states and visible text that still need to be surfaced to speech.
 - If music or art screens become available later in normal play, verify their speech coverage in runtime because they were not discoverable during the current test pass.
 
 ## Recent Test Results
 
+- Passed locally on 2026-04-02: `.\scripts\Test-ModSetup.ps1 -GamePath 'D:\SteamLibrary\steamapps\Common\Date Everything'` reported 18 successful checks, 0 warnings, and 0 errors for the BepInEx, Tolk, project-reference, and decompiled-source setup.
+- Passed locally on 2026-04-02: removed the dead duplicate phone-detail watcher state, finished the room-navigation watcher path, and `dotnet build .\DateEverythingAccess.csproj --no-restore -p:SkipCopyToPlugins=true` succeeded.
+- Passed locally on 2026-04-02: confirmed that `D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json` exists and contains usable room `Links`, but its waypoint coordinates are still zeroed, so live `CameraSpaces` zone positions remain the authoritative in-scene navigation anchors.
+- Passed locally on 2026-03-30: verified that the saved `AccessibilityWatcher.cs` still contains the chat reply navigation, `ValidateQuestions` focus path, Win32 key-state fallback, and pointer-style `ControllerMenuUI.SetCurrentlySelected(..., isViaPointer: true)` focus writes; `dotnet build .\DateEverythingAccess.csproj --no-restore -p:SkipCopyToPlugins=true` also succeeded.
 - Passed locally on 2026-03-30: `.\scripts\Build-PortableRelease.ps1 -Configuration Release` succeeded and created `artifacts\release-staging\DateEverythingAccess-portable-v0.1.0.zip`.
 - Published on GitHub on 2026-03-26: uploaded a second release asset, `DateEverythingAccess-portable-v0.1.0.zip`, to `https://github.com/ObjectInSpace/date-everything-access/releases/tag/v0.1.0`; it contains the tested BepInEx bootstrap files (`winhttp.dll`, `doorstop_config.ini`, `.doorstop_version`), `BepInEx\core`, `BepInEx\plugins\DateEverythingAccess.dll`, `Tolk.dll`, `nvdaControllerClient64.dll`, `README.txt`, `Install-DateEverythingAccess.ps1`, and `THIRD-PARTY-NOTICES.txt`.
 - Published on GitHub on 2026-03-26: created release `v0.1.0 - Initial Release` at `https://github.com/ObjectInSpace/date-everything-access/releases/tag/v0.1.0` with asset `DateEverythingAccess-v0.1.0.zip` containing `BepInEx\plugins\DateEverythingAccess.dll`, `Tolk.dll`, `nvdaControllerClient64.dll`, and `README.txt`.
@@ -174,12 +187,18 @@
 
 - F1: Help
 - Ctrl+F1: Repeat last spoken line
+- Ctrl+F6: Start navigation to the current objective or selected room target
+- Ctrl+Shift+F6: Cycle navigation target
+- Ctrl+Alt+F6: Toggle auto-walk
 - F9: Toggle debug mode
 - Ctrl+F9: Accessibility settings
 
 ## Notes for Next Session
 
 - Portable release packaging now lives in `.\scripts\Build-PortableRelease.ps1` and `artifacts\release-src\v0.1.0\portable\`; use that path when rebuilding or revising the self-contained loader bundle.
+- `navigation_graph.json` is now loaded from the game-side `BepInEx\plugins\` directory. The current file has usable room links, but its waypoint coordinates are still zero, so navigation should continue to rely on `CameraSpaces` live zone positions for actual movement targets.
+- The room-navigation hotkeys are now wired in code, but they still need runtime verification for target cycling, tutorial-objective routing, and blocked-path behavior.
+- Phone app speech now depends on the consolidated current-app announcer path; if a phone regression appears, inspect that generic path before reviving the deleted per-app detail methods.
 - The public `v0.1.0` release now has both a minimal mod zip and a portable zip; if one changes, keep the asset names and README contents aligned so users can tell which package already includes BepInEx.
 - Public release `v0.1.0` is now live at `https://github.com/ObjectInSpace/date-everything-access/releases/tag/v0.1.0`; if the package layout changes later, rebuild the zip so it still contains `BepInEx\plugins\DateEverythingAccess.dll`, `Tolk.dll`, `nvdaControllerClient64.dll`, and an updated plain-text `README.txt`.
 - If chat repeat still fails after the current selection-aware pass, the next step is targeted runtime logging around `RequestRepeatLastSpeech()`, the selected-object branch inside `TryBuildCurrentRepeatableAnnouncement()`, and the final text handed to `ScreenReader.Say(...)` so the mismatch can be narrowed to state detection versus repeat-memory handling.

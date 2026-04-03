@@ -106,7 +106,7 @@ decompiled/
 Thumbs.db
 Desktop.ini
 
-# MelonLoader output (don't commit game DLLs)
+# Built plugin output and game DLLs (don't commit these)
 *.dll
 !templates/**
 

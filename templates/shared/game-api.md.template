@@ -4,9 +4,9 @@
 
 - **Spiel:** [SPIELNAME]
 - **Engine:** Unity [VERSION]
-- **Runtime:** [net35/net6 - aus MelonLoader-Log]
+- **Runtime:** [net35/net472 - aus dem BepInEx-Log oder den geladenen DLLs]
 - **Architektur:** [32-Bit/64-Bit]
-- **Entwickler:** [ENTWICKLERNAME - EXAKT aus MelonLoader-Log]
+- **Entwickler:** [ENTWICKLERNAME - Projektangabe]
 
 ---
 

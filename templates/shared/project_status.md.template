@@ -5,7 +5,7 @@
 - **Game:** [GAME NAME]
 - **Engine:** [ENGINE + VERSION]
 - **Architecture:** [32-bit / 64-bit]
-- **Mod Loader:** [MelonLoader / BepInEx]
+- **Mod Loader:** [BepInEx]
 - **Runtime:** [net35 / net6]
 - **Game directory:** [PATH]
 - **User experience level:** [Little/None or A Lot]
@@ -17,7 +17,7 @@
 - [x] Game name and path confirmed
 - [x] Game familiarity assessed
 - [ ] Game directory auto-check completed
-- [ ] Mod loader selected and installed (MelonLoader or BepInEx)
+- [ ] Mod loader selected and installed (BepInEx)
 - [ ] Tolk DLLs in place
 - [ ] .NET SDK available
 - [ ] Decompiler tool ready
@@ -114,7 +114,7 @@ Document important decisions so future sessions understand the reasoning:
 <!-- Example:
 - Using ReflectionHelper for all UI text access (most fields are private)
 - State management via AccessStateManager (3+ handlers share arrow keys)
-- Manual Harmony patching in OnSceneWasLoaded (typeof() crashes at assembly load)
+- Manual Harmony patching after scene load (typeof() crashes at assembly load)
 -->
 
 ## Key Bindings (Mod)

@@ -1,129 +1,6 @@
 # Technical Reference
 
-Compact overview: MelonLoader, BepInEx, Harmony, and Tolk.
-
----
-
-## MelonLoader Basics
-
-### Project References (csproj)
-
-```xml
-<Reference Include="MelonLoader">
-    <HintPath>[GameDirectory]\MelonLoader\net6\MelonLoader.dll</HintPath>
-</Reference>
-<Reference Include="UnityEngine.CoreModule">
-    <HintPath>[GameDirectory]\MelonLoader\Managed\UnityEngine.CoreModule.dll</HintPath>
-</Reference>
-<Reference Include="Assembly-CSharp">
-    <HintPath>[GameDirectory]\[Game]_Data\Managed\Assembly-CSharp.dll</HintPath>
-</Reference>
-```
-
-### MelonInfo Attribute
-
-```csharp
-[assembly: MelonInfo(typeof(MyNamespace.Main), "ModName", "1.0.0", "Author")]
-[assembly: MelonGame("Developer", "GameName")]
-```
-
-### Lifecycle
-
-```csharp
-public class Main : MelonMod
-{
-    public override void OnInitializeMelon() { }  // Once on load
-    public override void OnUpdate() { }            // Every frame
-    public override void OnSceneWasLoaded(int buildIndex, string sceneName) { }
-    public override void OnApplicationQuit() { }   // On exit
-}
-```
-
-### CRITICAL: Accessing Game Code
-
-**Any access to game classes before the game is fully loaded can crash.**
-
-This affects:
-- Game manager singletons (e.g., `GameManager.i`, `AudioManager.instance`)
-- `typeof(GameClass)` - even in Harmony attributes!
-- Any reference to game classes in fields or early methods
-
-**Allowed by timing:**
-
-- Assembly load: Only own classes and Unity types
-- OnInitializeMelon: Only own initialization, NO game access
-- OnSceneWasLoaded: Everything allowed
-
-**When is the game ready?**
-
-Only in/after `OnSceneWasLoaded()`. Safe test: Check a reliable UI element:
-
-```csharp
-if (GameObject.Find("MainUI") == null)
-    return; // Game not ready yet
-```
-
-**Error 1: typeof() in Harmony attributes**
-
-```csharp
-// WRONG - typeof() is evaluated at assembly load
-[HarmonyPatch(typeof(GameClass))]
-public static class MyPatch { }
-```
-
-```csharp
-// CORRECT - Apply patches manually in OnSceneWasLoaded
-public override void OnSceneWasLoaded(int buildIndex, string sceneName)
-{
-    if (!_patchesApplied && GameObject.Find("MainUI") != null)
-    {
-        var targetType = typeof(GameClass);
-        _harmony.Patch(AccessTools.Method(targetType, "MethodName"), ...);
-        _patchesApplied = true;
-    }
-}
-```
-
-**Error 2: Singleton access too early**
-
-```csharp
-// WRONG - Singleton can block or crash
-public override void OnUpdate()
-{
-    var manager = GameManager.i;
-}
-```
-
-```csharp
-// CORRECT - Check first, then cache
-private GameManager _cachedManager = null;
-
-private GameManager GetManagerSafe()
-{
-    if (_cachedManager != null) return _cachedManager;
-
-    if (GameObject.Find("MainUI") == null)
-        return null; // Game not ready yet
-
-    _cachedManager = GameManager.i;
-    return _cachedManager;
-}
-```
-
-### Logging
-
-```csharp
-MelonLogger.Msg("Info");
-MelonLogger.Warning("Warning");
-MelonLogger.Error("Error");
-```
-
-### Key Input
-
-```csharp
-if (Input.GetKeyDown(KeyCode.F1)) { }  // Pressed once
-if (Input.GetKey(KeyCode.LeftShift)) { }  // Held
-```
+Compact overview: BepInEx, Harmony, and Tolk for this template.
 
 ---
 
@@ -156,7 +33,7 @@ if (Input.GetKey(KeyCode.LeftShift)) { }  // Held
 ```
 
 - First parameter: Unique GUID (reverse domain notation)
-- Unlike MelonLoader, these values are freely chosen (not from a log file)
+- These values are freely chosen by the mod author
 - The GUID must be unique across all mods for this game
 
 ### Lifecycle
@@ -168,13 +45,13 @@ using UnityEngine;
 [BepInPlugin("com.author.modname", "ModName", "1.0.0")]
 public class Main : BaseUnityPlugin
 {
-    void Awake() { }    // Once on load (like OnInitializeMelon)
-    void Update() { }   // Every frame (like OnUpdate)
-    void OnDestroy() { } // On exit (like OnApplicationQuit)
+    void Awake() { }    // Once on load
+    void Update() { }   // Every frame
+    void OnDestroy() { } // On exit
 }
 ```
 
-**Key differences from MelonLoader:**
+**Notes:**
 
 - `BaseUnityPlugin` inherits from `MonoBehaviour` — uses Unity lifecycle methods
 - No `OnSceneWasLoaded` equivalent built-in. Use `SceneManager.sceneLoaded` event instead:
@@ -193,9 +70,7 @@ private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
 }
 ```
 
-### CRITICAL: Accessing Game Code (BepInEx)
-
-The same timing rules apply as with MelonLoader:
+### CRITICAL: Accessing Game Code
 
 - **Awake()**: Only own initialization, NO game class access
 - **After scene load**: Everything allowed
@@ -229,7 +104,7 @@ Logger.LogError("Error");
 
 ### Key Input
 
-Same as MelonLoader — both use Unity's Input system:
+Uses Unity's Input system:
 
 ```csharp
 if (Input.GetKeyDown(KeyCode.F1)) { }  // Pressed once
@@ -238,30 +113,17 @@ if (Input.GetKey(KeyCode.LeftShift)) { }  // Held
 
 ### Mod Output Directory
 
-Built DLL goes into `BepInEx/plugins/` (not `Mods/` like MelonLoader).
+Built DLL goes into `BepInEx/plugins/`.
 
 ---
 
 ## Harmony Patching
 
-Harmony is included in both MelonLoader and BepInEx - no extra import needed.
+Harmony is bundled with the BepInEx setup used by this project, so no extra package import is needed for the base mod setup.
 
 ### Setup in Main
 
-**MelonLoader:**
 ```csharp
-private HarmonyLib.Harmony _harmony;
-
-public override void OnInitializeMelon()
-{
-    _harmony = new HarmonyLib.Harmony("com.author.modname");
-    _harmony.PatchAll();
-}
-```
-
-**BepInEx:**
-```csharp
-// Harmony is auto-created by BepInEx. Just call PatchAll in Awake:
 void Awake()
 {
     var harmony = new HarmonyLib.Harmony("com.author.modname");
@@ -292,7 +154,7 @@ public class HealthPatch
     [HarmonyPostfix]
     public static void Postfix(ref int __result)
     {
-        MelonLogger.Msg($"Health: {__result}");
+        DebugLogger.Log($"Health: {__result}");
     }
 }
 ```
@@ -398,21 +260,6 @@ public static class ScreenReader
 
 ### Usage
 
-**MelonLoader:**
-```csharp
-public override void OnInitializeMelon()
-{
-    ScreenReader.Initialize();
-    ScreenReader.Say("Mod loaded");
-}
-
-public override void OnApplicationQuit()
-{
-    ScreenReader.Shutdown();
-}
-```
-
-**BepInEx:**
 ```csharp
 void Awake()
 {
@@ -527,7 +374,6 @@ If the game runs on Linux or macOS, the mod can be ported. Here is what works, w
 ### Mod Loader
 
 - **BepInEx**: Has official Linux builds and works on macOS. Best choice for cross-platform mods.
-- **MelonLoader**: Linux support exists but is less mature than BepInEx. macOS support is limited.
 - If cross-platform is a goal, prefer BepInEx.
 
 ### The main challenge: Screen reader integration

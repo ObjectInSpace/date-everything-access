@@ -12,15 +12,21 @@ namespace DateEverythingAccess
     public class Main : BaseUnityPlugin
     {
         private const int VkF1 = 0x70;
+        private const int VkF6 = 0x75;
         private const int VkF9 = 0x78;
         private const int WmHotkey = 0x0312;
         private const int WmQuit = 0x0012;
         private const uint ModControl = 0x0002;
+        private const uint ModShift = 0x0004;
+        private const uint ModAlt = 0x0001;
         private const uint ModNoRepeat = 0x4000;
         private const int HelpHotkeyId = 1;
         private const int DebugHotkeyId = 2;
         private const int SettingsHotkeyId = 3;
         private const int RepeatSpeechHotkeyId = 4;
+        private const int NavigateToObjectiveHotkeyId = 5;
+        private const int SelectNavigationTargetHotkeyId = 6;
+        private const int AutoWalkHotkeyId = 7;
 
         private Thread _hotkeyThread;
         private volatile bool _hotkeyThreadRunning;
@@ -148,6 +154,9 @@ namespace DateEverythingAccess
                 RegisterHotkeyOrThrow(DebugHotkeyId, VkF9, "F9");
                 RegisterHotkeyOrThrow(SettingsHotkeyId, ModControl | ModNoRepeat, VkF9, "Ctrl+F9");
                 RegisterHotkeyOrThrow(RepeatSpeechHotkeyId, ModControl | ModNoRepeat, VkF1, "Ctrl+F1");
+                RegisterHotkeyOrThrow(NavigateToObjectiveHotkeyId, ModControl | ModNoRepeat, VkF6, "Ctrl+F6");
+                RegisterHotkeyOrThrow(SelectNavigationTargetHotkeyId, ModControl | ModShift | ModNoRepeat, VkF6, "Ctrl+Shift+F6");
+                RegisterHotkeyOrThrow(AutoWalkHotkeyId, ModControl | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+F6");
                 Logger.LogInfo("Background hotkey message loop active");
 
                 NativeMessage message;
@@ -173,6 +182,9 @@ namespace DateEverythingAccess
                 UnregisterHotKey(IntPtr.Zero, DebugHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, SettingsHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, RepeatSpeechHotkeyId);
+                UnregisterHotKey(IntPtr.Zero, NavigateToObjectiveHotkeyId);
+                UnregisterHotKey(IntPtr.Zero, SelectNavigationTargetHotkeyId);
+                UnregisterHotKey(IntPtr.Zero, AutoWalkHotkeyId);
                 Logger.LogInfo("Background hotkey thread exiting");
             }
         }
@@ -218,6 +230,27 @@ namespace DateEverythingAccess
             if (hotkeyId == RepeatSpeechHotkeyId)
             {
                 RepeatLastSpeech();
+                return;
+            }
+
+            if (hotkeyId == NavigateToObjectiveHotkeyId)
+            {
+                Logger.LogInfo("Navigate to objective hotkey detected");
+                AccessibilityWatcher.RequestNavigateToObjective();
+                return;
+            }
+
+            if (hotkeyId == SelectNavigationTargetHotkeyId)
+            {
+                Logger.LogInfo("Select navigation target hotkey detected");
+                AccessibilityWatcher.RequestSelectNavigationTarget();
+                return;
+            }
+
+            if (hotkeyId == AutoWalkHotkeyId)
+            {
+                Logger.LogInfo("Auto-walk hotkey detected");
+                AccessibilityWatcher.RequestAutoWalk();
             }
         }
 

@@ -1,36 +1,19 @@
 <#
 .SYNOPSIS
-    Validiert die Mod-Projekteinrichtung.
+    Validates the BepInEx-based Date Everything Access project setup.
 
 .DESCRIPTION
-    Prueft ob alle notwendigen Dateien und Konfigurationen vorhanden sind:
-    - MelonLoader Installation
-    - Tolk-DLLs
-    - Projektdatei (csproj)
-    - Referenzen
-    - MelonGame-Attribut
-
-    Gibt klare Fehlermeldungen und Loesungsvorschlaege aus.
-
-.PARAMETER GamePath
-    Pfad zum Spielordner (wo die .exe liegt).
-
-.PARAMETER ProjectPath
-    Pfad zum Mod-Projektordner. Standard: Aktuelles Verzeichnis.
-
-.PARAMETER Architecture
-    Architektur des Spiels: "x64" oder "x86".
-    Wird fuer Tolk-DLL-Pruefung benoetigt.
-
-.EXAMPLE
-    .\Test-ModSetup.ps1 -GamePath "C:\Spiele\MeinSpiel" -Architecture x64
-
-.EXAMPLE
-    .\Test-ModSetup.ps1 -GamePath "C:\Spiele\MeinSpiel" -ProjectPath "C:\Projekte\MeinMod" -Architecture x86
+    Checks the current game and project folders for the files this project
+    actually depends on:
+    - BepInEx installation
+    - Tolk DLLs
+    - project file and build references
+    - plugin attribute and copy target
+    - decompiled game code
 #>
 
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$GamePath,
 
     [string]$ProjectPath = (Get-Location).Path,
@@ -39,7 +22,6 @@ param(
     [string]$Architecture = "x64"
 )
 
-# Zaehler fuer Ergebnisse
 $script:errorCount = 0
 $script:warningCount = 0
 $script:successCount = 0
@@ -47,7 +29,7 @@ $script:successCount = 0
 function Write-Check {
     param(
         [string]$Name,
-        [string]$Status,  # "OK", "FEHLER", "WARNUNG"
+        [string]$Status,
         [string]$Details = ""
     )
 
@@ -56,12 +38,12 @@ function Write-Check {
             Write-Host "OK: $Name"
             $script:successCount++
         }
-        "FEHLER" {
-            Write-Host "FEHLER: $Name"
+        "ERROR" {
+            Write-Host "ERROR: $Name"
             $script:errorCount++
         }
-        "WARNUNG" {
-            Write-Host "WARNUNG: $Name"
+        "WARN" {
+            Write-Host "WARN: $Name"
             $script:warningCount++
         }
     }
@@ -73,299 +55,218 @@ function Write-Check {
 
 function Write-Solution {
     param([string]$Text)
-    Write-Host "   Loesung: $Text"
+    Write-Host "   Fix: $Text"
 }
 
 Write-Host ""
-Write-Host "Mod-Setup Validierung"
-Write-Host "====================="
+Write-Host "Date Everything Access Setup Validation"
+Write-Host "======================================="
 Write-Host ""
-Write-Host "Spielordner: $GamePath"
-Write-Host "Projektordner: $ProjectPath"
-Write-Host "Architektur: $Architecture"
-Write-Host ""
-Write-Host "Pruefe..."
-Write-Host "---------"
+Write-Host "Game folder: $GamePath"
+Write-Host "Project folder: $ProjectPath"
+Write-Host "Architecture: $Architecture"
 Write-Host ""
 
-# ===================
-# 1. SPIELORDNER
-# ===================
-
-Write-Host "1. Spielordner"
+Write-Host "1. Game Folder"
 Write-Host ""
 
-# Spielordner existiert?
-if (Test-Path $GamePath) {
-    Write-Check "Spielordner existiert" "OK"
+if (Test-Path -LiteralPath $GamePath) {
+    Write-Check "Game folder exists" "OK"
 } else {
-    Write-Check "Spielordner existiert" "FEHLER" "Pfad nicht gefunden: $GamePath"
-    Write-Solution "Pruefe den Pfad auf Tippfehler"
-    Write-Host ""
-    Write-Host "Abbruch - Spielordner muss existieren."
+    Write-Check "Game folder exists" "ERROR" "Path not found: $GamePath"
+    Write-Solution "Check the game path and run the script again."
     exit 1
 }
 
-# Spiel-EXE finden
 $exeFiles = Get-ChildItem -Path $GamePath -Filter "*.exe" -File | Where-Object { $_.Name -notmatch "UnityCrashHandler|UnityPlayer" }
 if ($exeFiles.Count -gt 0) {
-    Write-Check "Spiel-EXE gefunden" "OK" $exeFiles[0].Name
+    Write-Check "Game executable found" "OK" $exeFiles[0].Name
 } else {
-    Write-Check "Spiel-EXE gefunden" "WARNUNG" "Keine EXE im Spielordner gefunden"
+    Write-Check "Game executable found" "WARN" "No game executable was found in the top-level game folder."
 }
 
 Write-Host ""
-
-# ===================
-# 2. MELONLOADER
-# ===================
-
-Write-Host "2. MelonLoader"
+Write-Host "2. BepInEx"
 Write-Host ""
 
-$melonLoaderPath = Join-Path $GamePath "MelonLoader"
+$bepInExPath = Join-Path $GamePath "BepInEx"
+$bepInExCore = Join-Path $bepInExPath "core"
+$bepInExPlugins = Join-Path $bepInExPath "plugins"
+$bepInExDll = Join-Path $bepInExCore "BepInEx.dll"
+$harmonyDll = Join-Path $bepInExCore "0Harmony.dll"
+$logPath = Join-Path $bepInExPath "LogOutput.log"
 
-if (Test-Path $melonLoaderPath) {
-    Write-Check "MelonLoader-Ordner existiert" "OK"
-
-    # MelonLoader.dll pruefen
-    $melonDll = Join-Path $melonLoaderPath "net6\MelonLoader.dll"
-    $melonDll35 = Join-Path $melonLoaderPath "net35\MelonLoader.dll"
-
-    if ((Test-Path $melonDll) -or (Test-Path $melonDll35)) {
-        Write-Check "MelonLoader.dll vorhanden" "OK"
-    } else {
-        Write-Check "MelonLoader.dll vorhanden" "FEHLER" "DLL nicht in net6/ oder net35/ gefunden"
-        Write-Solution "MelonLoader neu installieren"
-    }
-
-    # Log pruefen
-    $logPath = Join-Path $melonLoaderPath "Latest.log"
-    if (Test-Path $logPath) {
-        Write-Check "Latest.log vorhanden" "OK"
-        Write-Host "   Tipp: Fuehre Get-MelonLoaderInfo.ps1 aus um die Werte zu extrahieren"
-    } else {
-        Write-Check "Latest.log vorhanden" "WARNUNG" "Log nicht gefunden"
-        Write-Solution "Starte das Spiel einmal mit MelonLoader"
-    }
-
+if (Test-Path -LiteralPath $bepInExPath) {
+    Write-Check "BepInEx folder exists" "OK"
 } else {
-    Write-Check "MelonLoader-Ordner existiert" "FEHLER" "Ordner nicht gefunden"
-    Write-Solution "MelonLoader installieren von https://github.com/LavaGang/MelonLoader.Installer/releases"
+    Write-Check "BepInEx folder exists" "ERROR" "Folder not found: $bepInExPath"
+    Write-Solution "Install BepInEx 5.x for the game and launch it once."
 }
 
-# Mods-Ordner
-$modsPath = Join-Path $GamePath "Mods"
-if (Test-Path $modsPath) {
-    Write-Check "Mods-Ordner existiert" "OK"
+if (Test-Path -LiteralPath $bepInExDll) {
+    Write-Check "BepInEx.dll present" "OK"
 } else {
-    Write-Check "Mods-Ordner existiert" "WARNUNG" "Wird beim ersten Start erstellt"
+    Write-Check "BepInEx.dll present" "ERROR" "Missing: $bepInExDll"
+    Write-Solution "Reinstall BepInEx and confirm the core runtime files are in place."
+}
+
+if (Test-Path -LiteralPath $harmonyDll) {
+    Write-Check "0Harmony.dll present" "OK"
+} else {
+    Write-Check "0Harmony.dll present" "ERROR" "Missing: $harmonyDll"
+    Write-Solution "Reinstall BepInEx and confirm Harmony was extracted into BepInEx\\core."
+}
+
+if (Test-Path -LiteralPath $bepInExPlugins) {
+    Write-Check "BepInEx plugins folder exists" "OK"
+} else {
+    Write-Check "BepInEx plugins folder exists" "WARN" "Folder not found: $bepInExPlugins"
+    Write-Solution "Start the game once after installing BepInEx to create the folder structure."
+}
+
+if (Test-Path -LiteralPath $logPath) {
+    Write-Check "BepInEx log found" "OK" $logPath
+} else {
+    Write-Check "BepInEx log found" "WARN" "Log file not found: $logPath"
+    Write-Solution "Start the game once with BepInEx to generate LogOutput.log."
 }
 
 Write-Host ""
-
-# ===================
-# 3. TOLK
-# ===================
-
-Write-Host "3. Tolk (Screenreader)"
+Write-Host "3. Tolk"
 Write-Host ""
 
 $tolkDll = Join-Path $GamePath "Tolk.dll"
-if (Test-Path $tolkDll) {
-    Write-Check "Tolk.dll vorhanden" "OK"
-} else {
-    Write-Check "Tolk.dll vorhanden" "FEHLER" "Tolk.dll nicht im Spielordner"
-    Write-Solution "Tolk.dll von https://github.com/ndarilek/tolk/releases herunterladen und in den Spielordner kopieren"
-}
-
-# NVDA Controller Client
 $nvdaDll = if ($Architecture -eq "x64") {
     Join-Path $GamePath "nvdaControllerClient64.dll"
 } else {
     Join-Path $GamePath "nvdaControllerClient32.dll"
 }
 
-$nvdaDllName = Split-Path $nvdaDll -Leaf
-
-if (Test-Path $nvdaDll) {
-    Write-Check "$nvdaDllName vorhanden" "OK"
+if (Test-Path -LiteralPath $tolkDll) {
+    Write-Check "Tolk.dll present" "OK"
 } else {
-    Write-Check "$nvdaDllName vorhanden" "FEHLER" "NVDA-DLL nicht gefunden"
+    Write-Check "Tolk.dll present" "ERROR" "Missing: $tolkDll"
+    Write-Solution "Copy Tolk.dll into the game folder."
+}
 
-    # Pruefen ob die falsche Version vorhanden ist
-    $wrongDll = if ($Architecture -eq "x64") {
-        Join-Path $GamePath "nvdaControllerClient32.dll"
-    } else {
-        Join-Path $GamePath "nvdaControllerClient64.dll"
-    }
-
-    if (Test-Path $wrongDll) {
-        $wrongName = Split-Path $wrongDll -Leaf
-        Write-Host "   HINWEIS: $wrongName ist vorhanden - falsche Architektur!"
-        Write-Solution "Verwende die $Architecture Version aus dem Tolk-Download"
-    } else {
-        Write-Solution "nvdaControllerClient-DLL aus dem Tolk-Download in den Spielordner kopieren"
-    }
+if (Test-Path -LiteralPath $nvdaDll) {
+    Write-Check "$(Split-Path $nvdaDll -Leaf) present" "OK"
+} else {
+    Write-Check "$(Split-Path $nvdaDll -Leaf) present" "ERROR" "Missing: $nvdaDll"
+    Write-Solution "Copy the matching NVDA controller client DLL into the game folder."
 }
 
 Write-Host ""
-
-# ===================
-# 4. PROJEKTDATEIEN
-# ===================
-
-Write-Host "4. Projektdateien"
+Write-Host "4. Project Files"
 Write-Host ""
 
-# csproj finden
 $csprojFiles = Get-ChildItem -Path $ProjectPath -Filter "*.csproj" -File -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -notmatch "Assembly-CSharp" }
 
 if ($csprojFiles.Count -eq 0) {
-    Write-Check "Projektdatei (csproj)" "FEHLER" "Keine csproj gefunden"
-    Write-Solution "Erstelle eine csproj aus der Vorlage"
+    Write-Check "Project file (.csproj)" "ERROR" "No project file was found."
+    Write-Solution "Create or restore the project file."
+    $csprojPath = $null
 } elseif ($csprojFiles.Count -eq 1) {
-    Write-Check "Projektdatei (csproj)" "OK" $csprojFiles[0].Name
     $csprojPath = $csprojFiles[0].FullName
+    Write-Check "Project file (.csproj)" "OK" $csprojFiles[0].Name
 } else {
-    $names = ($csprojFiles | ForEach-Object { $_.Name }) -join ", "
-    Write-Check "Projektdatei (csproj)" "WARNUNG" "Mehrere gefunden: $names"
-    Write-Host "   Beim Build explizit angeben: dotnet build [Name].csproj"
     $csprojPath = $csprojFiles[0].FullName
+    $names = ($csprojFiles | ForEach-Object { $_.Name }) -join ", "
+    Write-Check "Project file (.csproj)" "WARN" "Multiple project files found: $names"
 }
 
-# Main.cs pruefen
 $mainCs = Join-Path $ProjectPath "Main.cs"
-if (Test-Path $mainCs) {
-    Write-Check "Main.cs vorhanden" "OK"
+if (Test-Path -LiteralPath $mainCs) {
+    Write-Check "Main.cs present" "OK"
 
-    # MelonGame-Attribut pruefen
-    $mainContent = Get-Content $mainCs -Raw
-    if ($mainContent -match '\[assembly:\s*MelonGame\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)\s*\]') {
-        $dev = $matches[1]
-        $game = $matches[2]
-        Write-Check "MelonGame-Attribut" "OK" "Developer: $dev, Game: $game"
-
-        # Warnen wenn Platzhalter
-        if ($dev -eq "ENTWICKLER" -or $game -eq "SPIELNAME") {
-            Write-Check "MelonGame-Werte" "WARNUNG" "Platzhalter noch nicht ersetzt!"
-            Write-Solution "Werte aus MelonLoader-Log eintragen (Get-MelonLoaderInfo.ps1)"
-        }
+    $mainContent = Get-Content -LiteralPath $mainCs -Raw
+    if ($mainContent -match '\[BepInPlugin\("([^"]+)",\s*"([^"]+)",\s*"([^"]+)"\)\]') {
+        Write-Check "BepInPlugin attribute" "OK" "GUID: $($matches[1]); Name: $($matches[2]); Version: $($matches[3])"
     } else {
-        Write-Check "MelonGame-Attribut" "FEHLER" "Nicht gefunden oder fehlerhaft"
-        Write-Solution "MelonGame-Attribut in Main.cs einfuegen"
+        Write-Check "BepInPlugin attribute" "ERROR" "Main.cs is missing a valid BepInPlugin attribute."
+        Write-Solution "Add [BepInPlugin(...)] to the plugin class in Main.cs."
     }
 } else {
-    Write-Check "Main.cs vorhanden" "FEHLER" "Hauptdatei fehlt"
-    Write-Solution "Main.cs aus Vorlage erstellen"
+    Write-Check "Main.cs present" "ERROR" "Missing: $mainCs"
+    Write-Solution "Restore Main.cs from source control or recreate it."
 }
 
 Write-Host ""
+Write-Host "5. Project Configuration"
+Write-Host ""
 
-# ===================
-# 5. CSPROJ INHALT
-# ===================
+if ($csprojPath -and (Test-Path -LiteralPath $csprojPath)) {
+    $csprojContent = Get-Content -LiteralPath $csprojPath -Raw
 
-if ($csprojPath -and (Test-Path $csprojPath)) {
-    Write-Host "5. Projektkonfiguration (csproj)"
-    Write-Host ""
-
-    $csprojContent = Get-Content $csprojPath -Raw
-
-    # TargetFramework pruefen
     if ($csprojContent -match '<TargetFramework>([^<]+)</TargetFramework>') {
-        $framework = $matches[1]
-        Write-Check "TargetFramework" "OK" $framework
-
-        if ($framework -eq "netstandard2.0") {
-            Write-Check "Framework-Kompatibilitaet" "WARNUNG" "netstandard2.0 kann Probleme verursachen!"
-            Write-Solution "Fuer net35-Spiele: net472 verwenden. Fuer net6-Spiele: net6.0 verwenden."
-        }
-
-        if ($framework -eq "TARGET_FRAMEWORK") {
-            Write-Check "Framework-Wert" "FEHLER" "Platzhalter nicht ersetzt!"
-            Write-Solution "Wert aus MelonLoader-Log eintragen"
-        }
+        Write-Check "TargetFramework" "OK" $matches[1]
     } else {
-        Write-Check "TargetFramework" "FEHLER" "Nicht gefunden"
+        Write-Check "TargetFramework" "ERROR" "No TargetFramework entry was found."
     }
 
-    # Decompiled-Ausschluss pruefen
     if ($csprojContent -match '<Compile\s+Remove="decompiled\\\*\*"') {
-        Write-Check "Decompiled-Ausschluss" "OK"
+        Write-Check "decompiled exclusion" "OK"
     } else {
-        Write-Check "Decompiled-Ausschluss" "WARNUNG" "decompiled-Ordner wird nicht ausgeschlossen"
-        Write-Solution "In csproj einfuegen: <Compile Remove=`"decompiled\**`" />"
+        Write-Check "decompiled exclusion" "WARN" "The decompiled folder is not excluded from compilation."
+        Write-Solution 'Add <Compile Remove="decompiled\**" /> to the project file.'
     }
 
-    # MelonLoader-Referenz pruefen
-    if ($csprojContent -match '<Reference\s+Include="MelonLoader"') {
-        Write-Check "MelonLoader-Referenz" "OK"
-
-        # Pfad pruefen
-        if ($csprojContent -match 'SPIELORDNER') {
-            Write-Check "Referenz-Pfade" "FEHLER" "Platzhalter SPIELORDNER nicht ersetzt!"
-            Write-Solution "Alle SPIELORDNER durch den echten Pfad ersetzen"
-        }
+    if ($csprojContent -match '<Reference\s+Include="BepInEx"') {
+        Write-Check "BepInEx reference" "OK"
     } else {
-        Write-Check "MelonLoader-Referenz" "FEHLER" "Nicht gefunden"
+        Write-Check "BepInEx reference" "ERROR" "The project file does not reference BepInEx."
+        Write-Solution "Add the BepInEx core reference to the project file."
     }
 
-    # Copy-Target pruefen
-    if ($csprojContent -match 'CopyToMods') {
-        Write-Check "Auto-Copy zu Mods" "OK"
+    if ($csprojContent -match '<Reference\s+Include="0Harmony"') {
+        Write-Check "Harmony reference" "OK"
     } else {
-        Write-Check "Auto-Copy zu Mods" "WARNUNG" "DLL wird nicht automatisch kopiert"
-        Write-Solution "CopyToMods-Target aus Vorlage uebernehmen"
+        Write-Check "Harmony reference" "ERROR" "The project file does not reference 0Harmony."
+        Write-Solution "Add the Harmony reference from BepInEx\\core."
     }
 
-    Write-Host ""
+    if ($csprojContent -match 'CopyToPlugins') {
+        Write-Check "CopyToPlugins target" "OK"
+    } else {
+        Write-Check "CopyToPlugins target" "WARN" "No post-build plugin copy target was found."
+        Write-Solution "Add a CopyToPlugins target if you want the DLL copied into BepInEx\\plugins automatically."
+    }
 }
 
-# ===================
-# 6. DECOMPILED
-# ===================
-
-Write-Host "6. Dekompilierter Code"
+Write-Host ""
+Write-Host "6. Decompiled Source"
 Write-Host ""
 
 $decompiledPath = Join-Path $ProjectPath "decompiled"
-if (Test-Path $decompiledPath) {
-    $csFiles = Get-ChildItem -Path $decompiledPath -Filter "*.cs" -Recurse -ErrorAction SilentlyContinue
-    if ($csFiles.Count -gt 0) {
-        Write-Check "Dekompilierter Code" "OK" "$($csFiles.Count) CS-Dateien gefunden"
+if (Test-Path -LiteralPath $decompiledPath) {
+    $decompiledFiles = Get-ChildItem -Path $decompiledPath -Filter "*.cs" -Recurse -ErrorAction SilentlyContinue
+    if ($decompiledFiles.Count -gt 0) {
+        Write-Check "Decompiled source present" "OK" "$($decompiledFiles.Count) C# files found"
     } else {
-        Write-Check "Dekompilierter Code" "WARNUNG" "Ordner existiert aber keine CS-Dateien"
-        Write-Solution "Assembly-CSharp.dll mit dnSpy dekompilieren und Code hier ablegen"
+        Write-Check "Decompiled source present" "WARN" "The folder exists but no C# files were found."
+        Write-Solution "Re-decompile the game assemblies into the decompiled folder."
     }
 } else {
-    Write-Check "Decompiled-Ordner" "WARNUNG" "Nicht vorhanden"
-    Write-Solution "Ordner 'decompiled' erstellen und dekompilierten Code dort ablegen"
+    Write-Check "Decompiled source present" "WARN" "The decompiled folder does not exist."
+    Write-Solution "Create the decompiled folder and extract the game assemblies there."
 }
 
 Write-Host ""
-
-# ===================
-# ZUSAMMENFASSUNG
-# ===================
-
-Write-Host "Zusammenfassung"
-Write-Host "==============="
+Write-Host "Summary"
+Write-Host "======="
 Write-Host ""
-Write-Host "Erfolgreich: $script:successCount"
-Write-Host "Warnungen: $script:warningCount"
-Write-Host "Fehler: $script:errorCount"
+Write-Host "Successful: $script:successCount"
+Write-Host "Warnings:   $script:warningCount"
+Write-Host "Errors:     $script:errorCount"
 Write-Host ""
 
 if ($script:errorCount -eq 0 -and $script:warningCount -eq 0) {
-    Write-Host "Alles in Ordnung! Das Projekt ist bereit zum Bauen."
-    Write-Host "Befehl: dotnet build"
+    Write-Host "Everything looks ready."
 } elseif ($script:errorCount -eq 0) {
-    Write-Host "Projekt kann gebaut werden, aber es gibt Warnungen."
-    Write-Host "Empfehlung: Warnungen vor dem ersten Build beheben."
+    Write-Host "The project is usable, but there are warnings worth fixing."
 } else {
-    Write-Host "Es gibt Fehler! Diese muessen vor dem Build behoben werden."
+    Write-Host "Fix the reported errors before relying on the build or runtime setup."
 }
 
 Write-Host ""

@@ -34,6 +34,11 @@ namespace DateEverythingAccess
         private const float DateADexOpenEntryMaximumSuppressionSeconds = 8f;
         private const float EstimatedSpeechWordsPerMinute = 185f;
         private const float EstimatedSpeechLeadInSeconds = 0.75f;
+        private const float AutoWalkArrivalDistance = 2f;
+        private const float AutoWalkFacingThresholdDegrees = 80f;
+        private const float AutoWalkLookScaleDegrees = 45f;
+        private const float AutoWalkProgressDistance = 0.35f;
+        private const float AutoWalkBlockedTimeoutSeconds = 2f;
         private const int VkUp = 0x26;
         private const int VkDown = 0x28;
         private const int VkLeft = 0x25;
@@ -74,9 +79,14 @@ namespace DateEverythingAccess
         private static FieldInfo _saveScreenManagerNewSaveSlotField;
         private static FieldInfo _saveSlotPlayTimeField;
         private static FieldInfo _saveSlotDaysPlayedField;
+        private static FieldInfo _betterPlayerControlMoveField;
+        private static FieldInfo _betterPlayerControlLookField;
         private static Type _engagementType;
         private static Type _loadingFactsType;
         private static int _repeatLastSpeechRequested;
+        private static int _navigateToObjectiveRequested;
+        private static int _selectNavigationTargetRequested;
+        private static int _autoWalkRequested;
         private static int _pendingDateADexEntryAnnouncementRequested;
         private static float _pendingDateADexEntryAnnouncementNotBefore;
         private static float _pendingDateADexEntryAnnouncementExpiresAt;
@@ -99,15 +109,7 @@ namespace DateEverythingAccess
         private string _lastScreenSummary;
         private string _lastRoomName;
         private string _lastInteractableId;
-        private string _lastRoomersDetail;
         private string _lastDateADexDetail;
-        private string _pendingDateADexDetail;
-        private string _lastChatAppDetail;
-        private string _pendingChatAppDetail;
-        private string _lastActiveChatKey;
-        private string _lastMusicDetail;
-        private string _lastArtDetail;
-        private string _lastCollectableDetail;
         private string _lastResultDetail;
         private string _lastPopupAnnouncement;
         private string _lastUIDialogAnnouncement;
@@ -131,17 +133,23 @@ namespace DateEverythingAccess
         private int _lastLoveCount = -1;
         private int _lastHateCount = -1;
         private int _lastRealizedCount = -1;
+        private int _navigationSelectionIndex = -1;
         private float _nextPollTime;
         private float _suppressDateADexSelectionUntil;
         private float _suppressPopupSelectionUntil;
         private float _suppressUIDialogSelectionUntil;
         private float _suppressSpecsSelectionUntil;
         private float _suppressCreditsSelectionUntil;
-        private float _pendingDateADexDetailSince;
-        private float _pendingChatAppDetailSince;
-        private float _suppressChatSelectionUntil;
         private float _suppressPendingSpecsTutorialUntil;
+        private float _lastAutoWalkProgressTime;
         private SpecsAnnouncementMode _lastSpecsAnnouncementMode;
+        private string _navigationTargetZone;
+        private string _navigationTargetLabel;
+        private string _lastNavigationNextZone;
+        private Vector3 _lastAutoWalkPosition;
+        private List<string> _navigationPath;
+        private bool _isNavigationActive;
+        private bool _isAutoWalking;
 
         internal static void EnsureCreated()
         {
@@ -160,6 +168,24 @@ namespace DateEverythingAccess
             Interlocked.Exchange(ref _repeatLastSpeechRequested, 1);
         }
 
+        internal static void RequestNavigateToObjective()
+        {
+            EnsureCreated();
+            Interlocked.Exchange(ref _navigateToObjectiveRequested, 1);
+        }
+
+        internal static void RequestSelectNavigationTarget()
+        {
+            EnsureCreated();
+            Interlocked.Exchange(ref _selectNavigationTargetRequested, 1);
+        }
+
+        internal static void RequestAutoWalk()
+        {
+            EnsureCreated();
+            Interlocked.Exchange(ref _autoWalkRequested, 1);
+        }
+
         internal static void RequestDateADexEntryAnnouncement()
         {
             EnsureCreated();
@@ -175,6 +201,7 @@ namespace DateEverythingAccess
                 return;
 
             HandleRepeatLastSpeechRequest();
+            HandleNavigationRequests();
 
             bool isSettingsMenuOpen = ModConfig.IsMenuOpen;
             if (isSettingsMenuOpen)
@@ -216,6 +243,16 @@ namespace DateEverythingAccess
             AnnounceProgressionChangesIfNeeded();
         }
 
+        private void LateUpdate()
+        {
+            if (Main.IsShuttingDown)
+                return;
+
+            UpdateNavigationState();
+            ApplyAutoWalk();
+            ObjectTracker.UpdateTracking();
+        }
+
         private void HandlePendingDateADexEntryAnnouncement()
         {
             if (Interlocked.CompareExchange(ref _pendingDateADexEntryAnnouncementRequested, 0, 0) == 0)
@@ -235,8 +272,6 @@ namespace DateEverythingAccess
 
             Interlocked.Exchange(ref _pendingDateADexEntryAnnouncementRequested, 0);
             _lastDateADexDetail = announcement;
-            _pendingDateADexDetail = null;
-            _pendingDateADexDetailSince = 0f;
             float openEntrySuppressionSeconds = EstimateSpeechSuppressionSeconds(
                 announcement,
                 DateADexOpenEntryMinimumSuppressionSeconds,
@@ -294,6 +329,514 @@ namespace DateEverythingAccess
                 return;
 
             ScreenReader.Say(Loc.Get("repeat_last_unavailable"), remember: false);
+        }
+
+        private void HandleNavigationRequests()
+        {
+            if (Interlocked.Exchange(ref _selectNavigationTargetRequested, 0) != 0)
+                CycleNavigationTarget();
+
+            if (Interlocked.Exchange(ref _navigateToObjectiveRequested, 0) != 0)
+                StartNavigationToCurrentTarget();
+
+            if (Interlocked.Exchange(ref _autoWalkRequested, 0) != 0)
+                ToggleAutoWalk();
+        }
+
+        private void CycleNavigationTarget()
+        {
+            Loc.RefreshLanguage();
+
+            if (!TryGetNavigationTargets(out List<string> targets) || targets.Count == 0)
+            {
+                ScreenReader.Say(Loc.Get("navigation_no_objective"));
+                return;
+            }
+
+            string currentZone = GetCurrentZoneNameInternal();
+            int currentIndex = string.IsNullOrEmpty(_navigationTargetZone)
+                ? -1
+                : FindZoneIndex(targets, _navigationTargetZone);
+
+            _navigationSelectionIndex = currentIndex >= 0
+                ? (currentIndex + 1) % targets.Count
+                : 0;
+
+            _navigationTargetZone = targets[_navigationSelectionIndex];
+            _navigationTargetLabel = BuildNavigationTargetLabel(_navigationTargetZone, currentZone);
+            StopNavigationRuntime();
+
+            string announcement = Loc.Get("navigation_target_option", _navigationSelectionIndex + 1, targets.Count, _navigationTargetLabel);
+            ScreenReader.Say(Loc.Get("navigation_select_target_title") + ". " + announcement);
+        }
+
+        private void StartNavigationToCurrentTarget()
+        {
+            Loc.RefreshLanguage();
+
+            if (!TryEnsureNavigationTarget(out string targetZone, out string targetLabel))
+            {
+                ScreenReader.Say(Loc.Get("navigation_no_objective"));
+                return;
+            }
+
+            BeginNavigation(targetZone, targetLabel);
+        }
+
+        private void ToggleAutoWalk()
+        {
+            Loc.RefreshLanguage();
+
+            if (_isAutoWalking)
+            {
+                StopNavigationRuntime();
+                ScreenReader.Say(Loc.Get("navigation_autowalk_stopped"));
+                return;
+            }
+
+            if (!TryEnsureNavigationTarget(out string targetZone, out string targetLabel))
+            {
+                ScreenReader.Say(Loc.Get("navigation_no_objective"));
+                return;
+            }
+
+            if (!BeginNavigation(targetZone, targetLabel))
+                return;
+
+            if (!CanUseNavigationNow() || !ApplyNavigationInput(Vector3.zero, Vector3.zero))
+            {
+                StopNavigationRuntime();
+                ScreenReader.Say(Loc.Get("navigation_blocked"));
+                return;
+            }
+
+            _isAutoWalking = true;
+            _lastAutoWalkPosition = BetterPlayerControl.Instance != null ? BetterPlayerControl.Instance.transform.position : Vector3.zero;
+            _lastAutoWalkProgressTime = Time.unscaledTime;
+            ScreenReader.Say(Loc.Get("navigation_autowalk_started"));
+        }
+
+        private void UpdateNavigationState()
+        {
+            if (!_isNavigationActive)
+            {
+                if (ObjectTracker.IsTracking)
+                    ObjectTracker.StopTracking();
+                return;
+            }
+
+            if (!CanUseNavigationNow() || string.IsNullOrEmpty(_navigationTargetZone))
+            {
+                if (_isAutoWalking)
+                    StopNavigationWithAnnouncement("navigation_blocked");
+                else
+                    StopNavigationRuntime();
+                return;
+            }
+
+            if (!TryRefreshNavigationPath(forceAnnounce: false))
+            {
+                if (_isAutoWalking)
+                    StopNavigationWithAnnouncement("navigation_blocked");
+                else
+                    StopNavigationRuntime();
+            }
+        }
+
+        private void ApplyAutoWalk()
+        {
+            if (!_isAutoWalking)
+                return;
+
+            if (!CanUseNavigationNow() || BetterPlayerControl.Instance == null)
+            {
+                StopNavigationWithAnnouncement("navigation_blocked");
+                return;
+            }
+
+            if (!TryGetNextNavigationPosition(out Vector3 nextPosition))
+            {
+                StopNavigationWithAnnouncement("navigation_blocked");
+                return;
+            }
+
+            Transform playerTransform = BetterPlayerControl.Instance.transform;
+            Vector3 toTarget = nextPosition - playerTransform.position;
+            toTarget.y = 0f;
+
+            if (toTarget.sqrMagnitude <= AutoWalkArrivalDistance * AutoWalkArrivalDistance)
+            {
+                if (!TryRefreshNavigationPath(forceAnnounce: true))
+                {
+                    StopNavigationWithAnnouncement("navigation_blocked");
+                    return;
+                }
+
+                if (!TryGetNextNavigationPosition(out nextPosition))
+                {
+                    StopNavigationWithAnnouncement("navigation_blocked");
+                    return;
+                }
+
+                toTarget = nextPosition - playerTransform.position;
+                toTarget.y = 0f;
+            }
+
+            if (toTarget.sqrMagnitude <= 0.01f)
+            {
+                ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                return;
+            }
+
+            Vector3 direction = toTarget.normalized;
+            Vector3 localDirection = playerTransform.InverseTransformDirection(direction);
+            localDirection.y = 0f;
+
+            float turnDegrees = Vector3.SignedAngle(playerTransform.forward, direction, Vector3.up);
+            Vector3 moveInput = new Vector3(Mathf.Clamp(localDirection.x, -1f, 1f), 0f, Mathf.Clamp(localDirection.z, 0f, 1f));
+            if (Mathf.Abs(turnDegrees) > AutoWalkFacingThresholdDegrees)
+                moveInput = Vector3.zero;
+
+            Vector3 lookInput = new Vector3(Mathf.Clamp(turnDegrees / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
+            if (!ApplyNavigationInput(moveInput, lookInput))
+            {
+                StopNavigationWithAnnouncement("navigation_blocked");
+                return;
+            }
+
+            if (Vector3.Distance(playerTransform.position, _lastAutoWalkPosition) >= AutoWalkProgressDistance)
+            {
+                _lastAutoWalkPosition = playerTransform.position;
+                _lastAutoWalkProgressTime = Time.unscaledTime;
+            }
+            else if (Time.unscaledTime - _lastAutoWalkProgressTime >= AutoWalkBlockedTimeoutSeconds)
+            {
+                StopNavigationWithAnnouncement("navigation_blocked");
+            }
+        }
+
+        private bool BeginNavigation(string targetZone, string targetLabel)
+        {
+            _navigationTargetZone = targetZone;
+            _navigationTargetLabel = targetLabel;
+
+            if (!CanUseNavigationNow())
+            {
+                StopNavigationRuntime();
+                ScreenReader.Say(Loc.Get("navigation_blocked"));
+                return false;
+            }
+
+            string currentZone = GetCurrentZoneNameInternal();
+            if (!string.IsNullOrEmpty(currentZone) &&
+                string.Equals(currentZone, _navigationTargetZone, StringComparison.OrdinalIgnoreCase))
+            {
+                StopNavigationRuntime();
+                ScreenReader.Say(Loc.Get("navigation_arrived"));
+                return false;
+            }
+
+            if (!TryRefreshNavigationPath(forceAnnounce: true))
+            {
+                StopNavigationRuntime();
+                ScreenReader.Say(Loc.Get("navigation_blocked"));
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryRefreshNavigationPath(bool forceAnnounce)
+        {
+            string currentZone = GetCurrentZoneNameInternal();
+            if (string.IsNullOrEmpty(currentZone) || string.IsNullOrEmpty(_navigationTargetZone))
+                return false;
+
+            if (string.Equals(currentZone, _navigationTargetZone, StringComparison.OrdinalIgnoreCase))
+            {
+                StopNavigationWithAnnouncement("navigation_arrived");
+                return false;
+            }
+
+            List<string> path = NavigationGraph.FindPath(currentZone, _navigationTargetZone);
+            if (path == null || path.Count < 2)
+                return false;
+
+            _navigationPath = path;
+            _isNavigationActive = true;
+
+            string nextZone = path[1];
+            if (forceAnnounce || !string.Equals(nextZone, _lastNavigationNextZone, StringComparison.OrdinalIgnoreCase))
+            {
+                _lastNavigationNextZone = nextZone;
+                ScreenReader.Say(Loc.Get("navigation_navigating", _navigationTargetLabel, BuildNavigationTargetLabel(nextZone, currentZone)), interrupt: false);
+            }
+
+            if (TryGetZonePosition(nextZone, out Vector3 nextPosition))
+                ObjectTracker.StartTracking(nextPosition);
+
+            return true;
+        }
+
+        private void StopNavigationWithAnnouncement(string messageKey)
+        {
+            StopNavigationRuntime();
+            ScreenReader.Say(Loc.Get(messageKey));
+        }
+
+        private void StopNavigationRuntime()
+        {
+            _isNavigationActive = false;
+            _isAutoWalking = false;
+            _navigationPath = null;
+            _lastNavigationNextZone = null;
+            _lastAutoWalkProgressTime = 0f;
+            ObjectTracker.StopTracking();
+            ApplyNavigationInput(Vector3.zero, Vector3.zero);
+        }
+
+        private bool TryEnsureNavigationTarget(out string targetZone, out string targetLabel)
+        {
+            targetZone = _navigationTargetZone;
+            targetLabel = _navigationTargetLabel;
+
+            if (!string.IsNullOrEmpty(targetZone))
+            {
+                if (string.IsNullOrEmpty(targetLabel))
+                    targetLabel = BuildNavigationTargetLabel(targetZone, GetCurrentZoneNameInternal());
+                return true;
+            }
+
+            if (TryResolveCurrentObjectiveTarget(out targetZone, out targetLabel))
+            {
+                _navigationTargetZone = targetZone;
+                _navigationTargetLabel = targetLabel;
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryResolveCurrentObjectiveTarget(out string targetZone, out string targetLabel)
+        {
+            targetZone = null;
+            targetLabel = null;
+
+            if (TryFindTutorialObjectiveInteractable(out InteractableObj interactable) &&
+                TryGetZoneNameForPosition(interactable.transform.position, out targetZone))
+            {
+                targetLabel = GetInteractableDisplayName(interactable);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryFindTutorialObjectiveInteractable(out InteractableObj interactable)
+        {
+            interactable = null;
+
+            if (Singleton<Save>.Instance == null)
+                return false;
+
+            string internalName = GetTutorialObjectiveInternalName();
+            if (string.IsNullOrEmpty(internalName))
+                return false;
+
+            List<InteractableObj> interactables = Singleton<GameController>.Instance != null
+                ? Singleton<GameController>.Instance.GetAllCharacters()
+                : new List<InteractableObj>(FindObjectsOfType<InteractableObj>());
+
+            for (int i = 0; i < interactables.Count; i++)
+            {
+                InteractableObj candidate = interactables[i];
+                if (candidate == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                if (string.Equals(candidate.InternalName(), internalName, StringComparison.OrdinalIgnoreCase))
+                {
+                    interactable = candidate;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string GetTutorialObjectiveInternalName()
+        {
+            Save save = Singleton<Save>.Instance;
+            if (save == null)
+                return null;
+
+            if (save.GetDateStatus("skylar_specs") == RelationshipStatus.Unmet)
+                return "skylar";
+
+            if (save.GetDateStatus("dorian_door") == RelationshipStatus.Unmet)
+                return "dorian";
+
+            if (save.GetDateStatus("phoenicia_phone") == RelationshipStatus.Unmet)
+                return "phoenicia";
+
+            if (save.GetDateStatus("maggie_mglass") == RelationshipStatus.Unmet)
+                return "maggie";
+
+            if (save.GetDateStatus("betty_bed") == RelationshipStatus.Unmet)
+                return "betty";
+
+            return null;
+        }
+
+        private static bool TryGetNavigationTargets(out List<string> targets)
+        {
+            targets = new List<string>();
+
+            if (Singleton<CameraSpaces>.Instance == null || Singleton<CameraSpaces>.Instance.zones == null)
+                return false;
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < Singleton<CameraSpaces>.Instance.zones.Count; i++)
+            {
+                triggerzone zone = Singleton<CameraSpaces>.Instance.zones[i];
+                if (zone == null || string.IsNullOrWhiteSpace(zone.Name))
+                    continue;
+
+                if (seen.Add(zone.Name))
+                    targets.Add(zone.Name);
+            }
+
+            return targets.Count > 0;
+        }
+
+        private static int FindZoneIndex(List<string> targets, string zoneName)
+        {
+            if (targets == null || string.IsNullOrEmpty(zoneName))
+                return -1;
+
+            for (int i = 0; i < targets.Count; i++)
+            {
+                if (string.Equals(targets[i], zoneName, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
+
+            return -1;
+        }
+
+        private bool TryGetNextNavigationPosition(out Vector3 position)
+        {
+            position = Vector3.zero;
+
+            if (_navigationPath == null || _navigationPath.Count < 2)
+                return false;
+
+            return TryGetZonePosition(_navigationPath[1], out position);
+        }
+
+        private static bool TryGetZonePosition(string zoneName, out Vector3 position)
+        {
+            position = Vector3.zero;
+
+            if (Singleton<CameraSpaces>.Instance == null || Singleton<CameraSpaces>.Instance.zones == null || string.IsNullOrWhiteSpace(zoneName))
+                return false;
+
+            for (int i = 0; i < Singleton<CameraSpaces>.Instance.zones.Count; i++)
+            {
+                triggerzone zone = Singleton<CameraSpaces>.Instance.zones[i];
+                if (zone == null || !string.Equals(zone.Name, zoneName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (zone.Position != Vector3.zero)
+                {
+                    position = zone.Position;
+                    return true;
+                }
+
+                return false;
+            }
+
+            return false;
+        }
+
+        private static bool TryGetZoneNameForPosition(Vector3 position, out string zoneName)
+        {
+            zoneName = null;
+
+            if (Singleton<CameraSpaces>.Instance == null || Singleton<CameraSpaces>.Instance.zones == null)
+                return false;
+
+            for (int i = 0; i < Singleton<CameraSpaces>.Instance.zones.Count; i++)
+            {
+                triggerzone zone = Singleton<CameraSpaces>.Instance.zones[i];
+                if (zone == null)
+                    continue;
+
+                Bounds bounds = new Bounds(zone.Position, zone.Scale);
+                if (!bounds.Contains(position))
+                    continue;
+
+                zoneName = zone.Name;
+                return !string.IsNullOrEmpty(zoneName);
+            }
+
+            return false;
+        }
+
+        private static bool CanUseNavigationNow()
+        {
+            if (BetterPlayerControl.Instance == null || Singleton<GameController>.Instance == null)
+                return false;
+
+            if (Singleton<GameController>.Instance.viewState != VIEW_STATE.HOUSE)
+                return false;
+
+            if (BetterPlayerControl.Instance.STATE != BetterPlayerControl.PlayerState.CanControl)
+                return false;
+
+            if ((Singleton<PhoneManager>.Instance != null && (Singleton<PhoneManager>.Instance.IsPhoneMenuOpened() || Singleton<PhoneManager>.Instance.IsPhoneAnimating())) ||
+                (TalkingUI.Instance != null && TalkingUI.Instance.open) ||
+                (Popup.Instance != null && Popup.Instance.IsPopupOpen()) ||
+                (UIDialogManager.Instance != null && UIDialogManager.Instance.HasActiveDialogs) ||
+                ModConfig.IsMenuOpen)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool ApplyNavigationInput(Vector3 moveInput, Vector3 lookInput)
+        {
+            if (BetterPlayerControl.Instance == null)
+                return false;
+
+            EnsureReflectionCache();
+            if (_betterPlayerControlMoveField == null || _betterPlayerControlLookField == null)
+                return false;
+
+            _betterPlayerControlMoveField.SetValue(BetterPlayerControl.Instance, moveInput);
+            _betterPlayerControlLookField.SetValue(BetterPlayerControl.Instance, lookInput);
+            return true;
+        }
+
+        private static string BuildNavigationTargetLabel(string zoneName, string currentZone)
+        {
+            string normalizedZone = NormalizeIdentifierName(zoneName);
+            if (string.IsNullOrEmpty(normalizedZone))
+                normalizedZone = zoneName;
+
+            if (!string.IsNullOrEmpty(currentZone) && string.Equals(zoneName, currentZone, StringComparison.OrdinalIgnoreCase))
+                return Loc.Get("navigation_target_in_current_room") + ". " + normalizedZone;
+
+            return normalizedZone;
+        }
+
+        private static string GetCurrentZoneNameInternal()
+        {
+            if (Singleton<CameraSpaces>.Instance == null)
+                return null;
+
+            triggerzone zone = Singleton<CameraSpaces>.Instance.PlayerZone();
+            return zone != null ? zone.Name : null;
         }
 
         private void HandleChoiceKeyboardInput()
@@ -575,67 +1118,6 @@ namespace DateEverythingAccess
             ScreenReader.Say(announcement, rememberAsRepeatable: isRepeatableChatSelection);
         }
 
-        private void AnnounceRoomersDetailIfNeeded()
-        {
-            if (!ModConfig.ReadScreenText)
-            {
-                _lastRoomersDetail = null;
-                return;
-            }
-
-            string announcement;
-            if (!TryBuildRoomersDetailAnnouncement(out announcement))
-            {
-                _lastRoomersDetail = null;
-                return;
-            }
-
-            if (announcement == _lastRoomersDetail)
-                return;
-
-            _lastRoomersDetail = announcement;
-            ScreenReader.Say(announcement);
-        }
-
-        private void AnnounceDateADexDetailIfNeeded()
-        {
-            if (!ModConfig.ReadScreenText)
-            {
-                _lastDateADexDetail = null;
-                _pendingDateADexDetail = null;
-                return;
-            }
-
-            string announcement;
-            if (!TryBuildDateADexDetailAnnouncement(out announcement))
-            {
-                _lastDateADexDetail = null;
-                _pendingDateADexDetail = null;
-                return;
-            }
-
-            if (announcement == _lastDateADexDetail)
-            {
-                _pendingDateADexDetail = null;
-                return;
-            }
-
-            if (!string.Equals(announcement, _pendingDateADexDetail, StringComparison.Ordinal))
-            {
-                _pendingDateADexDetail = announcement;
-                _pendingDateADexDetailSince = Time.unscaledTime;
-                return;
-            }
-
-            if (Time.unscaledTime - _pendingDateADexDetailSince < 0.25f)
-                return;
-
-            _lastDateADexDetail = announcement;
-            _pendingDateADexDetail = null;
-            _suppressDateADexSelectionUntil = Time.unscaledTime + 0.5f;
-            ScreenReader.Say(announcement);
-        }
-
         private bool ShouldSuppressDateADexSelection(GameObject selectedObject)
         {
             if (!ModConfig.ReadPhoneAppText)
@@ -674,12 +1156,8 @@ namespace DateEverythingAccess
             if (selectedObject.GetComponentInParent<ChatButton>() != null)
                 return false;
 
-            if (Time.unscaledTime < _suppressChatSelectionUntil)
-                return IsChatSelectionObject(selectedObject);
-
             if (!TryBuildChatAppAnnouncement(out string pendingAnnouncement, out string activeChatKey) ||
                 string.IsNullOrEmpty(pendingAnnouncement) ||
-                pendingAnnouncement == _lastChatAppDetail ||
                 string.IsNullOrEmpty(activeChatKey))
             {
                 return false;
@@ -709,122 +1187,6 @@ namespace DateEverythingAccess
                 return false;
 
             return IsWithinChatPanel(selectedObject, activeChatType, activePanelNameObject, secondaryPanelObject);
-        }
-
-        private void AnnounceChatAppDetailIfNeeded()
-        {
-            if (!ModConfig.ReadScreenText)
-            {
-                _lastChatAppDetail = null;
-                _pendingChatAppDetail = null;
-                _lastActiveChatKey = null;
-                return;
-            }
-
-            string announcement;
-            string activeChatKey;
-            if (!TryBuildChatAppAnnouncement(out announcement, out activeChatKey))
-            {
-                _lastChatAppDetail = null;
-                _pendingChatAppDetail = null;
-                _lastActiveChatKey = null;
-                return;
-            }
-
-            bool activeChatChanged = !string.Equals(activeChatKey, _lastActiveChatKey, StringComparison.Ordinal);
-            if (activeChatChanged)
-            {
-                _lastActiveChatKey = activeChatKey;
-                _lastChatAppDetail = null;
-            }
-
-            if (announcement == _lastChatAppDetail)
-            {
-                _pendingChatAppDetail = null;
-                return;
-            }
-
-            if (activeChatChanged || !string.Equals(announcement, _pendingChatAppDetail, StringComparison.Ordinal))
-            {
-                _pendingChatAppDetail = announcement;
-                _pendingChatAppDetailSince = Time.unscaledTime;
-                _suppressChatSelectionUntil = Time.unscaledTime + 0.5f;
-                return;
-            }
-
-            if (Time.unscaledTime - _pendingChatAppDetailSince < 0.2f)
-                return;
-
-            _lastChatAppDetail = announcement;
-            _pendingChatAppDetail = null;
-            _suppressChatSelectionUntil = Time.unscaledTime + 0.5f;
-            ScreenReader.Say(announcement, interrupt: false);
-        }
-
-        private void AnnounceMusicDetailIfNeeded()
-        {
-            if (!ModConfig.ReadScreenText)
-            {
-                _lastMusicDetail = null;
-                return;
-            }
-
-            string announcement;
-            if (!TryBuildMusicAnnouncement(out announcement))
-            {
-                _lastMusicDetail = null;
-                return;
-            }
-
-            if (announcement == _lastMusicDetail)
-                return;
-
-            _lastMusicDetail = announcement;
-            ScreenReader.Say(announcement, interrupt: false);
-        }
-
-        private void AnnounceArtDetailIfNeeded()
-        {
-            if (!ModConfig.ReadScreenText)
-            {
-                _lastArtDetail = null;
-                return;
-            }
-
-            string announcement;
-            if (!TryBuildArtAnnouncement(out announcement))
-            {
-                _lastArtDetail = null;
-                return;
-            }
-
-            if (announcement == _lastArtDetail)
-                return;
-
-            _lastArtDetail = announcement;
-            ScreenReader.Say(announcement, interrupt: false);
-        }
-
-        private void AnnounceCollectableDetailIfNeeded()
-        {
-            if (!ModConfig.ReadScreenText)
-            {
-                _lastCollectableDetail = null;
-                return;
-            }
-
-            string announcement;
-            if (!TryBuildCollectableAnnouncement(out announcement))
-            {
-                _lastCollectableDetail = null;
-                return;
-            }
-
-            if (announcement == _lastCollectableDetail)
-                return;
-
-            _lastCollectableDetail = announcement;
-            ScreenReader.Say(announcement);
         }
 
         private void AnnounceResultScreenIfNeeded()
@@ -1228,7 +1590,6 @@ namespace DateEverythingAccess
                 TryBuildExamineAnnouncement(out announcement) ||
                 TryBuildUIDialogAnnouncement(out announcement) ||
                 TryBuildSpecsAnnouncement(out announcement, out SpecsAnnouncementMode _) ||
-                TryBuildChatAppAnnouncement(out announcement) ||
                 TryBuildPhoneAppContentAnnouncement(out announcement, out string _) ||
                 TryBuildCreditsAnnouncement(out announcement) ||
                 TryBuildResultAnnouncement(out announcement))
@@ -3423,6 +3784,8 @@ namespace DateEverythingAccess
             _saveScreenManagerNewSaveSlotField = typeof(SaveScreenManager).GetField("newSaveSlot", flags);
             _saveSlotPlayTimeField = typeof(SaveSlot).GetField("playTime", flags);
             _saveSlotDaysPlayedField = typeof(SaveSlot).GetField("daysPlayed", flags);
+            _betterPlayerControlMoveField = typeof(BetterPlayerControl).GetField("move", flags);
+            _betterPlayerControlLookField = typeof(BetterPlayerControl).GetField("look", flags);
             _engagementType = FindLoadedType("T17.Flow.Engagement");
             if (_engagementType != null)
             {

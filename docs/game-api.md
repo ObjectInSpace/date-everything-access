@@ -163,6 +163,9 @@ That means hardcoding letter keys for core controls is riskier than function key
 
 - `F1`: help
 - `Ctrl+F1`: repeat the most recently spoken mod line
+- `Ctrl+F6`: start navigation to the current objective or selected room target
+- `Ctrl+Shift+F6`: cycle the room-navigation target
+- `Ctrl+Alt+F6`: toggle navigation auto-walk
 - `F9`: toggle debug
 - `Ctrl+F9`: accessibility settings menu
 
@@ -170,6 +173,8 @@ That means hardcoding letter keys for core controls is riskier than function key
 
 - No gameplay consumer for `F1` was found in the decompiled game code.
 - `Ctrl+F1` reuses the same safe `F1` function key with an added modifier, so it stays outside the game's observed Rewired gameplay bindings.
+- No gameplay consumer for `F6` was found in the decompiled game code.
+- The three `Ctrl`-modified `F6` bindings stay outside the game's observed Rewired gameplay bindings and do not conflict with the shipped `F2`, `F3`, or `F8` debug keys.
 - No gameplay consumer for `F9` was found in the decompiled game code.
 - `Ctrl+F9` reuses the same safe `F9` function key with an added modifier, so it stays outside the game's observed Rewired gameplay bindings.
 - They sit outside the Rewired action flow the game relies on for normal keyboard/controller input.
@@ -407,6 +412,25 @@ That approach already works for menu focus speech and dialogue choice speech, bu
 - `Singleton<CameraSpaces>.Instance.PlayerZone()?.Name`
 
 This is the cleanest room identifier found for house navigation speech.
+
+### Room navigation graph
+
+- `Singleton<CameraSpaces>.Instance.zones`
+  - each `triggerzone` exposes `Name`, `Position`, and `Scale`
+  - `Position` is currently the most reliable room anchor for navigation handoff and auto-walk targeting
+- `Singleton<CameraSpaces>.Instance.PlayerZone()`
+  - resolves the player's current room zone at runtime
+- `BetterPlayerControl`
+  - private `move` and `look` fields can be written by reflection for accessibility auto-walk input
+  - `STATE == BetterPlayerControl.PlayerState.CanControl` is the safe gate before applying movement
+- `BepInEx\plugins\navigation_graph.json`
+  - the current game-directory copy contains usable room `Links` for inter-room routing
+  - the same JSON still has zeroed waypoint coordinates, so the mod should treat it as a room-topology graph, not as a precise waypoint source
+
+Important consequence:
+
+- Inter-room navigation can be routed reliably by zone name using the JSON graph plus `CameraSpaces.PlayerZone()`.
+- In-room guidance still needs live scene positions from `triggerzone.Position`, not the current waypoint data in the JSON.
 
 ### Current interactable
 

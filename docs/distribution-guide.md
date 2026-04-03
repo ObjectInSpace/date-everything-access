@@ -10,8 +10,9 @@ How to package, license, and publish your accessibility mod.
 
 Your mod requires these components on the user's machine:
 
-1. **MelonLoader** - The mod loader (user installs once)
-   - Download: https://github.com/LavaGang/MelonLoader.Installer/releases
+1. **BepInEx 5.x** - The mod loader runtime
+   - Install once into the game folder
+   - Plugin DLLs live in `BepInEx\plugins\`
 2. **Tolk DLLs** - Screen reader communication (included in your release)
    - `Tolk.dll`
    - `nvdaControllerClient64.dll` or `nvdaControllerClient32.dll` (matching game architecture)
@@ -23,8 +24,9 @@ Create a ZIP file containing:
 
 ```
 YourModName-v1.0.0.zip
-├── Mods/
-│   └── YourModName.dll          (your compiled mod)
+├── BepInEx/
+│   └── plugins/
+│       └── YourModName.dll      (your compiled plugin)
 ├── Tolk.dll                      (screen reader library)
 ├── nvdaControllerClient64.dll    (or 32-bit version)
 ├── README.txt                    (installation instructions)
@@ -81,15 +83,14 @@ Makes [GameName] playable with a screen reader (NVDA, JAWS).
 REQUIREMENTS
 ============
 - [GameName] (Steam version tested, others may work)
-- MelonLoader (https://github.com/LavaGang/MelonLoader.Installer/releases)
+- BepInEx 5.x for the game
 - A screen reader (NVDA recommended, JAWS also works)
 
 INSTALLATION
 ============
-1. Install MelonLoader for your game (run the installer, select your game)
-2. Start the game once to create the Mods folder, then close it
+1. Install BepInEx 5.x for your game and start the game once to create the `BepInEx` folder structure.
 3. Copy ALL files from this ZIP into your game folder:
-   - YourModName.dll goes into the Mods subfolder
+   - YourModName.dll goes into `BepInEx\plugins\`
    - Tolk.dll goes into the main game folder (where the .exe is)
    - nvdaControllerClient64.dll goes into the main game folder
 4. Start the game - you should hear "Mod loaded" from your screen reader
@@ -102,7 +103,7 @@ F1 - Help (shows all key bindings)
 TROUBLESHOOTING
 ===============
 - No sound from screen reader: Check that Tolk.dll is in the game folder
-- Mod doesn't load: Check MelonLoader/Latest.log for errors
+- Mod doesn't load: Check `BepInEx\LogOutput.log` for errors
 - Wrong architecture: If game is 32-bit, use nvdaControllerClient32.dll instead
 
 KNOWN ISSUES
@@ -125,7 +126,7 @@ Use Semantic Versioning (SemVer): **MAJOR.MINOR.PATCH**
 - **PATCH** (1.0.0 → 1.0.1): Bug fixes, announcement improvements
 
 Update the version in:
-- `MelonInfo` attribute in Main.cs
+- `BepInPlugin` attribute in Main.cs
 - Your release/tag on GitHub
 - README and changelog
 
@@ -300,8 +301,8 @@ SOFTWARE.
 ### Respecting Other Licenses
 
 Your mod uses third-party components:
-- **MelonLoader**: Apache 2.0 - note in your README
-- **Harmony** (included in MelonLoader): MIT
+- **BepInEx**: LGPL 2.1 - note in your README or third-party notices
+- **Harmony** (included with BepInEx): MIT
 - **Tolk**: LGPL 2.1 - you can distribute the DLLs alongside your mod
 - **The game itself**: You're modding it, not distributing it. Your mod should never include game code or assets.
 
@@ -314,7 +315,7 @@ Games get updated, and updates can break mods. Here's how to handle it:
 ### When a Game Update Drops
 
 1. **Test first** - Launch the game with your mod. It might still work.
-2. **Check the log** - If it doesn't work, read MelonLoader/Latest.log for errors.
+2. **Check the log** - If it doesn't work, read `BepInEx\LogOutput.log` for errors.
 3. **Re-decompile** - Get the new Assembly-CSharp.dll and decompile it.
 4. **Compare** - Look for renamed classes, changed method signatures, moved fields.
 5. **Fix and release** - Update your mod, bump the PATCH version.

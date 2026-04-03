@@ -80,7 +80,7 @@ Patterns: `docs/ACCESSIBILITY_MODDING_GUIDE.md`
 
 - `project_status.md` - central tracking
 - `docs/ACCESSIBILITY_MODDING_GUIDE.md` - code patterns
-- `docs/technical-reference.md` - MelonLoader, BepInEx, Harmony, Tolk
+- `docs/technical-reference.md` - BepInEx, Harmony, Tolk
 - `docs/unity-reflection-guide.md` - reflection patterns
 - `docs/state-management-guide.md` - multiple handlers
 - `docs/localization-guide.md` - localization
@@ -91,7 +91,6 @@ Patterns: `docs/ACCESSIBILITY_MODDING_GUIDE.md`
 - `docs/game-api.md` - keys, methods, patterns
 - `docs/distribution-guide.md` - packaging and publishing
 - `docs/git-github-guide.md` - Git and GitHub intro
-- `templates/melonloader/` - MelonLoader-specific templates
 - `templates/bepinex/` - BepInEx-specific templates
 - `templates/shared/` - mod-loader-independent templates
 - `scripts/` - PowerShell helpers

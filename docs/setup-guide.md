@@ -2,6 +2,8 @@
 
 This guide is only needed for the initial project setup.
 
+This repository now targets `BepInEx` only. Older background notes may still mention other Unity loaders for historical context, but new setup and scaffolding work in this repo should use the BepInEx paths, templates, logs, and output folders only.
+
 ---
 
 ## Setup Interview
@@ -59,7 +61,7 @@ Tell the user:
 **Advantages:**
 - Real source with comments and documentation
 - Can submit accessibility features as PR to the original project
-- No decompiler, no MelonLoader/BepInEx needed
+- No decompiler or external Unity mod loader needed
 - Better integration, fewer compatibility issues with game updates
 - Developers may review your code and help improve it
 
@@ -152,27 +154,25 @@ Perform these checks and collect the results:
    - `.exe` file properties can also indicate architecture
 
 3. **Check for existing modding infrastructure:**
-   - `MelonLoader` directory → MelonLoader installed (Unity)
    - `BepInEx` directory → BepInEx installed (Unity)
    - `Mods` or `plugins` directory → Possible mod support
    - `UE4SS` or similar → Unreal modding tools
    - Workshop folder or Steam Workshop integration
 
 4. **For Unity with mod loader - Read log (if present):**
-   - **MelonLoader** (`MelonLoader/Latest.log`): Extract Game Name, Developer, Runtime Type (net35/net6), Unity Version
    - **BepInEx** (`BepInEx/LogOutput.log`): Check for successful initialization, Unity version, any errors
 
 4b. **If no mod loader is installed — Search for community consensus:**
    - Web search: "[Game Name] mods"
-   - Web search: "[Game Name] MelonLoader OR BepInEx"
+   - Web search: "[Game Name] BepInEx"
    - Check Nexus Mods, Thunderstore, or game-specific mod sites
-   - Note which mod loader other mods for this game use
-   - If no existing mods found, note this — mod loader choice will be based on heuristics (see Step 4e)
+   - Note whether other mods for this game use BepInEx or a different loader
+   - If no existing mods found, note this — feasibility will be based on heuristics (see Step 4e)
 
 5. **Check Unity Version (for Unity games):**
-   - If Unity version is 4.x or older (3.x, 2.x): **Critical warning** - MelonLoader and BepInEx do NOT work, only Assembly-Patching possible. Games this old are rare but exist.
-   - If Unity version is 5.x: **Warning** - MelonLoader may not work, try BepInEx 5.x first
-   - If Unity version is 2017-2018: Usually works, but may need older MelonLoader version
+   - If Unity version is 4.x or older (3.x, 2.x): **Critical warning** - BepInEx does NOT work, only Assembly-Patching may be possible. Games this old are rare but exist.
+   - If Unity version is 5.x: **Warning** - try BepInEx 5.x first
+   - If Unity version is 2017-2018: Usually works, but may need older BepInEx builds
    - If Unity version is 2019+: Full support, no issues expected
    - See `docs/legacy-unity-modding.md` for details on older Unity versions
 
@@ -191,7 +191,7 @@ Perform these checks and collect the results:
 Show a summary of what was detected:
 - Game engine: Unity / Unreal / Godot / GameMaker / Unknown
 - Architecture: 64-bit / 32-bit / Unknown
-- Mod loader: MelonLoader / BepInEx / Neither installed (+ community recommendation if searched)
+- Mod loader: BepInEx / Neither installed / Different loader used by the community
 - Mod loader log info: Game name, developer, runtime, Unity version (if available)
 - Tolk DLLs: Present / Missing
 
@@ -250,7 +250,7 @@ For beginners: Different games use different "engines" (the underlying technolog
 **How to identify:** `.pak` files, `UE4` or `UE5` in filenames, `Engine/Binaries` directory structure.
 
 **What exists:**
-- **UE4SS** (RE-UE4SS) is the community-standard modding framework for Unreal games. It injects into the game and provides a Lua scripting layer and C++ mod API. Comparable in role to MelonLoader/BepInEx, but for Unreal.
+- **UE4SS** (RE-UE4SS) is the community-standard modding framework for Unreal games. It injects into the game and provides a Lua scripting layer and C++ mod API. Comparable in role to BepInEx, but for Unreal.
 - UE4SS can hook reflected game functions (similar concept to Harmony, but only for functions tagged as UFUNCTION in the engine's reflection system — not arbitrary C++ functions).
 - Lua mods can read/write game object properties, hook function execution, and react to game events.
 - C++ mods compiled as DLLs can in theory call Tolk for screen reader output.
@@ -282,7 +282,7 @@ For beginners: Different games use different "engines" (the underlying technolog
 **How to identify:** `.pck` files, `libgodot` files, Godot splash screen.
 
 **What exists:**
-- **Godot Mod Loader** is the primary modding framework — but it **must be integrated by the game developer**. It cannot be injected from outside (unlike MelonLoader/BepInEx). If the game doesn't include it, script-level modding is very limited.
+- **Godot Mod Loader** is the primary modding framework — but it **must be integrated by the game developer**. It cannot be injected from outside (unlike BepInEx). If the game doesn't include it, script-level modding is very limited.
 - Without the Mod Loader: mods work by replacing game files via PCK packages. Decompile game scripts, modify them, repack as PCK. This is fragile and breaks on game updates.
 - **Godot 4.5+** (released September 2025) has built-in AccessKit screen reader support. If the game uses Godot 4.5+ and standard UI nodes, the UI may already be partially accessible to screen readers without any modding.
 - Godot is fully open source (MIT license), so the engine internals are documented.
@@ -320,7 +320,7 @@ For beginners: Different games use different "engines" (the underlying technolog
 - Celeste (MonoGame) has the Everest mod loader
 
 **Realistic assessment:**
-- **Our template is largely applicable.** The accessibility patterns, Handler structure, ScreenReader wrapper, and Loc system all work. The main differences are in project setup (different DLL references, no MelonLoader/Unity-specific lifecycle) and potentially different entry points.
+- **Our template is largely applicable.** The accessibility patterns, Handler structure, ScreenReader wrapper, and Loc system all work. The main differences are in project setup (different DLL references, no BepInEx-specific plugin lifecycle) and potentially different entry points.
 - **Feasibility is similar to Unity** — if you can decompile the DLLs and BepInEx works, the full workflow applies.
 
 **If proceeding:** Try BepInEx first. Use dnSpy to analyze the game code. Adapt the template's Main.cs to use BepInEx's `BaseUnityPlugin` pattern (or the appropriate base class for the specific .NET framework). The rest of the template (Handlers, ScreenReader, Loc) needs minimal changes.
@@ -554,24 +554,23 @@ Hints for finding out:
 
 #### Step 4c: Mod Loader (manual, Unity only)
 
-Question: Is a mod loader (MelonLoader or BepInEx) already installed?
+Question: Is BepInEx already installed?
 
 Hints for finding out:
-- `MelonLoader` directory in game folder → MelonLoader is installed
 - `BepInEx` directory in game folder → BepInEx is installed
-- Neither → Need to install one (see Step 4e)
+- Neither → Need to install it (see Step 4e)
 
-For beginners: A mod loader is a program that loads our mod code into the game. Both MelonLoader and BepInEx come with "Harmony", a library for hooking into game functions. We don't need to download Harmony separately.
+For beginners: A mod loader is a program that loads our mod code into the game. BepInEx already includes Harmony, a library for hooking into game functions, so we don't need to download Harmony separately.
 
 ---
 
 ### Step 4e: Mod Loader Selection (Unity only)
 
-**Goal:** Determine which mod loader to use for this game. This is critical — using the wrong mod loader can mean the mod won't work at all.
+**Goal:** Determine whether BepInEx is the right loader for this game. This is critical — using the wrong loader can mean the mod won't work at all.
 
 **If a mod loader was already detected (auto-check or manual):**
 
-Use the one that's installed. If both are installed, ask which one the user prefers (usually stay with whatever the game's modding community uses).
+Use BepInEx if it is already installed. If the game community clearly standardizes on a different loader, note that before continuing because this repository is scaffolded for BepInEx.
 
 **If no mod loader is installed yet:**
 
@@ -582,23 +581,21 @@ Use the one that's installed. If both are installed, ask which one the user pref
    - Look at what other mods for this game use
 
 2. **Evaluate the results:**
-   - If the community uses **MelonLoader**: Use MelonLoader
    - If the community uses **BepInEx**: Use BepInEx
-   - If **both** are used: Either works — ask user preference or recommend what the majority uses
+   - If the community uses **another loader**: note that this template will need adaptation instead of using the default project files unchanged
    - If **no mods exist** for this game: See guidance below
 
 3. **General heuristics (when no community guidance exists):**
-   - Il2Cpp games (no `[Game]_Data\Managed` folder, or MelonLoader log says "Il2Cpp"): **MelonLoader** is generally more reliable
-   - Mono games (classic `[Game]_Data\Managed` folder with `Assembly-CSharp.dll`): Both work, BepInEx has more community resources
-   - Very old Unity versions (5.x): Try **BepInEx 5.x** first, MelonLoader may not support it
+   - Mono games (classic `[Game]_Data\Managed` folder with `Assembly-CSharp.dll`): BepInEx is usually the best first choice
+   - Il2Cpp games: check current community practice first; if there is no usable BepInEx path, note that this repo may need a different loader strategy
+   - Very old Unity versions (5.x): Try **BepInEx 5.x** first
 
 **Key differences for the user:**
 
-- **MelonLoader:** Installs via an installer EXE. Mods go in the `Mods/` folder. Has its own log file (`MelonLoader/Latest.log`).
-- **BepInEx:** Installs by extracting a ZIP into the game folder. Mods (plugins) go in the `BepInEx/plugins/` folder. Has its own log file (`BepInEx/LogOutput.log`).
-- **Both:** Include Harmony for patching. Both support Tolk for screen reader output. The core mod code (Handler classes, ScreenReader wrapper, Loc system) is nearly identical.
+- **BepInEx:** Installs by extracting a ZIP into the game folder. Mods (plugins) go in the `BepInEx/plugins/` folder. Logs go to `BepInEx/LogOutput.log`.
+- This repository assumes BepInEx paths, references, and plugin lifecycle methods.
 
-For beginners: Think of mod loaders like different brands of power adapters — they both deliver electricity (load your mod), just with slightly different plugs (setup and structure). The important part — your mod's actual features — works the same way with either one.
+For beginners: Think of BepInEx as the adapter that this template is already wired for. If the game needs a different adapter, the accessibility logic can still carry over, but the project setup has to change.
 
 **If no mods exist for this game at all:**
 
@@ -607,20 +604,14 @@ This is not necessarily a blocker, but it means:
 - There may be anti-cheat, DRM, or other obstacles
 - Installation might require troubleshooting
 
-Suggest trying the mod loader that matches the game's runtime (MelonLoader for Il2Cpp, either for Mono). If it doesn't work, try the other one. Document the findings.
+Suggest trying BepInEx first when the game looks Mono-based. If the game community depends on a different loader, document that before doing more setup work in this repo.
 
 **Installation instructions:**
-
-**MelonLoader:**
-- Download: https://github.com/LavaGang/MelonLoader.Installer/releases
-- Run the installer and point it at the game's EXE
-- After installation there should be a `MelonLoader` directory in the game directory
-- Start game once to create directory structure and generate the log file
 
 **BepInEx:**
 - Download: https://github.com/BepInEx/BepInEx/releases
 - For Unity Mono games: Download the appropriate build (x64 or x86, matching game architecture)
-- For Unity Il2Cpp games: Download the Il2Cpp build (though MelonLoader is usually better for Il2Cpp)
+- For Unity Il2Cpp games: Download the Il2Cpp build if BepInEx is the chosen loader for that game
 - Extract the ZIP contents into the game directory (where the game EXE is located)
 - Start game once to create directory structure (`BepInEx/plugins/`, `BepInEx/config/`, etc.)
 
@@ -630,14 +621,15 @@ Suggest trying the mod loader that matches the game's runtime (MelonLoader for I
 
 **Template selection based on mod loader:**
 
-Templates are organized into three directories:
-- `templates/melonloader/` — MelonLoader-specific files (Main.cs, DebugLogger.cs, ModConfig.cs, ScreenReader.cs, csproj)
-- `templates/bepinex/` — BepInEx-specific files (same set, adapted for BepInEx APIs)
-- `templates/shared/` — Mod-loader-independent files (Handler.cs, Loc.cs, AccessStateManager.cs, ReflectionHelper.cs, project_status.md, game-api.md)
+Templates are organized into two directories:
+- `templates/bepinex/` — BepInEx-specific files (`Main.cs`, `DebugLogger.cs`, `ModConfig.cs`, `ScreenReader.cs`, `csproj`)
+- `templates/shared/` — loader-independent files (`Handler.cs`, `Loc.cs`, `AccessStateManager.cs`, `ReflectionHelper.cs`, `project_status.md`, `game-api.md`)
 
-When creating project files later, **always use the templates matching the chosen mod loader** plus all shared templates. The key differences:
-- **MelonLoader:** `MelonMod` base class, `MelonLogger`, `MelonPreferences`, output to `Mods/`
-- **BepInEx:** `BaseUnityPlugin` base class, `ManualLogSource`, `ConfigFile`, output to `BepInEx/plugins/`
+When creating project files later, use the BepInEx templates plus the shared templates. The relevant framework differences for this repo are:
+- `BaseUnityPlugin` base class
+- `ManualLogSource` logging
+- `ConfigFile` configuration
+- output to `BepInEx/plugins/`
 
 ---
 
@@ -669,7 +661,7 @@ After installation, **restart the terminal** so the `dotnet` command is availabl
 
 If WinGet is not available, manual download: https://dotnet.microsoft.com/download (recommended: .NET 8 SDK or newer).
 
-For beginners: The .NET SDK is a development tool from Microsoft. We need it to compile our C# code into a DLL file that the mod loader (MelonLoader or BepInEx) can then load.
+For beginners: The .NET SDK is a development tool from Microsoft. We need it to compile our C# code into a DLL file that BepInEx can then load.
 
 ### Step 7: Decompilation
 
@@ -825,7 +817,7 @@ This saves tokens per message for the entire project lifetime.
 After the interview, read this checklist:
 
 - Game architecture known (32-bit or 64-bit)
-- Mod loader installed and tested: MelonLoader (game starts with MelonLoader console) or BepInEx (BepInEx log file created)
+- Mod loader installed and tested: BepInEx (`BepInEx/LogOutput.log` created)
 - Tolk DLLs in game directory (matching the architecture!)
 - Decompiler tool ready
 - Assembly-CSharp.dll decompiled and code copied to `decompiled/` directory
@@ -907,56 +899,6 @@ After completing setup, proceed in this order:
 
 ## CRITICAL: Before First Build - Check Log!
 
-**These values MUST be read from the mod loader's log, NEVER guess!**
-
-### For MelonLoader
-
-#### Automatically with Script (recommended)
-
-```powershell
-.\scripts\Get-MelonLoaderInfo.ps1 -GamePath "C:\Path\to\Game"
-```
-
-The script extracts all values and displays the finished MelonGame attribute.
-
-#### Manually (if script not available)
-
-**Step 1:** Start game once with MelonLoader (creates the log).
-
-**Step 2:** Log path: `[GameDirectory]\MelonLoader\Latest.log`
-
-Search for these lines and note the EXACT values:
-
-```
-Game Name: [COPY EXACTLY]
-Game Developer: [COPY EXACTLY]
-Runtime Type: [net35 or net6]
-```
-
-#### Enter Values in Code/Project (MelonLoader)
-
-**MelonGame Attribute (Main.cs):**
-```csharp
-[assembly: MelonGame("DEVELOPER_FROM_LOG", "GAME_NAME_FROM_LOG")]
-```
-- Capitalization MUST match exactly
-- Spaces MUST match exactly
-- With wrong name, the mod will load but NOT initialize!
-
-**TargetFramework (csproj):**
-- If log says `Runtime Type: net35` → use `<TargetFramework>net472</TargetFramework>`
-- If log says `Runtime Type: net6` → use `<TargetFramework>net6.0</TargetFramework>`
-- Reference MelonLoader DLLs from the matching subdirectory (net35/ or net6/)
-
-**WARNING:** Do NOT use `netstandard2.0` for net35 games!
-netstandard2.0 is only an API specification, not a runtime. Mono has compatibility issues with it - the mod will load but not initialize (no error message, just silence).
-
-**Why is this so important?**
-1. **Developer name wrong** = Mod loads but OnInitializeMelon() is never called. No error in log, just silence.
-2. **Framework wrong** = Mod loads but cannot execute. No error in log, just silence.
-
-**For crashes or silent failures:** Read `technical-reference.md` section "CRITICAL: Accessing Game Code".
-
 ### For BepInEx
 
 #### Log and Configuration
@@ -1004,9 +946,9 @@ Check the log for:
 </Reference>
 ```
 
-**Output directory:** The built DLL goes into `BepInEx/plugins/` (not `Mods/`).
+**Output directory:** The built DLL goes into `BepInEx/plugins/`.
 
-### Common to Both Mod Loaders
+### Project-wide Build Notes
 
 **Exclude decompiled directory (csproj):**
 The csproj MUST contain these lines, otherwise the decompiled files will be compiled (hundreds of errors!):
@@ -1420,9 +1362,8 @@ This order is just a suggestion. Depending on the game, it may make sense to pri
 
 **PREREQUISITE: Tier 1 Completion Gate MUST be passed!** (See above)
 
-1. Create C# project from the **mod-loader-specific csproj template** (`templates/melonloader/csproj.template` or `templates/bepinex/csproj.template`)
-2. Create Main.cs from the matching mod-loader template (`templates/melonloader/Main.cs.template` or `templates/bepinex/Main.cs.template`)
-3. Create ScreenReader.cs, DebugLogger.cs from the matching mod-loader templates
+1. Create C# project from `templates/bepinex/csproj.template`
+2. Create `Main.cs`, `ScreenReader.cs`, and `DebugLogger.cs` from `templates/bepinex/`
 4. Create localization system from `templates/shared/Loc.cs.template` — this is part of the basic framework, NOT a later addition. If multilingual: use the game language detection analyzed in Step 1.5.
 5. If AccessStateManager was decided in Step 1.4: Create from `templates/shared/AccessStateManager.cs.template`
 6. Create basic mod that announces `Loc.Get("mod_loaded")` at startup
@@ -1436,7 +1377,7 @@ The development workflow for testing mod changes:
 
 1. **Write/modify code** - Codex writes or modifies the mod source code
 2. **Build** - Run `dotnet build [ModName].csproj` to compile the mod into a DLL
-3. **Auto-copy** - The DLL is automatically copied to the game's mod folder: `Mods/` for MelonLoader or `BepInEx/plugins/` for BepInEx (if the CopyToMods target is set up in the csproj)
+3. **Auto-copy** - The DLL is automatically copied to `BepInEx/plugins/` (if the copy target is set up in the csproj)
 4. **Start the game** - Launch the game normally (the mod loader loads the mod automatically)
 5. **Test** - Check if the new feature works as expected
 6. **Close the game** - **Always close the game completely before the next build!** The DLL file is locked while the game is running.
@@ -1445,10 +1386,10 @@ The development workflow for testing mod changes:
 
 **Important notes for the user:**
 - You will need to close and restart the game for every code change - there is no "hot reload"
-- If the mod doesn't seem to load at all, check the log for errors: `MelonLoader/Latest.log` (MelonLoader) or `BepInEx/LogOutput.log` (BepInEx)
+- If the mod doesn't seem to load at all, check `BepInEx/LogOutput.log`
 - If you hear nothing from the screen reader but the log shows the mod loaded: Check if Tolk DLLs are in the right place and matching the architecture
 - Build errors (compilation failures) are shown in the terminal - Codex can read and fix them directly
-- Runtime errors (crashes during gameplay) appear in the MelonLoader log
+- Runtime errors (crashes during gameplay) appear in the BepInEx log
 
 For beginners: Think of it like editing a document and printing it. You make changes, "print" (build), then check the printout (test in game). If something is wrong, you go back and edit again.
 
@@ -1469,7 +1410,7 @@ Create these scripts in the `scripts/` directory:
 
 **`scripts/Deploy-Mod.ps1`** — Builds and copies to game directory:
 - Calls `Build-Mod.ps1`
-- Copies the output DLL to the game's mod folder (`Mods/` for MelonLoader, `BepInEx/plugins/` for BepInEx)
+- Copies the output DLL to `BepInEx/plugins/`
 - Optionally copies any additional files (e.g., localization files, config files)
 - Reports what was copied and where
 
@@ -1506,7 +1447,7 @@ Write-Host "Deployed to $targetDir"
 Update the "Environment" section with:
 - Game directory path
 - Architecture (32-bit/64-bit)
-- Mod loader (MelonLoader or BepInEx)
+- Mod loader (`BepInEx`)
 
 **Replace the `Build` placeholder in the Coding Rules section** with a reference to the scripts:
 
@@ -1578,27 +1519,13 @@ See `ACCESSIBILITY_MODDING_GUIDE.md` for code patterns.
 
 ## Helper Scripts
 
-### Get-MelonLoaderInfo.ps1
-
-Reads the MelonLoader log and extracts all important values:
-- Game Name and Developer (for MelonGame attribute)
-- Runtime Type (for TargetFramework)
-- Unity Version
-
-**Usage:**
-```powershell
-.\scripts\Get-MelonLoaderInfo.ps1 -GamePath "C:\Path\to\Game"
-```
-
-**Output:** Ready-to-copy code snippets.
-
 ### Test-ModSetup.ps1
 
 Validates if everything is set up correctly:
-- Mod loader installation (MelonLoader or BepInEx)
+- BepInEx installation
 - Tolk DLLs (also checks correct architecture!)
 - Project file and references
-- Mod loader attributes (MelonGame or BepInPlugin)
+- Plugin attributes (`BepInPlugin`)
 - Decompiled directory
 
 **Usage:**
@@ -1614,8 +1541,6 @@ Parameter `-Architecture` can be `x64` or `x86`.
 
 ## Important Links
 
-- MelonLoader GitHub: https://github.com/LavaGang/MelonLoader
-- MelonLoader Installer: https://github.com/LavaGang/MelonLoader.Installer/releases
 - BepInEx GitHub: https://github.com/BepInEx/BepInEx
 - BepInEx Releases: https://github.com/BepInEx/BepInEx/releases
 - Tolk (Screen reader): https://github.com/ndarilek/tolk/releases

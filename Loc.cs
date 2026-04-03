@@ -96,11 +96,11 @@ namespace DateEverythingAccess
         private static void InitializeStrings()
         {
             Add("mod_loaded",
-                "Date Everything Access geladen. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen werden automatisch vorgelesen. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen.",
-                "Date Everything Access loaded. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes are spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings.");
+                "Date Everything Access geladen. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen werden automatisch vorgelesen. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen. Strg+F6 startet die Navigation zum aktuellen Ziel oder gewaehlten Raum. Strg+Umschalt+F6 wechselt das Navigationsziel. Strg+Alt+F6 schaltet den Auto-Lauf um.",
+                "Date Everything Access loaded. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes are spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings. Ctrl+F6 starts navigation to the current objective or selected room target. Ctrl+Shift+F6 changes the navigation target. Ctrl+Alt+F6 toggles auto-walk.");
             Add("help_text",
-                "Date Everything Access. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen koennen automatisch vorgelesen werden. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen.",
-                "Date Everything Access. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes can be spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings.");
+                "Date Everything Access. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen koennen automatisch vorgelesen werden. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen. Strg+F6 startet die Navigation zum aktuellen Ziel oder gewaehlten Raum. Strg+Umschalt+F6 wechselt das Navigationsziel. Strg+Alt+F6 schaltet den Auto-Lauf um.",
+                "Date Everything Access. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes can be spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings. Ctrl+F6 starts navigation to the current objective or selected room target. Ctrl+Shift+F6 changes the navigation target. Ctrl+Alt+F6 toggles auto-walk.");
             Add("debug_mode_enabled", "Debug-Modus aktiviert.", "Debug mode enabled.");
             Add("debug_mode_enabled_with_mapping_dump",
                 "Debug-Modus aktiviert. Aktuelle Eingabebelegungen fuer {0} Geraete wurden ins Protokoll geschrieben.",
@@ -217,6 +217,16 @@ namespace DateEverythingAccess
             Add("chat_latest_message_without_contact", "{0}. Letzte Nachricht. {1}", "{0}. Latest message. {1}");
             Add("chat_latest_message_with_contact", "{0}. {1}. Letzte Nachricht. {2}", "{0}. {1}. Latest message. {2}");
             Add("chat_options", "Optionen. {0}", "Options. {0}");
+            Add("navigation_no_objective", "Kein aktuelles Ziel.", "No current objective.");
+            Add("navigation_navigating", "Navigiert zu {0}. Naechster Raum: {1}", "Navigating to {0}. Next zone: {1}");
+            Add("navigation_arrived", "Ziel erreicht.", "Arrived at target.");
+            Add("navigation_blocked", "Navigation blockiert oder unterbrochen.", "Navigation blocked or interrupted.");
+            Add("navigation_select_target_title", "Navigationsziel waehlen", "Select navigation target");
+            Add("navigation_target_option", "Option {0} von {1}. {2}", "Option {0} of {1}. {2}");
+            Add("navigation_target_in_current_room", "Aktueller Raum", "Current room");
+            Add("navigation_target_awakened", "Geweckt", "Awakened");
+            Add("navigation_autowalk_started", "Auto-Lauf begonnen.", "Auto-walk started.");
+            Add("navigation_autowalk_stopped", "Auto-Lauf gestoppt.", "Auto-walk stopped.");
         }
     }
 }

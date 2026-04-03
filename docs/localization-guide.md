@@ -277,12 +277,12 @@ namespace [YourModName]
 **At mod startup (Main.cs or equivalent):**
 
 ```csharp
-public override void OnInitializeMelon()
+void Awake()
 {
     // Initialize early, but AFTER the game is loaded
 }
 
-// For Unity/MelonLoader: When game is ready
+// For Unity/BepInEx: When game is ready
 private void OnGameReady()
 {
     Loc.Initialize();
@@ -420,7 +420,7 @@ Extend every `Add()` call with the new language.
 
 ## Engine-Specific Adaptations
 
-### Unity (MelonLoader, BepInEx)
+### Unity (BepInEx)
 
 **Read language:**
 ```csharp
