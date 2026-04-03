@@ -23,6 +23,8 @@ namespace DateEverythingAccess
         private static float _nextBeepTime;
         private static float _currentBeepRate;
         private static Vector3 _targetPosition;
+        private static NavigationGraph.StepKind _stepKind;
+        private static bool _requiresInteraction;
         private static bool _isTracking;
 
         /// <summary>
@@ -52,10 +54,20 @@ namespace DateEverythingAccess
         /// </summary>
         public static void StartTracking(Vector3 targetPosition)
         {
+            StartTracking(targetPosition, NavigationGraph.StepKind.Unknown, requiresInteraction: false);
+        }
+
+        /// <summary>
+        /// Starts or refreshes tracking for the supplied target position and transition type.
+        /// </summary>
+        public static void StartTracking(Vector3 targetPosition, NavigationGraph.StepKind stepKind, bool requiresInteraction)
+        {
             if (_audioSource == null)
                 Initialize();
 
             _targetPosition = targetPosition;
+            _stepKind = stepKind;
+            _requiresInteraction = requiresInteraction;
             _isTracking = true;
             _nextBeepTime = 0f;
         }
@@ -67,7 +79,10 @@ namespace DateEverythingAccess
         {
             _isTracking = false;
             if (_audioSource != null)
+            {
+                _audioSource.panStereo = 0f;
                 _audioSource.Stop();
+            }
         }
 
         /// <summary>
@@ -82,13 +97,31 @@ namespace DateEverythingAccess
             if (mainCamera == null)
                 return;
 
-            Vector3 screenPosition = mainCamera.WorldToScreenPoint(_targetPosition);
-            float normalizedY = Screen.height > 0 ? Mathf.Clamp01(screenPosition.y / Screen.height) : 0.5f;
-            float distance = Vector3.Distance(mainCamera.transform.position, _targetPosition);
+            Vector3 toTarget = _targetPosition - mainCamera.transform.position;
+            Vector3 flatTarget = Vector3.ProjectOnPlane(toTarget, Vector3.up);
+            Vector3 flatForward = Vector3.ProjectOnPlane(mainCamera.transform.forward, Vector3.up);
+            float distance = flatTarget.magnitude;
             float normalizedDistance = Mathf.Clamp01(1f - (distance / MaxTrackingDistance));
+            float signedAngle = 0f;
+            float facingAmount = 1f;
 
-            _audioSource.pitch = Mathf.Lerp(MinPitch, MaxPitch, normalizedY);
+            if (flatTarget.sqrMagnitude > 0.0001f && flatForward.sqrMagnitude > 0.0001f)
+            {
+                signedAngle = Vector3.SignedAngle(flatForward.normalized, flatTarget.normalized, Vector3.up);
+                facingAmount = 1f - Mathf.Clamp01(Mathf.Abs(signedAngle) / 180f);
+            }
+
+            float panAmount = Mathf.Clamp(signedAngle / 75f, -1f, 1f);
+            _audioSource.panStereo = panAmount;
+
+            float pitchFloor = _requiresInteraction ? 0.7f : MinPitch;
+            float pitchCeiling = _stepKind == NavigationGraph.StepKind.Stairs ? 1.4f : MaxPitch;
+            _audioSource.pitch = Mathf.Lerp(pitchFloor, pitchCeiling, facingAmount);
+            _audioSource.volume = _requiresInteraction ? 0.4f : 0.3f;
+
             _currentBeepRate = Mathf.Lerp(MinBeepRate, MaxBeepRate, normalizedDistance);
+            if (_requiresInteraction)
+                _currentBeepRate = Mathf.Min(MaxBeepRate, _currentBeepRate + 1f);
 
             if (Time.unscaledTime < _nextBeepTime)
                 return;

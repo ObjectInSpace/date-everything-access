@@ -1,0 +1,1069 @@
+{
+    "SceneName":  "Date Everything House",
+    "Links":  [
+                  {
+                      "FromZone":  "living_room_tutorial",
+                      "ToZone":  "living_room",
+                      "FromWaypoint":  {
+                                           "x":  19.539158,
+                                           "y":  5.573,
+                                           "z":  -12.018587
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  19.692667,
+                                         "y":  4.67,
+                                         "z":  -13.962976
+                                     },
+                      "Cost":  2.1493,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "frontdoor",
+                      "ToZone":  "living_room_tutorial",
+                      "FromWaypoint":  {
+                                           "x":  13.894039,
+                                           "y":  4.352,
+                                           "z":  -0.129586
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  19.539158,
+                                         "y":  5.573,
+                                         "z":  -12.018587
+                                     },
+                      "Cost":  13.2177,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "hallway",
+                      "ToZone":  "living_room",
+                      "FromWaypoint":  {
+                                           "x":  12.063061,
+                                           "y":  4.352,
+                                           "z":  -0.439635
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  13.64476,
+                                         "y":  4.67,
+                                         "z":  -13.039851
+                                     },
+                      "Cost":  12.7031,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "living_room",
+                      "ToZone":  "dining_room",
+                      "FromWaypoint":  {
+                                           "x":  -4.476051,
+                                           "y":  5.97,
+                                           "z":  -14.385586
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -19.761463,
+                                         "y":  4.196,
+                                         "z":  -7.695586
+                                     },
+                      "Cost":  16.7794,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dining_room",
+                      "ToZone":  "piano_room",
+                      "FromWaypoint":  {
+                                           "x":  -27.092533,
+                                           "y":  4.196,
+                                           "z":  -7.987653
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -24.595409,
+                                         "y":  4.82,
+                                         "z":  -13.389861
+                                     },
+                      "Cost":  5.9841,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dining_room",
+                      "ToZone":  "kitchen",
+                      "FromWaypoint":  {
+                                           "x":  -20.827639,
+                                           "y":  4.196,
+                                           "z":  3.662762
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -12.300047,
+                                         "y":  3.367,
+                                         "z":  9.675211
+                                     },
+                      "Cost":  10.4669,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "hallway",
+                      "ToZone":  "office",
+                      "FromWaypoint":  {
+                                           "x":  8.309622,
+                                           "y":  4.17,
+                                           "z":  0.664414
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  7.757801,
+                                         "y":  4.17,
+                                         "z":  11.494413
+                                     },
+                      "Cost":  10.844,
+                      "StepKind":  "Door",
+                      "ConnectorName":  "Doors_Office",
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "office",
+                      "ToZone":  "office_closet",
+                      "FromWaypoint":  {
+                                           "x":  9.35808,
+                                           "y":  4.17,
+                                           "z":  24.474413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -1.07132,
+                                         "y":  4.17,
+                                         "z":  23.964413
+                                     },
+                      "Cost":  10.4419,
+                      "StepKind":  "Door",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "office",
+                      "ToZone":  "crawlspace",
+                      "FromWaypoint":  {
+                                           "x":  2.3972,
+                                           "y":  -0.396,
+                                           "z":  24.89094
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -1.6172,
+                                         "y":  -9.59,
+                                         "z":  25.007938
+                                     },
+                      "Cost":  10.0329,
+                      "StepKind":  "Teleporter",
+                      "ConnectorName":  "CrawlspaceLadder",
+                      "RequiresInteraction":  true,
+                      "TransitionWaitSeconds":  12
+                  },
+                  {
+                      "FromZone":  "upper_hallway",
+                      "ToZone":  "bedroom",
+                      "FromWaypoint":  {
+                                           "x":  -12.604355,
+                                           "y":  17.84,
+                                           "z":  0.034413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -11.997356,
+                                         "y":  17.84,
+                                         "z":  -12.635586
+                                     },
+                      "Cost":  12.6845,
+                      "StepKind":  "Door",
+                      "ConnectorName":  "Doors_Bedroom",
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "bedroom",
+                      "ToZone":  "bedroom_closet",
+                      "FromWaypoint":  {
+                                           "x":  -10.53503,
+                                           "y":  18.02,
+                                           "z":  -11.725586
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -10.53503,
+                                         "y":  18.02,
+                                         "z":  -23.995586
+                                     },
+                      "Cost":  12.27,
+                      "StepKind":  "Door",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "bedroom",
+                      "ToZone":  "bathroom2",
+                      "FromWaypoint":  {
+                                           "x":  -25.461765,
+                                           "y":  17.84,
+                                           "z":  -12.635586
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -25.406582,
+                                         "y":  17.84,
+                                         "z":  0.034413
+                                     },
+                      "Cost":  12.6701,
+                      "StepKind":  "Door",
+                      "ConnectorName":  "Doors_Bedroom_Bathroom",
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "hallway",
+                      "ToZone":  "bathroom1",
+                      "FromWaypoint":  {
+                                           "x":  0.523441,
+                                           "y":  4.17,
+                                           "z":  0.664414
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -0.028381,
+                                         "y":  4.17,
+                                         "z":  11.494413
+                                     },
+                      "Cost":  10.844,
+                      "StepKind":  "Door",
+                      "ConnectorName":  "Doors_Bathroom1",
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "upper_hallway",
+                      "ToZone":  "hallway",
+                      "FromWaypoint":  {
+                                           "x":  -1.104427,
+                                           "y":  15.167,
+                                           "z":  -3.365586
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  6.488617,
+                                         "y":  9.688999,
+                                         "z":  -3.085587
+                                     },
+                      "Cost":  9.367,
+                      "StepKind":  "Stairs",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "upper_hallway",
+                      "ToZone":  "laundry_room",
+                      "FromWaypoint":  {
+                                           "x":  -7.573047,
+                                           "y":  17.969999,
+                                           "z":  3.853289
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -18.382547,
+                                         "y":  4.98,
+                                         "z":  33.884659
+                                     },
+                      "Cost":  34.4597,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "laundry_room",
+                      "ToZone":  "laundry_room_closet",
+                      "FromWaypoint":  {
+                                           "x":  -13.564522,
+                                           "y":  3.92,
+                                           "z":  30.984411
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -13.189285,
+                                         "y":  4.98,
+                                         "z":  29.026415
+                                     },
+                      "Cost":  2.2579,
+                      "StepKind":  "Door",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "upper_hallway",
+                      "ToZone":  "gym",
+                      "FromWaypoint":  {
+                                           "x":  -7.748341,
+                                           "y":  17.84,
+                                           "z":  1.714413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -7.748341,
+                                         "y":  17.84,
+                                         "z":  13.564413
+                                     },
+                      "Cost":  11.85,
+                      "StepKind":  "Door",
+                      "ConnectorName":  "Doors_Gym_Hall",
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "gym",
+                      "ToZone":  "gym_closet",
+                      "FromWaypoint":  {
+                                           "x":  -10.53503,
+                                           "y":  18.02,
+                                           "z":  20.664413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  1.831253,
+                                         "y":  18.02,
+                                         "z":  20.084414
+                                     },
+                      "Cost":  12.3799,
+                      "StepKind":  "Door",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "upper_hallway",
+                      "ToZone":  "attic",
+                      "FromWaypoint":  {
+                                           "x":  -4.249802,
+                                           "y":  18.261999,
+                                           "z":  3.885414
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  12.111662,
+                                         "y":  18.261999,
+                                         "z":  3.885414
+                                     },
+                      "Cost":  16.3615,
+                      "StepKind":  "Door",
+                      "ConnectorName":  "AtticDoors",
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_backdoor",
+                      "ToZone":  "laundry_room",
+                      "FromWaypoint":  {
+                                           "x":  -25.539013,
+                                           "y":  3.92,
+                                           "z":  -23.635588
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -18.382547,
+                                         "y":  4.98,
+                                         "z":  33.884659
+                                     },
+                      "Cost":  57.9734,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_bathroom1",
+                      "ToZone":  "bathroom1",
+                      "FromWaypoint":  {
+                                           "x":  -0.028381,
+                                           "y":  4.17,
+                                           "z":  11.494413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  0.647248,
+                                         "y":  4.894,
+                                         "z":  8.549414
+                                     },
+                      "Cost":  3.107,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_bathroom2",
+                      "ToZone":  "bathroom2",
+                      "FromWaypoint":  {
+                                           "x":  0.523441,
+                                           "y":  4.17,
+                                           "z":  0.664414
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -24.804977,
+                                         "y":  18.23,
+                                         "z":  -4.284243
+                                     },
+                      "Cost":  29.3888,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_bathroom2_1",
+                      "ToZone":  "bathroom2",
+                      "FromWaypoint":  {
+                                           "x":  -25.406582,
+                                           "y":  17.84,
+                                           "z":  0.034413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -24.804977,
+                                         "y":  18.23,
+                                         "z":  -4.284243
+                                     },
+                      "Cost":  4.3778,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_bathroom2_2",
+                      "ToZone":  "bathroom2",
+                      "FromWaypoint":  {
+                                           "x":  -25.461765,
+                                           "y":  17.84,
+                                           "z":  -12.635586
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -24.804977,
+                                         "y":  18.23,
+                                         "z":  -4.284243
+                                     },
+                      "Cost":  8.3862,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_bedroom1",
+                      "ToZone":  "bedroom",
+                      "FromWaypoint":  {
+                                           "x":  -12.604355,
+                                           "y":  17.84,
+                                           "z":  0.034413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -13.547646,
+                                         "y":  16.73,
+                                         "z":  -10.593616
+                                     },
+                      "Cost":  10.7274,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_bedroom2",
+                      "ToZone":  "bedroom",
+                      "FromWaypoint":  {
+                                           "x":  -11.997356,
+                                           "y":  17.84,
+                                           "z":  -12.635586
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -13.547646,
+                                         "y":  16.73,
+                                         "z":  -10.593616
+                                     },
+                      "Cost":  2.7938,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_bedroomcloset1",
+                      "ToZone":  "bedroom_closet",
+                      "FromWaypoint":  {
+                                           "x":  -10.53503,
+                                           "y":  18.02,
+                                           "z":  -11.725586
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -5.531917,
+                                         "y":  18.85,
+                                         "z":  -18.005587
+                                     },
+                      "Cost":  8.0721,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_bedroomcloset2",
+                      "ToZone":  "bedroom_closet",
+                      "FromWaypoint":  {
+                                           "x":  -10.53503,
+                                           "y":  18.02,
+                                           "z":  -23.995586
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -5.531917,
+                                         "y":  18.85,
+                                         "z":  -18.005587
+                                     },
+                      "Cost":  7.8486,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_office1",
+                      "ToZone":  "office",
+                      "FromWaypoint":  {
+                                           "x":  7.757801,
+                                           "y":  4.17,
+                                           "z":  11.494413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  13.980387,
+                                         "y":  4.217,
+                                         "z":  24.545811
+                                     },
+                      "Cost":  14.459,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_office2",
+                      "ToZone":  "office",
+                      "FromWaypoint":  {
+                                           "x":  8.309622,
+                                           "y":  4.17,
+                                           "z":  0.664414
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  13.980387,
+                                         "y":  4.217,
+                                         "z":  24.545811
+                                     },
+                      "Cost":  24.5455,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_office_closet1",
+                      "ToZone":  "office_closet",
+                      "FromWaypoint":  {
+                                           "x":  9.35808,
+                                           "y":  4.17,
+                                           "z":  24.474413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -1.481937,
+                                         "y":  5.01,
+                                         "z":  26.707882
+                                     },
+                      "Cost":  11.0995,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_office_closet2",
+                      "ToZone":  "office_closet",
+                      "FromWaypoint":  {
+                                           "x":  -1.07132,
+                                           "y":  4.17,
+                                           "z":  23.964413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -1.481937,
+                                         "y":  5.01,
+                                         "z":  26.707882
+                                     },
+                      "Cost":  2.8984,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_trapdoor1",
+                      "ToZone":  "office",
+                      "FromWaypoint":  {
+                                           "x":  3.288059,
+                                           "y":  4.17,
+                                           "z":  25.344412
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  13.980387,
+                                         "y":  4.217,
+                                         "z":  24.545811
+                                     },
+                      "Cost":  10.7222,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_trapdoor2",
+                      "ToZone":  "office",
+                      "FromWaypoint":  {
+                                           "x":  3.288059,
+                                           "y":  -7.03,
+                                           "z":  25.344412
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  13.980387,
+                                         "y":  4.217,
+                                         "z":  24.545811
+                                     },
+                      "Cost":  15.5389,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_laundry1",
+                      "ToZone":  "laundry_room",
+                      "FromWaypoint":  {
+                                           "x":  -17.686623,
+                                           "y":  3.92,
+                                           "z":  22.004414
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -18.382547,
+                                         "y":  4.98,
+                                         "z":  33.884659
+                                     },
+                      "Cost":  11.9477,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_laundry2",
+                      "ToZone":  "laundry_room",
+                      "FromWaypoint":  {
+                                           "x":  -17.123764,
+                                           "y":  3.92,
+                                           "z":  35.194416
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -18.382547,
+                                         "y":  4.98,
+                                         "z":  33.884659
+                                     },
+                      "Cost":  2.1032,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_laundrycloset1",
+                      "ToZone":  "laundry_room_closet",
+                      "FromWaypoint":  {
+                                           "x":  -13.564522,
+                                           "y":  3.92,
+                                           "z":  30.984411
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -12.574163,
+                                         "y":  4.98,
+                                         "z":  32.835442
+                                     },
+                      "Cost":  2.3517,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_upperhallcloset1",
+                      "ToZone":  "upper_hallway",
+                      "FromWaypoint":  {
+                                           "x":  -0.64642,
+                                           "y":  18.261999,
+                                           "z":  0.158413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -7.573047,
+                                         "y":  17.969999,
+                                         "z":  3.853289
+                                     },
+                      "Cost":  7.8559,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "hallway_arma",
+                      "ToZone":  "hallway",
+                      "FromWaypoint":  {
+                                           "x":  5.837467,
+                                           "y":  9.952,
+                                           "z":  -3.641587
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  22.615004,
+                                         "y":  4.352,
+                                         "z":  2.841414
+                                     },
+                      "Cost":  18.8381,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "office_1love",
+                      "ToZone":  "office",
+                      "FromWaypoint":  {
+                                           "x":  5.324958,
+                                           "y":  7.47,
+                                           "z":  2.526427
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  13.980387,
+                                         "y":  4.217,
+                                         "z":  24.545811
+                                     },
+                      "Cost":  23.882,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "office_2friend",
+                      "ToZone":  "office",
+                      "FromWaypoint":  {
+                                           "x":  6.81419,
+                                           "y":  7.47,
+                                           "z":  11.034412
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  13.980387,
+                                         "y":  4.217,
+                                         "z":  24.545811
+                                     },
+                      "Cost":  15.6363,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "office_3hate",
+                      "ToZone":  "office",
+                      "FromWaypoint":  {
+                                           "x":  6.81419,
+                                           "y":  3.124,
+                                           "z":  18.123413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  13.980387,
+                                         "y":  4.217,
+                                         "z":  24.545811
+                                     },
+                      "Cost":  9.6848,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "atticWindow",
+                      "ToZone":  "attic",
+                      "FromWaypoint":  {
+                                           "x":  14.705214,
+                                           "y":  18,
+                                           "z":  7.154414
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  14.363929,
+                                         "y":  18.098972,
+                                         "z":  3.739966
+                                     },
+                      "Cost":  3.4329,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "kitchen_tutorial",
+                      "ToZone":  "kitchen",
+                      "FromWaypoint":  {
+                                           "x":  -11.004078,
+                                           "y":  5.48,
+                                           "z":  -20.505587
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -12.300047,
+                                         "y":  3.367,
+                                         "z":  9.675211
+                                     },
+                      "Cost":  30.2824,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "kitchen_ronald",
+                      "ToZone":  "kitchen",
+                      "FromWaypoint":  {
+                                           "x":  -20.689219,
+                                           "y":  4.15,
+                                           "z":  13.134907
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -12.300047,
+                                         "y":  3.367,
+                                         "z":  9.675211
+                                     },
+                      "Cost":  9.1083,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "kitchen_cake",
+                      "ToZone":  "kitchen",
+                      "FromWaypoint":  {
+                                           "x":  -19.262619,
+                                           "y":  4.15,
+                                           "z":  25.163412
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -12.300047,
+                                         "y":  3.367,
+                                         "z":  9.675211
+                                     },
+                      "Cost":  16.9993,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "upper_hallway3_shelley",
+                      "ToZone":  "upper_hallway",
+                      "FromWaypoint":  {
+                                           "x":  -0.006306,
+                                           "y":  17.593,
+                                           "z":  8.491413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -7.573047,
+                                         "y":  17.969999,
+                                         "z":  3.853289
+                                     },
+                      "Cost":  8.8831,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_gym1",
+                      "ToZone":  "gym",
+                      "FromWaypoint":  {
+                                           "x":  -7.748341,
+                                           "y":  17.84,
+                                           "z":  13.564413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -18.3615,
+                                         "y":  17.449999,
+                                         "z":  11.371753
+                                     },
+                      "Cost":  10.8443,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_gym2",
+                      "ToZone":  "gym",
+                      "FromWaypoint":  {
+                                           "x":  -7.748341,
+                                           "y":  17.84,
+                                           "z":  1.714413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -18.3615,
+                                         "y":  17.449999,
+                                         "z":  11.371753
+                                     },
+                      "Cost":  14.3546,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_gym3",
+                      "ToZone":  "gym",
+                      "FromWaypoint":  {
+                                           "x":  -25.406582,
+                                           "y":  17.84,
+                                           "z":  13.564413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -18.3615,
+                                         "y":  17.449999,
+                                         "z":  11.371753
+                                     },
+                      "Cost":  7.3887,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_gym4",
+                      "ToZone":  "gym",
+                      "FromWaypoint":  {
+                                           "x":  -24.58437,
+                                           "y":  17.84,
+                                           "z":  1.714413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -18.3615,
+                                         "y":  17.449999,
+                                         "z":  11.371753
+                                     },
+                      "Cost":  11.4952,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_gymcloset1",
+                      "ToZone":  "gym_closet",
+                      "FromWaypoint":  {
+                                           "x":  -10.53503,
+                                           "y":  18.02,
+                                           "z":  20.664413
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -0.170087,
+                                         "y":  18.042,
+                                         "z":  16.617245
+                                     },
+                      "Cost":  11.1271,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_gymcloset2",
+                      "ToZone":  "gym_closet",
+                      "FromWaypoint":  {
+                                           "x":  1.831253,
+                                           "y":  18.02,
+                                           "z":  20.084414
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -0.170087,
+                                         "y":  18.042,
+                                         "z":  16.617245
+                                     },
+                      "Cost":  4.0034,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_attic1",
+                      "ToZone":  "attic",
+                      "FromWaypoint":  {
+                                           "x":  -4.249802,
+                                           "y":  18.261999,
+                                           "z":  3.885414
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  14.363929,
+                                         "y":  18.098972,
+                                         "z":  3.739966
+                                     },
+                      "Cost":  18.615,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_attic2",
+                      "ToZone":  "attic",
+                      "FromWaypoint":  {
+                                           "x":  12.111662,
+                                           "y":  18.261999,
+                                           "z":  3.885414
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  14.363929,
+                                         "y":  18.098972,
+                                         "z":  3.739966
+                                     },
+                      "Cost":  2.2628,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  },
+                  {
+                      "FromZone":  "dorian_irondoor",
+                      "ToZone":  "bedroom_closet",
+                      "FromWaypoint":  {
+                                           "x":  -24.319492,
+                                           "y":  5.13,
+                                           "z":  22.004414
+                                       },
+                      "ToWaypoint":  {
+                                         "x":  -5.531917,
+                                         "y":  18.85,
+                                         "z":  -18.005587
+                                     },
+                      "Cost":  46.2819,
+                      "StepKind":  "OpenPassage",
+                      "ConnectorName":  null,
+                      "RequiresInteraction":  false,
+                      "TransitionWaitSeconds":  0
+                  }
+              ]
+}

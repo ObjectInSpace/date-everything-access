@@ -424,13 +424,46 @@ This is the cleanest room identifier found for house navigation speech.
   - private `move` and `look` fields can be written by reflection for accessibility auto-walk input
   - `STATE == BetterPlayerControl.PlayerState.CanControl` is the safe gate before applying movement
 - `BepInEx\plugins\navigation_graph.json`
-  - the current game-directory copy contains usable room `Links` for inter-room routing
-  - the same JSON still has zeroed waypoint coordinates, so the mod should treat it as a room-topology graph, not as a precise waypoint source
+  - the current game-directory copy contains usable room `Links`, nonzero `FromWaypoint` and `ToWaypoint` coordinates, and populated `Cost` values
+  - the current file was generated from ripped scene data plus explicit connector overrides through `.\scripts\Build-NavigationGraph.ps1`
+- AssetRipper export of `ThirdPersonGreybox.unity`
+  - the scene's `CameraSetup` object serializes the full `CameraSpaces.zones` list directly into the asset
+  - every zone currently used by `navigation_graph.json` exists in that `zones` list
+  - the scene also contains many extra `CameraSpaces` entries that are not in the JSON, including room-local variants such as `hallway2` to `hallway7`, `living_room2` to `living_room11`, `office2` to `office9`, `piano_room2` to `piano_room11`, and `upper_hallway2` to `upper_hallway8`
+  - those extra entries are the strongest current asset-side candidates for finer-grained waypoint nodes or doorway-adjacent anchors
+- `Teleporter` in `ThirdPersonGreybox.unity`
+  - the crawlspace teleporter serializes explicit `LocationDown` and `LocationUp` destination objects
+  - it also serializes `teleportInRotation` and `teleportOutRotation`
+  - practical consequence:
+    - the crawlspace transition already has explicit asset-defined endpoints and facing data
+    - ordinary room-to-room transitions do not appear to expose the same direct paired-endpoint structure
+- Asset-mining helper in this repo
+  - `.\scripts\Export-SceneNavigationData.ps1`
+  - writes `artifacts\navigation\thirdpersongreybox-navigation-data.json`
+  - emits world-space door objects, camera objects, teleporter endpoints, and `CameraSpaces`
+  - `artifacts\navigation\README.md` lists the currently identified door, stair, closet, and crawlspace connector assets for the main graph links
+- Graph-construction helper in this repo
+  - `.\scripts\Build-NavigationGraph.ps1`
+  - writes `artifacts\navigation\navigation_graph.generated.json`
+  - uses explicit door, stairs, and teleporter connector overrides where available
+  - emits per-link `StepKind`, `ConnectorName`, `RequiresInteraction`, and `TransitionWaitSeconds` metadata for runtime navigation handling
+  - falls back to zone anchors or nearest room-family anchors for the remaining links
+- Runtime consumption
+  - `NavigationGraph.FindPathSteps(...)` now parses and returns per-link `FromWaypoint`, `ToWaypoint`, `Cost`, transition type, connector name, and transition timing data from the live JSON
+  - `AccessibilityWatcher` now targets the current step waypoint instead of only the next room center
+  - `AccessibilityWatcher` treats teleporter links as interaction-driven transitions, waits through the crawlspace animation while player control is disabled, and can retry door interactions before declaring navigation blocked
+  - `ObjectTracker` beeps now follow the current navigation step target chosen by the watcher and use stereo panning plus facing-sensitive pitch for stronger left/right guidance
+- Generic interactable placement data
+  - many serialized `Interactable.interactedPosition` values in the scene export are still `{x: 0, y: 0, z: 0}`
+  - practical consequence:
+    - `interactedPosition` is not a reliable generic source for doorway waypoints in this scene
 
 Important consequence:
 
-- Inter-room navigation can be routed reliably by zone name using the JSON graph plus `CameraSpaces.PlayerZone()`.
-- In-room guidance still needs live scene positions from `triggerzone.Position`, not the current waypoint data in the JSON.
+- Inter-room navigation can now use authored or inferred connector waypoints from the generated JSON instead of only zeroed placeholders.
+- The generated graph now carries enough metadata for runtime code to distinguish open passages, doors, stairs, and the crawlspace teleporter without hardcoded room-pair logic in the watcher.
+- In-room guidance may still benefit from live `triggerzone.Position` or runtime refinement, especially for open passages and any link where the generated graph had to fall back to room-family heuristics.
+- Asset data is sufficient to build and regenerate the current waypoint graph from local tooling.
 
 ### Current interactable
 

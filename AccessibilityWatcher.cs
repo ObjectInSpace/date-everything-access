@@ -22,6 +22,14 @@ namespace DateEverythingAccess
             Glossary
         }
 
+        private enum NavigationTargetKind
+        {
+            ExitWaypoint,
+            TransitionInteractable,
+            EntryWaypoint,
+            ZoneFallback
+        }
+
         private const float PopupSelectionSuppressionSeconds = 0.75f;
         private const float UIDialogSelectionSuppressionSeconds = 0.75f;
         private const float SpecsSelectionSuppressionSeconds = 0.75f;
@@ -39,6 +47,9 @@ namespace DateEverythingAccess
         private const float AutoWalkLookScaleDegrees = 45f;
         private const float AutoWalkProgressDistance = 0.35f;
         private const float AutoWalkBlockedTimeoutSeconds = 2f;
+        private const float AutoWalkInteractionRetrySeconds = 0.75f;
+        private const float AutoWalkConnectorSearchDistance = 4f;
+        private const int AutoWalkMaxRecoveryAttempts = 2;
         private const int VkUp = 0x26;
         private const int VkDown = 0x28;
         private const int VkLeft = 0x25;
@@ -141,13 +152,16 @@ namespace DateEverythingAccess
         private float _suppressSpecsSelectionUntil;
         private float _suppressCreditsSelectionUntil;
         private float _suppressPendingSpecsTutorialUntil;
+        private float _lastNavigationInteractionAttemptTime;
         private float _lastAutoWalkProgressTime;
+        private float _autoWalkTransitionUntil;
         private SpecsAnnouncementMode _lastSpecsAnnouncementMode;
         private string _navigationTargetZone;
         private string _navigationTargetLabel;
         private string _lastNavigationNextZone;
         private Vector3 _lastAutoWalkPosition;
-        private List<string> _navigationPath;
+        private List<NavigationGraph.PathStep> _navigationPath;
+        private int _autoWalkRecoveryAttempts;
         private bool _isNavigationActive;
         private bool _isAutoWalking;
 
@@ -425,6 +439,9 @@ namespace DateEverythingAccess
                 return;
             }
 
+            if (HandlePendingNavigationTransition())
+                return;
+
             if (!CanUseNavigationNow() || string.IsNullOrEmpty(_navigationTargetZone))
             {
                 if (_isAutoWalking)
@@ -448,15 +465,20 @@ namespace DateEverythingAccess
             if (!_isAutoWalking)
                 return;
 
+            if (HandlePendingNavigationTransition())
+                return;
+
             if (!CanUseNavigationNow() || BetterPlayerControl.Instance == null)
             {
                 StopNavigationWithAnnouncement("navigation_blocked");
                 return;
             }
 
-            if (!TryGetNextNavigationPosition(out Vector3 nextPosition))
+            NavigationGraph.PathStep currentStep = GetCurrentNavigationStep();
+            if (!TryGetNextNavigationPosition(out Vector3 nextPosition, out NavigationTargetKind targetKind))
             {
-                StopNavigationWithAnnouncement("navigation_blocked");
+                if (!TryRecoverAutoWalk(currentStep, NavigationTargetKind.ZoneFallback))
+                    StopNavigationWithAnnouncement("navigation_blocked");
                 return;
             }
 
@@ -466,20 +488,55 @@ namespace DateEverythingAccess
 
             if (toTarget.sqrMagnitude <= AutoWalkArrivalDistance * AutoWalkArrivalDistance)
             {
-                if (!TryRefreshNavigationPath(forceAnnounce: true))
+                if (targetKind == NavigationTargetKind.TransitionInteractable)
+                {
+                    if (!TryAttemptTransitionInteraction(currentStep, allowOptionalDoorInteraction: false) &&
+                        !TryRecoverAutoWalk(currentStep, targetKind))
+                    {
+                        StopNavigationWithAnnouncement("navigation_blocked");
+                    }
+
+                    return;
+                }
+
+                if (targetKind == NavigationTargetKind.ExitWaypoint)
+                {
+                    if (!TryGetNextNavigationPosition(out nextPosition, out targetKind))
+                    {
+                        if (!TryRecoverAutoWalk(currentStep, targetKind))
+                            StopNavigationWithAnnouncement("navigation_blocked");
+                        return;
+                    }
+                }
+                else if (!TryRefreshNavigationPath(forceAnnounce: true))
                 {
                     StopNavigationWithAnnouncement("navigation_blocked");
                     return;
                 }
 
-                if (!TryGetNextNavigationPosition(out nextPosition))
+                if (!TryGetNextNavigationPosition(out nextPosition, out targetKind))
                 {
-                    StopNavigationWithAnnouncement("navigation_blocked");
+                    if (!TryRecoverAutoWalk(currentStep, targetKind))
+                        StopNavigationWithAnnouncement("navigation_blocked");
                     return;
                 }
 
+                currentStep = GetCurrentNavigationStep();
                 toTarget = nextPosition - playerTransform.position;
                 toTarget.y = 0f;
+            }
+
+            if (targetKind == NavigationTargetKind.TransitionInteractable)
+            {
+                ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                if (!TryAttemptTransitionInteraction(currentStep, allowOptionalDoorInteraction: false) &&
+                    Time.unscaledTime - _lastAutoWalkProgressTime >= AutoWalkBlockedTimeoutSeconds &&
+                    !TryRecoverAutoWalk(currentStep, targetKind))
+                {
+                    StopNavigationWithAnnouncement("navigation_blocked");
+                }
+
+                return;
             }
 
             if (toTarget.sqrMagnitude <= 0.01f)
@@ -500,7 +557,8 @@ namespace DateEverythingAccess
             Vector3 lookInput = new Vector3(Mathf.Clamp(turnDegrees / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
             if (!ApplyNavigationInput(moveInput, lookInput))
             {
-                StopNavigationWithAnnouncement("navigation_blocked");
+                if (!TryRecoverAutoWalk(currentStep, targetKind))
+                    StopNavigationWithAnnouncement("navigation_blocked");
                 return;
             }
 
@@ -508,10 +566,12 @@ namespace DateEverythingAccess
             {
                 _lastAutoWalkPosition = playerTransform.position;
                 _lastAutoWalkProgressTime = Time.unscaledTime;
+                _autoWalkRecoveryAttempts = 0;
             }
             else if (Time.unscaledTime - _lastAutoWalkProgressTime >= AutoWalkBlockedTimeoutSeconds)
             {
-                StopNavigationWithAnnouncement("navigation_blocked");
+                if (!TryRecoverAutoWalk(currentStep, targetKind))
+                    StopNavigationWithAnnouncement("navigation_blocked");
             }
         }
 
@@ -543,6 +603,7 @@ namespace DateEverythingAccess
                 return false;
             }
 
+            ResetAutoWalkProgress();
             return true;
         }
 
@@ -558,22 +619,23 @@ namespace DateEverythingAccess
                 return false;
             }
 
-            List<string> path = NavigationGraph.FindPath(currentZone, _navigationTargetZone);
-            if (path == null || path.Count < 2)
+            List<NavigationGraph.PathStep> path = NavigationGraph.FindPathSteps(currentZone, _navigationTargetZone);
+            if (path == null || path.Count < 1)
                 return false;
 
             _navigationPath = path;
             _isNavigationActive = true;
+            _autoWalkTransitionUntil = 0f;
+            _autoWalkRecoveryAttempts = 0;
 
-            string nextZone = path[1];
+            string nextZone = path[0].ToZone;
             if (forceAnnounce || !string.Equals(nextZone, _lastNavigationNextZone, StringComparison.OrdinalIgnoreCase))
             {
                 _lastNavigationNextZone = nextZone;
                 ScreenReader.Say(Loc.Get("navigation_navigating", _navigationTargetLabel, BuildNavigationTargetLabel(nextZone, currentZone)), interrupt: false);
             }
 
-            if (TryGetZonePosition(nextZone, out Vector3 nextPosition))
-                ObjectTracker.StartTracking(nextPosition);
+            UpdateNavigationTracker();
 
             return true;
         }
@@ -591,6 +653,9 @@ namespace DateEverythingAccess
             _navigationPath = null;
             _lastNavigationNextZone = null;
             _lastAutoWalkProgressTime = 0f;
+            _lastNavigationInteractionAttemptTime = 0f;
+            _autoWalkTransitionUntil = 0f;
+            _autoWalkRecoveryAttempts = 0;
             ObjectTracker.StopTracking();
             ApplyNavigationInput(Vector3.zero, Vector3.zero);
         }
@@ -722,14 +787,268 @@ namespace DateEverythingAccess
             return -1;
         }
 
-        private bool TryGetNextNavigationPosition(out Vector3 position)
+        private bool TryGetNextNavigationPosition(out Vector3 position, out NavigationTargetKind targetKind)
         {
             position = Vector3.zero;
+            targetKind = NavigationTargetKind.ZoneFallback;
 
-            if (_navigationPath == null || _navigationPath.Count < 2)
+            if (_navigationPath == null || _navigationPath.Count < 1)
                 return false;
 
-            return TryGetZonePosition(_navigationPath[1], out position);
+            NavigationGraph.PathStep step = _navigationPath[0];
+            if (step == null)
+                return false;
+
+            if (BetterPlayerControl.Instance != null &&
+                !string.IsNullOrEmpty(step.FromZone) &&
+                string.Equals(GetCurrentZoneNameInternal(), step.FromZone, StringComparison.OrdinalIgnoreCase))
+            {
+                Vector3 fromWaypoint = step.FromWaypoint;
+                fromWaypoint.y = BetterPlayerControl.Instance.transform.position.y;
+                if (Vector3.Distance(BetterPlayerControl.Instance.transform.position, fromWaypoint) > AutoWalkArrivalDistance)
+                {
+                    position = step.FromWaypoint;
+                    targetKind = NavigationTargetKind.ExitWaypoint;
+                    return true;
+                }
+
+                if (step.RequiresInteraction)
+                {
+                    position = step.FromWaypoint;
+                    targetKind = NavigationTargetKind.TransitionInteractable;
+                    return true;
+                }
+            }
+
+            if (step.ToWaypoint != Vector3.zero)
+            {
+                position = step.ToWaypoint;
+                targetKind = NavigationTargetKind.EntryWaypoint;
+                return true;
+            }
+
+            if (TryGetZonePosition(step.ToZone, out position))
+            {
+                targetKind = NavigationTargetKind.ZoneFallback;
+                return true;
+            }
+
+            return false;
+        }
+
+        private NavigationGraph.PathStep GetCurrentNavigationStep()
+        {
+            if (_navigationPath == null || _navigationPath.Count < 1)
+                return null;
+
+            return _navigationPath[0];
+        }
+
+        private bool HandlePendingNavigationTransition()
+        {
+            if (_autoWalkTransitionUntil <= 0f)
+                return false;
+
+            NavigationGraph.PathStep currentStep = GetCurrentNavigationStep();
+            if (HasAdvancedBeyondStep(currentStep))
+            {
+                _autoWalkTransitionUntil = 0f;
+                TryRefreshNavigationPath(forceAnnounce: false);
+                return true;
+            }
+
+            if (Time.unscaledTime < _autoWalkTransitionUntil)
+            {
+                ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                ObjectTracker.StopTracking();
+                return true;
+            }
+
+            _autoWalkTransitionUntil = 0f;
+            return false;
+        }
+
+        private bool HasAdvancedBeyondStep(NavigationGraph.PathStep step)
+        {
+            if (step == null || string.IsNullOrEmpty(step.FromZone))
+                return false;
+
+            string currentZone = GetCurrentZoneNameInternal();
+            if (string.IsNullOrEmpty(currentZone))
+                return false;
+
+            return !string.Equals(currentZone, step.FromZone, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void UpdateNavigationTracker()
+        {
+            if (TryGetNextNavigationPosition(out Vector3 nextPosition, out NavigationTargetKind targetKind))
+            {
+                NavigationGraph.PathStep step = GetCurrentNavigationStep();
+                NavigationGraph.StepKind stepKind = step != null ? step.Kind : NavigationGraph.StepKind.Unknown;
+                bool requiresInteraction = targetKind == NavigationTargetKind.TransitionInteractable ||
+                    (step != null && step.RequiresInteraction);
+                ObjectTracker.StartTracking(nextPosition, stepKind, requiresInteraction);
+                return;
+            }
+
+            ObjectTracker.StopTracking();
+        }
+
+        private void ResetAutoWalkProgress()
+        {
+            _lastAutoWalkPosition = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform.position
+                : Vector3.zero;
+            _lastAutoWalkProgressTime = Time.unscaledTime;
+        }
+
+        private bool TryRecoverAutoWalk(NavigationGraph.PathStep step, NavigationTargetKind targetKind)
+        {
+            if (TryAttemptTransitionInteraction(step, allowOptionalDoorInteraction: targetKind != NavigationTargetKind.TransitionInteractable))
+                return true;
+
+            if (_autoWalkRecoveryAttempts >= AutoWalkMaxRecoveryAttempts)
+                return false;
+
+            _autoWalkRecoveryAttempts++;
+            if (!TryRefreshNavigationPath(forceAnnounce: false))
+                return false;
+
+            ResetAutoWalkProgress();
+            return true;
+        }
+
+        private bool TryAttemptTransitionInteraction(NavigationGraph.PathStep step, bool allowOptionalDoorInteraction)
+        {
+            if (step == null)
+                return false;
+
+            bool shouldAttempt = step.RequiresInteraction;
+            if (!shouldAttempt &&
+                allowOptionalDoorInteraction &&
+                step.Kind == NavigationGraph.StepKind.Door &&
+                string.Equals(GetCurrentZoneNameInternal(), step.FromZone, StringComparison.OrdinalIgnoreCase))
+            {
+                shouldAttempt = true;
+            }
+
+            if (!shouldAttempt)
+                return false;
+
+            if (Time.unscaledTime - _lastNavigationInteractionAttemptTime < AutoWalkInteractionRetrySeconds)
+                return false;
+
+            if (!TryFindTransitionInteractable(step, out InteractableObj interactable))
+                return false;
+
+            if (!CanAutoInteractWithStep(step, interactable))
+                return false;
+
+            _lastNavigationInteractionAttemptTime = Time.unscaledTime;
+            Singleton<InteractableManager>.Instance.Interact(interactable);
+            _autoWalkRecoveryAttempts = 0;
+            ResetAutoWalkProgress();
+
+            if (step.TransitionWaitSeconds > 0f)
+            {
+                _autoWalkTransitionUntil = Time.unscaledTime + step.TransitionWaitSeconds;
+                ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                ObjectTracker.StopTracking();
+            }
+
+            return true;
+        }
+
+        private bool TryFindTransitionInteractable(NavigationGraph.PathStep step, out InteractableObj interactable)
+        {
+            interactable = null;
+
+            if (BetterPlayerControl.Instance == null || Singleton<InteractableManager>.Instance == null)
+                return false;
+
+            Transform playerTransform = BetterPlayerControl.Instance.transform;
+            InteractableObj activeObject = Singleton<InteractableManager>.Instance.activeObject;
+            if (IsMatchingTransitionInteractable(step, activeObject) && IsInteractableWithinRange(activeObject, playerTransform.position))
+            {
+                interactable = activeObject;
+                return true;
+            }
+
+            InteractableObj[] candidates = FindObjectsOfType<InteractableObj>();
+            float bestScore = float.MaxValue;
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                InteractableObj candidate = candidates[i];
+                if (!IsMatchingTransitionInteractable(step, candidate) || !IsInteractableWithinRange(candidate, playerTransform.position))
+                    continue;
+
+                float score = Vector3.Distance(candidate.transform.position, step.FromWaypoint) +
+                    Vector3.Distance(candidate.transform.position, playerTransform.position);
+                if (!string.IsNullOrEmpty(step.ConnectorName) &&
+                    string.Equals(candidate.name, step.ConnectorName, StringComparison.OrdinalIgnoreCase))
+                {
+                    score -= 100f;
+                }
+
+                if (score >= bestScore)
+                    continue;
+
+                bestScore = score;
+                interactable = candidate;
+            }
+
+            return interactable != null;
+        }
+
+        private static bool IsMatchingTransitionInteractable(NavigationGraph.PathStep step, InteractableObj interactable)
+        {
+            if (step == null || interactable == null || !interactable.gameObject.activeInHierarchy)
+                return false;
+
+            if (!string.IsNullOrEmpty(step.ConnectorName) &&
+                string.Equals(interactable.name, step.ConnectorName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            switch (step.Kind)
+            {
+                case NavigationGraph.StepKind.Teleporter:
+                    return interactable.GetComponent<Teleporter>() != null;
+                case NavigationGraph.StepKind.Door:
+                    return interactable.GetComponent<Door>() != null || interactable.GetComponent<SlidingDoor>() != null;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool IsInteractableWithinRange(InteractableObj interactable, Vector3 playerPosition)
+        {
+            if (interactable == null)
+                return false;
+
+            float allowedDistance = Mathf.Max(AutoWalkConnectorSearchDistance, interactable.InteractionRadius + 1f);
+            return Vector3.Distance(playerPosition, interactable.transform.position) <= allowedDistance;
+        }
+
+        private static bool CanAutoInteractWithStep(NavigationGraph.PathStep step, InteractableObj interactable)
+        {
+            if (step == null || interactable == null)
+                return false;
+
+            if (step.Kind == NavigationGraph.StepKind.Teleporter)
+                return interactable.GetComponent<Teleporter>() != null;
+
+            Door door = interactable.GetComponent<Door>();
+            if (door != null)
+                return !door.locked && !door.open;
+
+            SlidingDoor slidingDoor = interactable.GetComponent<SlidingDoor>();
+            if (slidingDoor != null)
+                return !slidingDoor.locked && !slidingDoor.open;
+
+            return step.RequiresInteraction;
         }
 
         private static bool TryGetZonePosition(string zoneName, out Vector3 position)

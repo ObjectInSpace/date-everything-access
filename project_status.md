@@ -32,8 +32,8 @@
 ## Current Phase
 
 **Phase:** Early Feature Work
-**Currently working on:** Navigation is now implemented in code with room-target cycling, objective routing, and auto-walk control. The remaining work is concentrated on runtime validation of path quality plus broader gameplay/system coverage.
-**Blocked by:** In-game testing for navigation and auto-walk behavior, explicit runtime testing for unseen or unspoken interactables, and optional later verification for music or art screens if they become available in the current save.
+**Currently working on:** Navigation now includes waypoint-aware routing, transition metadata, connector interaction recovery, and improved directional tracking. The remaining work is concentrated on in-game validation plus broader gameplay/system coverage.
+**Blocked by:** In-game testing for navigation and auto-walk behavior, especially door, stairs, and crawlspace transitions, explicit runtime testing for unseen or unspoken interactables, and optional later verification for music or art screens if they become available in the current save.
 
 ## Codebase Analysis Progress
 
@@ -84,8 +84,9 @@
 - Automatic room announcements in house exploration
 - Automatic nearby interactable announcements
 - Automatic Dateviators equip/charge state announcements
-- Room navigation routing based on `navigation_graph.json` links plus live `CameraSpaces` zone positions
+- Room navigation routing based on `navigation_graph.json` waypoints plus live `CameraSpaces` zone positions
 - Auto-walk guidance and directional object-tracker beeps for the next navigation step
+- Transition-aware auto-walk with teleporter waits, connector interaction retries, and stronger left or right tracker cues
 
 ## Pending Tests
 
@@ -95,6 +96,8 @@
 - Verify in runtime that `Ctrl+Shift+F6` cycles through the expected room targets and announces the selected target clearly.
 - Verify in runtime that `Ctrl+F6` routes to the current tutorial objective when available and otherwise starts navigation to the selected room target.
 - Verify in runtime that `Ctrl+Alt+F6` can start and stop auto-walk cleanly, advances between rooms, and stops with the expected arrival or blocked announcements.
+- Verify in runtime that connector handling works on real transitions: closed doors should recover cleanly, stairs should continue without false blocks, and the crawlspace teleporter should no longer stop navigation during its animation.
+- Verify in runtime that the updated object tracker gives usable left or right guidance and does not become confusing during transition interactions.
 - Verify in runtime that phone app speech still behaves correctly after removing the redundant per-app watcher detail paths.
 - Test how nearby interactable announcements behave for objects the player has not scanned or spoken to yet, especially that unmet datables use object names and met datables switch to character names.
 - Identify more gameplay states and visible text that still need to be surfaced to speech.
@@ -102,9 +105,15 @@
 
 ## Recent Test Results
 
+- Passed locally on 2026-04-03: `.\scripts\Build-NavigationGraph.ps1` now emits `StepKind`, `ConnectorName`, `RequiresInteraction`, and `TransitionWaitSeconds` metadata, regenerated `artifacts\navigation\navigation_graph.generated.json`, and the updated graph was copied into the live game-side `D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json`.
+- Passed locally on 2026-04-03: `NavigationGraph` now parses transition metadata, `AccessibilityWatcher` now treats teleporter links as interaction-driven transitions, holds navigation through temporary loss of player control, retries nearby door connectors before declaring a block, and `ObjectTracker` now adds stereo left or right guidance; `dotnet build .\DateEverythingAccess.csproj --no-restore -p:SkipCopyToPlugins=true` succeeded with 0 warnings and 0 errors, and the rebuilt `DateEverythingAccess.dll` was copied into `D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\`.
 - Passed locally on 2026-04-02: `.\scripts\Test-ModSetup.ps1 -GamePath 'D:\SteamLibrary\steamapps\Common\Date Everything'` reported 18 successful checks, 0 warnings, and 0 errors for the BepInEx, Tolk, project-reference, and decompiled-source setup.
+- Passed locally on 2026-04-02: `NavigationGraph` now parses `FromWaypoint` and `ToWaypoint`, `AccessibilityWatcher` now uses waypoint-aware path steps for tracking and auto-walk targeting instead of only next-zone centers, `dotnet build .\DateEverythingAccess.csproj --no-restore -p:SkipCopyToPlugins=true` succeeded with 0 warnings and 0 errors, and the rebuilt `DateEverythingAccess.dll` was copied into `D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\`.
 - Passed locally on 2026-04-02: removed the dead duplicate phone-detail watcher state, finished the room-navigation watcher path, and `dotnet build .\DateEverythingAccess.csproj --no-restore -p:SkipCopyToPlugins=true` succeeded.
-- Passed locally on 2026-04-02: confirmed that `D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json` exists and contains usable room `Links`, but its waypoint coordinates are still zeroed, so live `CameraSpaces` zone positions remain the authoritative in-scene navigation anchors.
+- Passed locally on 2026-04-02: added `.\scripts\Build-NavigationGraph.ps1`, generated `artifacts\navigation\navigation_graph.generated.json`, verified that the generated graph has 0 zeroed `FromWaypoint` values, 0 zeroed `ToWaypoint` values, and 0 zero-cost links, then copied it over the live game-side `D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json`.
+- Passed locally on 2026-04-02: added `.\scripts\Export-SceneNavigationData.ps1`, generated `artifacts\navigation\thirdpersongreybox-navigation-data.json`, and documented the main authored connector assets in `artifacts\navigation\README.md`. The asset scan now covers door objects, door cameras, stair cameras, crawlspace teleporter endpoints, and all serialized `CameraSpaces` zones needed for the next graph-construction pass.
+- Passed locally on 2026-04-02: AssetRipper inspection of `ThirdPersonGreybox.unity` confirmed that every zone named in the game-side `navigation_graph.json` exists in the scene's serialized `CameraSpaces.zones` list, that the scene also contains many additional room-local camera-space variants such as `hallway2` to `hallway7` and `living_room2` to `living_room11`, and that the crawlspace `Teleporter` already has explicit `LocationDown` / `LocationUp` endpoints plus in/out rotation data. The remaining missing waypoint-graph data is explicit per-link doorway anchors for ordinary room transitions.
+- Passed locally on 2026-04-02: before the graph-construction pass, confirmed that `D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json` existed and contained usable room `Links`, but its waypoint coordinates were still zeroed, which is why the generated replacement graph was needed.
 - Passed locally on 2026-03-30: verified that the saved `AccessibilityWatcher.cs` still contains the chat reply navigation, `ValidateQuestions` focus path, Win32 key-state fallback, and pointer-style `ControllerMenuUI.SetCurrentlySelected(..., isViaPointer: true)` focus writes; `dotnet build .\DateEverythingAccess.csproj --no-restore -p:SkipCopyToPlugins=true` also succeeded.
 - Passed locally on 2026-03-30: `.\scripts\Build-PortableRelease.ps1 -Configuration Release` succeeded and created `artifacts\release-staging\DateEverythingAccess-portable-v0.1.0.zip`.
 - Published on GitHub on 2026-03-26: uploaded a second release asset, `DateEverythingAccess-portable-v0.1.0.zip`, to `https://github.com/ObjectInSpace/date-everything-access/releases/tag/v0.1.0`; it contains the tested BepInEx bootstrap files (`winhttp.dll`, `doorstop_config.ini`, `.doorstop_version`), `BepInEx\core`, `BepInEx\plugins\DateEverythingAccess.dll`, `Tolk.dll`, `nvdaControllerClient64.dll`, `README.txt`, `Install-DateEverythingAccess.ps1`, and `THIRD-PARTY-NOTICES.txt`.
@@ -196,7 +205,12 @@
 ## Notes for Next Session
 
 - Portable release packaging now lives in `.\scripts\Build-PortableRelease.ps1` and `artifacts\release-src\v0.1.0\portable\`; use that path when rebuilding or revising the self-contained loader bundle.
-- `navigation_graph.json` is now loaded from the game-side `BepInEx\plugins\` directory. The current file has usable room links, but its waypoint coordinates are still zero, so navigation should continue to rely on `CameraSpaces` live zone positions for actual movement targets.
+- `navigation_graph.json` is loaded from the game-side `BepInEx\plugins\` directory. The live file was replaced on 2026-04-02 with the generated waypoint graph from `.\scripts\Build-NavigationGraph.ps1`, and the repo copy lives at `artifacts\navigation\navigation_graph.generated.json`.
+- The generated graph now includes transition metadata (`StepKind`, `ConnectorName`, `RequiresInteraction`, `TransitionWaitSeconds`) so the runtime can distinguish open passages, doors, stairs, and teleporter links.
+- Navigation asset inputs can now be regenerated locally with `.\scripts\Export-SceneNavigationData.ps1`; the current generated output is in `artifacts\navigation\thirdpersongreybox-navigation-data.json`, and the curated connector shortlist lives in `artifacts\navigation\README.md`.
+- AssetRipper's exported `ThirdPersonGreybox.unity` scene confirms that `CameraSpaces.zones` contains all JSON graph rooms plus many finer-grained room variants. If navigation quality still needs improvement after runtime testing, the next evidence-based step is to refine the open-passage heuristics or promote more extra room variants into explicit intermediate nodes.
+- The crawlspace edge is special-cased in assets through `Teleporter.LocationDown`, `Teleporter.LocationUp`, and explicit teleport rotations, so it can be treated as an authored transition instead of an inferred hallway-style edge.
+- The runtime navigation code now consumes waypoint steps plus transition metadata from the generated graph, but it still needs in-game verification for door crossings, crawlspace traversal behavior, stairs, and open-passage tuning.
 - The room-navigation hotkeys are now wired in code, but they still need runtime verification for target cycling, tutorial-objective routing, and blocked-path behavior.
 - Phone app speech now depends on the consolidated current-app announcer path; if a phone regression appears, inspect that generic path before reviving the deleted per-app detail methods.
 - The public `v0.1.0` release now has both a minimal mod zip and a portable zip; if one changes, keep the asset names and README contents aligned so users can tell which package already includes BepInEx.
