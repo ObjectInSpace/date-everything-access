@@ -34,6 +34,15 @@ namespace DateEverythingAccess
             ZoneFallback
         }
 
+        private enum OpenPassageTraversalStage
+        {
+            None,
+            SourceWaypoint,
+            SourceHandoff,
+            DestinationWaypoint,
+            DestinationHandoff
+        }
+
         private enum TutorialObjectiveKind
         {
             None,
@@ -211,11 +220,12 @@ namespace DateEverythingAccess
         private string _navigationTargetLabel;
         private string _lastNavigationNextZone;
         private string _lastNavigationAnnouncementLabel;
-        private string _committedEntryWaypointStepKey;
+        private string _openPassageTraversalStepKey;
         private Vector3 _lastAutoWalkPosition;
         private List<NavigationGraph.PathStep> _navigationPath;
         private List<RoomObjectTarget> _roomObjectTargets;
         private int _autoWalkRecoveryAttempts;
+        private OpenPassageTraversalStage _openPassageTraversalStage;
         private bool _isRoomObjectPickerOpen;
         private bool _isNavigationActive;
         private bool _isAutoWalking;
@@ -922,6 +932,7 @@ namespace DateEverythingAccess
                 _isNavigationActive = true;
                 _autoWalkTransitionUntil = 0f;
                 _autoWalkRecoveryAttempts = 0;
+                ResetOpenPassageTraversalState();
 
                 if (!AreZonesEquivalent(_lastNavigationNextZone, currentZone) ||
                     !string.Equals(_lastNavigationAnnouncementLabel, _navigationTargetLabel, StringComparison.OrdinalIgnoreCase))
@@ -947,6 +958,7 @@ namespace DateEverythingAccess
                 _isNavigationActive = true;
                 _autoWalkTransitionUntil = 0f;
                 _autoWalkRecoveryAttempts = 0;
+                ResetOpenPassageTraversalState();
 
                 if (!string.Equals(_lastNavigationNextZone, _navigationTargetZone, StringComparison.OrdinalIgnoreCase) ||
                     !string.Equals(_lastNavigationAnnouncementLabel, _navigationTargetLabel, StringComparison.OrdinalIgnoreCase))
@@ -992,13 +1004,30 @@ namespace DateEverythingAccess
                 return false;
             }
 
-            string previousCommittedStepKey = _committedEntryWaypointStepKey;
+            string previousOpenPassageStepKey = _openPassageTraversalStepKey;
+            OpenPassageTraversalStage previousOpenPassageTraversalStage = _openPassageTraversalStage;
             _navigationPath = path;
-            string refreshedFirstStepKey = BuildNavigationStepKey(path[0]);
-            _committedEntryWaypointStepKey = !string.IsNullOrEmpty(previousCommittedStepKey) &&
-                string.Equals(previousCommittedStepKey, refreshedFirstStepKey, StringComparison.Ordinal)
-                ? previousCommittedStepKey
-                : null;
+            NavigationGraph.PathStep refreshedFirstStep = path[0];
+            if (refreshedFirstStep != null &&
+                refreshedFirstStep.Kind == NavigationGraph.StepKind.OpenPassage)
+            {
+                string refreshedFirstStepKey = BuildNavigationStepKey(refreshedFirstStep);
+                if (!string.IsNullOrEmpty(previousOpenPassageStepKey) &&
+                    string.Equals(previousOpenPassageStepKey, refreshedFirstStepKey, StringComparison.Ordinal))
+                {
+                    _openPassageTraversalStepKey = previousOpenPassageStepKey;
+                    _openPassageTraversalStage = previousOpenPassageTraversalStage;
+                }
+                else
+                {
+                    _openPassageTraversalStepKey = refreshedFirstStepKey;
+                    _openPassageTraversalStage = OpenPassageTraversalStage.SourceWaypoint;
+                }
+            }
+            else
+            {
+                ResetOpenPassageTraversalState();
+            }
             _isNavigationActive = true;
             _autoWalkTransitionUntil = 0f;
             _autoWalkRecoveryAttempts = 0;
@@ -1038,7 +1067,7 @@ namespace DateEverythingAccess
             _isNavigationActive = false;
             _isAutoWalking = false;
             _navigationPath = null;
-            _committedEntryWaypointStepKey = null;
+            ResetOpenPassageTraversalState();
             _lastNavigationNextZone = null;
             _lastNavigationAnnouncementLabel = null;
             _lastAutoWalkProgressTime = 0f;
@@ -1655,134 +1684,136 @@ namespace DateEverythingAccess
                 return false;
             }
 
-            if (BetterPlayerControl.Instance != null &&
-                !string.IsNullOrEmpty(step.FromZone) &&
-                IsZoneEquivalentToNavigationZone(currentZone, step.FromZone))
+            if (BetterPlayerControl.Instance != null)
             {
-                string stepKey = BuildNavigationStepKey(step);
-                Vector3 fromWaypoint = step.FromWaypoint;
-                fromWaypoint.y = BetterPlayerControl.Instance.transform.position.y;
-                float fromDistance = Vector3.Distance(BetterPlayerControl.Instance.transform.position, fromWaypoint);
-                float toDistance = float.MaxValue;
-                if (step.ToWaypoint != Vector3.zero)
+                Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
+
+                if (step.Kind == NavigationGraph.StepKind.OpenPassage &&
+                    !string.IsNullOrEmpty(step.FromZone) &&
+                    !string.IsNullOrEmpty(step.ToZone) &&
+                    step.FromWaypoint != Vector3.zero &&
+                    step.ToWaypoint != Vector3.zero)
                 {
+                    Vector3 fromWaypoint = step.FromWaypoint;
+                    fromWaypoint.y = playerPosition.y;
+                    float fromDistance = Vector3.Distance(playerPosition, fromWaypoint);
                     Vector3 toWaypoint = step.ToWaypoint;
-                    toWaypoint.y = BetterPlayerControl.Instance.transform.position.y;
-                    toDistance = Vector3.Distance(BetterPlayerControl.Instance.transform.position, toWaypoint);
-                }
+                    toWaypoint.y = playerPosition.y;
+                    float toDistance = Vector3.Distance(playerPosition, toWaypoint);
+                    OpenPassageTraversalStage traversalStage = GetOpenPassageTraversalStage(step, currentZone, fromDistance, toDistance);
 
-                bool hasCommittedEntryWaypoint = !string.IsNullOrEmpty(_committedEntryWaypointStepKey) &&
-                    string.Equals(_committedEntryWaypointStepKey, stepKey, StringComparison.Ordinal);
-                Vector3 destinationZonePosition = Vector3.zero;
-                bool shouldForceOpenPassageZoneFallback = hasCommittedEntryWaypoint &&
-                    step.Kind == NavigationGraph.StepKind.OpenPassage &&
-                    toDistance <= AutoWalkZoneBoundaryFallbackDistance &&
-                    !string.IsNullOrEmpty(step.ToZone) &&
-                    !IsZoneEquivalentToNavigationZone(currentZone, step.ToZone) &&
-                    TryGetZonePosition(step.ToZone, out destinationZonePosition);
-
-                if (shouldForceOpenPassageZoneFallback)
-                {
-                    position = BuildOpenPassageHandoffPosition(step, destinationZonePosition);
-                    targetKind = NavigationTargetKind.ZoneFallback;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
-                        " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " toDistance=" + toDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " reason=committed open-passage zone handoff" +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-
-                bool shouldUseOpenPassageSourceHandoff = step.Kind == NavigationGraph.StepKind.OpenPassage &&
-                    (fromDistance <= AutoWalkOpenPassageCommitDistance || hasCommittedEntryWaypoint) &&
-                    toDistance > AutoWalkZoneBoundaryFallbackDistance &&
-                    step.ToWaypoint != Vector3.zero &&
-                    !string.IsNullOrEmpty(step.ToZone) &&
-                    !IsZoneEquivalentToNavigationZone(currentZone, step.ToZone);
-
-                if (shouldUseOpenPassageSourceHandoff)
-                {
-                    _committedEntryWaypointStepKey = stepKey;
-                    float sourceHandoffDistance = AutoWalkOpenPassageHandoffDistance +
-                        (_autoWalkRecoveryAttempts * AutoWalkOpenPassageHandoffDistance);
-                    position = BuildOpenPassageSourceHandoffPosition(
-                        step,
-                        BetterPlayerControl.Instance.transform.position,
-                        sourceHandoffDistance);
-                    targetKind = NavigationTargetKind.ZoneFallback;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
-                        " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " toDistance=" + toDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " recoveryAttempts=" + _autoWalkRecoveryAttempts +
-                        " reason=push through open-passage source threshold" +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-
-                bool shouldPreferEntryWaypoint = step.ToWaypoint != Vector3.zero &&
-                    !step.RequiresInteraction &&
-                    (hasCommittedEntryWaypoint ||
-                     fromDistance <= AutoWalkArrivalDistance ||
-                     (step.Kind != NavigationGraph.StepKind.OpenPassage && toDistance + 0.5f < fromDistance) ||
-                     (step.Kind == NavigationGraph.StepKind.OpenPassage &&
-                      (fromDistance <= AutoWalkOpenPassageCommitDistance || toDistance <= AutoWalkOpenPassageCommitDistance) &&
-                      toDistance + 0.5f < fromDistance));
-
-                if (shouldPreferEntryWaypoint)
-                {
-                    _committedEntryWaypointStepKey = stepKey;
-
-                    if (step.Kind == NavigationGraph.StepKind.OpenPassage &&
-                        toDistance <= AutoWalkZoneBoundaryFallbackDistance &&
-                        !string.IsNullOrEmpty(step.ToZone) &&
-                        !IsZoneEquivalentToNavigationZone(currentZone, step.ToZone) &&
-                        TryGetZonePosition(step.ToZone, out destinationZonePosition))
+                    switch (traversalStage)
                     {
-                        position = BuildOpenPassageHandoffPosition(step, destinationZonePosition);
-                        targetKind = NavigationTargetKind.ZoneFallback;
+                        case OpenPassageTraversalStage.SourceWaypoint:
+                            position = step.FromWaypoint;
+                            targetKind = NavigationTargetKind.ExitWaypoint;
+                            LogNavigationTrackerDebug(
+                                "Next navigation target kind=ExitWaypoint position=" + FormatVector3(position) +
+                                " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                                " toDistance=" + toDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                                " stage=SourceWaypoint" +
+                                " step=" + DescribeNavigationStep(step));
+                            return true;
+
+                        case OpenPassageTraversalStage.SourceHandoff:
+                            float sourceHandoffDistance = AutoWalkOpenPassageHandoffDistance +
+                                (_autoWalkRecoveryAttempts * AutoWalkOpenPassageHandoffDistance);
+                            position = BuildOpenPassageSourceHandoffPosition(
+                                step,
+                                playerPosition,
+                                sourceHandoffDistance);
+                            targetKind = NavigationTargetKind.ZoneFallback;
+                            LogNavigationTrackerDebug(
+                                "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
+                                " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                                " toDistance=" + toDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                                " recoveryAttempts=" + _autoWalkRecoveryAttempts +
+                                " stage=SourceHandoff" +
+                                " reason=push through open-passage source threshold" +
+                                " step=" + DescribeNavigationStep(step));
+                            return true;
+
+                        case OpenPassageTraversalStage.DestinationWaypoint:
+                            position = step.ToWaypoint;
+                            targetKind = NavigationTargetKind.EntryWaypoint;
+                            LogNavigationTrackerDebug(
+                                "Next navigation target kind=EntryWaypoint position=" + FormatVector3(position) +
+                                " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                                " toDistance=" + toDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                                " stage=DestinationWaypoint" +
+                                " reason=approach open-passage destination threshold" +
+                                " step=" + DescribeNavigationStep(step));
+                            return true;
+
+                        case OpenPassageTraversalStage.DestinationHandoff:
+                            float destinationHandoffDistance = AutoWalkOpenPassageHandoffDistance +
+                                (_autoWalkRecoveryAttempts * AutoWalkOpenPassageHandoffDistance);
+                            position = BuildOpenPassageDestinationHandoffPosition(step, destinationHandoffDistance);
+                            targetKind = NavigationTargetKind.ZoneFallback;
+                            LogNavigationTrackerDebug(
+                                "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
+                                " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                                " toDistance=" + toDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                                " recoveryAttempts=" + _autoWalkRecoveryAttempts +
+                                " stage=DestinationHandoff" +
+                                " reason=push beyond open-passage destination threshold" +
+                                " step=" + DescribeNavigationStep(step));
+                            return true;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(step.FromZone) &&
+                    IsZoneEquivalentToNavigationZone(currentZone, step.FromZone))
+                {
+                    Vector3 fromWaypoint = step.FromWaypoint;
+                    fromWaypoint.y = playerPosition.y;
+                    float fromDistance = Vector3.Distance(playerPosition, fromWaypoint);
+                    float toDistance = float.MaxValue;
+                    if (step.ToWaypoint != Vector3.zero)
+                    {
+                        Vector3 toWaypoint = step.ToWaypoint;
+                        toWaypoint.y = playerPosition.y;
+                        toDistance = Vector3.Distance(playerPosition, toWaypoint);
+                    }
+
+                    bool shouldPreferEntryWaypoint = step.ToWaypoint != Vector3.zero &&
+                        !step.RequiresInteraction &&
+                        (fromDistance <= AutoWalkArrivalDistance ||
+                         toDistance + 0.5f < fromDistance);
+
+                    if (shouldPreferEntryWaypoint)
+                    {
+                        position = step.ToWaypoint;
+                        targetKind = NavigationTargetKind.EntryWaypoint;
                         LogNavigationTrackerDebug(
-                            "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
+                            "Next navigation target kind=EntryWaypoint position=" + FormatVector3(position) +
                             " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                             " toDistance=" + toDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                            " reason=push across open-passage boundary" +
                             " step=" + DescribeNavigationStep(step));
                         return true;
                     }
 
-                    position = step.ToWaypoint;
-                    targetKind = NavigationTargetKind.EntryWaypoint;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=EntryWaypoint position=" + FormatVector3(position) +
-                        " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " toDistance=" + toDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " committed=" + hasCommittedEntryWaypoint +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
+                    if (!shouldPreferEntryWaypoint && fromDistance > AutoWalkArrivalDistance)
+                    {
+                        position = step.FromWaypoint;
+                        targetKind = NavigationTargetKind.ExitWaypoint;
+                        LogNavigationTrackerDebug(
+                            "Next navigation target kind=ExitWaypoint position=" + FormatVector3(position) +
+                            " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " toDistance=" + toDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " step=" + DescribeNavigationStep(step));
+                        return true;
+                    }
 
-                if (!shouldPreferEntryWaypoint && fromDistance > AutoWalkArrivalDistance)
-                {
-                    _committedEntryWaypointStepKey = null;
-                    position = step.FromWaypoint;
-                    targetKind = NavigationTargetKind.ExitWaypoint;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=ExitWaypoint position=" + FormatVector3(position) +
-                        " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " toDistance=" + toDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-
-                if (step.RequiresInteraction)
-                {
-                    position = step.FromWaypoint;
-                    targetKind = NavigationTargetKind.TransitionInteractable;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=TransitionInteractable position=" + FormatVector3(position) +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
+                    if (step.RequiresInteraction)
+                    {
+                        position = step.FromWaypoint;
+                        targetKind = NavigationTargetKind.TransitionInteractable;
+                        LogNavigationTrackerDebug(
+                            "Next navigation target kind=TransitionInteractable position=" + FormatVector3(position) +
+                            " step=" + DescribeNavigationStep(step));
+                        return true;
+                    }
                 }
             }
 
@@ -1801,7 +1832,6 @@ namespace DateEverythingAccess
                     return true;
                 }
 
-                _committedEntryWaypointStepKey = BuildNavigationStepKey(step);
                 position = step.ToWaypoint;
                 targetKind = NavigationTargetKind.EntryWaypoint;
                 LogNavigationTrackerDebug(
@@ -1966,6 +1996,70 @@ namespace DateEverythingAccess
                 return null;
 
             return (step.FromZone ?? string.Empty) + "->" + (step.ToZone ?? string.Empty) + "|" + step.FromWaypoint + "|" + step.ToWaypoint;
+        }
+
+        private void ResetOpenPassageTraversalState()
+        {
+            _openPassageTraversalStepKey = null;
+            _openPassageTraversalStage = OpenPassageTraversalStage.None;
+        }
+
+        private void SyncOpenPassageTraversalState(NavigationGraph.PathStep step)
+        {
+            if (step == null || step.Kind != NavigationGraph.StepKind.OpenPassage)
+            {
+                ResetOpenPassageTraversalState();
+                return;
+            }
+
+            string stepKey = BuildNavigationStepKey(step);
+            if (!string.Equals(_openPassageTraversalStepKey, stepKey, StringComparison.Ordinal))
+            {
+                _openPassageTraversalStepKey = stepKey;
+                _openPassageTraversalStage = OpenPassageTraversalStage.SourceWaypoint;
+            }
+            else if (_openPassageTraversalStage == OpenPassageTraversalStage.None)
+            {
+                _openPassageTraversalStage = OpenPassageTraversalStage.SourceWaypoint;
+            }
+        }
+
+        private OpenPassageTraversalStage GetOpenPassageTraversalStage(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            float fromDistance,
+            float toDistance)
+        {
+            SyncOpenPassageTraversalState(step);
+            if (step == null || step.Kind != NavigationGraph.StepKind.OpenPassage)
+                return OpenPassageTraversalStage.None;
+
+            if (!string.IsNullOrEmpty(step.ToZone) &&
+                IsZoneEquivalentToNavigationZone(currentZone, step.ToZone))
+            {
+                _openPassageTraversalStage = OpenPassageTraversalStage.DestinationHandoff;
+                return _openPassageTraversalStage;
+            }
+
+            switch (_openPassageTraversalStage)
+            {
+                case OpenPassageTraversalStage.SourceWaypoint:
+                    if (fromDistance <= AutoWalkOpenPassageCommitDistance)
+                        _openPassageTraversalStage = OpenPassageTraversalStage.SourceHandoff;
+                    break;
+
+                case OpenPassageTraversalStage.SourceHandoff:
+                    if (toDistance <= AutoWalkZoneBoundaryFallbackDistance)
+                        _openPassageTraversalStage = OpenPassageTraversalStage.DestinationWaypoint;
+                    break;
+
+                case OpenPassageTraversalStage.DestinationWaypoint:
+                    if (toDistance <= AutoWalkArrivalDistance)
+                        _openPassageTraversalStage = OpenPassageTraversalStage.DestinationHandoff;
+                    break;
+            }
+
+            return _openPassageTraversalStage;
         }
 
         private bool TryRecoverAutoWalk(NavigationGraph.PathStep step, NavigationTargetKind targetKind)
@@ -2892,30 +2986,26 @@ namespace DateEverythingAccess
             return true;
         }
 
-        private static Vector3 BuildOpenPassageHandoffPosition(NavigationGraph.PathStep step, Vector3 destinationZonePosition)
+        private static Vector3 BuildOpenPassageDestinationHandoffPosition(
+            NavigationGraph.PathStep step,
+            float handoffDistance)
         {
             if (step == null)
-                return destinationZonePosition;
+                return Vector3.zero;
 
             if (step.ToWaypoint == Vector3.zero)
-                return destinationZonePosition;
+                return step.FromWaypoint;
 
             Vector3 handoffPosition = step.ToWaypoint;
-            Vector3 handoffDirection = destinationZonePosition - step.ToWaypoint;
+            Vector3 handoffDirection = step.ToWaypoint - step.FromWaypoint;
             handoffDirection.y = 0f;
-
-            if (handoffDirection.sqrMagnitude <= 0.0001f)
-            {
-                handoffDirection = step.ToWaypoint - step.FromWaypoint;
-                handoffDirection.y = 0f;
-            }
 
             if (handoffDirection.sqrMagnitude <= 0.0001f)
                 return handoffPosition;
 
             handoffDirection.Normalize();
-            handoffPosition += handoffDirection * AutoWalkOpenPassageHandoffDistance;
-            handoffPosition.y = destinationZonePosition.y != 0f ? destinationZonePosition.y : step.ToWaypoint.y;
+            handoffPosition += handoffDirection * Mathf.Max(handoffDistance, 0.1f);
+            handoffPosition.y = step.ToWaypoint.y != 0f ? step.ToWaypoint.y : step.FromWaypoint.y;
             return handoffPosition;
         }
 
