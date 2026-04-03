@@ -1697,9 +1697,9 @@ namespace DateEverythingAccess
                     Vector3 fromWaypoint = step.FromWaypoint;
                     fromWaypoint.y = playerPosition.y;
                     float fromDistance = Vector3.Distance(playerPosition, fromWaypoint);
-                    Vector3 toWaypoint = step.ToWaypoint;
-                    toWaypoint.y = playerPosition.y;
-                    float toDistance = Vector3.Distance(playerPosition, toWaypoint);
+                    Vector3 destinationApproachPosition = GetOpenPassageDestinationApproachPosition(step);
+                    destinationApproachPosition.y = playerPosition.y;
+                    float toDistance = Vector3.Distance(playerPosition, destinationApproachPosition);
                     OpenPassageTraversalStage traversalStage = GetOpenPassageTraversalStage(step, currentZone, fromDistance, toDistance);
 
                     switch (traversalStage)
@@ -1734,7 +1734,7 @@ namespace DateEverythingAccess
                             return true;
 
                         case OpenPassageTraversalStage.DestinationWaypoint:
-                            position = step.ToWaypoint;
+                            position = destinationApproachPosition;
                             targetKind = NavigationTargetKind.EntryWaypoint;
                             LogNavigationTrackerDebug(
                                 "Next navigation target kind=EntryWaypoint position=" + FormatVector3(position) +
@@ -2350,12 +2350,13 @@ namespace DateEverythingAccess
             }
 
             NavigationGraph.PathStep step = GetCurrentNavigationStep();
+            Vector3 destinationApproachWaypoint = GetOpenPassageDestinationApproachPosition(step);
             if (step == null ||
                 step.Kind != NavigationGraph.StepKind.OpenPassage ||
                 string.IsNullOrEmpty(step.FromZone) ||
                 string.IsNullOrEmpty(step.ToZone) ||
                 step.FromWaypoint == Vector3.zero ||
-                step.ToWaypoint == Vector3.zero ||
+                destinationApproachWaypoint == Vector3.zero ||
                 IsExactZoneMatch(step.ToZone, _navigationTargetZone))
             {
                 return currentZone;
@@ -2364,7 +2365,7 @@ namespace DateEverythingAccess
             Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
             Vector3 fromWaypoint = step.FromWaypoint;
             fromWaypoint.y = playerPosition.y;
-            Vector3 toWaypoint = step.ToWaypoint;
+            Vector3 toWaypoint = destinationApproachWaypoint;
             toWaypoint.y = playerPosition.y;
 
             float fromDistance = Vector3.Distance(playerPosition, fromWaypoint);
@@ -2986,12 +2987,49 @@ namespace DateEverythingAccess
             return true;
         }
 
+        private static Vector3 GetOpenPassageDestinationApproachPosition(NavigationGraph.PathStep step)
+        {
+            if (step == null)
+                return Vector3.zero;
+
+            if (step.ToCrossingAnchor != Vector3.zero)
+                return step.ToCrossingAnchor;
+
+            return step.ToWaypoint;
+        }
+
+        private static Vector3 GetOpenPassageSourceHandoffOrigin(NavigationGraph.PathStep step)
+        {
+            if (step == null)
+                return Vector3.zero;
+
+            if (step.FromCrossingAnchor != Vector3.zero)
+                return step.FromCrossingAnchor;
+
+            return step.FromWaypoint;
+        }
+
         private static Vector3 BuildOpenPassageDestinationHandoffPosition(
             NavigationGraph.PathStep step,
             float handoffDistance)
         {
             if (step == null)
                 return Vector3.zero;
+
+            if (step.ToCrossingAnchor != Vector3.zero && step.ToWaypoint != Vector3.zero)
+            {
+                Vector3 handoffStart = step.ToCrossingAnchor;
+                Vector3 approachDirection = step.ToWaypoint - handoffStart;
+                approachDirection.y = 0f;
+                if (approachDirection.sqrMagnitude <= 0.0001f)
+                    return step.ToWaypoint;
+
+                float segmentLength = approachDirection.magnitude;
+                approachDirection.Normalize();
+                Vector3 approachPosition = handoffStart + approachDirection * Mathf.Min(Mathf.Max(handoffDistance, 0.1f), segmentLength);
+                approachPosition.y = step.ToWaypoint.y != 0f ? step.ToWaypoint.y : handoffStart.y;
+                return approachPosition;
+            }
 
             if (step.ToWaypoint == Vector3.zero)
                 return step.FromWaypoint;
@@ -3017,23 +3055,25 @@ namespace DateEverythingAccess
             if (step == null)
                 return Vector3.zero;
 
-            if (step.FromWaypoint == Vector3.zero || step.ToWaypoint == Vector3.zero)
-                return step != null ? step.ToWaypoint : Vector3.zero;
+            Vector3 handoffStart = GetOpenPassageSourceHandoffOrigin(step);
+            Vector3 handoffDestination = GetOpenPassageDestinationApproachPosition(step);
+            if (handoffStart == Vector3.zero || handoffDestination == Vector3.zero)
+                return handoffDestination != Vector3.zero ? handoffDestination : step.ToWaypoint;
 
-            Vector3 handoffDirection = step.ToWaypoint - step.FromWaypoint;
+            Vector3 handoffDirection = handoffDestination - handoffStart;
             handoffDirection.y = 0f;
             if (handoffDirection.sqrMagnitude <= 0.0001f)
-                return step.FromWaypoint;
+                return handoffStart;
 
             float segmentLength = handoffDirection.magnitude;
             handoffDirection.Normalize();
-            Vector3 playerOffset = playerPosition - step.FromWaypoint;
+            Vector3 playerOffset = playerPosition - handoffStart;
             playerOffset.y = 0f;
             float progress = Mathf.Clamp(Vector3.Dot(playerOffset, handoffDirection), 0f, segmentLength);
             float nextProgress = Mathf.Min(progress + Mathf.Max(handoffDistance, 0.1f), segmentLength);
 
-            Vector3 handoffPosition = step.FromWaypoint + handoffDirection * nextProgress;
-            handoffPosition.y = step.ToWaypoint.y != 0f ? step.ToWaypoint.y : step.FromWaypoint.y;
+            Vector3 handoffPosition = handoffStart + handoffDirection * nextProgress;
+            handoffPosition.y = handoffDestination.y != 0f ? handoffDestination.y : handoffStart.y;
             return handoffPosition;
         }
 
@@ -3092,7 +3132,9 @@ namespace DateEverythingAccess
                 " interaction=" + step.RequiresInteraction +
                 " connector=" + (step.ConnectorName ?? "<null>") +
                 " from=" + FormatVector3(step.FromWaypoint) +
-                " to=" + FormatVector3(step.ToWaypoint);
+                " to=" + FormatVector3(step.ToWaypoint) +
+                " fromCross=" + FormatVector3(step.FromCrossingAnchor) +
+                " toCross=" + FormatVector3(step.ToCrossingAnchor);
         }
 
         private static string DescribeNavigationPath(List<NavigationGraph.PathStep> path)

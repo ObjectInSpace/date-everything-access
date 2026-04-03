@@ -14,6 +14,16 @@
                                          "y":  4.67,
                                          "z":  -13.962976
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  19.539158,
+                                                 "y":  5.573,
+                                                 "z":  -12.990782
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  19.539158,
+                                               "y":  4.67,
+                                               "z":  -12.990782
+                                           },
                       "Cost":  2.1493,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -33,6 +43,16 @@
                                          "y":  5.573,
                                          "z":  -12.018587
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  13.894039,
+                                                 "y":  4.352,
+                                                 "z":  -0.129586
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  19.539158,
+                                               "y":  5.573,
+                                               "z":  -7.018587
+                                           },
                       "Cost":  13.2177,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -48,11 +68,21 @@
                                            "z":  -0.439635
                                        },
                       "ToWaypoint":  {
-                                         "x":  13.64476,
+                                         "x":  5.280338,
                                          "y":  4.67,
-                                         "z":  -13.039851
+                                         "z":  -13.189749
                                      },
-                      "Cost":  12.7031,
+                      "FromCrossingAnchor":  {
+                                                 "x":  9.563061,
+                                                 "y":  4.352,
+                                                 "z":  -5.600156
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  9.370822,
+                                               "y":  4.67,
+                                               "z":  -6.627208
+                                           },
+                      "Cost":  14.4455,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -62,16 +92,26 @@
                       "FromZone":  "living_room",
                       "ToZone":  "dining_room",
                       "FromWaypoint":  {
-                                           "x":  -4.476051,
-                                           "y":  5.97,
-                                           "z":  -14.385586
+                                           "x":  -3.217151,
+                                           "y":  5.67,
+                                           "z":  -12.813282
                                        },
                       "ToWaypoint":  {
-                                         "x":  -19.761463,
-                                         "y":  4.196,
-                                         "z":  -7.695586
+                                         "x":  -17.046043,
+                                         "y":  4.68,
+                                         "z":  -1.686586
                                      },
-                      "Cost":  16.7794,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -6.146032,
+                                                 "y":  5.67,
+                                                 "z":  -8.258282
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -12.877396,
+                                               "y":  4.68,
+                                               "z":  -5.67384
+                                           },
+                      "Cost":  17.777,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -81,16 +121,26 @@
                       "FromZone":  "dining_room",
                       "ToZone":  "piano_room",
                       "FromWaypoint":  {
-                                           "x":  -27.092533,
+                                           "x":  -19.958641,
                                            "y":  4.196,
-                                           "z":  -7.987653
+                                           "z":  -8.101789
                                        },
                       "ToWaypoint":  {
-                                         "x":  -24.595409,
-                                         "y":  4.82,
-                                         "z":  -13.389861
+                                         "x":  -11.559673,
+                                         "y":  4.842866,
+                                         "z":  -13.034458
                                      },
-                      "Cost":  5.9841,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -17.593108,
+                                                 "y":  4.196,
+                                                 "z":  -10.13085
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -16.954394,
+                                               "y":  4.842866,
+                                               "z":  -10.13085
+                                           },
+                      "Cost":  9.7618,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -100,16 +150,26 @@
                       "FromZone":  "dining_room",
                       "ToZone":  "kitchen",
                       "FromWaypoint":  {
-                                           "x":  -20.827639,
-                                           "y":  4.196,
-                                           "z":  3.662762
+                                           "x":  -17.046043,
+                                           "y":  4.68,
+                                           "z":  -1.686586
                                        },
                       "ToWaypoint":  {
                                          "x":  -12.300047,
                                          "y":  3.367,
                                          "z":  9.675211
                                      },
-                      "Cost":  10.4669,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -14.673045,
+                                                 "y":  4.68,
+                                                 "z":  2.300668
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -14.673045,
+                                               "y":  3.367,
+                                               "z":  2.300668
+                                           },
+                      "Cost":  12.383,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -128,6 +188,8 @@
                                          "y":  4.17,
                                          "z":  11.494413
                                      },
+                      "FromCrossingAnchor":  null,
+                      "ToCrossingAnchor":  null,
                       "Cost":  10.844,
                       "StepKind":  "Door",
                       "ConnectorName":  "Doors_Office",
@@ -147,6 +209,8 @@
                                          "y":  4.17,
                                          "z":  23.964413
                                      },
+                      "FromCrossingAnchor":  null,
+                      "ToCrossingAnchor":  null,
                       "Cost":  10.4419,
                       "StepKind":  "Door",
                       "ConnectorName":  null,
@@ -166,6 +230,8 @@
                                          "y":  -9.59,
                                          "z":  25.007938
                                      },
+                      "FromCrossingAnchor":  null,
+                      "ToCrossingAnchor":  null,
                       "Cost":  10.0329,
                       "StepKind":  "Teleporter",
                       "ConnectorName":  "CrawlspaceLadder",
@@ -185,6 +251,8 @@
                                          "y":  17.84,
                                          "z":  -12.635586
                                      },
+                      "FromCrossingAnchor":  null,
+                      "ToCrossingAnchor":  null,
                       "Cost":  12.6845,
                       "StepKind":  "Door",
                       "ConnectorName":  "Doors_Bedroom",
@@ -204,6 +272,8 @@
                                          "y":  18.02,
                                          "z":  -23.995586
                                      },
+                      "FromCrossingAnchor":  null,
+                      "ToCrossingAnchor":  null,
                       "Cost":  12.27,
                       "StepKind":  "Door",
                       "ConnectorName":  null,
@@ -223,6 +293,8 @@
                                          "y":  17.84,
                                          "z":  0.034413
                                      },
+                      "FromCrossingAnchor":  null,
+                      "ToCrossingAnchor":  null,
                       "Cost":  12.6701,
                       "StepKind":  "Door",
                       "ConnectorName":  "Doors_Bedroom_Bathroom",
@@ -242,6 +314,8 @@
                                          "y":  4.17,
                                          "z":  11.494413
                                      },
+                      "FromCrossingAnchor":  null,
+                      "ToCrossingAnchor":  null,
                       "Cost":  10.844,
                       "StepKind":  "Door",
                       "ConnectorName":  "Doors_Bathroom1",
@@ -261,6 +335,8 @@
                                          "y":  9.688999,
                                          "z":  -3.085587
                                      },
+                      "FromCrossingAnchor":  null,
+                      "ToCrossingAnchor":  null,
                       "Cost":  9.367,
                       "StepKind":  "Stairs",
                       "ConnectorName":  null,
@@ -271,16 +347,26 @@
                       "FromZone":  "upper_hallway",
                       "ToZone":  "laundry_room",
                       "FromWaypoint":  {
-                                           "x":  -7.573047,
-                                           "y":  17.969999,
-                                           "z":  3.853289
+                                           "x":  -13.566796,
+                                           "y":  18.17,
+                                           "z":  3.55603
                                        },
                       "ToWaypoint":  {
                                          "x":  -18.382547,
                                          "y":  4.98,
                                          "z":  33.884659
                                      },
-                      "Cost":  34.4597,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -15.974672,
+                                                 "y":  18.17,
+                                                 "z":  6.760952
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -15.974672,
+                                               "y":  4.98,
+                                               "z":  29.419168
+                                           },
+                      "Cost":  33.4214,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -299,6 +385,8 @@
                                          "y":  4.98,
                                          "z":  29.026415
                                      },
+                      "FromCrossingAnchor":  null,
+                      "ToCrossingAnchor":  null,
                       "Cost":  2.2579,
                       "StepKind":  "Door",
                       "ConnectorName":  null,
@@ -318,6 +406,8 @@
                                          "y":  17.84,
                                          "z":  13.564413
                                      },
+                      "FromCrossingAnchor":  null,
+                      "ToCrossingAnchor":  null,
                       "Cost":  11.85,
                       "StepKind":  "Door",
                       "ConnectorName":  "Doors_Gym_Hall",
@@ -337,6 +427,8 @@
                                          "y":  18.02,
                                          "z":  20.084414
                                      },
+                      "FromCrossingAnchor":  null,
+                      "ToCrossingAnchor":  null,
                       "Cost":  12.3799,
                       "StepKind":  "Door",
                       "ConnectorName":  null,
@@ -356,6 +448,8 @@
                                          "y":  18.261999,
                                          "z":  3.885414
                                      },
+                      "FromCrossingAnchor":  null,
+                      "ToCrossingAnchor":  null,
                       "Cost":  16.3615,
                       "StepKind":  "Door",
                       "ConnectorName":  "AtticDoors",
@@ -371,11 +465,21 @@
                                            "z":  -23.635588
                                        },
                       "ToWaypoint":  {
-                                         "x":  -18.382547,
+                                         "x":  -24.545549,
                                          "y":  4.98,
-                                         "z":  33.884659
+                                         "z":  33.058807
                                      },
-                      "Cost":  57.9734,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -25.539013,
+                                                 "y":  3.92,
+                                                 "z":  -23.635588
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -25.539013,
+                                               "y":  4.98,
+                                               "z":  29.193374
+                                           },
+                      "Cost":  56.713,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -394,6 +498,16 @@
                                          "y":  4.894,
                                          "z":  8.549414
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -0.028381,
+                                                 "y":  4.17,
+                                                 "z":  11.494413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -0.028381,
+                                               "y":  4.894,
+                                               "z":  10.25434
+                                           },
                       "Cost":  3.107,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -413,6 +527,16 @@
                                          "y":  18.23,
                                          "z":  -4.284243
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  0.523441,
+                                                 "y":  4.17,
+                                                 "z":  0.664414
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -18.548107,
+                                               "y":  18.23,
+                                               "z":  -3.498277
+                                           },
                       "Cost":  29.3888,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -432,6 +556,16 @@
                                          "y":  18.23,
                                          "z":  -4.284243
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -25.406582,
+                                                 "y":  17.84,
+                                                 "z":  0.034413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -25.406582,
+                                               "y":  18.23,
+                                               "z":  -3.498277
+                                           },
                       "Cost":  4.3778,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -451,6 +585,16 @@
                                          "y":  18.23,
                                          "z":  -4.284243
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -25.461765,
+                                                 "y":  17.84,
+                                                 "z":  -12.635586
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -25.461765,
+                                               "y":  18.23,
+                                               "z":  -5.07021
+                                           },
                       "Cost":  8.3862,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -470,6 +614,16 @@
                                          "y":  16.73,
                                          "z":  -10.593616
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -12.604355,
+                                                 "y":  17.84,
+                                                 "z":  0.034413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -12.604355,
+                                               "y":  16.73,
+                                               "z":  -7.237823
+                                           },
                       "Cost":  10.7274,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -489,6 +643,16 @@
                                          "y":  16.73,
                                          "z":  -10.593616
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -11.997356,
+                                                 "y":  17.84,
+                                                 "z":  -12.635586
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -11.997356,
+                                               "y":  16.73,
+                                               "z":  -12.635586
+                                           },
                       "Cost":  2.7938,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -508,6 +672,16 @@
                                          "y":  18.85,
                                          "z":  -18.005587
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -10.53503,
+                                                 "y":  18.02,
+                                                 "z":  -11.725586
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -10.099268,
+                                               "y":  18.85,
+                                               "z":  -11.725586
+                                           },
                       "Cost":  8.0721,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -527,6 +701,16 @@
                                          "y":  18.85,
                                          "z":  -18.005587
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -10.53503,
+                                                 "y":  18.02,
+                                                 "z":  -23.995586
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -10.099268,
+                                               "y":  18.85,
+                                               "z":  -23.995586
+                                           },
                       "Cost":  7.8486,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -542,11 +726,21 @@
                                            "z":  11.494413
                                        },
                       "ToWaypoint":  {
-                                         "x":  13.980387,
-                                         "y":  4.217,
-                                         "z":  24.545811
+                                         "x":  8.537694,
+                                         "y":  4.622776,
+                                         "z":  10.8675
                                      },
-                      "Cost":  14.459,
+                      "FromCrossingAnchor":  {
+                                                 "x":  7.757801,
+                                                 "y":  4.17,
+                                                 "z":  11.494413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  7.757801,
+                                               "y":  4.622776,
+                                               "z":  11.494413
+                                           },
+                      "Cost":  1.0983,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -561,11 +755,21 @@
                                            "z":  0.664414
                                        },
                       "ToWaypoint":  {
-                                         "x":  13.980387,
-                                         "y":  4.217,
-                                         "z":  24.545811
+                                         "x":  8.537694,
+                                         "y":  4.622776,
+                                         "z":  10.8675
                                      },
-                      "Cost":  24.5455,
+                      "FromCrossingAnchor":  {
+                                                 "x":  8.309622,
+                                                 "y":  4.17,
+                                                 "z":  0.664414
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  8.309622,
+                                               "y":  4.622776,
+                                               "z":  8.363896
+                                           },
+                      "Cost":  10.2157,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -584,6 +788,16 @@
                                          "y":  5.01,
                                          "z":  26.707882
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  9.35808,
+                                                 "y":  4.17,
+                                                 "z":  24.474413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  2.679611,
+                                               "y":  5.01,
+                                               "z":  24.474413
+                                           },
                       "Cost":  11.0995,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -603,6 +817,16 @@
                                          "y":  5.01,
                                          "z":  26.707882
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -1.07132,
+                                                 "y":  4.17,
+                                                 "z":  23.964413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -1.07132,
+                                               "y":  5.01,
+                                               "z":  23.964413
+                                           },
                       "Cost":  2.8984,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -618,11 +842,21 @@
                                            "z":  25.344412
                                        },
                       "ToWaypoint":  {
-                                         "x":  13.980387,
-                                         "y":  4.217,
-                                         "z":  24.545811
+                                         "x":  8.151783,
+                                         "y":  4.37,
+                                         "z":  23.264553
                                      },
-                      "Cost":  10.7222,
+                      "FromCrossingAnchor":  {
+                                                 "x":  3.288059,
+                                                 "y":  4.17,
+                                                 "z":  25.344412
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  5.651917,
+                                               "y":  4.37,
+                                               "z":  25.344412
+                                           },
+                      "Cost":  5.2935,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -637,11 +871,21 @@
                                            "z":  25.344412
                                        },
                       "ToWaypoint":  {
-                                         "x":  13.980387,
-                                         "y":  4.217,
-                                         "z":  24.545811
+                                         "x":  8.151783,
+                                         "y":  4.37,
+                                         "z":  23.264553
                                      },
-                      "Cost":  15.5389,
+                      "FromCrossingAnchor":  {
+                                                 "x":  3.288059,
+                                                 "y":  -7.03,
+                                                 "z":  25.344412
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  5.651917,
+                                               "y":  4.37,
+                                               "z":  25.344412
+                                           },
+                      "Cost":  12.5675,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -660,6 +904,16 @@
                                          "y":  4.98,
                                          "z":  33.884659
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -17.686623,
+                                                 "y":  3.92,
+                                                 "z":  22.004414
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -17.686623,
+                                               "y":  4.98,
+                                               "z":  29.419168
+                                           },
                       "Cost":  11.9477,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -679,6 +933,16 @@
                                          "y":  4.98,
                                          "z":  33.884659
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -17.123764,
+                                                 "y":  3.92,
+                                                 "z":  35.194416
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -17.123764,
+                                               "y":  4.98,
+                                               "z":  35.194416
+                                           },
                       "Cost":  2.1032,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -698,6 +962,16 @@
                                          "y":  4.98,
                                          "z":  32.835442
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -13.564522,
+                                                 "y":  3.92,
+                                                 "z":  30.984411
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -13.564522,
+                                               "y":  4.98,
+                                               "z":  30.984411
+                                           },
                       "Cost":  2.3517,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -713,11 +987,21 @@
                                            "z":  0.158413
                                        },
                       "ToWaypoint":  {
-                                         "x":  -7.573047,
-                                         "y":  17.969999,
-                                         "z":  3.853289
+                                         "x":  -0.997404,
+                                         "y":  18.261999,
+                                         "z":  3.647734
                                      },
-                      "Cost":  7.8559,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -0.64642,
+                                                 "y":  18.261999,
+                                                 "z":  0.158413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -0.64642,
+                                               "y":  18.261999,
+                                               "z":  1.393295
+                                           },
+                      "Cost":  3.5069,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -732,11 +1016,21 @@
                                            "z":  -3.641587
                                        },
                       "ToWaypoint":  {
-                                         "x":  22.615004,
+                                         "x":  12.063061,
                                          "y":  4.352,
-                                         "z":  2.841414
+                                         "z":  -0.439635
                                      },
-                      "Cost":  18.8381,
+                      "FromCrossingAnchor":  {
+                                                 "x":  5.837467,
+                                                 "y":  9.952,
+                                                 "z":  -3.641587
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  9.563061,
+                                               "y":  4.352,
+                                               "z":  -3.641587
+                                           },
+                      "Cost":  8.965,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -751,11 +1045,21 @@
                                            "z":  2.526427
                                        },
                       "ToWaypoint":  {
-                                         "x":  13.980387,
-                                         "y":  4.217,
-                                         "z":  24.545811
+                                         "x":  8.537694,
+                                         "y":  4.622776,
+                                         "z":  10.8675
                                      },
-                      "Cost":  23.882,
+                      "FromCrossingAnchor":  {
+                                                 "x":  5.324958,
+                                                 "y":  7.47,
+                                                 "z":  2.526427
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  6.037495,
+                                               "y":  4.622776,
+                                               "z":  8.363896
+                                           },
+                      "Cost":  9.3809,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -770,11 +1074,21 @@
                                            "z":  11.034412
                                        },
                       "ToWaypoint":  {
-                                         "x":  13.980387,
-                                         "y":  4.217,
-                                         "z":  24.545811
+                                         "x":  8.537694,
+                                         "y":  4.622776,
+                                         "z":  10.8675
                                      },
-                      "Cost":  15.6363,
+                      "FromCrossingAnchor":  {
+                                                 "x":  6.81419,
+                                                 "y":  7.47,
+                                                 "z":  11.034412
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  6.81419,
+                                               "y":  4.622776,
+                                               "z":  11.034412
+                                           },
+                      "Cost":  3.3324,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -789,11 +1103,21 @@
                                            "z":  18.123413
                                        },
                       "ToWaypoint":  {
-                                         "x":  13.980387,
-                                         "y":  4.217,
-                                         "z":  24.545811
+                                         "x":  8.292202,
+                                         "y":  4.37,
+                                         "z":  15.507165
                                      },
-                      "Cost":  9.6848,
+                      "FromCrossingAnchor":  {
+                                                 "x":  6.81419,
+                                                 "y":  3.124,
+                                                 "z":  18.123413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  6.81419,
+                                               "y":  4.37,
+                                               "z":  18.123413
+                                           },
+                      "Cost":  3.253,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -812,6 +1136,16 @@
                                          "y":  18.098972,
                                          "z":  3.739966
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  14.705214,
+                                                 "y":  18,
+                                                 "z":  7.154414
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  14.705214,
+                                               "y":  18.098972,
+                                               "z":  7.154414
+                                           },
                       "Cost":  3.4329,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -831,6 +1165,16 @@
                                          "y":  3.367,
                                          "z":  9.675211
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -11.004078,
+                                                 "y":  5.48,
+                                                 "z":  -20.505587
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -11.004078,
+                                               "y":  3.367,
+                                               "z":  0.197612
+                                           },
                       "Cost":  30.2824,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -846,11 +1190,21 @@
                                            "z":  13.134907
                                        },
                       "ToWaypoint":  {
-                                         "x":  -12.300047,
-                                         "y":  3.367,
-                                         "z":  9.675211
+                                         "x":  -25.737026,
+                                         "y":  4.15,
+                                         "z":  18.212091
                                      },
-                      "Cost":  9.1083,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -23.213122,
+                                                 "y":  4.15,
+                                                 "z":  15.873601
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -23.213122,
+                                               "y":  4.15,
+                                               "z":  15.873601
+                                           },
+                      "Cost":  7.1595,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -865,11 +1219,21 @@
                                            "z":  25.163412
                                        },
                       "ToWaypoint":  {
-                                         "x":  -12.300047,
-                                         "y":  3.367,
-                                         "z":  9.675211
+                                         "x":  -20.927364,
+                                         "y":  4.15,
+                                         "z":  23.973909
                                      },
-                      "Cost":  16.9993,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -19.262619,
+                                                 "y":  4.15,
+                                                 "z":  25.163412
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -19.262619,
+                                               "y":  4.15,
+                                               "z":  25.163412
+                                           },
+                      "Cost":  2.046,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -884,11 +1248,21 @@
                                            "z":  8.491413
                                        },
                       "ToWaypoint":  {
-                                         "x":  -7.573047,
-                                         "y":  17.969999,
-                                         "z":  3.853289
+                                         "x":  -0.006306,
+                                         "y":  17.593,
+                                         "z":  8.491413
                                      },
-                      "Cost":  8.8831,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -0.006306,
+                                                 "y":  17.593,
+                                                 "z":  8.491413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -0.006306,
+                                               "y":  17.593,
+                                               "z":  8.491413
+                                           },
+                      "Cost":  1,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -903,11 +1277,21 @@
                                            "z":  13.564413
                                        },
                       "ToWaypoint":  {
-                                         "x":  -18.3615,
-                                         "y":  17.449999,
-                                         "z":  11.371753
+                                         "x":  -10.674067,
+                                         "y":  18.139999,
+                                         "z":  13.578363
                                      },
-                      "Cost":  10.8443,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -7.748341,
+                                                 "y":  17.84,
+                                                 "z":  13.564413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -7.748341,
+                                               "y":  18.139999,
+                                               "z":  13.564413
+                                           },
+                      "Cost":  2.9411,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -922,11 +1306,21 @@
                                            "z":  1.714413
                                        },
                       "ToWaypoint":  {
-                                         "x":  -18.3615,
-                                         "y":  17.449999,
-                                         "z":  11.371753
+                                         "x":  -10.674067,
+                                         "y":  18.139999,
+                                         "z":  13.578363
                                      },
-                      "Cost":  14.3546,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -7.748341,
+                                                 "y":  17.84,
+                                                 "z":  1.714413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -7.748341,
+                                               "y":  18.139999,
+                                               "z":  9.161174
+                                           },
+                      "Cost":  12.2231,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -941,11 +1335,21 @@
                                            "z":  13.564413
                                        },
                       "ToWaypoint":  {
-                                         "x":  -18.3615,
-                                         "y":  17.449999,
-                                         "z":  11.371753
+                                         "x":  -26.36091,
+                                         "y":  18.139999,
+                                         "z":  14.032388
                                      },
-                      "Cost":  7.3887,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -25.406582,
+                                                 "y":  17.84,
+                                                 "z":  13.564413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -25.406582,
+                                               "y":  18.139999,
+                                               "z":  13.564413
+                                           },
+                      "Cost":  1.1044,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -960,11 +1364,21 @@
                                            "z":  1.714413
                                        },
                       "ToWaypoint":  {
-                                         "x":  -18.3615,
-                                         "y":  17.449999,
-                                         "z":  11.371753
+                                         "x":  -26.36091,
+                                         "y":  18.139999,
+                                         "z":  14.032388
                                      },
-                      "Cost":  11.4952,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -24.58437,
+                                                 "y":  17.84,
+                                                 "z":  1.714413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -24.58437,
+                                               "y":  18.139999,
+                                               "z":  8.72267
+                                           },
+                      "Cost":  12.449,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -979,11 +1393,21 @@
                                            "z":  20.664413
                                        },
                       "ToWaypoint":  {
-                                         "x":  -0.170087,
+                                         "x":  -0.170223,
                                          "y":  18.042,
-                                         "z":  16.617245
+                                         "z":  23.698233
                                      },
-                      "Cost":  11.1271,
+                      "FromCrossingAnchor":  {
+                                                 "x":  -10.53503,
+                                                 "y":  18.02,
+                                                 "z":  20.664413
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -3.308133,
+                                               "y":  18.042,
+                                               "z":  20.664413
+                                           },
+                      "Cost":  10.7997,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -998,11 +1422,21 @@
                                            "z":  20.084414
                                        },
                       "ToWaypoint":  {
-                                         "x":  -0.170087,
+                                         "x":  -0.170223,
                                          "y":  18.042,
-                                         "z":  16.617245
+                                         "z":  23.698233
                                      },
-                      "Cost":  4.0034,
+                      "FromCrossingAnchor":  {
+                                                 "x":  1.831253,
+                                                 "y":  18.02,
+                                                 "z":  20.084414
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  1.831253,
+                                               "y":  18.042,
+                                               "z":  20.084414
+                                           },
+                      "Cost":  4.1311,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
                       "RequiresInteraction":  false,
@@ -1021,6 +1455,16 @@
                                          "y":  18.098972,
                                          "z":  3.739966
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -4.249802,
+                                                 "y":  18.261999,
+                                                 "z":  3.885414
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  4.77688,
+                                               "y":  18.098972,
+                                               "z":  3.885414
+                                           },
                       "Cost":  18.615,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -1040,6 +1484,16 @@
                                          "y":  18.098972,
                                          "z":  3.739966
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  12.111662,
+                                                 "y":  18.261999,
+                                                 "z":  3.885414
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  12.111662,
+                                               "y":  18.098972,
+                                               "z":  3.885414
+                                           },
                       "Cost":  2.2628,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,
@@ -1059,6 +1513,16 @@
                                          "y":  18.85,
                                          "z":  -18.005587
                                      },
+                      "FromCrossingAnchor":  {
+                                                 "x":  -24.319492,
+                                                 "y":  5.13,
+                                                 "z":  22.004414
+                                             },
+                      "ToCrossingAnchor":  {
+                                               "x":  -10.099268,
+                                               "y":  18.85,
+                                               "z":  -7.348853
+                                           },
                       "Cost":  46.2819,
                       "StepKind":  "OpenPassage",
                       "ConnectorName":  null,

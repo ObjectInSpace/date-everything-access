@@ -22,6 +22,7 @@ Run:
 - Extra `CameraSpaces` variants that can serve as intermediate or doorway-adjacent anchors
 - One authored teleporter transition for crawlspace with explicit endpoints and rotations
 - Door and door-camera scene objects with world positions for the house
+- Enough `CameraSpaces` position and scale data to derive source-side and destination-side crossing anchors for every open-passage link in the current graph
 
 ## Candidate Authored Connectors
 
@@ -81,11 +82,20 @@ Run:
 - `dining_room -> piano_room`
 - `dining_room -> kitchen`
 
-These links likely need waypoint anchors chosen from the extra `CameraSpaces` variants rather than from door objects.
+These links now derive their waypoints and crossing anchors from the scene's own `CameraSpaces` data instead of from hand-picked room-pair overrides.
+
+Current open-passage build strategy:
+
+- For each graph link marked `OpenPassage`, collect the exact scene zone plus any same-family numbered `CameraSpaces` variants such as `hallway2` to `hallway7`.
+- Evaluate every source and destination candidate pair using the serialized zone bounds when present, or the scene point position when the zone has no bounds.
+- Pick the pair with the smallest boundary gap, then emit:
+  - `FromWaypoint` and `ToWaypoint` from the selected source and destination scene-zone positions
+  - `FromCrossingAnchor` and `ToCrossingAnchor` from the closest boundary points between those selected scene zones
+- This now covers the six major room-to-room passages and the remaining subzone-to-room open-passage links such as `dorian_office2 -> office` and `kitchen_ronald -> kitchen`.
 
 ## Practical Build Order
 
 1. Use teleporter endpoints directly for `office -> crawlspace`.
 2. Use paired door cameras for links with obvious `Camera_Dorian...Door...` assets.
 3. Use stair cameras for `upper_hallway -> hallway`.
-4. Use extra `CameraSpaces` variants to author the open-passage links.
+4. Use `CameraSpaces` geometry to derive open-passage anchors, then only add hand-authored overrides if runtime testing proves a specific link still needs them.

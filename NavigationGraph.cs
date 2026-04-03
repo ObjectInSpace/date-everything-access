@@ -35,6 +35,8 @@ namespace DateEverythingAccess
                 string toZone,
                 Vector3 fromWaypoint,
                 Vector3 toWaypoint,
+                Vector3 fromCrossingAnchor,
+                Vector3 toCrossingAnchor,
                 float cost,
                 StepKind kind,
                 string connectorName,
@@ -45,6 +47,8 @@ namespace DateEverythingAccess
                 ToZone = toZone;
                 FromWaypoint = fromWaypoint;
                 ToWaypoint = toWaypoint;
+                FromCrossingAnchor = fromCrossingAnchor;
+                ToCrossingAnchor = toCrossingAnchor;
                 Cost = cost;
                 Kind = kind;
                 ConnectorName = connectorName;
@@ -71,6 +75,16 @@ namespace DateEverythingAccess
             /// Gets the entry waypoint within the destination zone.
             /// </summary>
             public Vector3 ToWaypoint { get; }
+
+            /// <summary>
+            /// Gets the authored source-side crossing anchor for open passages when available.
+            /// </summary>
+            public Vector3 FromCrossingAnchor { get; }
+
+            /// <summary>
+            /// Gets the authored destination-side crossing anchor for open passages when available.
+            /// </summary>
+            public Vector3 ToCrossingAnchor { get; }
 
             /// <summary>
             /// Gets the traversal cost for this step.
@@ -104,6 +118,8 @@ namespace DateEverythingAccess
             public string ToZone;
             public Vector3 FromWaypoint;
             public Vector3 ToWaypoint;
+            public Vector3 FromCrossingAnchor;
+            public Vector3 ToCrossingAnchor;
             public float Cost;
             public StepKind Kind;
             public string ConnectorName;
@@ -166,8 +182,8 @@ namespace DateEverythingAccess
                 for (int i = 0; i < parsedLinks.Count; i++)
                 {
                     Link link = parsedLinks[i];
-                    AddLink(link.FromZone, link.ToZone, link.FromWaypoint, link.ToWaypoint, link.Cost, link.Kind, link.ConnectorName, link.RequiresInteraction, link.TransitionWaitSeconds);
-                    AddLink(link.ToZone, link.FromZone, link.ToWaypoint, link.FromWaypoint, link.Cost, link.Kind, link.ConnectorName, link.RequiresInteraction, link.TransitionWaitSeconds);
+                    AddLink(link.FromZone, link.ToZone, link.FromWaypoint, link.ToWaypoint, link.FromCrossingAnchor, link.ToCrossingAnchor, link.Cost, link.Kind, link.ConnectorName, link.RequiresInteraction, link.TransitionWaitSeconds);
+                    AddLink(link.ToZone, link.FromZone, link.ToWaypoint, link.FromWaypoint, link.ToCrossingAnchor, link.FromCrossingAnchor, link.Cost, link.Kind, link.ConnectorName, link.RequiresInteraction, link.TransitionWaitSeconds);
                 }
 
                 Main.Log.LogInfo("Navigation graph loaded. Zones: " + _knownZones.Count + ", Links: " + _links.Count);
@@ -264,6 +280,8 @@ namespace DateEverythingAccess
             string toZone,
             Vector3 fromWaypoint,
             Vector3 toWaypoint,
+            Vector3 fromCrossingAnchor,
+            Vector3 toCrossingAnchor,
             float cost,
             StepKind kind,
             string connectorName,
@@ -276,6 +294,8 @@ namespace DateEverythingAccess
                 ToZone = toZone,
                 FromWaypoint = fromWaypoint,
                 ToWaypoint = toWaypoint,
+                FromCrossingAnchor = fromCrossingAnchor,
+                ToCrossingAnchor = toCrossingAnchor,
                 Cost = cost <= 0f ? 1f : cost,
                 Kind = kind,
                 ConnectorName = connectorName,
@@ -376,6 +396,8 @@ namespace DateEverythingAccess
 
             Vector3 fromWaypoint = ExtractJsonVector3(obj, "FromWaypoint");
             Vector3 toWaypoint = ExtractJsonVector3(obj, "ToWaypoint");
+            Vector3 fromCrossingAnchor = ExtractJsonVector3(obj, "FromCrossingAnchor");
+            Vector3 toCrossingAnchor = ExtractJsonVector3(obj, "ToCrossingAnchor");
             StepKind kind = ParseStepKind(ExtractJsonString(obj, "StepKind"));
             string connectorName = ExtractJsonString(obj, "ConnectorName");
             bool requiresInteraction = ExtractJsonBool(obj, "RequiresInteraction");
@@ -387,6 +409,8 @@ namespace DateEverythingAccess
                 ToZone = toZone,
                 FromWaypoint = fromWaypoint,
                 ToWaypoint = toWaypoint,
+                FromCrossingAnchor = fromCrossingAnchor,
+                ToCrossingAnchor = toCrossingAnchor,
                 Cost = cost,
                 Kind = kind,
                 ConnectorName = connectorName,
@@ -582,6 +606,8 @@ namespace DateEverythingAccess
                     matchingLink.ToZone,
                     matchingLink.FromWaypoint,
                     matchingLink.ToWaypoint,
+                    matchingLink.FromCrossingAnchor,
+                    matchingLink.ToCrossingAnchor,
                     matchingLink.Cost,
                     matchingLink.Kind,
                     matchingLink.ConnectorName,

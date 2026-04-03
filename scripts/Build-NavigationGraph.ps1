@@ -41,6 +41,21 @@ function Copy-Vec3 {
     return New-Vec3 -X ([double]$Source.x) -Y ([double]$Source.y) -Z ([double]$Source.z)
 }
 
+function Clamp-Value {
+    param(
+        [Parameter(Mandatory = $true)]
+        [double]$Value,
+
+        [Parameter(Mandatory = $true)]
+        [double]$Minimum,
+
+        [Parameter(Mandatory = $true)]
+        [double]$Maximum
+    )
+
+    return [Math]::Max($Minimum, [Math]::Min($Maximum, $Value))
+}
+
 function Distance {
     param(
         [Parameter(Mandatory = $true)]
@@ -88,41 +103,184 @@ function Get-BaseFamilyZones {
     return @($CameraSpaces | Where-Object { $_.Name -match $pattern })
 }
 
-function Find-NearestFamilyPair {
+function Get-ZoneBounds {
     param(
         [Parameter(Mandatory = $true)]
-        [object[]]$CameraSpaces,
-
-        [Parameter(Mandatory = $true)]
-        [string]$FromBase,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ToBase
+        [object]$Zone
     )
 
-    $fromFamily = Get-BaseFamilyZones -CameraSpaces $CameraSpaces -BaseName $FromBase
-    $toFamily = Get-BaseFamilyZones -CameraSpaces $CameraSpaces -BaseName $ToBase
-    if ($fromFamily.Count -eq 0 -or $toFamily.Count -eq 0) {
+    if ($null -eq $Zone) {
         return $null
     }
 
-    $bestPair = $null
-    foreach ($fromZone in $fromFamily) {
-        foreach ($toZone in $toFamily) {
-            $distance = Distance -A $fromZone.Position -B $toZone.Position
-            if ($null -eq $bestPair -or $distance -lt $bestPair.Distance) {
-                $bestPair = [pscustomobject]@{
-                    FromZone = $fromZone.Name
-                    ToZone = $toZone.Name
-                    FromWaypoint = Copy-Vec3 $fromZone.Position
-                    ToWaypoint = Copy-Vec3 $toZone.Position
-                    Distance = $distance
+    $halfX = [Math]::Abs([double]$Zone.Scale.x) / 2.0
+    $halfY = [Math]::Abs([double]$Zone.Scale.y) / 2.0
+    $halfZ = [Math]::Abs([double]$Zone.Scale.z) / 2.0
+    if ($halfX -le 0.0 -and $halfY -le 0.0 -and $halfZ -le 0.0) {
+        return $null
+    }
+
+    return [ordered]@{
+        MinX = [double]$Zone.Position.x - $halfX
+        MaxX = [double]$Zone.Position.x + $halfX
+        MinZ = [double]$Zone.Position.z - $halfZ
+        MaxZ = [double]$Zone.Position.z + $halfZ
+    }
+}
+
+function Get-NearestPointOnZoneGeometry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Zone,
+
+        [Parameter(Mandatory = $true)]
+        [object]$TargetPosition
+    )
+
+    $bounds = Get-ZoneBounds -Zone $Zone
+    if ($null -eq $bounds) {
+        return Copy-Vec3 $Zone.Position
+    }
+
+    return New-Vec3 `
+        -X (Clamp-Value -Value ([double]$TargetPosition.x) -Minimum $bounds.MinX -Maximum $bounds.MaxX) `
+        -Y ([double]$Zone.Position.y) `
+        -Z (Clamp-Value -Value ([double]$TargetPosition.z) -Minimum $bounds.MinZ -Maximum $bounds.MaxZ)
+}
+
+function Get-ZoneFamilyCandidates {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ZoneName
+    )
+
+    $candidates = New-Object System.Collections.Generic.List[object]
+    $seen = @{}
+
+    if ($zonesByName.ContainsKey($ZoneName) -and -not $seen.ContainsKey($ZoneName)) {
+        $seen[$ZoneName] = $true
+        $candidates.Add($zonesByName[$ZoneName])
+    }
+
+    foreach ($familyZone in @(Get-BaseFamilyZones -CameraSpaces $sceneData.CameraSpaces -BaseName $ZoneName)) {
+        if ($null -ne $familyZone -and -not $seen.ContainsKey($familyZone.Name)) {
+            $seen[$familyZone.Name] = $true
+            $candidates.Add($familyZone)
+        }
+    }
+
+    return $candidates.ToArray()
+}
+
+function Get-NearestGeometryPointPair {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$FromZone,
+
+        [Parameter(Mandatory = $true)]
+        [object]$ToZone
+    )
+
+    $fromBounds = Get-ZoneBounds -Zone $FromZone
+    $toBounds = Get-ZoneBounds -Zone $ToZone
+
+    if ($null -eq $fromBounds -and $null -eq $toBounds) {
+        $fromPoint = Copy-Vec3 $FromZone.Position
+        $toPoint = Copy-Vec3 $ToZone.Position
+    } elseif ($null -eq $fromBounds) {
+        $fromPoint = Copy-Vec3 $FromZone.Position
+        $toPoint = Get-NearestPointOnZoneGeometry -Zone $ToZone -TargetPosition $FromZone.Position
+    } elseif ($null -eq $toBounds) {
+        $fromPoint = Get-NearestPointOnZoneGeometry -Zone $FromZone -TargetPosition $ToZone.Position
+        $toPoint = Copy-Vec3 $ToZone.Position
+    } else {
+        $fromMidX = ([double]$FromZone.Position.x + [double]$ToZone.Position.x) / 2.0
+        $fromMidZ = ([double]$FromZone.Position.z + [double]$ToZone.Position.z) / 2.0
+
+        if ($fromBounds.MaxX -lt $toBounds.MinX) {
+            $fromX = $fromBounds.MaxX
+            $toX = $toBounds.MinX
+        } elseif ($toBounds.MaxX -lt $fromBounds.MinX) {
+            $fromX = $fromBounds.MinX
+            $toX = $toBounds.MaxX
+        } else {
+            $sharedMinX = [Math]::Max($fromBounds.MinX, $toBounds.MinX)
+            $sharedMaxX = [Math]::Min($fromBounds.MaxX, $toBounds.MaxX)
+            $sharedX = Clamp-Value -Value $fromMidX -Minimum $sharedMinX -Maximum $sharedMaxX
+            $fromX = $sharedX
+            $toX = $sharedX
+        }
+
+        if ($fromBounds.MaxZ -lt $toBounds.MinZ) {
+            $fromZ = $fromBounds.MaxZ
+            $toZ = $toBounds.MinZ
+        } elseif ($toBounds.MaxZ -lt $fromBounds.MinZ) {
+            $fromZ = $fromBounds.MinZ
+            $toZ = $toBounds.MaxZ
+        } else {
+            $sharedMinZ = [Math]::Max($fromBounds.MinZ, $toBounds.MinZ)
+            $sharedMaxZ = [Math]::Min($fromBounds.MaxZ, $toBounds.MaxZ)
+            $sharedZ = Clamp-Value -Value $fromMidZ -Minimum $sharedMinZ -Maximum $sharedMaxZ
+            $fromZ = $sharedZ
+            $toZ = $sharedZ
+        }
+
+        $fromPoint = New-Vec3 -X $fromX -Y ([double]$FromZone.Position.y) -Z $fromZ
+        $toPoint = New-Vec3 -X $toX -Y ([double]$ToZone.Position.y) -Z $toZ
+    }
+
+    $dx = [double]$fromPoint.x - [double]$toPoint.x
+    $dz = [double]$fromPoint.z - [double]$toPoint.z
+    $gap2d = [Math]::Sqrt(($dx * $dx) + ($dz * $dz))
+
+    return [ordered]@{
+        FromPoint = $fromPoint
+        ToPoint = $toPoint
+        Gap2d = $gap2d
+    }
+}
+
+function Get-OpenPassageGeometry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FromZoneName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ToZoneName
+    )
+
+    $fromCandidates = @(Get-ZoneFamilyCandidates -ZoneName $FromZoneName)
+    $toCandidates = @(Get-ZoneFamilyCandidates -ZoneName $ToZoneName)
+    if ($fromCandidates.Count -eq 0 -or $toCandidates.Count -eq 0) {
+        throw "Unable to resolve open-passage geometry for '$FromZoneName' -> '$ToZoneName'"
+    }
+
+    $bestMatch = $null
+    foreach ($fromZone in $fromCandidates) {
+        foreach ($toZone in $toCandidates) {
+            $pointPair = Get-NearestGeometryPointPair -FromZone $fromZone -ToZone $toZone
+            $centerDistance = Distance -A $fromZone.Position -B $toZone.Position
+            if ($null -eq $bestMatch -or
+                $pointPair.Gap2d -lt $bestMatch.Gap2d -or
+                ($pointPair.Gap2d -eq $bestMatch.Gap2d -and $centerDistance -lt $bestMatch.CenterDistance)) {
+                $bestMatch = [ordered]@{
+                    FromZone = $fromZone
+                    ToZone = $toZone
+                    FromPoint = $pointPair.FromPoint
+                    ToPoint = $pointPair.ToPoint
+                    Gap2d = $pointPair.Gap2d
+                    CenterDistance = $centerDistance
                 }
             }
         }
     }
 
-    return $bestPair
+    return [ordered]@{
+        FromWaypoint = Copy-Vec3 $bestMatch.FromZone.Position
+        ToWaypoint = Copy-Vec3 $bestMatch.ToZone.Position
+        FromCrossingAnchor = $bestMatch.FromPoint
+        ToCrossingAnchor = $bestMatch.ToPoint
+    }
 }
 
 if (-not (Test-Path -LiteralPath $SceneDataPath)) {
@@ -193,13 +351,6 @@ function Get-TeleporterWaypoint {
 
     $teleporter = $teleporterByName[$TeleporterName]
     return Copy-Vec3 $teleporter.$PropertyName.Position
-}
-
-$openPassagePairs = @{
-    "hallway|living_room" = Find-NearestFamilyPair -CameraSpaces $sceneData.CameraSpaces -FromBase "hallway" -ToBase "living_room"
-    "living_room|dining_room" = Find-NearestFamilyPair -CameraSpaces $sceneData.CameraSpaces -FromBase "living_room" -ToBase "dining_room"
-    "dining_room|piano_room" = Find-NearestFamilyPair -CameraSpaces $sceneData.CameraSpaces -FromBase "dining_room" -ToBase "piano_room"
-    "dining_room|kitchen" = Find-NearestFamilyPair -CameraSpaces $sceneData.CameraSpaces -FromBase "dining_room" -ToBase "kitchen"
 }
 
 $directedOverrides = @{
@@ -323,15 +474,25 @@ $generatedLinks = New-Object System.Collections.Generic.List[object]
 foreach ($link in @($inputGraph.Links)) {
     $key = "$($link.FromZone)|$($link.ToZone)"
     $waypointPair = $null
+    $metadata = $stepMetadata[$key]
+    if ($null -eq $metadata) {
+        $metadata = [ordered]@{
+            StepKind = "OpenPassage"
+        }
+    }
+
+    $stepKind = Get-MetadataValue -Metadata $metadata -Key "StepKind" -DefaultValue "OpenPassage"
 
     if ($directedOverrides.ContainsKey($key)) {
         $waypointPair = $directedOverrides[$key]
-    } elseif ($openPassagePairs.ContainsKey($key)) {
-        $waypointPair = $openPassagePairs[$key]
+    } elseif ($stepKind -eq "OpenPassage") {
+        $waypointPair = Get-OpenPassageGeometry -FromZoneName $link.FromZone -ToZoneName $link.ToZone
     } else {
         $waypointPair = [ordered]@{
             FromWaypoint = Get-ZoneWaypoint $link.FromZone
             ToWaypoint = Get-ZoneWaypoint $link.ToZone
+            FromCrossingAnchor = $null
+            ToCrossingAnchor = $null
         }
     }
 
@@ -340,20 +501,15 @@ foreach ($link in @($inputGraph.Links)) {
         $cost = 1.0
     }
 
-    $metadata = $stepMetadata[$key]
-    if ($null -eq $metadata) {
-        $metadata = [ordered]@{
-            StepKind = "OpenPassage"
-        }
-    }
-
     $generatedLinks.Add([ordered]@{
         FromZone = $link.FromZone
         ToZone = $link.ToZone
         FromWaypoint = $waypointPair.FromWaypoint
         ToWaypoint = $waypointPair.ToWaypoint
+        FromCrossingAnchor = Get-MetadataValue -Metadata $waypointPair -Key "FromCrossingAnchor"
+        ToCrossingAnchor = Get-MetadataValue -Metadata $waypointPair -Key "ToCrossingAnchor"
         Cost = $cost
-        StepKind = Get-MetadataValue -Metadata $metadata -Key "StepKind" -DefaultValue "OpenPassage"
+        StepKind = $stepKind
         ConnectorName = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
         RequiresInteraction = [bool](Get-MetadataValue -Metadata $metadata -Key "RequiresInteraction" -DefaultValue $false)
         TransitionWaitSeconds = [double](Get-MetadataValue -Metadata $metadata -Key "TransitionWaitSeconds" -DefaultValue 0.0)

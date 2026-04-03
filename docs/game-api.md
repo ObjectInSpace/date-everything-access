@@ -453,11 +453,15 @@ This is the cleanest room identifier found for house navigation speech.
   - writes `artifacts\navigation\navigation_graph.generated.json`
   - uses explicit door, stairs, and teleporter connector overrides where available
   - emits per-link `StepKind`, `ConnectorName`, `RequiresInteraction`, and `TransitionWaitSeconds` metadata for runtime navigation handling
-  - falls back to zone anchors or nearest room-family anchors for the remaining links
+  - all `OpenPassage` links now derive `FromWaypoint`, `ToWaypoint`, `FromCrossingAnchor`, and `ToCrossingAnchor` from the scene's own `CameraSpaces` geometry by comparing the exact graph zone plus same-family numbered variants and choosing the smallest scene-side boundary gap
+  - practical consequence:
+    - the builder no longer needs hand-picked open-passage room-pair overrides for the current graph
+    - the generated graph now carries scene-derived threshold anchors even for subzone-to-room open passages such as `dorian_office2 -> office`
 - Runtime consumption
-  - `NavigationGraph.FindPathSteps(...)` now parses and returns per-link `FromWaypoint`, `ToWaypoint`, `Cost`, transition type, connector name, and transition timing data from the live JSON
+  - `NavigationGraph.FindPathSteps(...)` now parses and returns per-link `FromWaypoint`, `ToWaypoint`, `FromCrossingAnchor`, `ToCrossingAnchor`, `Cost`, transition type, connector name, and transition timing data from the live JSON
   - `AccessibilityWatcher` now tracks a concrete interactable target, falls back to the current step waypoint while that target is still in another zone, and switches back to the live object position after entering the target room
   - `AccessibilityWatcher` treats teleporter links as interaction-driven transitions, waits through the crawlspace animation while player control is disabled, and can retry door interactions before declaring navigation blocked
+  - `AccessibilityWatcher` now uses authored open-passage crossing anchors when present instead of inferring the entire crossing line from room-center waypoints at runtime
   - `ObjectTracker` beeps now follow the tracked object or current waypoint chosen by the watcher, use stereo panning for left or right guidance, map pitch to the target's height relative to the camera, map beep rate to target proximity, and raise volume as the player gets closer
   - practical consequence:
     - the navigation graph currently uses coarse authored zones such as `office`
@@ -472,7 +476,7 @@ Important consequence:
 
 - Inter-room navigation can now use authored or inferred connector waypoints from the generated JSON instead of only zeroed placeholders.
 - The generated graph now carries enough metadata for runtime code to distinguish open passages, doors, stairs, and the crawlspace teleporter without hardcoded room-pair logic in the watcher.
-- In-room guidance may still benefit from live `triggerzone.Position` or runtime refinement, especially for open passages and any link where the generated graph had to fall back to room-family heuristics.
+- In-room guidance may still benefit from live `triggerzone.Position` or runtime refinement, but open-passage threshold selection is now coming from scene-derived `CameraSpaces` geometry rather than from coarse-room fallback guesses.
 - Asset data is sufficient to build and regenerate the current waypoint graph from local tooling.
 
 ### Current interactable
