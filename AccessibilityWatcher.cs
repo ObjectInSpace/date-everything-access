@@ -140,6 +140,7 @@ namespace DateEverythingAccess
         private static int _navigateToObjectiveRequested;
         private static int _selectNavigationTargetRequested;
         private static int _autoWalkRequested;
+        private static int _exportNavMeshRequested;
         private static int _pendingDateADexEntryAnnouncementRequested;
         private static float _pendingDateADexEntryAnnouncementNotBefore;
         private static float _pendingDateADexEntryAnnouncementExpiresAt;
@@ -225,6 +226,8 @@ namespace DateEverythingAccess
         private List<NavigationGraph.PathStep> _navigationPath;
         private List<RoomObjectTarget> _roomObjectTargets;
         private int _autoWalkRecoveryAttempts;
+        private int _openPassageSourceHandoffRecoveryFloor;
+        private int _openPassageDestinationHandoffRecoveryFloor;
         private OpenPassageTraversalStage _openPassageTraversalStage;
         private bool _isRoomObjectPickerOpen;
         private bool _isNavigationActive;
@@ -287,6 +290,11 @@ namespace DateEverythingAccess
             Interlocked.Exchange(ref _autoWalkRequested, 1);
         }
 
+        internal static void RequestExportNavMesh()
+        {
+            Interlocked.Exchange(ref _exportNavMeshRequested, 1);
+        }
+
         internal static void RequestDateADexEntryAnnouncement()
         {
             Interlocked.Exchange(ref _pendingDateADexEntryAnnouncementRequested, 1);
@@ -302,6 +310,7 @@ namespace DateEverythingAccess
 
             HandleRepeatLastSpeechRequest();
             HandleNavigationRequests();
+            HandleNavMeshExportRequest();
 
             bool isSettingsMenuOpen = ModConfig.IsMenuOpen;
             if (isSettingsMenuOpen)
@@ -445,6 +454,35 @@ namespace DateEverythingAccess
 
             if (Interlocked.Exchange(ref _autoWalkRequested, 0) != 0)
                 ToggleAutoWalk();
+        }
+
+        private void HandleNavMeshExportRequest()
+        {
+            if (Interlocked.Exchange(ref _exportNavMeshRequested, 0) == 0)
+                return;
+
+            Loc.RefreshLanguage();
+
+            if (NavMeshExporter.TryExport(out string outputPath, out int triangleCount, out int transitionCount, out NavMeshExporter.ExportFailure failure))
+            {
+                Main.Log.LogInfo("Navmesh export completed: " + outputPath);
+                ScreenReader.Say(Loc.Get("navmesh_export_success", triangleCount, transitionCount), remember: false);
+                return;
+            }
+
+            string failureKey = "navmesh_export_failed";
+            switch (failure)
+            {
+                case NavMeshExporter.ExportFailure.NoNavMesh:
+                    failureKey = "navmesh_export_no_navmesh";
+                    break;
+                case NavMeshExporter.ExportFailure.WriteFailed:
+                    failureKey = "navmesh_export_write_failed";
+                    break;
+            }
+
+            Main.Log.LogWarning("Navmesh export failed: " + failure);
+            ScreenReader.Say(Loc.Get(failureKey), remember: false);
         }
 
         private void CycleNavigationTarget()
@@ -1716,8 +1754,9 @@ namespace DateEverythingAccess
                             return true;
 
                         case OpenPassageTraversalStage.SourceHandoff:
+                            int sourceHandoffRecoveryAttempts = GetOpenPassageRecoveryAttemptsForStage(traversalStage);
                             float sourceHandoffDistance = AutoWalkOpenPassageHandoffDistance +
-                                (_autoWalkRecoveryAttempts * AutoWalkOpenPassageHandoffDistance);
+                                (sourceHandoffRecoveryAttempts * AutoWalkOpenPassageHandoffDistance);
                             position = BuildOpenPassageSourceHandoffPosition(
                                 step,
                                 playerPosition,
@@ -1727,7 +1766,7 @@ namespace DateEverythingAccess
                                 "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
                                 " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                                 " toDistance=" + toDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " recoveryAttempts=" + _autoWalkRecoveryAttempts +
+                                " recoveryAttempts=" + sourceHandoffRecoveryAttempts +
                                 " stage=SourceHandoff" +
                                 " reason=push through open-passage source threshold" +
                                 " step=" + DescribeNavigationStep(step));
@@ -1746,15 +1785,19 @@ namespace DateEverythingAccess
                             return true;
 
                         case OpenPassageTraversalStage.DestinationHandoff:
+                            int destinationHandoffRecoveryAttempts = GetOpenPassageRecoveryAttemptsForStage(traversalStage);
                             float destinationHandoffDistance = AutoWalkOpenPassageHandoffDistance +
-                                (_autoWalkRecoveryAttempts * AutoWalkOpenPassageHandoffDistance);
-                            position = BuildOpenPassageDestinationHandoffPosition(step, destinationHandoffDistance);
+                                (destinationHandoffRecoveryAttempts * AutoWalkOpenPassageHandoffDistance);
+                            position = BuildOpenPassageDestinationHandoffPosition(
+                                step,
+                                playerPosition,
+                                destinationHandoffDistance);
                             targetKind = NavigationTargetKind.ZoneFallback;
                             LogNavigationTrackerDebug(
                                 "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
                                 " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                                 " toDistance=" + toDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " recoveryAttempts=" + _autoWalkRecoveryAttempts +
+                                " recoveryAttempts=" + destinationHandoffRecoveryAttempts +
                                 " stage=DestinationHandoff" +
                                 " reason=push beyond open-passage destination threshold" +
                                 " step=" + DescribeNavigationStep(step));
@@ -1912,8 +1955,17 @@ namespace DateEverythingAccess
                 return true;
             }
 
+            if (ShouldAdvanceOpenPassageStepByGeometry(currentStep))
+            {
+                reason = "open-passage geometric advance";
+                return true;
+            }
+
             if (!IsZoneEquivalentToNavigationZone(currentNavigationZone, currentStep.FromZone))
             {
+                if (ShouldSuppressOpenPassageBackwardZoneReport(currentStep, currentZone, currentNavigationZone, out _, out _))
+                    return false;
+
                 reason = "player left current step source zone";
                 return true;
             }
@@ -1967,6 +2019,118 @@ namespace DateEverythingAccess
             return !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone);
         }
 
+        private bool IsCommittedOpenPassageTraversal(NavigationGraph.PathStep step)
+        {
+            if (step == null || step.Kind != NavigationGraph.StepKind.OpenPassage)
+                return false;
+
+            string stepKey = BuildNavigationStepKey(step);
+            if (!string.Equals(_openPassageTraversalStepKey, stepKey, StringComparison.Ordinal))
+                return false;
+
+            return _openPassageTraversalStage == OpenPassageTraversalStage.SourceHandoff ||
+                _openPassageTraversalStage == OpenPassageTraversalStage.DestinationWaypoint ||
+                _openPassageTraversalStage == OpenPassageTraversalStage.DestinationHandoff;
+        }
+
+        private bool TryGetOpenPassageProgressMetrics(
+            NavigationGraph.PathStep step,
+            out float projectedProgress,
+            out float segmentLength,
+            out float destinationDistance)
+        {
+            projectedProgress = 0f;
+            segmentLength = 0f;
+            destinationDistance = float.MaxValue;
+
+            if (step == null || step.Kind != NavigationGraph.StepKind.OpenPassage || BetterPlayerControl.Instance == null)
+                return false;
+
+            Vector3 handoffStart = GetOpenPassageSourceHandoffOrigin(step);
+            Vector3 destinationApproach = GetOpenPassageDestinationApproachPosition(step);
+            if (handoffStart == Vector3.zero || destinationApproach == Vector3.zero)
+                return false;
+
+            Vector3 handoffDirection = destinationApproach - handoffStart;
+            handoffDirection.y = 0f;
+            if (handoffDirection.sqrMagnitude <= 0.0001f)
+                return false;
+
+            segmentLength = handoffDirection.magnitude;
+            handoffDirection.Normalize();
+
+            Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
+            Vector3 playerOffset = playerPosition - handoffStart;
+            playerOffset.y = 0f;
+            projectedProgress = Vector3.Dot(playerOffset, handoffDirection);
+
+            Vector3 destinationFlat = destinationApproach;
+            destinationFlat.y = playerPosition.y;
+            destinationDistance = Vector3.Distance(playerPosition, destinationFlat);
+            return true;
+        }
+
+        private bool ShouldSuppressOpenPassageBackwardZoneReport(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            string currentNavigationZone,
+            out string fallbackZone,
+            out string reason)
+        {
+            fallbackZone = null;
+            reason = null;
+
+            if (step == null ||
+                step.Kind != NavigationGraph.StepKind.OpenPassage ||
+                string.IsNullOrEmpty(step.FromZone) ||
+                !IsCommittedOpenPassageTraversal(step))
+            {
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(currentZone))
+                return false;
+
+            if (IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                (!string.IsNullOrEmpty(step.ToZone) && IsZoneEquivalentToNavigationZone(currentZone, step.ToZone)))
+            {
+                return false;
+            }
+
+            if (!TryGetOpenPassageProgressMetrics(step, out float projectedProgress, out float segmentLength, out float destinationDistance))
+                return false;
+
+            if (projectedProgress < AutoWalkOpenPassageCommitDistance)
+                return false;
+
+            fallbackZone = step.FromZone;
+            reason =
+                "rawCurrentZone=" + currentZone +
+                " currentNavigationZone=" + (currentNavigationZone ?? "<null>") +
+                " fallbackZone=" + step.FromZone +
+                " projectedProgress=" + projectedProgress.ToString("0.00", CultureInfo.InvariantCulture) +
+                " segmentLength=" + segmentLength.ToString("0.00", CultureInfo.InvariantCulture) +
+                " destinationDistance=" + destinationDistance.ToString("0.00", CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        private bool ShouldAdvanceOpenPassageStepByGeometry(NavigationGraph.PathStep step)
+        {
+            if (step == null ||
+                step.Kind != NavigationGraph.StepKind.OpenPassage ||
+                !IsCommittedOpenPassageTraversal(step) ||
+                _openPassageTraversalStage != OpenPassageTraversalStage.DestinationHandoff)
+            {
+                return false;
+            }
+
+            if (!TryGetOpenPassageProgressMetrics(step, out float projectedProgress, out float segmentLength, out float destinationDistance))
+                return false;
+
+            return projectedProgress >= segmentLength ||
+                destinationDistance <= AutoWalkArrivalDistance;
+        }
+
         private void UpdateNavigationTracker()
         {
             if (TryGetNextNavigationPosition(out Vector3 nextPosition, out NavigationTargetKind targetKind))
@@ -2002,6 +2166,8 @@ namespace DateEverythingAccess
         {
             _openPassageTraversalStepKey = null;
             _openPassageTraversalStage = OpenPassageTraversalStage.None;
+            _openPassageSourceHandoffRecoveryFloor = 0;
+            _openPassageDestinationHandoffRecoveryFloor = 0;
         }
 
         private void SyncOpenPassageTraversalState(NavigationGraph.PathStep step)
@@ -2017,10 +2183,52 @@ namespace DateEverythingAccess
             {
                 _openPassageTraversalStepKey = stepKey;
                 _openPassageTraversalStage = OpenPassageTraversalStage.SourceWaypoint;
+                _openPassageSourceHandoffRecoveryFloor = 0;
+                _openPassageDestinationHandoffRecoveryFloor = 0;
             }
             else if (_openPassageTraversalStage == OpenPassageTraversalStage.None)
             {
                 _openPassageTraversalStage = OpenPassageTraversalStage.SourceWaypoint;
+            }
+        }
+
+        private int GetOpenPassageRecoveryAttemptsForStage(OpenPassageTraversalStage traversalStage)
+        {
+            switch (traversalStage)
+            {
+                case OpenPassageTraversalStage.SourceHandoff:
+                    return Mathf.Max(_autoWalkRecoveryAttempts, _openPassageSourceHandoffRecoveryFloor);
+
+                case OpenPassageTraversalStage.DestinationHandoff:
+                    return Mathf.Max(_autoWalkRecoveryAttempts, _openPassageDestinationHandoffRecoveryFloor);
+
+                default:
+                    return _autoWalkRecoveryAttempts;
+            }
+        }
+
+        private void RememberOpenPassageRecoveryAttempt(NavigationGraph.PathStep step, int recoveryAttempt)
+        {
+            if (step == null ||
+                step.Kind != NavigationGraph.StepKind.OpenPassage ||
+                recoveryAttempt <= 0)
+            {
+                return;
+            }
+
+            string stepKey = BuildNavigationStepKey(step);
+            if (!string.Equals(_openPassageTraversalStepKey, stepKey, StringComparison.Ordinal))
+                return;
+
+            switch (_openPassageTraversalStage)
+            {
+                case OpenPassageTraversalStage.SourceHandoff:
+                    _openPassageSourceHandoffRecoveryFloor = Mathf.Max(_openPassageSourceHandoffRecoveryFloor, recoveryAttempt);
+                    break;
+
+                case OpenPassageTraversalStage.DestinationHandoff:
+                    _openPassageDestinationHandoffRecoveryFloor = Mathf.Max(_openPassageDestinationHandoffRecoveryFloor, recoveryAttempt);
+                    break;
             }
         }
 
@@ -2083,6 +2291,7 @@ namespace DateEverythingAccess
 
             int nextRecoveryAttempt = _autoWalkRecoveryAttempts + 1;
             _autoWalkRecoveryAttempts = nextRecoveryAttempt;
+            RememberOpenPassageRecoveryAttempt(step, nextRecoveryAttempt);
             bool refreshed = TryRefreshNavigationPath(forceAnnounce: false);
             if (refreshed)
                 _autoWalkRecoveryAttempts = nextRecoveryAttempt;
@@ -2341,13 +2550,8 @@ namespace DateEverythingAccess
         private string GetCurrentZoneNameForNavigation()
         {
             string currentZone = GetCurrentZoneNameInternal();
-            if (string.IsNullOrEmpty(currentZone) ||
-                string.IsNullOrEmpty(_navigationTargetZone) ||
-                !IsExactZoneMatch(currentZone, _navigationTargetZone) ||
-                BetterPlayerControl.Instance == null)
-            {
+            if (string.IsNullOrEmpty(currentZone) || BetterPlayerControl.Instance == null)
                 return currentZone;
-            }
 
             NavigationGraph.PathStep step = GetCurrentNavigationStep();
             Vector3 destinationApproachWaypoint = GetOpenPassageDestinationApproachPosition(step);
@@ -2356,7 +2560,22 @@ namespace DateEverythingAccess
                 string.IsNullOrEmpty(step.FromZone) ||
                 string.IsNullOrEmpty(step.ToZone) ||
                 step.FromWaypoint == Vector3.zero ||
-                destinationApproachWaypoint == Vector3.zero ||
+                destinationApproachWaypoint == Vector3.zero)
+            {
+                return currentZone;
+            }
+
+            string currentNavigationZone = GetNavigationZoneName(currentZone);
+            if (ShouldSuppressOpenPassageBackwardZoneReport(step, currentZone, currentNavigationZone, out string fallbackZone, out string rewindReason))
+            {
+                LogNavigationAutoWalkDebug(
+                    "Suppressing transient backward zone report " + rewindReason +
+                    " step=" + DescribeNavigationStep(step));
+                return fallbackZone;
+            }
+
+            if (string.IsNullOrEmpty(_navigationTargetZone) ||
+                !IsExactZoneMatch(currentZone, _navigationTargetZone) ||
                 IsExactZoneMatch(step.ToZone, _navigationTargetZone))
             {
                 return currentZone;
@@ -3011,6 +3230,7 @@ namespace DateEverythingAccess
 
         private static Vector3 BuildOpenPassageDestinationHandoffPosition(
             NavigationGraph.PathStep step,
+            Vector3 playerPosition,
             float handoffDistance)
         {
             if (step == null)
@@ -3026,9 +3246,16 @@ namespace DateEverythingAccess
 
                 float segmentLength = approachDirection.magnitude;
                 approachDirection.Normalize();
-                Vector3 approachPosition = handoffStart + approachDirection * Mathf.Min(Mathf.Max(handoffDistance, 0.1f), segmentLength);
-                approachPosition.y = step.ToWaypoint.y != 0f ? step.ToWaypoint.y : handoffStart.y;
-                return approachPosition;
+                Vector3 playerOffset = playerPosition - handoffStart;
+                playerOffset.y = 0f;
+                float progress = Mathf.Clamp(Vector3.Dot(playerOffset, approachDirection), 0f, segmentLength + Mathf.Max(handoffDistance, 0.1f));
+                float nextProgress = Mathf.Min(
+                    progress + Mathf.Max(handoffDistance, 0.1f),
+                    segmentLength + Mathf.Max(handoffDistance, 0.1f));
+
+                Vector3 progressiveHandoffPosition = handoffStart + approachDirection * nextProgress;
+                progressiveHandoffPosition.y = step.ToWaypoint.y != 0f ? step.ToWaypoint.y : handoffStart.y;
+                return progressiveHandoffPosition;
             }
 
             if (step.ToWaypoint == Vector3.zero)

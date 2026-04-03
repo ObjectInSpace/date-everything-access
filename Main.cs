@@ -27,6 +27,7 @@ namespace DateEverythingAccess
         private const int NavigateToObjectiveHotkeyId = 5;
         private const int SelectNavigationTargetHotkeyId = 6;
         private const int AutoWalkHotkeyId = 7;
+        private const int ExportNavMeshHotkeyId = 8;
 
         private Thread _hotkeyThread;
         private volatile bool _hotkeyThreadRunning;
@@ -160,6 +161,7 @@ namespace DateEverythingAccess
                 RegisterHotkeyOrThrow(NavigateToObjectiveHotkeyId, ModControl | ModNoRepeat, VkF6, "Ctrl+F6");
                 RegisterHotkeyOrThrow(SelectNavigationTargetHotkeyId, ModControl | ModShift | ModNoRepeat, VkF6, "Ctrl+Shift+F6");
                 RegisterHotkeyOrThrow(AutoWalkHotkeyId, ModControl | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+F6");
+                RegisterHotkeyOrThrow(ExportNavMeshHotkeyId, ModControl | ModShift | ModNoRepeat, VkF9, "Ctrl+Shift+F9");
                 Logger.LogInfo("Background hotkey message loop active");
 
                 NativeMessage message;
@@ -188,6 +190,7 @@ namespace DateEverythingAccess
                 UnregisterHotKey(IntPtr.Zero, NavigateToObjectiveHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, SelectNavigationTargetHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, AutoWalkHotkeyId);
+                UnregisterHotKey(IntPtr.Zero, ExportNavMeshHotkeyId);
                 Logger.LogInfo("Background hotkey thread exiting");
             }
         }
@@ -220,12 +223,18 @@ namespace DateEverythingAccess
 
             if (hotkeyId == DebugHotkeyId)
             {
+                if (IsModifierKeyDown(0x10) || IsModifierKeyDown(0x11) || IsModifierKeyDown(0x12))
+                    return;
+
                 ToggleDebugMode();
                 return;
             }
 
             if (hotkeyId == SettingsHotkeyId)
             {
+                if (!IsModifierKeyDown(0x11) || IsModifierKeyDown(0x10) || IsModifierKeyDown(0x12))
+                    return;
+
                 ToggleSettingsMenu();
                 return;
             }
@@ -263,6 +272,16 @@ namespace DateEverythingAccess
 
                 Logger.LogInfo("Auto-walk hotkey detected");
                 AccessibilityWatcher.RequestAutoWalk();
+                return;
+            }
+
+            if (hotkeyId == ExportNavMeshHotkeyId)
+            {
+                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || IsModifierKeyDown(0x12))
+                    return;
+
+                Logger.LogInfo("Navmesh export hotkey detected");
+                AccessibilityWatcher.RequestExportNavMesh();
             }
         }
 

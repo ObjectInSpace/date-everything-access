@@ -96,16 +96,28 @@ namespace DateEverythingAccess
         private static void InitializeStrings()
         {
             Add("mod_loaded",
-                "Date Everything Access geladen. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen werden automatisch vorgelesen. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Objektliste fuer den aktuellen Raum. Strg+Alt+F6 schaltet den Auto-Lauf zum verfolgten Objekt um.",
-                "Date Everything Access loaded. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes are spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the current room object list. Ctrl+Alt+F6 toggles auto-walk to the tracked object.");
+                "Date Everything Access geladen. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen werden automatisch vorgelesen. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen. Strg+Umschalt+F9 exportiert die Navmesh-Daten. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Objektliste fuer den aktuellen Raum. Strg+Alt+F6 schaltet den Auto-Lauf zum verfolgten Objekt um.",
+                "Date Everything Access loaded. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes are spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings. Ctrl+Shift+F9 exports navmesh data. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the current room object list. Ctrl+Alt+F6 toggles auto-walk to the tracked object.");
             Add("help_text",
-                "Date Everything Access. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen koennen automatisch vorgelesen werden. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Objektliste fuer den aktuellen Raum. Strg+Alt+F6 schaltet den Auto-Lauf zum verfolgten Objekt um.",
-                "Date Everything Access. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes can be spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the current room object list. Ctrl+Alt+F6 toggles auto-walk to the tracked object.");
+                "Date Everything Access. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen koennen automatisch vorgelesen werden. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen. Strg+Umschalt+F9 exportiert die Navmesh-Daten. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Objektliste fuer den aktuellen Raum. Strg+Alt+F6 schaltet den Auto-Lauf zum verfolgten Objekt um.",
+                "Date Everything Access. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes can be spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings. Ctrl+Shift+F9 exports navmesh data. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the current room object list. Ctrl+Alt+F6 toggles auto-walk to the tracked object.");
             Add("debug_mode_enabled", "Debug-Modus aktiviert.", "Debug mode enabled.");
             Add("debug_mode_enabled_with_mapping_dump",
                 "Debug-Modus aktiviert. Aktuelle Eingabebelegungen fuer {0} Geraete wurden ins Protokoll geschrieben.",
                 "Debug mode enabled. Current input mappings for {0} devices were written to the log.");
             Add("debug_mode_disabled", "Debug-Modus deaktiviert.", "Debug mode disabled.");
+            Add("navmesh_export_success",
+                "Navmesh exportiert. {0} Dreiecke. {1} Uebergangspruefungen.",
+                "Navmesh exported. {0} triangles. {1} transition checks.");
+            Add("navmesh_export_no_navmesh",
+                "In der aktuellen Szene ist kein aktives Navmesh verfuegbar.",
+                "No active navmesh is available in the current scene.");
+            Add("navmesh_export_write_failed",
+                "Die Navmesh-Datei konnte nicht geschrieben werden. Details stehen im Protokoll.",
+                "The navmesh file could not be written. Check the log for details.");
+            Add("navmesh_export_failed",
+                "Der Navmesh-Export ist fehlgeschlagen. Details stehen im Protokoll.",
+                "Navmesh export failed. Check the log for details.");
             Add("repeat_last_unavailable", "Noch keine Sprachausgabe zum Wiederholen vorhanden.", "Nothing has been spoken yet.");
             Add("settings_menu_opened", "Zugaenglichkeitseinstellungen geoeffnet.", "Accessibility settings opened.");
             Add("settings_menu_closed", "Zugaenglichkeitseinstellungen geschlossen und gespeichert.", "Accessibility settings closed and saved.");

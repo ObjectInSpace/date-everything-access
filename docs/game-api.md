@@ -168,6 +168,7 @@ That means hardcoding letter keys for core controls is riskier than function key
 - `Ctrl+Alt+F6`: toggle auto-walk to the tracked object
 - `F9`: toggle debug
 - `Ctrl+F9`: accessibility settings menu
+- `Ctrl+Shift+F9`: export live navmesh triangulation and transition checks
 
 ### Why these are safe
 
@@ -177,6 +178,7 @@ That means hardcoding letter keys for core controls is riskier than function key
 - The three `Ctrl`-modified `F6` bindings stay outside the game's observed Rewired gameplay bindings and do not conflict with the shipped `F2`, `F3`, or `F8` debug keys.
 - No gameplay consumer for `F9` was found in the decompiled game code.
 - `Ctrl+F9` reuses the same safe `F9` function key with an added modifier, so it stays outside the game's observed Rewired gameplay bindings.
+- `Ctrl+Shift+F9` reuses the same safe `F9` function key with one more modifier and is explicitly filtered in the hotkey handler so it does not also trigger plain debug toggle or the settings menu.
 - They sit outside the Rewired action flow the game relies on for normal keyboard/controller input.
 
 ### Keys to avoid
@@ -443,6 +445,14 @@ This is the cleanest room identifier found for house navigation speech.
   - practical consequence:
     - the crawlspace transition already has explicit asset-defined endpoints and facing data
     - ordinary room-to-room transitions do not appear to expose the same direct paired-endpoint structure
+- Asset-side navmesh inspection
+  - `.\scripts\Inspect-SceneNavMeshAssets.ps1`
+  - writes `artifacts\navigation\thirdpersongreybox-navmesh-assets-report.json`
+  - confirms that the exported `ThirdPersonGreybox.unity` scene contains `NavMeshSettings` but its `m_NavMeshData` reference is `fileID: 0`
+  - the raw Addressables scene bundle still contains generic navmesh type metadata and shared-assets references, but no scene-linked baked `NavMeshData` asset was found through the local export path
+  - practical consequence:
+    - there is currently no evidence that `ThirdPersonGreybox` ships a baked navmesh asset we can extract and use as authoritative transition geometry
+    - transition validation should continue to rely on scene geometry, authored connector assets, and runtime behavior instead of waiting on a hidden baked navmesh dump
 - Asset-mining helper in this repo
   - `.\scripts\Export-SceneNavigationData.ps1`
   - writes `artifacts\navigation\thirdpersongreybox-navigation-data.json`
@@ -462,6 +472,9 @@ This is the cleanest room identifier found for house navigation speech.
   - `AccessibilityWatcher` now tracks a concrete interactable target, falls back to the current step waypoint while that target is still in another zone, and switches back to the live object position after entering the target room
   - `AccessibilityWatcher` treats teleporter links as interaction-driven transitions, waits through the crawlspace animation while player control is disabled, and can retry door interactions before declaring navigation blocked
   - `AccessibilityWatcher` now uses authored open-passage crossing anchors when present instead of inferring the entire crossing line from room-center waypoints at runtime
+  - `Ctrl+Shift+F9` now runs a live navmesh export through `UnityEngine.AI.NavMesh.CalculateTriangulation()` and writes `BepInEx\plugins\navmesh_export.live.json`
+  - the export samples each directed `NavigationGraph` step's waypoints and crossing anchors onto the current navmesh and records the resulting path status and any missing or suspicious anchors
+  - `.\scripts\Import-NavMeshExport.ps1` copies that live export into `artifacts\navigation\navmesh_export.live.json` for repo-side inspection
   - `ObjectTracker` beeps now follow the tracked object or current waypoint chosen by the watcher, use stereo panning for left or right guidance, map pitch to the target's height relative to the camera, map beep rate to target proximity, and raise volume as the player gets closer
   - practical consequence:
     - the navigation graph currently uses coarse authored zones such as `office`
@@ -478,6 +491,8 @@ Important consequence:
 - The generated graph now carries enough metadata for runtime code to distinguish open passages, doors, stairs, and the crawlspace teleporter without hardcoded room-pair logic in the watcher.
 - In-room guidance may still benefit from live `triggerzone.Position` or runtime refinement, but open-passage threshold selection is now coming from scene-derived `CameraSpaces` geometry rather than from coarse-room fallback guesses.
 - Asset data is sufficient to build and regenerate the current waypoint graph from local tooling.
+- The repo now also has a live runtime export path for the actual Unity navmesh, so transition anchors can be checked against the walkable surface instead of only against scene-geometry heuristics.
+- The current asset-side evidence says `ThirdPersonGreybox` does not expose a baked `NavMeshData` link, so "extract the baked navmesh from assets" is not presently a viable path for this scene.
 
 ### Current interactable
 

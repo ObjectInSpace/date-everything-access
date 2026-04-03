@@ -207,6 +207,34 @@ namespace DateEverythingAccess
         }
 
         /// <summary>
+        /// Returns every directed step currently loaded from the live navigation graph.
+        /// </summary>
+        public static List<PathStep> GetAllPathSteps()
+        {
+            Initialize();
+
+            var steps = new List<PathStep>(_links.Count);
+            for (int i = 0; i < _links.Count; i++)
+            {
+                Link link = _links[i];
+                steps.Add(new PathStep(
+                    link.FromZone,
+                    link.ToZone,
+                    link.FromWaypoint,
+                    link.ToWaypoint,
+                    link.FromCrossingAnchor,
+                    link.ToCrossingAnchor,
+                    link.Cost,
+                    link.Kind,
+                    link.ConnectorName,
+                    link.RequiresInteraction,
+                    link.TransitionWaitSeconds));
+            }
+
+            return steps;
+        }
+
+        /// <summary>
         /// Finds the shortest room path between two zones.
         /// </summary>
         public static List<string> FindPath(string startZone, string endZone)
