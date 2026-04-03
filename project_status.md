@@ -32,7 +32,7 @@
 ## Current Phase
 
 **Phase:** Early Feature Work
-**Currently working on:** Navigation now includes waypoint-aware routing, transition metadata, connector interaction recovery, and improved directional tracking. The remaining work is concentrated on in-game validation plus broader gameplay/system coverage.
+**Currently working on:** Navigation now includes waypoint-aware routing, transition metadata, connector interaction recovery, and improved directional tracking with target-height pitch and proximity-based beep cadence. The remaining work is concentrated on in-game validation plus broader gameplay/system coverage.
 **Blocked by:** In-game testing for navigation and auto-walk behavior, especially door, stairs, and crawlspace transitions, explicit runtime testing for unseen or unspoken interactables, and optional later verification for music or art screens if they become available in the current save.
 
 ## Codebase Analysis Progress
@@ -85,7 +85,7 @@
 - Automatic nearby interactable announcements
 - Automatic Dateviators equip/charge state announcements
 - Room navigation routing based on `navigation_graph.json` waypoints plus live `CameraSpaces` zone positions
-- Auto-walk guidance and directional object-tracker beeps for the next navigation step
+- Auto-walk guidance and directional object-tracker beeps for the next navigation step, with pitch tied to target height and cadence tied to proximity
 - Transition-aware auto-walk with teleporter waits, connector interaction retries, and stronger left or right tracker cues
 
 ## Pending Tests
@@ -97,7 +97,7 @@
 - Verify in runtime that `Ctrl+F6` routes to the current tutorial objective when available and otherwise starts navigation to the selected room target.
 - Verify in runtime that `Ctrl+Alt+F6` can start and stop auto-walk cleanly, advances between rooms, and stops with the expected arrival or blocked announcements.
 - Verify in runtime that connector handling works on real transitions: closed doors should recover cleanly, stairs should continue without false blocks, and the crawlspace teleporter should no longer stop navigation during its animation.
-- Verify in runtime that the updated object tracker gives usable left or right guidance and does not become confusing during transition interactions.
+- Verify in runtime that the updated object tracker gives usable left or right guidance, clear higher or lower pitch cues for target height, and intuitive faster or slower cadence for proximity without becoming confusing during transition interactions.
 - Verify in runtime that phone app speech still behaves correctly after removing the redundant per-app watcher detail paths.
 - Test how nearby interactable announcements behave for objects the player has not scanned or spoken to yet, especially that unmet datables use object names and met datables switch to character names.
 - Identify more gameplay states and visible text that still need to be surfaced to speech.
@@ -105,6 +105,7 @@
 
 ## Recent Test Results
 
+- Passed locally on 2026-04-03: changed `ObjectTracker` so navigation beep pitch now follows the tracked target's vertical position relative to the camera while beep rate now follows true target proximity, updated `docs\game-api.md` to match, and `dotnet build .\DateEverythingAccess.csproj --no-restore -p:SkipCopyToPlugins=true` succeeded with 0 warnings and 0 errors.
 - Passed locally on 2026-04-03: `.\scripts\Build-NavigationGraph.ps1` now emits `StepKind`, `ConnectorName`, `RequiresInteraction`, and `TransitionWaitSeconds` metadata, regenerated `artifacts\navigation\navigation_graph.generated.json`, and the updated graph was copied into the live game-side `D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json`.
 - Passed locally on 2026-04-03: `NavigationGraph` now parses transition metadata, `AccessibilityWatcher` now treats teleporter links as interaction-driven transitions, holds navigation through temporary loss of player control, retries nearby door connectors before declaring a block, and `ObjectTracker` now adds stereo left or right guidance; `dotnet build .\DateEverythingAccess.csproj --no-restore -p:SkipCopyToPlugins=true` succeeded with 0 warnings and 0 errors, and the rebuilt `DateEverythingAccess.dll` was copied into `D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\`.
 - Passed locally on 2026-04-02: `.\scripts\Test-ModSetup.ps1 -GamePath 'D:\SteamLibrary\steamapps\Common\Date Everything'` reported 18 successful checks, 0 warnings, and 0 errors for the BepInEx, Tolk, project-reference, and decompiled-source setup.
@@ -207,6 +208,7 @@
 - Portable release packaging now lives in `.\scripts\Build-PortableRelease.ps1` and `artifacts\release-src\v0.1.0\portable\`; use that path when rebuilding or revising the self-contained loader bundle.
 - `navigation_graph.json` is loaded from the game-side `BepInEx\plugins\` directory. The live file was replaced on 2026-04-02 with the generated waypoint graph from `.\scripts\Build-NavigationGraph.ps1`, and the repo copy lives at `artifacts\navigation\navigation_graph.generated.json`.
 - The generated graph now includes transition metadata (`StepKind`, `ConnectorName`, `RequiresInteraction`, `TransitionWaitSeconds`) so the runtime can distinguish open passages, doors, stairs, and teleporter links.
+- The navigation tracker now maps pitch to target height relative to the camera and beep cadence to true target proximity; the next in-game pass should confirm that the higher or lower cue remains readable during stairs, upper-floor routes, and crawlspace transitions.
 - Navigation asset inputs can now be regenerated locally with `.\scripts\Export-SceneNavigationData.ps1`; the current generated output is in `artifacts\navigation\thirdpersongreybox-navigation-data.json`, and the curated connector shortlist lives in `artifacts\navigation\README.md`.
 - AssetRipper's exported `ThirdPersonGreybox.unity` scene confirms that `CameraSpaces.zones` contains all JSON graph rooms plus many finer-grained room variants. If navigation quality still needs improvement after runtime testing, the next evidence-based step is to refine the open-passage heuristics or promote more extra room variants into explicit intermediate nodes.
 - The crawlspace edge is special-cased in assets through `Teleporter.LocationDown`, `Teleporter.LocationUp`, and explicit teleport rotations, so it can be treated as an authored transition instead of an inferred hallway-style edge.

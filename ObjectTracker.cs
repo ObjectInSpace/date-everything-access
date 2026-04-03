@@ -15,6 +15,7 @@ namespace DateEverythingAccess
         private const float MinBeepRate = 0.5f;
         private const float MaxBeepRate = 8f;
         private const float MaxTrackingDistance = 100f;
+        private const float MaxVerticalPitchOffset = 6f;
         private const float ClipDurationSeconds = 0.05f;
 
         private static GameObject _trackerObject;
@@ -23,7 +24,6 @@ namespace DateEverythingAccess
         private static float _nextBeepTime;
         private static float _currentBeepRate;
         private static Vector3 _targetPosition;
-        private static NavigationGraph.StepKind _stepKind;
         private static bool _requiresInteraction;
         private static bool _isTracking;
 
@@ -66,7 +66,6 @@ namespace DateEverythingAccess
                 Initialize();
 
             _targetPosition = targetPosition;
-            _stepKind = stepKind;
             _requiresInteraction = requiresInteraction;
             _isTracking = true;
             _nextBeepTime = 0f;
@@ -100,28 +99,21 @@ namespace DateEverythingAccess
             Vector3 toTarget = _targetPosition - mainCamera.transform.position;
             Vector3 flatTarget = Vector3.ProjectOnPlane(toTarget, Vector3.up);
             Vector3 flatForward = Vector3.ProjectOnPlane(mainCamera.transform.forward, Vector3.up);
-            float distance = flatTarget.magnitude;
-            float normalizedDistance = Mathf.Clamp01(1f - (distance / MaxTrackingDistance));
+            float distance = toTarget.magnitude;
+            float proximityAmount = Mathf.Clamp01(1f - (distance / MaxTrackingDistance));
             float signedAngle = 0f;
-            float facingAmount = 1f;
 
             if (flatTarget.sqrMagnitude > 0.0001f && flatForward.sqrMagnitude > 0.0001f)
-            {
                 signedAngle = Vector3.SignedAngle(flatForward.normalized, flatTarget.normalized, Vector3.up);
-                facingAmount = 1f - Mathf.Clamp01(Mathf.Abs(signedAngle) / 180f);
-            }
 
             float panAmount = Mathf.Clamp(signedAngle / 75f, -1f, 1f);
             _audioSource.panStereo = panAmount;
 
-            float pitchFloor = _requiresInteraction ? 0.7f : MinPitch;
-            float pitchCeiling = _stepKind == NavigationGraph.StepKind.Stairs ? 1.4f : MaxPitch;
-            _audioSource.pitch = Mathf.Lerp(pitchFloor, pitchCeiling, facingAmount);
+            float verticalAmount = Mathf.InverseLerp(-MaxVerticalPitchOffset, MaxVerticalPitchOffset, toTarget.y);
+            _audioSource.pitch = Mathf.Lerp(MinPitch, MaxPitch, verticalAmount);
             _audioSource.volume = _requiresInteraction ? 0.4f : 0.3f;
 
-            _currentBeepRate = Mathf.Lerp(MinBeepRate, MaxBeepRate, normalizedDistance);
-            if (_requiresInteraction)
-                _currentBeepRate = Mathf.Min(MaxBeepRate, _currentBeepRate + 1f);
+            _currentBeepRate = Mathf.Lerp(MinBeepRate, MaxBeepRate, proximityAmount);
 
             if (Time.unscaledTime < _nextBeepTime)
                 return;

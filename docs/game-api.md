@@ -452,7 +452,7 @@ This is the cleanest room identifier found for house navigation speech.
   - `NavigationGraph.FindPathSteps(...)` now parses and returns per-link `FromWaypoint`, `ToWaypoint`, `Cost`, transition type, connector name, and transition timing data from the live JSON
   - `AccessibilityWatcher` now targets the current step waypoint instead of only the next room center
   - `AccessibilityWatcher` treats teleporter links as interaction-driven transitions, waits through the crawlspace animation while player control is disabled, and can retry door interactions before declaring navigation blocked
-  - `ObjectTracker` beeps now follow the current navigation step target chosen by the watcher and use stereo panning plus facing-sensitive pitch for stronger left/right guidance
+  - `ObjectTracker` beeps now follow the current navigation step target chosen by the watcher, use stereo panning for left or right guidance, map pitch to the target's height relative to the camera, and map beep rate to target proximity
 - Generic interactable placement data
   - many serialized `Interactable.interactedPosition` values in the scene export are still `{x: 0, y: 0, z: 0}`
   - practical consequence:
