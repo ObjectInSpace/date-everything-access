@@ -52,6 +52,9 @@ namespace DateEverythingAccess
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool PostThreadMessage(uint idThread, uint msg, UIntPtr wParam, IntPtr lParam);
 
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
+
         [DllImport("kernel32.dll")]
         private static extern uint GetCurrentThreadId();
 
@@ -235,6 +238,9 @@ namespace DateEverythingAccess
 
             if (hotkeyId == NavigateToObjectiveHotkeyId)
             {
+                if (IsModifierKeyDown(0x10) || IsModifierKeyDown(0x12))
+                    return;
+
                 Logger.LogInfo("Navigate to objective hotkey detected");
                 AccessibilityWatcher.RequestNavigateToObjective();
                 return;
@@ -242,6 +248,9 @@ namespace DateEverythingAccess
 
             if (hotkeyId == SelectNavigationTargetHotkeyId)
             {
+                if (!IsModifierKeyDown(0x10) || IsModifierKeyDown(0x12))
+                    return;
+
                 Logger.LogInfo("Select navigation target hotkey detected");
                 AccessibilityWatcher.RequestSelectNavigationTarget();
                 return;
@@ -249,9 +258,17 @@ namespace DateEverythingAccess
 
             if (hotkeyId == AutoWalkHotkeyId)
             {
+                if (!IsModifierKeyDown(0x12) || IsModifierKeyDown(0x10))
+                    return;
+
                 Logger.LogInfo("Auto-walk hotkey detected");
                 AccessibilityWatcher.RequestAutoWalk();
             }
+        }
+
+        private static bool IsModifierKeyDown(int virtualKey)
+        {
+            return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
         }
 
         private void AnnounceHelp()

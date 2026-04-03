@@ -5,7 +5,9 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using TMPro;
+using T17.Services;
 using T17.UI;
+using Team17.Scripts.Services.Input;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -24,10 +26,33 @@ namespace DateEverythingAccess
 
         private enum NavigationTargetKind
         {
+            DirectObject,
             ExitWaypoint,
             TransitionInteractable,
             EntryWaypoint,
             ZoneFallback
+        }
+
+        private enum TutorialObjectiveKind
+        {
+            None,
+            Computer,
+            FrontDoor,
+            HouseExit,
+            Dorian,
+            Phone,
+            Maggie,
+            Bed,
+            Skylar,
+            AnyUnmetDatable,
+            AnyUnrealizedDatable
+        }
+
+        private sealed class RoomObjectTarget
+        {
+            public InteractableObj Interactable;
+            public string Label;
+            public string ZoneName;
         }
 
         private const float PopupSelectionSuppressionSeconds = 0.75f;
@@ -49,6 +74,7 @@ namespace DateEverythingAccess
         private const float AutoWalkBlockedTimeoutSeconds = 2f;
         private const float AutoWalkInteractionRetrySeconds = 0.75f;
         private const float AutoWalkConnectorSearchDistance = 4f;
+        private const float InteractableZoneFallbackDistance = 8f;
         private const int AutoWalkMaxRecoveryAttempts = 2;
         private const int VkUp = 0x26;
         private const int VkDown = 0x28;
@@ -56,6 +82,7 @@ namespace DateEverythingAccess
         private const int VkRight = 0x27;
         private const int VkReturn = 0x0D;
         private const int VkSpace = 0x20;
+        private const int VkEscape = 0x1B;
 
         private static readonly Regex RichTextRegex = new Regex("<[^>]+>", RegexOptions.Compiled);
 
@@ -69,6 +96,8 @@ namespace DateEverythingAccess
         private static FieldInfo _tutorialSignpostField;
         private static FieldInfo _tutorialSignpostTextField;
         private static FieldInfo _tutorialSubtitleTextField;
+        private static FieldInfo _tutorialFrontDoorField;
+        private static FieldInfo _tutorialComputerField;
         private static FieldInfo _engagementTitleField;
         private static FieldInfo _engagementStateField;
         private static FieldInfo _specStatTooltipsField;
@@ -110,6 +139,14 @@ namespace DateEverythingAccess
         private static bool _choiceRightWasDown;
         private static bool _choiceReturnWasDown;
         private static bool _choiceSpaceWasDown;
+        private static bool _roomPickerUpWasDown;
+        private static bool _roomPickerDownWasDown;
+        private static bool _roomPickerReturnWasDown;
+        private static bool _roomPickerSpaceWasDown;
+        private static bool _roomPickerEscapeWasDown;
+        private static int _virtualChatChoiceIndex = -1;
+        private static string _virtualChatChoiceContextKey;
+        private static AccessibilityWatcher _instance;
 
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int vKey);
@@ -156,25 +193,60 @@ namespace DateEverythingAccess
         private float _lastAutoWalkProgressTime;
         private float _autoWalkTransitionUntil;
         private SpecsAnnouncementMode _lastSpecsAnnouncementMode;
+        private InputModeHandle _roomObjectPickerInputHandle;
+        private InteractableObj _trackedInteractable;
+        private string _trackedInteractableId;
+        private string _trackedInteractableLabel;
+        private string _trackedInteractableZone;
+        private string _lastRoomObjectListZone;
         private string _navigationTargetZone;
         private string _navigationTargetLabel;
         private string _lastNavigationNextZone;
+        private string _lastNavigationAnnouncementLabel;
+        private string _committedEntryWaypointStepKey;
         private Vector3 _lastAutoWalkPosition;
         private List<NavigationGraph.PathStep> _navigationPath;
+        private List<RoomObjectTarget> _roomObjectTargets;
         private int _autoWalkRecoveryAttempts;
+        private bool _isRoomObjectPickerOpen;
         private bool _isNavigationActive;
         private bool _isAutoWalking;
 
         internal static void EnsureCreated()
         {
-            if (FindObjectOfType<AccessibilityWatcher>() != null)
+            if (_instance != null)
                 return;
+
+            AccessibilityWatcher existingWatcher = FindObjectOfType<AccessibilityWatcher>();
+            if (existingWatcher != null)
+            {
+                _instance = existingWatcher;
+                return;
+            }
 
             var watcherObject = new GameObject("DateEverythingAccessWatcher");
             watcherObject.hideFlags = HideFlags.HideAndDontSave;
             DontDestroyOnLoad(watcherObject);
             watcherObject.AddComponent<AccessibilityWatcher>();
             Main.Log.LogInfo("Accessibility watcher created");
+        }
+
+        private void Awake()
+        {
+            if (_instance != null && _instance != this)
+            {
+                Main.Log.LogWarning("Destroying duplicate accessibility watcher instance.");
+                Destroy(gameObject);
+                return;
+            }
+
+            _instance = this;
+        }
+
+        private void OnDestroy()
+        {
+            if (_instance == this)
+                _instance = null;
         }
 
         internal static void RequestRepeatLastSpeech()
@@ -184,25 +256,21 @@ namespace DateEverythingAccess
 
         internal static void RequestNavigateToObjective()
         {
-            EnsureCreated();
             Interlocked.Exchange(ref _navigateToObjectiveRequested, 1);
         }
 
         internal static void RequestSelectNavigationTarget()
         {
-            EnsureCreated();
             Interlocked.Exchange(ref _selectNavigationTargetRequested, 1);
         }
 
         internal static void RequestAutoWalk()
         {
-            EnsureCreated();
             Interlocked.Exchange(ref _autoWalkRequested, 1);
         }
 
         internal static void RequestDateADexEntryAnnouncement()
         {
-            EnsureCreated();
             Interlocked.Exchange(ref _pendingDateADexEntryAnnouncementRequested, 1);
             _pendingDateADexEntryAnnouncementNotBefore = Time.unscaledTime + 0.05f;
             _pendingDateADexEntryAnnouncementExpiresAt = Time.unscaledTime + 1.5f;
@@ -221,6 +289,10 @@ namespace DateEverythingAccess
             if (isSettingsMenuOpen)
             {
                 ModConfig.Update();
+            }
+            else if (_isRoomObjectPickerOpen)
+            {
+                UpdateRoomObjectPicker();
             }
             else
             {
@@ -247,7 +319,7 @@ namespace DateEverythingAccess
             AnnounceSpecsDetailIfNeeded();
             AnnounceCreditsIfNeeded();
             HandlePendingDateADexEntryAnnouncement();
-            if (!isSettingsMenuOpen)
+            if (!isSettingsMenuOpen && !_isRoomObjectPickerOpen)
             {
                 AnnounceSelectionIfNeeded();
             }
@@ -361,39 +433,173 @@ namespace DateEverythingAccess
         {
             Loc.RefreshLanguage();
 
-            if (!TryGetNavigationTargets(out List<string> targets) || targets.Count == 0)
+            string currentZone = GetCurrentZoneNameInternal();
+            if (!TryGetRoomObjectTargets(currentZone, out List<RoomObjectTarget> targets) || targets.Count == 0)
             {
-                ScreenReader.Say(Loc.Get("navigation_no_objective"));
+                ScreenReader.Say(Loc.Get("navigation_no_room_objects"));
+                return;
+            }
+
+            if (!string.Equals(_lastRoomObjectListZone, currentZone, StringComparison.OrdinalIgnoreCase))
+                _navigationSelectionIndex = -1;
+
+            int currentIndex = FindTrackedObjectIndex(targets);
+
+            _navigationSelectionIndex = currentIndex >= 0
+                ? Mathf.Clamp(currentIndex, 0, targets.Count - 1)
+                : 0;
+
+            _roomObjectTargets = targets;
+            _lastRoomObjectListZone = currentZone;
+            OpenRoomObjectPicker();
+        }
+
+        private void OpenRoomObjectPicker()
+        {
+            if (_roomObjectTargets == null || _roomObjectTargets.Count == 0)
+            {
+                ScreenReader.Say(Loc.Get("navigation_no_room_objects"));
+                return;
+            }
+
+            _isRoomObjectPickerOpen = true;
+            AcquireRoomObjectPickerInputBlock();
+            SyncRoomObjectPickerKeyStates();
+            AnnounceCurrentRoomObjectPickerItem();
+        }
+
+        private void CloseRoomObjectPicker(bool announceClosed)
+        {
+            if (!_isRoomObjectPickerOpen)
+                return;
+
+            _isRoomObjectPickerOpen = false;
+            ReleaseRoomObjectPickerInputBlock();
+            SyncRoomObjectPickerKeyStates();
+            if (announceClosed)
+                ScreenReader.Say(Loc.Get("navigation_room_object_picker_closed"));
+        }
+
+        private void UpdateRoomObjectPicker()
+        {
+            if (_roomObjectTargets == null || _roomObjectTargets.Count == 0)
+            {
+                CloseRoomObjectPicker(announceClosed: false);
                 return;
             }
 
             string currentZone = GetCurrentZoneNameInternal();
-            int currentIndex = string.IsNullOrEmpty(_navigationTargetZone)
-                ? -1
-                : FindZoneIndex(targets, _navigationTargetZone);
+            if (string.IsNullOrEmpty(currentZone) ||
+                !string.Equals(currentZone, _lastRoomObjectListZone, StringComparison.OrdinalIgnoreCase))
+            {
+                CloseRoomObjectPicker(announceClosed: true);
+                return;
+            }
 
-            _navigationSelectionIndex = currentIndex >= 0
-                ? (currentIndex + 1) % targets.Count
-                : 0;
+            if (WasRoomPickerKeyPressed(KeyCode.UpArrow, VkUp, ref _roomPickerUpWasDown))
+            {
+                _navigationSelectionIndex = (_navigationSelectionIndex + _roomObjectTargets.Count - 1) % _roomObjectTargets.Count;
+                AnnounceCurrentRoomObjectPickerItem();
+                return;
+            }
 
-            _navigationTargetZone = targets[_navigationSelectionIndex];
-            _navigationTargetLabel = BuildNavigationTargetLabel(_navigationTargetZone, currentZone);
-            StopNavigationRuntime();
+            if (WasRoomPickerKeyPressed(KeyCode.DownArrow, VkDown, ref _roomPickerDownWasDown))
+            {
+                _navigationSelectionIndex = (_navigationSelectionIndex + 1) % _roomObjectTargets.Count;
+                AnnounceCurrentRoomObjectPickerItem();
+                return;
+            }
 
-            string announcement = Loc.Get("navigation_target_option", _navigationSelectionIndex + 1, targets.Count, _navigationTargetLabel);
-            ScreenReader.Say(Loc.Get("navigation_select_target_title") + ". " + announcement);
+            if (WasRoomPickerKeyPressed(KeyCode.Return, VkReturn, ref _roomPickerReturnWasDown) ||
+                WasRoomPickerKeyPressed(KeyCode.KeypadEnter, VkReturn, ref _roomPickerReturnWasDown) ||
+                WasRoomPickerKeyPressed(KeyCode.Space, VkSpace, ref _roomPickerSpaceWasDown))
+            {
+                SelectCurrentRoomObjectPickerItem();
+                return;
+            }
+
+            if (WasRoomPickerKeyPressed(KeyCode.Escape, VkEscape, ref _roomPickerEscapeWasDown))
+                CloseRoomObjectPicker(announceClosed: true);
+        }
+
+        private void AnnounceCurrentRoomObjectPickerItem()
+        {
+            if (_roomObjectTargets == null || _roomObjectTargets.Count == 0)
+                return;
+
+            _navigationSelectionIndex = Mathf.Clamp(_navigationSelectionIndex, 0, _roomObjectTargets.Count - 1);
+            RoomObjectTarget target = _roomObjectTargets[_navigationSelectionIndex];
+            string announcement = Loc.Get("navigation_room_object_option", _navigationSelectionIndex + 1, _roomObjectTargets.Count, target.Label);
+            ScreenReader.Say(Loc.Get("navigation_room_object_list_title", GetCurrentRoomName()) + ". " + announcement);
+        }
+
+        private void SelectCurrentRoomObjectPickerItem()
+        {
+            if (_roomObjectTargets == null || _roomObjectTargets.Count == 0)
+            {
+                CloseRoomObjectPicker(announceClosed: false);
+                return;
+            }
+
+            _navigationSelectionIndex = Mathf.Clamp(_navigationSelectionIndex, 0, _roomObjectTargets.Count - 1);
+            RoomObjectTarget target = _roomObjectTargets[_navigationSelectionIndex];
+            SetTrackedInteractable(target.Interactable, target.ZoneName, target.Label);
+            CloseRoomObjectPicker(announceClosed: false);
+            BeginNavigation(target.ZoneName, target.Label);
+        }
+
+        private void AcquireRoomObjectPickerInputBlock()
+        {
+            ReleaseRoomObjectPickerInputBlock();
+
+            if (Services.InputService == null)
+                return;
+
+            _roomObjectPickerInputHandle = Services.InputService.PushMode(IMirandaInputService.EInputMode.None, "DateEverythingAccess.RoomObjectPicker");
+        }
+
+        private void ReleaseRoomObjectPickerInputBlock()
+        {
+            if (_roomObjectPickerInputHandle == null)
+                return;
+
+            _roomObjectPickerInputHandle.SafeDispose();
+            _roomObjectPickerInputHandle = null;
+        }
+
+        private static bool WasRoomPickerKeyPressed(KeyCode keyCode, int virtualKey, ref bool wasDown)
+        {
+            bool isDown = (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+            bool pressed = Input.GetKeyDown(keyCode) || (isDown && !wasDown);
+            wasDown = isDown;
+            return pressed;
+        }
+
+        private static void SyncRoomObjectPickerKeyStates()
+        {
+            _roomPickerUpWasDown = IsVirtualKeyDown(VkUp);
+            _roomPickerDownWasDown = IsVirtualKeyDown(VkDown);
+            _roomPickerReturnWasDown = IsVirtualKeyDown(VkReturn);
+            _roomPickerSpaceWasDown = IsVirtualKeyDown(VkSpace);
+            _roomPickerEscapeWasDown = IsVirtualKeyDown(VkEscape);
+        }
+
+        private static bool IsVirtualKeyDown(int virtualKey)
+        {
+            return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
         }
 
         private void StartNavigationToCurrentTarget()
         {
             Loc.RefreshLanguage();
 
-            if (!TryEnsureNavigationTarget(out string targetZone, out string targetLabel))
+            if (!TryResolveCurrentObjectiveInteractable(out InteractableObj interactable, out string targetZone, out string targetLabel))
             {
                 ScreenReader.Say(Loc.Get("navigation_no_objective"));
                 return;
             }
 
+            SetTrackedInteractable(interactable, targetZone, targetLabel);
             BeginNavigation(targetZone, targetLabel);
         }
 
@@ -451,12 +657,25 @@ namespace DateEverythingAccess
                 return;
             }
 
-            if (!TryRefreshNavigationPath(forceAnnounce: false))
+            if (NeedsNavigationPathRefresh())
             {
-                if (_isAutoWalking)
-                    StopNavigationWithAnnouncement("navigation_blocked");
-                else
-                    StopNavigationRuntime();
+                if (!TryRefreshNavigationPath(forceAnnounce: false))
+                {
+                    if (_isAutoWalking)
+                        StopNavigationWithAnnouncement("navigation_blocked");
+                    else
+                        StopNavigationRuntime();
+                    return;
+                }
+            }
+            else
+            {
+                UpdateNavigationTracker();
+            }
+
+            if (IsTrackedObjectReached())
+            {
+                StopNavigationWithAnnouncement("navigation_arrived");
             }
         }
 
@@ -488,6 +707,12 @@ namespace DateEverythingAccess
 
             if (toTarget.sqrMagnitude <= AutoWalkArrivalDistance * AutoWalkArrivalDistance)
             {
+                if (targetKind == NavigationTargetKind.DirectObject)
+                {
+                    StopNavigationWithAnnouncement("navigation_arrived");
+                    return;
+                }
+
                 if (targetKind == NavigationTargetKind.TransitionInteractable)
                 {
                     if (!TryAttemptTransitionInteraction(currentStep, allowOptionalDoorInteraction: false) &&
@@ -500,6 +725,17 @@ namespace DateEverythingAccess
                 }
 
                 if (targetKind == NavigationTargetKind.ExitWaypoint)
+                {
+                    if (!TryGetNextNavigationPosition(out nextPosition, out targetKind))
+                    {
+                        if (!TryRecoverAutoWalk(currentStep, targetKind))
+                            StopNavigationWithAnnouncement("navigation_blocked");
+                        return;
+                    }
+                }
+                else if (targetKind == NavigationTargetKind.EntryWaypoint &&
+                    currentStep != null &&
+                    !IsCurrentZoneEquivalentTo(currentStep.ToZone))
                 {
                     if (!TryGetNextNavigationPosition(out nextPosition, out targetKind))
                     {
@@ -575,7 +811,7 @@ namespace DateEverythingAccess
             }
         }
 
-        private bool BeginNavigation(string targetZone, string targetLabel)
+        private bool BeginNavigation(string targetZone, string targetLabel, bool announceFailure = true)
         {
             _navigationTargetZone = targetZone;
             _navigationTargetLabel = targetLabel;
@@ -583,23 +819,26 @@ namespace DateEverythingAccess
             if (!CanUseNavigationNow())
             {
                 StopNavigationRuntime();
-                ScreenReader.Say(Loc.Get("navigation_blocked"));
-                return false;
-            }
-
-            string currentZone = GetCurrentZoneNameInternal();
-            if (!string.IsNullOrEmpty(currentZone) &&
-                string.Equals(currentZone, _navigationTargetZone, StringComparison.OrdinalIgnoreCase))
-            {
-                StopNavigationRuntime();
-                ScreenReader.Say(Loc.Get("navigation_arrived"));
+                if (announceFailure)
+                    ScreenReader.Say(Loc.Get("navigation_blocked"));
                 return false;
             }
 
             if (!TryRefreshNavigationPath(forceAnnounce: true))
             {
+                string currentZone = GetCurrentZoneNameInternal();
+                if (!string.IsNullOrEmpty(currentZone) &&
+                    AreZonesEquivalent(currentZone, _navigationTargetZone))
+                {
+                    StopNavigationRuntime();
+                    if (announceFailure)
+                        ScreenReader.Say(Loc.Get("navigation_arrived"));
+                    return false;
+                }
+
                 StopNavigationRuntime();
-                ScreenReader.Say(Loc.Get("navigation_blocked"));
+                if (announceFailure)
+                    ScreenReader.Say(Loc.Get("navigation_blocked"));
                 return false;
             }
 
@@ -610,28 +849,67 @@ namespace DateEverythingAccess
         private bool TryRefreshNavigationPath(bool forceAnnounce)
         {
             string currentZone = GetCurrentZoneNameInternal();
-            if (string.IsNullOrEmpty(currentZone) || string.IsNullOrEmpty(_navigationTargetZone))
+            if (string.IsNullOrEmpty(currentZone))
                 return false;
 
-            if (string.Equals(currentZone, _navigationTargetZone, StringComparison.OrdinalIgnoreCase))
+            if (TryGetTrackedInteractable(out InteractableObj trackedInteractable) &&
+                TryGetTrackedInteractableZone(trackedInteractable, out string trackedZone))
+            {
+                _navigationTargetZone = trackedZone;
+                if (string.IsNullOrEmpty(_navigationTargetLabel))
+                    _navigationTargetLabel = GetTrackedInteractableLabel(trackedInteractable);
+            }
+
+            if (string.IsNullOrEmpty(_navigationTargetZone))
+                return false;
+
+            if (AreZonesEquivalent(currentZone, _navigationTargetZone) &&
+                TryGetTrackedInteractable(out _))
+            {
+                _navigationPath = new List<NavigationGraph.PathStep>();
+                _isNavigationActive = true;
+                _autoWalkTransitionUntil = 0f;
+                _autoWalkRecoveryAttempts = 0;
+
+                if (!AreZonesEquivalent(_lastNavigationNextZone, currentZone) ||
+                    !string.Equals(_lastNavigationAnnouncementLabel, _navigationTargetLabel, StringComparison.OrdinalIgnoreCase))
+                {
+                    _lastNavigationNextZone = currentZone;
+                    _lastNavigationAnnouncementLabel = _navigationTargetLabel;
+                    ScreenReader.Say(Loc.Get("navigation_tracking", _navigationTargetLabel), interrupt: false);
+                }
+
+                UpdateNavigationTracker();
+                return true;
+            }
+
+            if (AreZonesEquivalent(currentZone, _navigationTargetZone))
             {
                 StopNavigationWithAnnouncement("navigation_arrived");
                 return false;
             }
 
-            List<NavigationGraph.PathStep> path = NavigationGraph.FindPathSteps(currentZone, _navigationTargetZone);
+            string currentNavigationZone = GetNavigationZoneName(currentZone);
+            string targetNavigationZone = GetNavigationZoneName(_navigationTargetZone);
+            if (string.IsNullOrEmpty(currentNavigationZone) || string.IsNullOrEmpty(targetNavigationZone))
+                return false;
+
+            List<NavigationGraph.PathStep> path = NavigationGraph.FindPathSteps(currentNavigationZone, targetNavigationZone);
             if (path == null || path.Count < 1)
                 return false;
 
             _navigationPath = path;
+            _committedEntryWaypointStepKey = null;
             _isNavigationActive = true;
             _autoWalkTransitionUntil = 0f;
             _autoWalkRecoveryAttempts = 0;
 
             string nextZone = path[0].ToZone;
-            if (forceAnnounce || !string.Equals(nextZone, _lastNavigationNextZone, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(nextZone, _lastNavigationNextZone, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(_lastNavigationAnnouncementLabel, _navigationTargetLabel, StringComparison.OrdinalIgnoreCase))
             {
                 _lastNavigationNextZone = nextZone;
+                _lastNavigationAnnouncementLabel = _navigationTargetLabel;
                 ScreenReader.Say(Loc.Get("navigation_navigating", _navigationTargetLabel, BuildNavigationTargetLabel(nextZone, currentZone)), interrupt: false);
             }
 
@@ -651,7 +929,9 @@ namespace DateEverythingAccess
             _isNavigationActive = false;
             _isAutoWalking = false;
             _navigationPath = null;
+            _committedEntryWaypointStepKey = null;
             _lastNavigationNextZone = null;
+            _lastNavigationAnnouncementLabel = null;
             _lastAutoWalkProgressTime = 0f;
             _lastNavigationInteractionAttemptTime = 0f;
             _autoWalkTransitionUntil = 0f;
@@ -662,9 +942,18 @@ namespace DateEverythingAccess
 
         private bool TryEnsureNavigationTarget(out string targetZone, out string targetLabel)
         {
+            if (TryGetTrackedInteractable(out InteractableObj trackedInteractable) &&
+                TryGetTrackedInteractableZone(trackedInteractable, out targetZone))
+            {
+                _trackedInteractableZone = targetZone;
+                targetLabel = GetTrackedInteractableLabel(trackedInteractable);
+                _navigationTargetZone = targetZone;
+                _navigationTargetLabel = targetLabel;
+                return true;
+            }
+
             targetZone = _navigationTargetZone;
             targetLabel = _navigationTargetLabel;
-
             if (!string.IsNullOrEmpty(targetZone))
             {
                 if (string.IsNullOrEmpty(targetLabel))
@@ -672,125 +961,542 @@ namespace DateEverythingAccess
                 return true;
             }
 
-            if (TryResolveCurrentObjectiveTarget(out targetZone, out targetLabel))
+            if (TryResolveCurrentObjectiveInteractable(out InteractableObj objectiveInteractable, out targetZone, out targetLabel))
             {
-                _navigationTargetZone = targetZone;
-                _navigationTargetLabel = targetLabel;
+                SetTrackedInteractable(objectiveInteractable, targetZone, targetLabel);
                 return true;
             }
 
             return false;
         }
 
-        private bool TryResolveCurrentObjectiveTarget(out string targetZone, out string targetLabel)
+        private bool TryResolveCurrentObjectiveInteractable(out InteractableObj interactable, out string targetZone, out string targetLabel)
         {
+            interactable = null;
             targetZone = null;
             targetLabel = null;
+            string objectiveText = null;
+            TryGetCurrentTutorialObjectiveText(out objectiveText);
 
-            if (TryFindTutorialObjectiveInteractable(out InteractableObj interactable) &&
-                TryGetZoneNameForPosition(interactable.transform.position, out targetZone))
+            if (!TryResolveTutorialObjectiveKind(out TutorialObjectiveKind objectiveKind) ||
+                objectiveKind == TutorialObjectiveKind.None)
             {
-                targetLabel = GetInteractableDisplayName(interactable);
+                DebugLogger.Log(LogCategory.State, "AccessibilityWatcher", "Objective resolve failed: no tutorial objective kind. signpostText=" + (objectiveText ?? "<null>"));
+                return false;
+            }
+
+            if (!TryFindTutorialObjectiveInteractable(objectiveKind, out interactable) ||
+                interactable == null)
+            {
+                DebugLogger.Log(
+                    LogCategory.State,
+                    "AccessibilityWatcher",
+                    "Objective resolve failed: objectiveKind=" + objectiveKind +
+                    " signpostText=" + (objectiveText ?? "<null>") +
+                    " interactable=" + (interactable != null ? interactable.name : "<null>"));
+                return false;
+            }
+
+            if (!TryResolveNavigableInteractable(interactable, out InteractableObj resolvedInteractable, out targetZone))
+            {
+                DebugLogger.Log(
+                    LogCategory.State,
+                    "AccessibilityWatcher",
+                    "Objective resolve failed: objectiveKind=" + objectiveKind +
+                    " signpostText=" + (objectiveText ?? "<null>") +
+                    " interactable=" + interactable.name +
+                    " reason=no navigable zone");
+                return false;
+            }
+
+            interactable = resolvedInteractable;
+
+            targetLabel = GetTrackedInteractableLabel(interactable);
+            DebugLogger.Log(
+                LogCategory.State,
+                "AccessibilityWatcher",
+                "Objective resolve success: objectiveKind=" + objectiveKind +
+                " signpostText=" + (objectiveText ?? "<null>") +
+                " label=" + (targetLabel ?? "<null>") +
+                " zone=" + targetZone +
+                " interactable=" + interactable.name);
+            return !string.IsNullOrEmpty(targetLabel);
+        }
+
+        private static bool TryResolveTutorialObjectiveKind(out TutorialObjectiveKind objectiveKind)
+        {
+            objectiveKind = TutorialObjectiveKind.None;
+
+            if (TryResolveTutorialObjectiveKindFromSignpostText(out objectiveKind) &&
+                objectiveKind != TutorialObjectiveKind.None)
+            {
+                return true;
+            }
+
+            Save save = Singleton<Save>.Instance;
+            if (save == null)
+                return false;
+
+            bool sawIntroAnimations = save.GetTutorialThresholdState(TutorialController.TUTORIAL_STATE_0_ANIMATIONS);
+            bool wentToWork = save.GetTutorialThresholdState(TutorialController.TUTORIAL_STATE_1_WENT_TO_WORK);
+            bool sawThiscord = save.GetTutorialThresholdState(TutorialController.TUTORIAL_STATE_2_SAW_THISCORD);
+            bool wokeUpDayTwo = save.GetTutorialThresholdState(TutorialController.TUTORIAL_STATE_3_WOKE_UP_DAY_TWO);
+            bool isDeluxe = save.AvailableTotalDatables() > 100;
+            int realizedTargetCount = isDeluxe ? 101 : 99;
+            int endingTargetCount = isDeluxe ? 101 : 99;
+            int finalExitEndingCount = isDeluxe ? 102 : 100;
+
+            if (sawIntroAnimations && !wentToWork)
+            {
+                objectiveKind = TutorialObjectiveKind.Computer;
+                return true;
+            }
+
+            if (wentToWork && !sawThiscord)
+            {
+                if (Singleton<PhoneManager>.Instance != null && Singleton<PhoneManager>.Instance.HasNewMessageAlert())
+                {
+                    objectiveKind = TutorialObjectiveKind.Phone;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (sawThiscord && save.GetDateStatus("skylar_specs") == RelationshipStatus.Unmet)
+            {
+                objectiveKind = TutorialObjectiveKind.FrontDoor;
+                return true;
+            }
+
+            if (sawThiscord && save.GetDateStatus("dorian_door") == RelationshipStatus.Unmet)
+            {
+                if (Singleton<Dateviators>.Instance == null || !Singleton<Dateviators>.Instance.Equipped)
+                    return false;
+
+                objectiveKind = TutorialObjectiveKind.Dorian;
+                return true;
+            }
+
+            if (sawThiscord && save.GetDateStatus("phoenicia_phone") == RelationshipStatus.Unmet)
+            {
+                objectiveKind = TutorialObjectiveKind.Phone;
+                return true;
+            }
+
+            if (sawThiscord && save.GetDateStatus("maggie_mglass") == RelationshipStatus.Unmet)
+            {
+                objectiveKind = TutorialObjectiveKind.Maggie;
+                return true;
+            }
+
+            if (sawThiscord && save.GetDateStatus("betty_bed") == RelationshipStatus.Unmet)
+            {
+                objectiveKind = TutorialObjectiveKind.Bed;
+                return true;
+            }
+
+            if (sawThiscord && !wokeUpDayTwo)
+            {
+                objectiveKind = TutorialObjectiveKind.Bed;
+                return true;
+            }
+
+            if (!wokeUpDayTwo)
+                return false;
+
+            if (!GetInkVariableBool("skylar_where"))
+            {
+                objectiveKind = TutorialObjectiveKind.AnyUnmetDatable;
+                return true;
+            }
+
+            if (save.AvailableTotalMetDatables() < 10)
+            {
+                objectiveKind = TutorialObjectiveKind.Maggie;
+                return true;
+            }
+
+            if (save.GetRoomersFound().Count > 5)
+            {
+                objectiveKind = TutorialObjectiveKind.AnyUnmetDatable;
+                return true;
+            }
+
+            string realizeSkylarState = GetInkVariableString("realize_skylar_asap");
+            if (save.AvailableTotalMetDatables() >= 48 &&
+                save.AvailableTotalRealizedDatables() == 0 &&
+                string.Equals(realizeSkylarState, "on", StringComparison.OrdinalIgnoreCase))
+            {
+                objectiveKind = TutorialObjectiveKind.Skylar;
+                return true;
+            }
+
+            if (save.AvailableTotalMetDatables() >= 48 &&
+                save.AvailableTotalRealizedDatables() == realizedTargetCount)
+            {
+                objectiveKind = TutorialObjectiveKind.Skylar;
+                return true;
+            }
+
+            if (save.GetDateStatus("reggie") == RelationshipStatus.Unmet &&
+                save.AvailableTotalLoveEndings() == endingTargetCount)
+            {
+                objectiveKind = TutorialObjectiveKind.Skylar;
+                return true;
+            }
+
+            if (save.GetDateStatus("reggie") == RelationshipStatus.Unmet &&
+                save.GetDateStatusRealized("dorian") != RelationshipStatus.Realized &&
+                save.AvailableTotalFriendEndings() == endingTargetCount)
+            {
+                objectiveKind = TutorialObjectiveKind.Dorian;
+                return true;
+            }
+
+            if (save.AvailableTotalHateEndings() == finalExitEndingCount ||
+                save.AvailableTotalRealizedDatables() == finalExitEndingCount)
+            {
+                objectiveKind = TutorialObjectiveKind.HouseExit;
+                return true;
+            }
+
+            if (save.AvailableTotalMetDatables() >= 48 &&
+                string.Equals(realizeSkylarState, "complete", StringComparison.OrdinalIgnoreCase))
+            {
+                objectiveKind = TutorialObjectiveKind.AnyUnrealizedDatable;
                 return true;
             }
 
             return false;
         }
 
-        private static bool TryFindTutorialObjectiveInteractable(out InteractableObj interactable)
+        private static bool TryResolveTutorialObjectiveKindFromSignpostText(out TutorialObjectiveKind objectiveKind)
+        {
+            objectiveKind = TutorialObjectiveKind.None;
+
+            if (!TryGetCurrentTutorialObjectiveText(out string objectiveText))
+                return false;
+
+            if (ContainsToken(objectiveText, "start your new job at your computer"))
+            {
+                objectiveKind = TutorialObjectiveKind.Computer;
+                return true;
+            }
+
+            if (ContainsToken(objectiveText, "check the message on your phone") ||
+                ContainsToken(objectiveText, "awaken your phone"))
+            {
+                objectiveKind = TutorialObjectiveKind.Phone;
+                return true;
+            }
+
+            if (ContainsToken(objectiveText, "check the delivery at the front door"))
+            {
+                objectiveKind = TutorialObjectiveKind.FrontDoor;
+                return true;
+            }
+
+            if (ContainsToken(objectiveText, "awaken a door") ||
+                ContainsToken(objectiveText, "talk to dorian"))
+            {
+                objectiveKind = TutorialObjectiveKind.Dorian;
+                return true;
+            }
+
+            if (ContainsToken(objectiveText, "locate the magnifying glass") ||
+                ContainsToken(objectiveText, "speak with maggie"))
+            {
+                objectiveKind = TutorialObjectiveKind.Maggie;
+                return true;
+            }
+
+            if (ContainsToken(objectiveText, "follow the clue in roomers") ||
+                ContainsToken(objectiveText, "charge the dateviators by going to sleep"))
+            {
+                objectiveKind = TutorialObjectiveKind.Bed;
+                return true;
+            }
+
+            if (ContainsToken(objectiveText, "talk to skylar specs") ||
+                ContainsToken(objectiveText, "realize skylar specs"))
+            {
+                objectiveKind = TutorialObjectiveKind.Skylar;
+                return true;
+            }
+
+            if (ContainsToken(objectiveText, "continue to awaken dateable objects"))
+            {
+                objectiveKind = TutorialObjectiveKind.AnyUnmetDatable;
+                return true;
+            }
+
+            if (ContainsToken(objectiveText, "realize dateable objects"))
+            {
+                objectiveKind = TutorialObjectiveKind.AnyUnrealizedDatable;
+                return true;
+            }
+
+            if (ContainsToken(objectiveText, "leave your home to return the dateviators") ||
+                ContainsToken(objectiveText, "leave your home to see your effects on the world"))
+            {
+                objectiveKind = TutorialObjectiveKind.HouseExit;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryFindTutorialObjectiveInteractable(TutorialObjectiveKind objectiveKind, out InteractableObj interactable)
         {
             interactable = null;
 
-            if (Singleton<Save>.Instance == null)
-                return false;
+            if (objectiveKind == TutorialObjectiveKind.AnyUnmetDatable)
+                return TryFindNearestDateableInteractable(requireUnmet: true, requireUnrealized: false, out interactable);
 
-            string internalName = GetTutorialObjectiveInternalName();
-            if (string.IsNullOrEmpty(internalName))
-                return false;
+            if (objectiveKind == TutorialObjectiveKind.AnyUnrealizedDatable)
+                return TryFindNearestDateableInteractable(requireUnmet: false, requireUnrealized: true, out interactable);
 
-            List<InteractableObj> interactables = Singleton<GameController>.Instance != null
-                ? Singleton<GameController>.Instance.GetAllCharacters()
-                : new List<InteractableObj>(FindObjectsOfType<InteractableObj>());
+            if (TryResolveTutorialObjectiveAnchorInteractable(objectiveKind, out interactable))
+                return true;
 
-            for (int i = 0; i < interactables.Count; i++)
+            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
+            float bestScore = float.MinValue;
+            for (int i = 0; i < interactables.Length; i++)
             {
                 InteractableObj candidate = interactables[i];
                 if (candidate == null || !candidate.gameObject.activeInHierarchy)
                     continue;
 
-                if (string.Equals(candidate.InternalName(), internalName, StringComparison.OrdinalIgnoreCase))
-                {
-                    interactable = candidate;
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static string GetTutorialObjectiveInternalName()
-        {
-            Save save = Singleton<Save>.Instance;
-            if (save == null)
-                return null;
-
-            if (save.GetDateStatus("skylar_specs") == RelationshipStatus.Unmet)
-                return "skylar";
-
-            if (save.GetDateStatus("dorian_door") == RelationshipStatus.Unmet)
-                return "dorian";
-
-            if (save.GetDateStatus("phoenicia_phone") == RelationshipStatus.Unmet)
-                return "phoenicia";
-
-            if (save.GetDateStatus("maggie_mglass") == RelationshipStatus.Unmet)
-                return "maggie";
-
-            if (save.GetDateStatus("betty_bed") == RelationshipStatus.Unmet)
-                return "betty";
-
-            return null;
-        }
-
-        private static bool TryGetNavigationTargets(out List<string> targets)
-        {
-            targets = new List<string>();
-
-            if (Singleton<CameraSpaces>.Instance == null || Singleton<CameraSpaces>.Instance.zones == null)
-                return false;
-
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < Singleton<CameraSpaces>.Instance.zones.Count; i++)
-            {
-                triggerzone zone = Singleton<CameraSpaces>.Instance.zones[i];
-                if (zone == null || string.IsNullOrWhiteSpace(zone.Name))
+                float score = ScoreTutorialObjectiveInteractable(objectiveKind, candidate);
+                if (score <= 0f || score <= bestScore)
                     continue;
 
-                if (seen.Add(zone.Name))
-                    targets.Add(zone.Name);
+                bestScore = score;
+                interactable = candidate;
             }
 
-            return targets.Count > 0;
+            return interactable != null;
         }
 
-        private static int FindZoneIndex(List<string> targets, string zoneName)
+        private static bool TryFindNearestDateableInteractable(bool requireUnmet, bool requireUnrealized, out InteractableObj interactable)
         {
-            if (targets == null || string.IsNullOrEmpty(zoneName))
-                return -1;
+            interactable = null;
 
-            for (int i = 0; i < targets.Count; i++)
+            Save save = Singleton<Save>.Instance;
+            if (save == null || BetterPlayerControl.Instance == null)
+                return false;
+
+            string currentZone = GetCurrentZoneNameInternal();
+            Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
+            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
+            float bestScore = float.MinValue;
+            for (int i = 0; i < interactables.Length; i++)
             {
-                if (string.Equals(targets[i], zoneName, StringComparison.OrdinalIgnoreCase))
-                    return i;
+                InteractableObj candidate = interactables[i];
+                if (candidate == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                string internalName = candidate.InternalName();
+                if (string.IsNullOrWhiteSpace(internalName))
+                    continue;
+
+                if (!save.TryGetNameByInternalName(internalName, out string displayName) ||
+                    string.IsNullOrWhiteSpace(displayName))
+                {
+                    continue;
+                }
+
+                RelationshipStatus dateStatus = save.GetDateStatus(internalName);
+                RelationshipStatus realizedStatus = save.GetDateStatusRealized(internalName);
+                if (requireUnmet && dateStatus != RelationshipStatus.Unmet)
+                    continue;
+
+                if (requireUnrealized &&
+                    (dateStatus == RelationshipStatus.Unmet || realizedStatus == RelationshipStatus.Realized))
+                {
+                    continue;
+                }
+
+                float score = 0f;
+                if (TryGetZoneNameForInteractable(candidate, out string candidateZone) &&
+                    AreZonesEquivalent(candidateZone, currentZone))
+                {
+                    score += 50f;
+                }
+
+                score -= Vector3.Distance(playerPosition, candidate.transform.position);
+                if (score <= bestScore)
+                    continue;
+
+                bestScore = score;
+                interactable = candidate;
             }
 
-            return -1;
+            return interactable != null;
+        }
+
+        private static bool TryResolveTutorialObjectiveAnchorInteractable(TutorialObjectiveKind objectiveKind, out InteractableObj interactable)
+        {
+            interactable = null;
+
+            GameObject anchorObject = null;
+            switch (objectiveKind)
+            {
+                case TutorialObjectiveKind.Computer:
+                    EnsureReflectionCache();
+                    anchorObject = _tutorialComputerField != null && TutorialController.Instance != null
+                        ? _tutorialComputerField.GetValue(TutorialController.Instance) as GameObject
+                        : null;
+                    break;
+
+                case TutorialObjectiveKind.FrontDoor:
+                case TutorialObjectiveKind.HouseExit:
+                    EnsureReflectionCache();
+                    anchorObject = _tutorialFrontDoorField != null && TutorialController.Instance != null
+                        ? _tutorialFrontDoorField.GetValue(TutorialController.Instance) as GameObject
+                        : null;
+                    break;
+            }
+
+            if (anchorObject == null)
+                return false;
+
+            interactable = anchorObject.GetComponent<InteractableObj>();
+            if (interactable != null && interactable.gameObject.activeInHierarchy)
+                return true;
+
+            interactable = anchorObject.GetComponentInChildren<InteractableObj>(includeInactive: true);
+            if (interactable != null && interactable.gameObject.activeInHierarchy)
+                return true;
+
+            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
+            float bestDistance = float.MaxValue;
+            for (int i = 0; i < interactables.Length; i++)
+            {
+                InteractableObj candidate = interactables[i];
+                if (candidate == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                float distance = Vector3.Distance(candidate.transform.position, anchorObject.transform.position);
+                if (distance >= bestDistance || distance > 8f)
+                    continue;
+
+                bestDistance = distance;
+                interactable = candidate;
+            }
+
+            return interactable != null;
+        }
+
+        private static float ScoreTutorialObjectiveInteractable(TutorialObjectiveKind objectiveKind, InteractableObj interactable)
+        {
+            if (interactable == null)
+                return 0f;
+
+            string internalName = NormalizeText(interactable.InternalName());
+            string objectLabel = GetObjectFacingDisplayName(interactable);
+            string sceneName = NormalizeIdentifierName(interactable.name);
+            string knownName = GetKnownDateableDisplayName(interactable);
+            string currentZone = GetCurrentZoneNameInternal();
+            bool isCurrentZone = TryGetZoneNameForInteractable(interactable, out string objectZone) &&
+                AreZonesEquivalent(objectZone, currentZone);
+
+            float score = isCurrentZone ? 5f : 0f;
+
+            switch (objectiveKind)
+            {
+                case TutorialObjectiveKind.Computer:
+                    if (ContainsToken(objectLabel, "computer"))
+                        score += 100f;
+                    if (ContainsToken(sceneName, "computer"))
+                        score += 80f;
+                    break;
+
+                case TutorialObjectiveKind.FrontDoor:
+                case TutorialObjectiveKind.HouseExit:
+                    if (ContainsToken(objectLabel, "front door"))
+                        score += 140f;
+                    if (ContainsToken(sceneName, "front door") || ContainsToken(sceneName, "frontdoor"))
+                        score += 120f;
+                    if (ContainsToken(objectLabel, "door"))
+                        score += 40f;
+                    break;
+
+                case TutorialObjectiveKind.Dorian:
+                    if (string.Equals(internalName, "dorian", StringComparison.OrdinalIgnoreCase))
+                        score += 140f;
+                    if (ContainsToken(objectLabel, "door"))
+                        score += 40f;
+                    break;
+
+                case TutorialObjectiveKind.Phone:
+                    if (string.Equals(internalName, "phoenicia", StringComparison.OrdinalIgnoreCase))
+                        score += 140f;
+                    if (ContainsToken(objectLabel, "phone"))
+                        score += 110f;
+                    break;
+
+                case TutorialObjectiveKind.Maggie:
+                    if (string.Equals(internalName, "maggie", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(internalName, "maggie_mglass", StringComparison.OrdinalIgnoreCase))
+                    {
+                        score += 140f;
+                    }
+                    if (ContainsToken(objectLabel, "maggie") ||
+                        ContainsToken(sceneName, "maggie") ||
+                        ContainsToken(knownName, "maggie"))
+                    {
+                        score += 120f;
+                    }
+                    if (ContainsToken(objectLabel, "magnifying"))
+                        score += 110f;
+                    if (ContainsToken(sceneName, "magnifying") || ContainsToken(sceneName, "mglass"))
+                        score += 90f;
+                    break;
+
+                case TutorialObjectiveKind.Bed:
+                    if (string.Equals(internalName, "betty", StringComparison.OrdinalIgnoreCase))
+                        score += 140f;
+                    if (ContainsToken(objectLabel, "bed"))
+                        score += 110f;
+                    break;
+
+                case TutorialObjectiveKind.Skylar:
+                    if (string.Equals(internalName, "skylar", StringComparison.OrdinalIgnoreCase))
+                        score += 140f;
+                    if (ContainsToken(objectLabel, "specs"))
+                        score += 110f;
+                    break;
+            }
+
+            return score;
+        }
+
+        private static string GetKnownDateableDisplayName(InteractableObj interactable)
+        {
+            if (interactable == null || Singleton<Save>.Instance == null)
+                return null;
+
+            if (!Singleton<Save>.Instance.TryGetNameByInternalName(interactable.InternalName(), out string displayName))
+                return null;
+
+            return NormalizeIdentifierName(displayName);
         }
 
         private bool TryGetNextNavigationPosition(out Vector3 position, out NavigationTargetKind targetKind)
         {
             position = Vector3.zero;
             targetKind = NavigationTargetKind.ZoneFallback;
+
+            if (TryGetTrackedInteractable(out InteractableObj trackedInteractable) &&
+                TryGetTrackedInteractableZone(trackedInteractable, out string trackedZone) &&
+                AreZonesEquivalent(GetCurrentZoneNameInternal(), trackedZone))
+            {
+                position = trackedInteractable.transform.position;
+                targetKind = NavigationTargetKind.DirectObject;
+                return true;
+            }
 
             if (_navigationPath == null || _navigationPath.Count < 1)
                 return false;
@@ -801,12 +1507,39 @@ namespace DateEverythingAccess
 
             if (BetterPlayerControl.Instance != null &&
                 !string.IsNullOrEmpty(step.FromZone) &&
-                string.Equals(GetCurrentZoneNameInternal(), step.FromZone, StringComparison.OrdinalIgnoreCase))
+                IsCurrentZoneEquivalentTo(step.FromZone))
             {
+                string stepKey = BuildNavigationStepKey(step);
                 Vector3 fromWaypoint = step.FromWaypoint;
                 fromWaypoint.y = BetterPlayerControl.Instance.transform.position.y;
-                if (Vector3.Distance(BetterPlayerControl.Instance.transform.position, fromWaypoint) > AutoWalkArrivalDistance)
+                float fromDistance = Vector3.Distance(BetterPlayerControl.Instance.transform.position, fromWaypoint);
+                float toDistance = float.MaxValue;
+                if (step.ToWaypoint != Vector3.zero)
                 {
+                    Vector3 toWaypoint = step.ToWaypoint;
+                    toWaypoint.y = BetterPlayerControl.Instance.transform.position.y;
+                    toDistance = Vector3.Distance(BetterPlayerControl.Instance.transform.position, toWaypoint);
+                }
+
+                bool hasCommittedEntryWaypoint = !string.IsNullOrEmpty(_committedEntryWaypointStepKey) &&
+                    string.Equals(_committedEntryWaypointStepKey, stepKey, StringComparison.Ordinal);
+                bool shouldPreferEntryWaypoint = step.ToWaypoint != Vector3.zero &&
+                    !step.RequiresInteraction &&
+                    (hasCommittedEntryWaypoint ||
+                     fromDistance <= AutoWalkArrivalDistance ||
+                     toDistance + 0.5f < fromDistance);
+
+                if (shouldPreferEntryWaypoint)
+                {
+                    _committedEntryWaypointStepKey = stepKey;
+                    position = step.ToWaypoint;
+                    targetKind = NavigationTargetKind.EntryWaypoint;
+                    return true;
+                }
+
+                if (!shouldPreferEntryWaypoint && fromDistance > AutoWalkArrivalDistance)
+                {
+                    _committedEntryWaypointStepKey = null;
                     position = step.FromWaypoint;
                     targetKind = NavigationTargetKind.ExitWaypoint;
                     return true;
@@ -822,6 +1555,17 @@ namespace DateEverythingAccess
 
             if (step.ToWaypoint != Vector3.zero)
             {
+                if (!string.IsNullOrEmpty(step.ToZone) &&
+                    !string.IsNullOrEmpty(step.FromZone) &&
+                    !IsCurrentZoneEquivalentTo(step.FromZone) &&
+                    !IsCurrentZoneEquivalentTo(step.ToZone) &&
+                    TryGetZonePosition(step.ToZone, out position))
+                {
+                    targetKind = NavigationTargetKind.ZoneFallback;
+                    return true;
+                }
+
+                _committedEntryWaypointStepKey = BuildNavigationStepKey(step);
                 position = step.ToWaypoint;
                 targetKind = NavigationTargetKind.EntryWaypoint;
                 return true;
@@ -842,6 +1586,40 @@ namespace DateEverythingAccess
                 return null;
 
             return _navigationPath[0];
+        }
+
+        private bool NeedsNavigationPathRefresh()
+        {
+            if (_navigationPath == null || _navigationPath.Count < 1)
+                return true;
+
+            string currentZone = GetCurrentZoneNameInternal();
+            if (string.IsNullOrEmpty(currentZone) || string.IsNullOrEmpty(_navigationTargetZone))
+                return true;
+
+            if (AreZonesEquivalent(currentZone, _navigationTargetZone))
+                return true;
+
+            string currentNavigationZone = GetNavigationZoneName(currentZone);
+            if (string.IsNullOrEmpty(currentNavigationZone))
+                return false;
+
+            string targetNavigationZone = GetNavigationZoneName(_navigationTargetZone);
+            if (string.IsNullOrEmpty(targetNavigationZone))
+                return true;
+
+            NavigationGraph.PathStep currentStep = GetCurrentNavigationStep();
+            if (currentStep == null)
+                return true;
+
+            NavigationGraph.PathStep destinationStep = _navigationPath[_navigationPath.Count - 1];
+            if (destinationStep == null ||
+                !string.Equals(destinationStep.ToZone, targetNavigationZone, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return !IsZoneEquivalentToNavigationZone(currentNavigationZone, currentStep.FromZone);
         }
 
         private bool HandlePendingNavigationTransition()
@@ -877,7 +1655,7 @@ namespace DateEverythingAccess
             if (string.IsNullOrEmpty(currentZone))
                 return false;
 
-            return !string.Equals(currentZone, step.FromZone, StringComparison.OrdinalIgnoreCase);
+            return !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone);
         }
 
         private void UpdateNavigationTracker()
@@ -901,6 +1679,14 @@ namespace DateEverythingAccess
                 ? BetterPlayerControl.Instance.transform.position
                 : Vector3.zero;
             _lastAutoWalkProgressTime = Time.unscaledTime;
+        }
+
+        private static string BuildNavigationStepKey(NavigationGraph.PathStep step)
+        {
+            if (step == null)
+                return null;
+
+            return (step.FromZone ?? string.Empty) + "->" + (step.ToZone ?? string.Empty) + "|" + step.FromWaypoint + "|" + step.ToWaypoint;
         }
 
         private bool TryRecoverAutoWalk(NavigationGraph.PathStep step, NavigationTargetKind targetKind)
@@ -928,7 +1714,7 @@ namespace DateEverythingAccess
             if (!shouldAttempt &&
                 allowOptionalDoorInteraction &&
                 step.Kind == NavigationGraph.StepKind.Door &&
-                string.Equals(GetCurrentZoneNameInternal(), step.FromZone, StringComparison.OrdinalIgnoreCase))
+                IsCurrentZoneEquivalentTo(step.FromZone))
             {
                 shouldAttempt = true;
             }
@@ -1100,6 +1886,562 @@ namespace DateEverythingAccess
             return false;
         }
 
+        private static bool TryGetZoneNameForInteractable(InteractableObj interactable, out string zoneName)
+        {
+            zoneName = null;
+            if (interactable == null)
+                return false;
+
+            if (TryGetZoneNameForGameObject(interactable.gameObject, out zoneName))
+                return true;
+
+            return TryGetFallbackZoneNameForGameObject(interactable.gameObject, out zoneName);
+        }
+
+        private static bool TryGetZoneNameForGameObject(GameObject gameObject, out string zoneName)
+        {
+            zoneName = null;
+            if (gameObject == null || Singleton<CameraSpaces>.Instance == null || Singleton<CameraSpaces>.Instance.zones == null)
+                return false;
+
+            List<Vector3> candidatePoints = new List<Vector3>();
+            Transform currentTransform = gameObject.transform;
+            while (currentTransform != null)
+            {
+                AddCandidatePoint(candidatePoints, currentTransform.position);
+                currentTransform = currentTransform.parent;
+            }
+
+            List<Collider> colliders = new List<Collider>();
+            AddUniqueComponents(colliders, gameObject.GetComponentsInChildren<Collider>(includeInactive: true));
+            AddUniqueComponents(colliders, gameObject.GetComponentsInParent<Collider>(includeInactive: true));
+
+            List<Renderer> renderers = new List<Renderer>();
+            AddUniqueComponents(renderers, gameObject.GetComponentsInChildren<Renderer>(includeInactive: true));
+            AddUniqueComponents(renderers, gameObject.GetComponentsInParent<Renderer>(includeInactive: true));
+
+            int bestScore = int.MinValue;
+            string bestZone = null;
+            for (int i = 0; i < Singleton<CameraSpaces>.Instance.zones.Count; i++)
+            {
+                triggerzone zone = Singleton<CameraSpaces>.Instance.zones[i];
+                if (zone == null)
+                    continue;
+
+                Bounds bounds = new Bounds(zone.Position, zone.Scale);
+                int score = ScoreZoneMatch(bounds, zone.Position, candidatePoints, colliders, renderers);
+                if (score <= 0 || score <= bestScore)
+                    continue;
+
+                bestScore = score;
+                bestZone = zone.Name;
+            }
+
+            zoneName = bestZone;
+            return !string.IsNullOrEmpty(zoneName);
+        }
+
+        private static int ScoreZoneMatch(Bounds zoneBounds, Vector3 zonePosition, List<Vector3> candidatePoints, List<Collider> colliders, List<Renderer> renderers)
+        {
+            int score = 0;
+
+            if (candidatePoints != null)
+            {
+                for (int i = 0; i < candidatePoints.Count; i++)
+                {
+                    if (zoneBounds.Contains(candidatePoints[i]))
+                        score += 50;
+                }
+            }
+
+            if (colliders != null)
+            {
+                for (int i = 0; i < colliders.Count; i++)
+                {
+                    Collider collider = colliders[i];
+                    if (collider == null)
+                        continue;
+
+                    if (zoneBounds.Contains(collider.ClosestPointOnBounds(zonePosition)))
+                        score += 100;
+                    else if (zoneBounds.Intersects(collider.bounds))
+                        score += 10;
+                }
+            }
+
+            if (renderers != null)
+            {
+                for (int i = 0; i < renderers.Count; i++)
+                {
+                    Renderer renderer = renderers[i];
+                    if (renderer == null)
+                        continue;
+
+                    if (zoneBounds.Contains(renderer.bounds.center))
+                        score += 25;
+                    else if (zoneBounds.Intersects(renderer.bounds))
+                        score += 5;
+                }
+            }
+
+            return score;
+        }
+
+        private static bool TryResolveNavigableInteractable(InteractableObj interactable, out InteractableObj resolvedInteractable, out string zoneName)
+        {
+            resolvedInteractable = null;
+            zoneName = null;
+            if (interactable == null)
+                return false;
+
+            var candidates = new List<InteractableObj>();
+            AddUniqueComponents(candidates, new[] { interactable });
+            AddUniqueComponents(candidates, interactable.GetComponentsInParent<InteractableObj>(includeInactive: true));
+            AddUniqueComponents(candidates, interactable.GetComponentsInChildren<InteractableObj>(includeInactive: true));
+            if (interactable.transform.root != null)
+                AddUniqueComponents(candidates, interactable.transform.root.GetComponentsInChildren<InteractableObj>(includeInactive: true));
+
+            float bestScore = float.MinValue;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                InteractableObj candidate = candidates[i];
+                if (candidate == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                if (!TryGetZoneNameForInteractable(candidate, out string candidateZone))
+                    continue;
+
+                float score = ScoreNavigableInteractableCandidate(interactable, candidate, candidateZone);
+                if (score <= bestScore)
+                    continue;
+
+                bestScore = score;
+                resolvedInteractable = candidate;
+                zoneName = candidateZone;
+            }
+
+            return resolvedInteractable != null && !string.IsNullOrEmpty(zoneName);
+        }
+
+        private static float ScoreNavigableInteractableCandidate(InteractableObj preferredInteractable, InteractableObj candidate, string candidateZone)
+        {
+            if (preferredInteractable == null || candidate == null)
+                return float.MinValue;
+
+            float score = 0f;
+            if (candidate == preferredInteractable)
+                score += 1000f;
+
+            if (!string.IsNullOrEmpty(preferredInteractable.Id) &&
+                string.Equals(preferredInteractable.Id, candidate.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 800f;
+            }
+
+            if (string.Equals(preferredInteractable.InternalName(), candidate.InternalName(), StringComparison.OrdinalIgnoreCase))
+                score += 400f;
+
+            string label = GetObjectFacingDisplayName(candidate);
+            if (!string.IsNullOrEmpty(label) &&
+                !string.Equals(label, Loc.Get("unknown_object"), StringComparison.OrdinalIgnoreCase))
+            {
+                score += 100f;
+            }
+
+            string mainText = NormalizeText(candidate.mainText);
+            if (!string.IsNullOrEmpty(mainText) &&
+                !mainText.StartsWith("Default hover text for ", StringComparison.OrdinalIgnoreCase))
+            {
+                score += 100f;
+            }
+
+            string currentZone = GetCurrentZoneNameInternal();
+            if (!string.IsNullOrEmpty(currentZone) &&
+                AreZonesEquivalent(candidateZone, currentZone))
+            {
+                score += 50f;
+            }
+
+            score -= Vector3.Distance(preferredInteractable.transform.position, candidate.transform.position) * 5f;
+            return score;
+        }
+
+        private static bool TryGetFallbackZoneNameForGameObject(GameObject gameObject, out string zoneName)
+        {
+            zoneName = null;
+            if (gameObject == null || Singleton<CameraSpaces>.Instance == null || Singleton<CameraSpaces>.Instance.zones == null)
+                return false;
+
+            var candidatePoints = new List<Vector3>();
+            Transform currentTransform = gameObject.transform;
+            while (currentTransform != null)
+            {
+                AddCandidatePoint(candidatePoints, currentTransform.position);
+                currentTransform = currentTransform.parent;
+            }
+
+            for (int i = 0; i < Singleton<CameraSpaces>.Instance.zones.Count; i++)
+            {
+                triggerzone zone = Singleton<CameraSpaces>.Instance.zones[i];
+                if (zone == null)
+                    continue;
+
+                Bounds bounds = new Bounds(zone.Position, zone.Scale);
+                for (int pointIndex = 0; pointIndex < candidatePoints.Count; pointIndex++)
+                {
+                    if (!bounds.Contains(candidatePoints[pointIndex]))
+                        continue;
+
+                    zoneName = zone.Name;
+                    return !string.IsNullOrEmpty(zoneName);
+                }
+            }
+
+            float bestDistanceSquared = float.MaxValue;
+            string bestZone = null;
+            for (int i = 0; i < Singleton<CameraSpaces>.Instance.zones.Count; i++)
+            {
+                triggerzone zone = Singleton<CameraSpaces>.Instance.zones[i];
+                if (zone == null)
+                    continue;
+
+                Bounds bounds = new Bounds(zone.Position, zone.Scale);
+                for (int pointIndex = 0; pointIndex < candidatePoints.Count; pointIndex++)
+                {
+                    float distanceSquared = bounds.SqrDistance(candidatePoints[pointIndex]);
+                    if (distanceSquared >= bestDistanceSquared)
+                        continue;
+
+                    bestDistanceSquared = distanceSquared;
+                    bestZone = zone.Name;
+                }
+            }
+
+            if (bestDistanceSquared <= InteractableZoneFallbackDistance * InteractableZoneFallbackDistance)
+            {
+                zoneName = bestZone;
+                return !string.IsNullOrEmpty(zoneName);
+            }
+
+            return false;
+        }
+
+        private static void AddCandidatePoint(List<Vector3> candidatePoints, Vector3 point)
+        {
+            if (candidatePoints == null)
+                return;
+
+            for (int i = 0; i < candidatePoints.Count; i++)
+            {
+                if (Vector3.SqrMagnitude(candidatePoints[i] - point) <= 0.0001f)
+                    return;
+            }
+
+            candidatePoints.Add(point);
+        }
+
+        private static void AddUniqueComponents<T>(List<T> destination, T[] components) where T : Component
+        {
+            if (destination == null || components == null)
+                return;
+
+            for (int i = 0; i < components.Length; i++)
+            {
+                T component = components[i];
+                if (component == null || destination.Contains(component))
+                    continue;
+
+                destination.Add(component);
+            }
+        }
+
+        private void SetTrackedInteractable(InteractableObj interactable, string targetZone, string targetLabel)
+        {
+            _trackedInteractable = interactable;
+            _trackedInteractableId = interactable != null ? interactable.Id : null;
+            _trackedInteractableZone = targetZone;
+            _trackedInteractableLabel = targetLabel;
+            _navigationTargetZone = targetZone;
+            _navigationTargetLabel = targetLabel;
+        }
+
+        private bool TryGetTrackedInteractable(out InteractableObj interactable)
+        {
+            interactable = _trackedInteractable;
+            if (interactable != null &&
+                interactable.gameObject != null &&
+                interactable.gameObject.activeInHierarchy &&
+                (string.IsNullOrEmpty(_trackedInteractableId) || string.Equals(interactable.Id, _trackedInteractableId, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrEmpty(_trackedInteractableId))
+            {
+                interactable = null;
+                _trackedInteractable = null;
+                return false;
+            }
+
+            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
+            for (int i = 0; i < interactables.Length; i++)
+            {
+                InteractableObj candidate = interactables[i];
+                if (candidate == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                if (!string.Equals(candidate.Id, _trackedInteractableId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                _trackedInteractable = candidate;
+                interactable = candidate;
+                return true;
+            }
+
+            _trackedInteractable = null;
+            _trackedInteractableId = null;
+            _trackedInteractableZone = null;
+            _trackedInteractableLabel = null;
+            interactable = null;
+            return false;
+        }
+
+        private bool TryGetTrackedInteractableZone(InteractableObj interactable, out string zoneName)
+        {
+            zoneName = null;
+            if (interactable == null)
+                return false;
+
+            if (TryGetZoneNameForInteractable(interactable, out zoneName))
+            {
+                _trackedInteractableZone = zoneName;
+                return true;
+            }
+
+            if (TryResolveNavigableInteractable(interactable, out InteractableObj resolvedInteractable, out zoneName))
+            {
+                if (resolvedInteractable != null && resolvedInteractable != interactable)
+                {
+                    _trackedInteractable = resolvedInteractable;
+                    _trackedInteractableId = resolvedInteractable.Id;
+                    _trackedInteractableLabel = GetObjectFacingDisplayName(resolvedInteractable);
+                }
+
+                _trackedInteractableZone = zoneName;
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(_trackedInteractableZone))
+            {
+                zoneName = _trackedInteractableZone;
+                return true;
+            }
+
+            return false;
+        }
+
+        private string GetTrackedInteractableLabel(InteractableObj interactable)
+        {
+            if (interactable == null)
+                return _trackedInteractableLabel;
+
+            string label = GetObjectFacingDisplayName(interactable);
+            if (!string.IsNullOrEmpty(label))
+            {
+                _trackedInteractableLabel = label;
+                return label;
+            }
+
+            return _trackedInteractableLabel;
+        }
+
+        private bool IsTrackedObjectReached()
+        {
+            if (!TryGetTrackedInteractable(out InteractableObj trackedInteractable) ||
+                BetterPlayerControl.Instance == null)
+            {
+                return false;
+            }
+
+            if (!TryGetTrackedInteractableZone(trackedInteractable, out string trackedZone) ||
+                !AreZonesEquivalent(trackedZone, GetCurrentZoneNameInternal()))
+            {
+                return false;
+            }
+
+            Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
+            Vector3 targetPosition = trackedInteractable.transform.position;
+            playerPosition.y = 0f;
+            targetPosition.y = 0f;
+            return Vector3.Distance(playerPosition, targetPosition) <= AutoWalkArrivalDistance;
+        }
+
+        private int FindTrackedObjectIndex(List<RoomObjectTarget> targets)
+        {
+            if (targets == null || targets.Count == 0 || string.IsNullOrEmpty(_trackedInteractableId))
+                return -1;
+
+            for (int i = 0; i < targets.Count; i++)
+            {
+                RoomObjectTarget target = targets[i];
+                if (target != null &&
+                    target.Interactable != null &&
+                    string.Equals(target.Interactable.Id, _trackedInteractableId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private bool TryGetRoomObjectTargets(string zoneName, out List<RoomObjectTarget> targets)
+        {
+            targets = new List<RoomObjectTarget>();
+            if (string.IsNullOrEmpty(zoneName))
+                return false;
+
+            if (TryCollectRoomObjectTargets(zoneName, exactZoneOnly: true, targets))
+                return true;
+
+            string zoneFamilyKey = GetZoneFamilyKey(zoneName);
+            if (string.IsNullOrEmpty(zoneFamilyKey))
+                return false;
+
+            return TryCollectRoomObjectTargets(zoneName, exactZoneOnly: false, targets);
+        }
+
+        private bool TryCollectRoomObjectTargets(string zoneName, bool exactZoneOnly, List<RoomObjectTarget> targets)
+        {
+            if (targets == null || string.IsNullOrEmpty(zoneName))
+                return false;
+
+            targets.Clear();
+            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
+            Transform playerTransform = BetterPlayerControl.Instance != null ? BetterPlayerControl.Instance.transform : null;
+            string currentZoneFamilyKey = exactZoneOnly ? null : GetZoneFamilyKey(zoneName);
+            for (int i = 0; i < interactables.Length; i++)
+            {
+                InteractableObj candidate = interactables[i];
+                if (candidate == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                if (!TryGetZoneNameForInteractable(candidate, out string candidateZone))
+                    continue;
+
+                bool zoneMatches = string.Equals(candidateZone, zoneName, StringComparison.OrdinalIgnoreCase);
+                if (!zoneMatches && !exactZoneOnly)
+                {
+                    zoneMatches = string.Equals(GetZoneFamilyKey(candidateZone), currentZoneFamilyKey, StringComparison.OrdinalIgnoreCase);
+                }
+
+                if (!zoneMatches)
+                {
+                    continue;
+                }
+
+                string label = GetObjectFacingDisplayName(candidate);
+                if (!IsUsableRoomObjectLabel(label))
+                    continue;
+
+                if (TryFindEquivalentRoomObjectTarget(targets, candidate, label, out RoomObjectTarget existingTarget))
+                {
+                    if (playerTransform == null)
+                        continue;
+
+                    float existingDistance = Vector3.Distance(playerTransform.position, existingTarget.Interactable.transform.position);
+                    float candidateDistance = Vector3.Distance(playerTransform.position, candidate.transform.position);
+                    if (candidateDistance < existingDistance)
+                    {
+                        existingTarget.Interactable = candidate;
+                        existingTarget.Label = label;
+                        existingTarget.ZoneName = candidateZone;
+                    }
+
+                    continue;
+                }
+
+                targets.Add(new RoomObjectTarget
+                {
+                    Interactable = candidate,
+                    Label = label,
+                    ZoneName = candidateZone
+                });
+            }
+
+            if (targets.Count == 0)
+                return false;
+
+            if (playerTransform != null)
+            {
+                targets.Sort((left, right) =>
+                {
+                    float leftDistance = Vector3.Distance(playerTransform.position, left.Interactable.transform.position);
+                    float rightDistance = Vector3.Distance(playerTransform.position, right.Interactable.transform.position);
+                    int distanceComparison = leftDistance.CompareTo(rightDistance);
+                    return distanceComparison != 0
+                        ? distanceComparison
+                        : string.Compare(left.Label, right.Label, StringComparison.CurrentCultureIgnoreCase);
+                });
+            }
+            else
+            {
+                targets.Sort((left, right) => string.Compare(left.Label, right.Label, StringComparison.CurrentCultureIgnoreCase));
+            }
+
+            return true;
+        }
+
+        private static bool TryFindEquivalentRoomObjectTarget(List<RoomObjectTarget> targets, InteractableObj candidate, string label, out RoomObjectTarget equivalentTarget)
+        {
+            equivalentTarget = null;
+            if (targets == null || candidate == null)
+                return false;
+
+            string candidateInternalName = NormalizeText(candidate.InternalName());
+            for (int i = 0; i < targets.Count; i++)
+            {
+                RoomObjectTarget existingTarget = targets[i];
+                if (existingTarget == null || existingTarget.Interactable == null)
+                    continue;
+
+                if (!string.Equals(existingTarget.Label, label, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string existingInternalName = NormalizeText(existingTarget.Interactable.InternalName());
+                if (!string.Equals(existingInternalName, candidateInternalName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (Vector3.Distance(existingTarget.Interactable.transform.position, candidate.transform.position) > 2.5f)
+                    continue;
+
+                equivalentTarget = existingTarget;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsUsableRoomObjectLabel(string label)
+        {
+            label = NormalizeText(label);
+            if (string.IsNullOrEmpty(label))
+                return false;
+
+            if (label.StartsWith("Default hover text for", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (string.Equals(label, "Main Camera", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return true;
+        }
+
+        private bool ShouldSuppressNavigationAmbientSpeech()
+        {
+            return _isNavigationActive || _isRoomObjectPickerOpen || ObjectTracker.IsTracking;
+        }
+
         private static bool CanUseNavigationNow()
         {
             if (BetterPlayerControl.Instance == null || Singleton<GameController>.Instance == null)
@@ -1160,10 +2502,15 @@ namespace DateEverythingAccess
 
         private void HandleChoiceKeyboardInput()
         {
-            if (HandleChoiceKeyboardInput(GetActiveChatChoices()))
+            IList<Button> chatChoices = GetActiveChatChoices();
+            if (ShouldHandleChatChoiceKeyboardInput(chatChoices) && HandleChatChoiceKeyboardInput(chatChoices))
                 return;
 
-            HandleChoiceKeyboardInput(GetActiveDialogueChoices());
+            ClearVirtualChatChoiceState();
+
+            IList<Button> dialogueChoices = GetActiveDialogueChoices();
+            if (ShouldHandleDialogueChoiceKeyboardInput(dialogueChoices))
+                HandleChoiceKeyboardInput(dialogueChoices);
         }
 
         private bool HandleChoiceKeyboardInput(IList<Button> choices)
@@ -1205,12 +2552,106 @@ namespace DateEverythingAccess
                 WasChoiceKeyPressed(KeyCode.KeypadEnter, VkReturn, ref _choiceReturnWasDown) ||
                 WasChoiceKeyPressed(KeyCode.Space, VkSpace, ref _choiceSpaceWasDown))
             {
-                int targetIndex = currentIndex >= 0 ? currentIndex : 0;
-                ActivateChoice(choices[targetIndex]);
-                return true;
+                if (currentIndex >= 0)
+                {
+                    ActivateChoice(choices[currentIndex]);
+                    return true;
+                }
             }
 
             return false;
+        }
+
+        private bool HandleChatChoiceKeyboardInput(IList<Button> choices)
+        {
+            if (choices == null || choices.Count == 0)
+                return false;
+
+            string contextKey = GetActiveChatChoiceContextKey();
+            if (string.IsNullOrEmpty(contextKey) || !string.Equals(_virtualChatChoiceContextKey, contextKey, StringComparison.Ordinal))
+            {
+                _virtualChatChoiceContextKey = contextKey;
+                _virtualChatChoiceIndex = GetCurrentChoiceIndex(choices);
+            }
+
+            int currentIndex = _virtualChatChoiceIndex;
+            if (currentIndex < 0 || currentIndex >= choices.Count)
+                currentIndex = 0;
+
+            bool hasMultipleChoices = choices.Count > 1;
+            if (hasMultipleChoices && WasChoiceKeyPressed(KeyCode.UpArrow, VkUp, ref _choiceUpWasDown))
+            {
+                currentIndex = (currentIndex + choices.Count - 1) % choices.Count;
+                SetVirtualChatChoiceIndex(currentIndex, choices);
+                return true;
+            }
+
+            if (hasMultipleChoices && WasChoiceKeyPressed(KeyCode.LeftArrow, VkLeft, ref _choiceLeftWasDown))
+            {
+                currentIndex = (currentIndex + choices.Count - 1) % choices.Count;
+                SetVirtualChatChoiceIndex(currentIndex, choices);
+                return true;
+            }
+
+            if (hasMultipleChoices && WasChoiceKeyPressed(KeyCode.DownArrow, VkDown, ref _choiceDownWasDown))
+            {
+                currentIndex = (currentIndex + 1) % choices.Count;
+                SetVirtualChatChoiceIndex(currentIndex, choices);
+                return true;
+            }
+
+            if (hasMultipleChoices && WasChoiceKeyPressed(KeyCode.RightArrow, VkRight, ref _choiceRightWasDown))
+            {
+                currentIndex = (currentIndex + 1) % choices.Count;
+                SetVirtualChatChoiceIndex(currentIndex, choices);
+                return true;
+            }
+
+            if (WasChoiceKeyPressed(KeyCode.Return, VkReturn, ref _choiceReturnWasDown) ||
+                WasChoiceKeyPressed(KeyCode.KeypadEnter, VkReturn, ref _choiceReturnWasDown) ||
+                WasChoiceKeyPressed(KeyCode.Space, VkSpace, ref _choiceSpaceWasDown))
+            {
+                if (currentIndex >= 0 && currentIndex < choices.Count)
+                {
+                    ActivateChoice(choices[currentIndex]);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ShouldHandleDialogueChoiceKeyboardInput(IList<Button> choices)
+        {
+            if (choices == null || choices.Count == 0 || TalkingUI.Instance == null || !TalkingUI.Instance.open)
+                return false;
+
+            GameObject selectedObject = GetCurrentSelectedObject();
+            if (selectedObject == null)
+                return true;
+
+            if (selectedObject == TalkingUI.Instance.gameObject || selectedObject.transform.IsChildOf(TalkingUI.Instance.transform))
+                return true;
+
+            return GetCurrentChoiceIndex(choices) >= 0;
+        }
+
+        private static bool ShouldHandleChatChoiceKeyboardInput(IList<Button> choices)
+        {
+            if (choices == null || choices.Count == 0 || ChatMaster.Instance == null)
+                return false;
+
+            if (!TryGetActiveChatContext(out ChatType activeChatType, out _, out _, out _, out GameObject activePanelNameObject, out GameObject secondaryPanelObject))
+                return false;
+
+            GameObject selectedObject = GetCurrentSelectedObject();
+            if (selectedObject == null)
+                return false;
+
+            if (GetCurrentChoiceIndex(choices) >= 0)
+                return true;
+
+            return IsWithinChatPanel(selectedObject, activeChatType, activePanelNameObject, secondaryPanelObject);
         }
 
         private void AnnounceScreenSummaryIfNeeded()
@@ -1222,6 +2663,12 @@ namespace DateEverythingAccess
             }
 
             string summary = BuildScreenSummary();
+            if (ShouldSuppressNavigationAmbientSpeech())
+            {
+                _lastScreenSummary = summary;
+                return;
+            }
+
             if (summary == _lastScreenSummary)
                 return;
 
@@ -1248,6 +2695,12 @@ namespace DateEverythingAccess
                 return;
 
             string roomName = GetCurrentRoomName();
+            if (ShouldSuppressNavigationAmbientSpeech())
+            {
+                _lastRoomName = roomName;
+                return;
+            }
+
             if (string.IsNullOrEmpty(roomName) || roomName == _lastRoomName)
                 return;
 
@@ -1273,6 +2726,12 @@ namespace DateEverythingAccess
                 return;
 
             InteractableObj interactable = Singleton<InteractableManager>.Instance.activeObject;
+            if (ShouldSuppressNavigationAmbientSpeech())
+            {
+                _lastInteractableId = interactable != null ? interactable.Id : null;
+                return;
+            }
+
             if (interactable == null)
             {
                 _lastInteractableId = null;
@@ -1627,6 +3086,12 @@ namespace DateEverythingAccess
                 return;
             }
 
+            if (ShouldSuppressNavigationAmbientSpeech())
+            {
+                _lastTutorialAnnouncement = announcement;
+                return;
+            }
+
             if (announcement == _lastTutorialAnnouncement)
                 return;
 
@@ -1882,10 +3347,10 @@ namespace DateEverythingAccess
             GameObject selectedObject = GetCurrentSelectedObject();
             int choiceIndex;
             int choiceCount;
+            string choiceText;
             if (selectedObject != null &&
-                TryGetChatChoiceAnnouncement(selectedObject, out choiceIndex, out choiceCount))
+                TryGetChatChoiceSpeechInfo(selectedObject, out choiceIndex, out choiceCount, out choiceText))
             {
-                string choiceText = ExtractTextFromObject(selectedObject);
                 if (!string.IsNullOrEmpty(choiceText))
                 {
                     announcement = Loc.Get("choice_announcement", choiceIndex, choiceCount, choiceText);
@@ -2106,13 +3571,13 @@ namespace DateEverythingAccess
 
             int choiceIndex;
             int choiceCount;
-            if (TryGetChatChoiceAnnouncement(selectedObject, out choiceIndex, out choiceCount))
+            string choiceText;
+            if (TryGetChatChoiceSpeechInfo(selectedObject, out choiceIndex, out choiceCount, out choiceText))
             {
                 branch = "chat_choice";
                 if (!ModConfig.ReadFocusedItems && !ModConfig.ReadDialogueChoices)
                     return null;
 
-                string choiceText = ExtractTextFromObject(selectedObject);
                 if (!string.IsNullOrEmpty(choiceText))
                     return Loc.Get("choice_announcement", choiceIndex, choiceCount, choiceText);
             }
@@ -2132,9 +3597,9 @@ namespace DateEverythingAccess
                 if (!ModConfig.ReadDialogueChoices)
                     return null;
 
-                string choiceText = ExtractTextFromObject(selectedObject);
-                if (!string.IsNullOrEmpty(choiceText))
-                    return Loc.Get("choice_announcement", choiceIndex, choiceCount, choiceText);
+                string dialogueChoiceText = ExtractTextFromObject(selectedObject);
+                if (!string.IsNullOrEmpty(dialogueChoiceText))
+                    return Loc.Get("choice_announcement", choiceIndex, choiceCount, dialogueChoiceText);
             }
 
             if (TalkingUI.Instance != null && TalkingUI.Instance.open)
@@ -3365,17 +4830,7 @@ namespace DateEverythingAccess
         {
             announcement = null;
 
-            if (TutorialController.Instance == null)
-                return false;
-
-            EnsureReflectionCache();
-            GameObject signpost = _tutorialSignpostField != null ? _tutorialSignpostField.GetValue(TutorialController.Instance) as GameObject : null;
-            TMP_Text signpostText = _tutorialSignpostTextField != null ? _tutorialSignpostTextField.GetValue(TutorialController.Instance) as TMP_Text : null;
-            if (signpost == null || !signpost.activeInHierarchy || signpostText == null)
-                return false;
-
-            string text = NormalizeText(signpostText.text);
-            if (string.IsNullOrEmpty(text))
+            if (!TryGetCurrentTutorialObjectiveText(out string text))
                 return false;
 
             announcement = Loc.Get("objective_announcement", text);
@@ -3635,6 +5090,45 @@ namespace DateEverythingAccess
             return TryGetChoiceAnnouncement(selectedObject, GetActiveDialogueChoices(), out choiceIndex, out choiceCount);
         }
 
+        private static bool TryGetChatChoiceSpeechInfo(GameObject selectedObject, out int choiceIndex, out int choiceCount, out string choiceText)
+        {
+            choiceText = null;
+            if (TryGetChatChoiceAnnouncement(selectedObject, out choiceIndex, out choiceCount))
+            {
+                choiceText = ExtractTextFromObject(selectedObject);
+                return !string.IsNullOrEmpty(choiceText);
+            }
+
+            IList<Button> choices = GetActiveChatChoices();
+            string activeChatContextKey = GetActiveChatChoiceContextKey();
+            if (selectedObject == null ||
+                choices == null ||
+                choices.Count == 0 ||
+                string.IsNullOrEmpty(activeChatContextKey) ||
+                !string.Equals(activeChatContextKey, _virtualChatChoiceContextKey, StringComparison.Ordinal) ||
+                _virtualChatChoiceIndex < 0 ||
+                _virtualChatChoiceIndex >= choices.Count)
+            {
+                choiceIndex = 0;
+                choiceCount = 0;
+                return false;
+            }
+
+            if (!TryGetActiveChatContext(out ChatType activeChatType, out _, out _, out _, out GameObject activePanelNameObject, out GameObject secondaryPanelObject) ||
+                !IsWithinChatPanel(selectedObject, activeChatType, activePanelNameObject, secondaryPanelObject))
+            {
+                choiceIndex = 0;
+                choiceCount = 0;
+                return false;
+            }
+
+            Button choiceButton = choices[_virtualChatChoiceIndex];
+            choiceText = choiceButton != null ? NormalizeText(ExtractTextFromObject(choiceButton.gameObject)) : null;
+            choiceIndex = _virtualChatChoiceIndex + 1;
+            choiceCount = choices.Count;
+            return !string.IsNullOrEmpty(choiceText);
+        }
+
         private static bool TryGetChatChoiceAnnouncement(GameObject selectedObject, out int choiceIndex, out int choiceCount)
         {
             return TryGetChoiceAnnouncement(selectedObject, GetActiveChatChoices(), out choiceIndex, out choiceCount);
@@ -3741,6 +5235,42 @@ namespace DateEverythingAccess
             return false;
         }
 
+        private static void SetVirtualChatChoiceIndex(int choiceIndex, IList<Button> choices)
+        {
+            _virtualChatChoiceIndex = choiceIndex;
+            SpeakVirtualChoiceAnnouncement(choiceIndex, choices);
+        }
+
+        private static void SpeakVirtualChoiceAnnouncement(int choiceIndex, IList<Button> choices)
+        {
+            if (choices == null || choiceIndex < 0 || choiceIndex >= choices.Count)
+                return;
+
+            Button choice = choices[choiceIndex];
+            if (choice == null)
+                return;
+
+            string choiceText = NormalizeText(ExtractTextFromObject(choice.gameObject));
+            if (string.IsNullOrEmpty(choiceText))
+                return;
+
+            ScreenReader.Say(Loc.Get("choice_announcement", choiceIndex + 1, choices.Count, choiceText), interrupt: false);
+        }
+
+        private static string GetActiveChatChoiceContextKey()
+        {
+            if (!TryGetActiveChatContext(out _, out _, out ParallelChat activeChat, out _, out _, out _))
+                return null;
+
+            return activeChat != null ? activeChat.GetInstanceID().ToString() : null;
+        }
+
+        private static void ClearVirtualChatChoiceState()
+        {
+            _virtualChatChoiceIndex = -1;
+            _virtualChatChoiceContextKey = null;
+        }
+
         private static int GetCurrentChoiceIndex(IList<Button> choices)
         {
             GameObject selectedObject = GetCurrentSelectedObject();
@@ -3757,6 +5287,15 @@ namespace DateEverythingAccess
                     return i;
             }
 
+            string activeChatContextKey = GetActiveChatChoiceContextKey();
+            if (!string.IsNullOrEmpty(activeChatContextKey) &&
+                string.Equals(activeChatContextKey, _virtualChatChoiceContextKey, StringComparison.Ordinal) &&
+                _virtualChatChoiceIndex >= 0 &&
+                _virtualChatChoiceIndex < choices.Count)
+            {
+                return _virtualChatChoiceIndex;
+            }
+
             return -1;
         }
 
@@ -3765,7 +5304,7 @@ namespace DateEverythingAccess
             if (choice == null)
                 return;
 
-            ControllerMenuUI.SetCurrentlySelected(choice.gameObject, direction, manualSelected: true, isViaPointer: true);
+            ControllerMenuUI.SetCurrentlySelected(choice.gameObject, direction, manualSelected: true);
         }
 
         private static void ActivateChoice(Button choice)
@@ -4017,6 +5556,46 @@ namespace DateEverythingAccess
             return NormalizeIdentifierName(zone.Name);
         }
 
+        private static bool TryGetCurrentTutorialObjectiveText(out string objectiveText)
+        {
+            objectiveText = null;
+
+            if (TutorialController.Instance == null)
+                return false;
+
+            EnsureReflectionCache();
+            TMP_Text signpostText = _tutorialSignpostTextField != null ? _tutorialSignpostTextField.GetValue(TutorialController.Instance) as TMP_Text : null;
+            if (signpostText == null)
+                return false;
+
+            objectiveText = NormalizeText(signpostText.text);
+            return !string.IsNullOrEmpty(objectiveText);
+        }
+
+        private static string GetObjectFacingDisplayName(InteractableObj interactable)
+        {
+            if (interactable == null)
+                return Loc.Get("unknown_object");
+
+            string displayName = NormalizeText(interactable.mainText);
+            if (!string.IsNullOrEmpty(displayName) &&
+                !displayName.StartsWith("Default hover text for ", StringComparison.OrdinalIgnoreCase))
+            {
+                return displayName;
+            }
+
+            displayName = GetAlternateInteractionDisplayName(interactable);
+            if (!string.IsNullOrEmpty(displayName))
+                return displayName;
+
+            displayName = NormalizeIdentifierName(interactable.name);
+            if (!string.IsNullOrEmpty(displayName))
+                return displayName;
+
+            displayName = NormalizeIdentifierName(interactable.InternalName());
+            return string.IsNullOrEmpty(displayName) ? Loc.Get("unknown_object") : displayName;
+        }
+
         private static string GetInteractableDisplayName(InteractableObj interactable)
         {
             if (interactable == null)
@@ -4033,7 +5612,12 @@ namespace DateEverythingAccess
 
             if (save.TryGetNameByInternalName(internalName, out string displayName) && !string.IsNullOrEmpty(displayName))
             {
-                return displayName;
+                string normalizedDisplayName = NormalizeIdentifierName(displayName);
+                if (!string.IsNullOrEmpty(normalizedDisplayName) &&
+                    !string.Equals(normalizedDisplayName, NormalizeIdentifierName(internalName), StringComparison.OrdinalIgnoreCase))
+                {
+                    return normalizedDisplayName;
+                }
             }
 
             return objectName;
@@ -4053,19 +5637,37 @@ namespace DateEverythingAccess
 
         private static string GetUnmetInteractableDisplayName(InteractableObj interactable)
         {
-            string displayName = NormalizeText(interactable.mainText);
-            if (!string.IsNullOrEmpty(displayName) &&
-                !displayName.StartsWith("Default hover text for ", StringComparison.OrdinalIgnoreCase))
-            {
-                return displayName;
-            }
+            return GetObjectFacingDisplayName(interactable);
+        }
 
-            displayName = NormalizeIdentifierName(interactable.name);
-            if (!string.IsNullOrEmpty(displayName))
-                return displayName;
+        private static string GetAlternateInteractionDisplayName(InteractableObj interactable)
+        {
+            if (interactable == null || interactable.AlternateInteractions == null || interactable.AlternateInteractions.Count < 1)
+                return null;
 
-            displayName = NormalizeIdentifierName(interactable.InternalName());
-            return string.IsNullOrEmpty(displayName) ? Loc.Get("unknown_object") : displayName;
+            Interactable alternateInteraction = interactable.AlternateInteractions[0];
+            return NormalizeText(alternateInteraction != null ? alternateInteraction.Name : null);
+        }
+
+        private static bool ContainsToken(string value, string token)
+        {
+            return !string.IsNullOrEmpty(value) &&
+                !string.IsNullOrEmpty(token) &&
+                value.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string GetInkVariableString(string variableName)
+        {
+            if (string.IsNullOrEmpty(variableName) || Singleton<InkController>.Instance == null)
+                return null;
+
+            return Singleton<InkController>.Instance.GetVariable(variableName);
+        }
+
+        private static bool GetInkVariableBool(string variableName)
+        {
+            string value = GetInkVariableString(variableName);
+            return bool.TryParse(value, out bool parsedValue) && parsedValue;
         }
 
         private static void EnsureReflectionCache()
@@ -4084,6 +5686,8 @@ namespace DateEverythingAccess
             _tutorialSignpostField = typeof(TutorialController).GetField("tutorialSignpost", flags);
             _tutorialSignpostTextField = typeof(TutorialController).GetField("tutorialSignpostTMP", flags);
             _tutorialSubtitleTextField = typeof(TutorialController).GetField("SubtitleText", flags);
+            _tutorialFrontDoorField = typeof(TutorialController).GetField("frontDoor", flags);
+            _tutorialComputerField = typeof(TutorialController).GetField("computer", flags);
             _specStatTooltipsField = typeof(SpecStatMain).GetField("statTooltips", flags);
             _specStatMainKeyButtonField = typeof(SpecStatMain).GetField("keyButton", flags);
             _specStatMainAutoSelectFallbackField = typeof(SpecStatMain).GetField("autoSelectFallback", flags);
@@ -4680,6 +6284,70 @@ namespace DateEverythingAccess
             }
 
             return cleaned.Trim();
+        }
+
+        private static string GetZoneFamilyKey(string zoneName)
+        {
+            string cleaned = NormalizeText(zoneName);
+            if (string.IsNullOrEmpty(cleaned))
+                return null;
+
+            int endIndex = cleaned.Length;
+            while (endIndex > 0 && char.IsDigit(cleaned[endIndex - 1]))
+            {
+                endIndex--;
+            }
+
+            cleaned = cleaned.Substring(0, endIndex).TrimEnd('_', '-', ' ');
+            return string.IsNullOrEmpty(cleaned)
+                ? null
+                : cleaned.ToLowerInvariant();
+        }
+
+        private static bool AreZonesEquivalent(string firstZone, string secondZone)
+        {
+            if (string.IsNullOrWhiteSpace(firstZone) || string.IsNullOrWhiteSpace(secondZone))
+                return false;
+
+            if (string.Equals(firstZone, secondZone, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return string.Equals(GetZoneFamilyKey(firstZone), GetZoneFamilyKey(secondZone), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetNavigationZoneName(string zoneName)
+        {
+            if (string.IsNullOrWhiteSpace(zoneName))
+                return null;
+
+            if (NavigationGraph.ContainsZone(zoneName))
+                return zoneName;
+
+            string zoneFamilyKey = GetZoneFamilyKey(zoneName);
+            if (!string.IsNullOrEmpty(zoneFamilyKey) && NavigationGraph.ContainsZone(zoneFamilyKey))
+                return zoneFamilyKey;
+
+            return null;
+        }
+
+        private static bool IsZoneEquivalentToNavigationZone(string runtimeZone, string navigationZone)
+        {
+            if (string.IsNullOrWhiteSpace(runtimeZone) || string.IsNullOrWhiteSpace(navigationZone))
+                return false;
+
+            string normalizedRuntimeZone = GetNavigationZoneName(runtimeZone);
+            if (!string.IsNullOrEmpty(normalizedRuntimeZone) &&
+                string.Equals(normalizedRuntimeZone, navigationZone, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return AreZonesEquivalent(runtimeZone, navigationZone);
+        }
+
+        private static bool IsCurrentZoneEquivalentTo(string navigationZone)
+        {
+            return IsZoneEquivalentToNavigationZone(GetCurrentZoneNameInternal(), navigationZone);
         }
     }
 }

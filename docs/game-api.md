@@ -163,9 +163,9 @@ That means hardcoding letter keys for core controls is riskier than function key
 
 - `F1`: help
 - `Ctrl+F1`: repeat the most recently spoken mod line
-- `Ctrl+F6`: start navigation to the current objective or selected room target
-- `Ctrl+Shift+F6`: cycle the room-navigation target
-- `Ctrl+Alt+F6`: toggle navigation auto-walk
+- `Ctrl+F6`: track the current tutorial objective
+- `Ctrl+Shift+F6`: open and cycle the current-room object list
+- `Ctrl+Alt+F6`: toggle auto-walk to the tracked object
 - `F9`: toggle debug
 - `Ctrl+F9`: accessibility settings menu
 
@@ -410,6 +410,9 @@ That approach already works for menu focus speech and dialogue choice speech, bu
 ### Current room
 
 - `Singleton<CameraSpaces>.Instance.PlayerZone()?.Name`
+- `CameraSpaces.CameraLoc(Transform t)`
+  - checks `Bounds.Contains(t.position)`
+  - also checks `Collider.ClosestPointOnBounds(zone.Position)` when the tracked transform has a collider
 
 This is the cleanest room identifier found for house navigation speech.
 
@@ -431,6 +434,9 @@ This is the cleanest room identifier found for house navigation speech.
   - every zone currently used by `navigation_graph.json` exists in that `zones` list
   - the scene also contains many extra `CameraSpaces` entries that are not in the JSON, including room-local variants such as `hallway2` to `hallway7`, `living_room2` to `living_room11`, `office2` to `office9`, `piano_room2` to `piano_room11`, and `upper_hallway2` to `upper_hallway8`
   - those extra entries are the strongest current asset-side candidates for finer-grained waypoint nodes or doorway-adjacent anchors
+  - practical consequence:
+    - runtime room-object listing cannot assume a single coarse room zone
+    - when an exact room-zone match is empty, a same-family fallback such as `office6` -> `office` is a reasonable recovery path for room-local object discovery
 - `Teleporter` in `ThirdPersonGreybox.unity`
   - the crawlspace teleporter serializes explicit `LocationDown` and `LocationUp` destination objects
   - it also serializes `teleportInRotation` and `teleportOutRotation`
@@ -450,9 +456,13 @@ This is the cleanest room identifier found for house navigation speech.
   - falls back to zone anchors or nearest room-family anchors for the remaining links
 - Runtime consumption
   - `NavigationGraph.FindPathSteps(...)` now parses and returns per-link `FromWaypoint`, `ToWaypoint`, `Cost`, transition type, connector name, and transition timing data from the live JSON
-  - `AccessibilityWatcher` now targets the current step waypoint instead of only the next room center
+  - `AccessibilityWatcher` now tracks a concrete interactable target, falls back to the current step waypoint while that target is still in another zone, and switches back to the live object position after entering the target room
   - `AccessibilityWatcher` treats teleporter links as interaction-driven transitions, waits through the crawlspace animation while player control is disabled, and can retry door interactions before declaring navigation blocked
-  - `ObjectTracker` beeps now follow the current navigation step target chosen by the watcher, use stereo panning for left or right guidance, map pitch to the target's height relative to the camera, and map beep rate to target proximity
+  - `ObjectTracker` beeps now follow the tracked object or current waypoint chosen by the watcher, use stereo panning for left or right guidance, map pitch to the target's height relative to the camera, map beep rate to target proximity, and raise volume as the player gets closer
+  - practical consequence:
+    - the navigation graph currently uses coarse authored zones such as `office`
+    - live `CameraSpaces.PlayerZone()` can return finer runtime subzones such as `office2`, `office5`, and `office6`
+    - tracker and auto-walk code therefore need to normalize runtime subzones onto graph zones for pathfinding and also treat same-family subzones as the same room for direct-object guidance
 - Generic interactable placement data
   - many serialized `Interactable.interactedPosition` values in the scene export are still `{x: 0, y: 0, z: 0}`
   - practical consequence:
@@ -471,15 +481,57 @@ Important consequence:
 - `InteractableObj.InteractionPrompt`
 - `InteractableObj.InternalName()`
 - `InteractableObj.mainText`
+- `InteractableObj.AlternateInteractions[0].Name`
 - `Save.TryGetNameByInternalName(...)` to resolve display names
 - `Save.GetDateStatus(...)` to determine whether the player has met the datable yet
 
 Important consequence:
 
+- `InteractableManager` uses `AlternateInteractions[0].Name` as the visible in-world object label for normal house interactions.
+- Accessibility tracker labels and current-room object lists should prefer that object-facing label before falling back to `mainText`, scene object names, or internal names.
 - Nearby-object speech should not always use the dateable name.
 - `InteractableObj.StartDialogue()` calls `Save.MeetDatableIfUnmet(InternalName())`, so `GetDateStatus(...) != Unmet` is the correct "player knows this character" boundary.
 - Before that point, prefer the object's own label, starting with `InteractableObj.mainText` when it is populated, then falling back to the scene object name.
 - After the player has met the datable, it is appropriate to switch to the resolved character name from `TryGetNameByInternalName(...)`.
+
+### AudioManager 3D track behavior
+
+- `AudioManager.PlayTrack(...)`
+- `AudioManager.NewTrack(...)`
+- `AudioManager.MusicChild.GetAudio()`
+
+Important consequence:
+
+- `AudioManager.NewTrack(...)` only applies the game's built-in 3D setup when `objectFor3dSound` is non-null.
+- In that path the new source is initialized with positional audio settings and anchored to the owner object's current world position.
+- For a moving accessibility tracker tone, the safest game-native approach is to keep a dedicated anchor `GameObject`, pass it as `objectFor3dSound`, and move that anchor as the tracked object or waypoint changes.
+
+### Tutorial objectives
+
+- `TutorialController.SetTutorialText(...)`
+  - this is the authoritative source for the current tutorial signpost text
+  - it drives objective text such as `Start your new job at your computer`, `Check the delivery at the front door.`, `Awaken your phone.`, `Locate the magnifying glass to Awaken it.`, and `Talk to Skylar Specs.`
+- `TutorialController`
+  - private `computer` field stores the tutorial computer anchor `GameObject`
+  - private `frontDoor` field stores the tutorial front-door anchor `GameObject`
+
+Important consequence:
+
+- Objective tracking should prefer the live tutorial signpost text over reconstructed save-state guesses when both are available.
+- Computer and front-door tracking can anchor directly from those serialized `TutorialController` object references before falling back to generic interactable-name heuristics.
+- `TutorialController.SetTutorialText(...)` also emits generic prompts such as `Continue to awaken dateable objects.` and `Realize Dateable Objects.` that do not name a single character directly.
+- For those generic prompts, accessibility objective tracking needs a fallback policy such as picking the nearest valid unmet or not-yet-realized dateable interactable instead of returning `No current objective.`
+- The `tutorialSignpostTMP` text can still hold the current objective even when the signpost object itself is hidden, so objective readers should key off the text field, not only the signpost object's active state.
+- Maggie’s tutorial progression uses mixed identifiers: save-state checks use `maggie_mglass`, while the tutorial interaction gate checks `obj.InternalName() != "maggie"`, so tracker matching should tolerate both names plus visible labels like `Maggie` or `Magnifying`.
+
+### Hotkey overlap
+
+- Windows `RegisterHotKey(...)` registrations can overlap when one modifier combination is a strict superset of another, for example `Ctrl+F6` and `Ctrl+Shift+F6`.
+
+Important consequence:
+
+- The mod cannot rely on the registered hotkey id alone to distinguish those combinations cleanly.
+- The hotkey handler needs an explicit modifier-state check so `Ctrl+Shift+F6` and `Ctrl+Alt+F6` do not also trigger the plain `Ctrl+F6` objective action.
 
 ### Dateviators status
 
@@ -580,10 +632,18 @@ Good Harmony targets for future feature work:
 - Room announcements
 - Nearby interactable announcements
 - Dateviators equip/charge change announcements
+- `Ctrl+F6` current tutorial objective tracking
+- `Ctrl+Shift+F6` current-room object listing
+- `Ctrl+Alt+F6` auto-walk to the tracked object
 
 ## Not Yet Analyzed
 
-- Full tutorial flow and tutorial-specific text extraction
 - Remaining runtime verification for hidden phone bindings that may be populated outside the decompiled code path scan
 - Full message log content extraction
 - Non-dialogue gameplay notifications such as pickups, relationship changes, or time-of-day transitions
+
+## Latest Tracker Findings
+
+- Tutorial objective resolution can surface a model-child `InteractableObj` instead of the usable root interactable, especially for Maggie and other multi-part dateables. Tracker resolution should canonicalize within the interactable hierarchy before trusting the candidate for zone lookup or navigation.
+- `UpdateNavigationState()` should not rebuild the navigation path every poll while the player is still in the current step's `FromZone`. Rebuilding every frame causes repeated tracker restarts and unstable open-passage auto-walk behavior even when the target step has not changed.
+- Runtime transit zones such as `stairsdown` can be outside the authored navigation graph. Auto-walk must keep the current graph step alive through those zones and continue toward the step's destination graph zone instead of refreshing the path immediately on entry-waypoint arrival.

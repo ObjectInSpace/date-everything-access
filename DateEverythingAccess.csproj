@@ -62,6 +62,10 @@
       <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Unity.TextMeshPro">
       <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
