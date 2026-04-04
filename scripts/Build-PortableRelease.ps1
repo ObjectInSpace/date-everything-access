@@ -27,6 +27,8 @@ $stagingRoot = Join-Path $projectDir "artifacts\release-staging"
 $packageRoot = Join-Path $stagingRoot "DateEverythingAccess-portable-$releaseTag"
 $zipPath = Join-Path $stagingRoot "DateEverythingAccess-portable-$releaseTag.zip"
 $outputDllPath = Join-Path $projectDir "bin\$Configuration\net472\DateEverythingAccess.dll"
+$navigationGraphPath = Join-Path $projectDir "bin\$Configuration\net472\navigation_graph.json"
+$navigationOverridePath = Join-Path $projectDir "bin\$Configuration\net472\navigation_transition_overrides.json"
 
 $requiredGameFiles = @(
     ".doorstop_version",
@@ -68,6 +70,16 @@ if (-not (Test-Path -LiteralPath $outputDllPath)) {
     exit 1
 }
 
+if (-not (Test-Path -LiteralPath $navigationGraphPath)) {
+    Write-Error "Expected navigation graph output not found: $navigationGraphPath"
+    exit 1
+}
+
+if (-not (Test-Path -LiteralPath $navigationOverridePath)) {
+    Write-Error "Expected navigation override output not found: $navigationOverridePath"
+    exit 1
+}
+
 if (Test-Path -LiteralPath $packageRoot) {
     Remove-Item -LiteralPath $packageRoot -Recurse -Force
 }
@@ -80,6 +92,8 @@ New-Item -ItemType Directory -Path (Join-Path $packageRoot "BepInEx\core") -Forc
 New-Item -ItemType Directory -Path (Join-Path $packageRoot "BepInEx\plugins") -Force | Out-Null
 
 Copy-Item -LiteralPath $outputDllPath -Destination (Join-Path $packageRoot "BepInEx\plugins\DateEverythingAccess.dll") -Force
+Copy-Item -LiteralPath $navigationGraphPath -Destination (Join-Path $packageRoot "BepInEx\plugins\navigation_graph.json") -Force
+Copy-Item -LiteralPath $navigationOverridePath -Destination (Join-Path $packageRoot "BepInEx\plugins\navigation_transition_overrides.json") -Force
 Copy-Item -LiteralPath $coreSourcePath -Destination (Join-Path $packageRoot "BepInEx") -Recurse -Force
 
 foreach ($requiredFile in $requiredGameFiles) {

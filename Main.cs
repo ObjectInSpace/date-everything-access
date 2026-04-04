@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace DateEverythingAccess
 {
-    [BepInPlugin("com.amock.dateeverythingaccess", "Date Everything Access", "0.1.0")]
+    [BepInPlugin("com.amock.dateeverythingaccess", "Date Everything Access", "0.1.1")]
     public class Main : BaseUnityPlugin
     {
         private const int VkF1 = 0x70;
