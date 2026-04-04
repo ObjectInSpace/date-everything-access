@@ -19,6 +19,8 @@ namespace DateEverythingAccess
             public string GeneratedAtUtc;
             public string ActiveScene;
             public string[] LoadedScenes;
+            public bool HasActiveNavMesh;
+            public string ExportStatus;
             public int VertexCount;
             public int TriangleCount;
             public Vector3[] Vertices;
@@ -47,10 +49,17 @@ namespace DateEverythingAccess
             public string ConnectorName;
             public bool RequiresInteraction;
             public float TransitionWaitSeconds;
+            public float ValidationTimeoutSeconds;
+            public int StaticSuspicionScore;
+            public AnchorCheckData ConnectorObjectPosition;
             public AnchorCheckData FromWaypoint;
             public AnchorCheckData ToWaypoint;
             public AnchorCheckData FromCrossingAnchor;
             public AnchorCheckData ToCrossingAnchor;
+            public AnchorCheckData SourceApproachPoint;
+            public AnchorCheckData SourceClearPoint;
+            public AnchorCheckData DestinationClearPoint;
+            public AnchorCheckData DestinationApproachPoint;
             public PathCheckData WaypointPath;
             public PathCheckData CrossingPath;
             public string[] Issues;
@@ -91,23 +100,23 @@ namespace DateEverythingAccess
             out string outputPath,
             out int triangleCount,
             out int transitionCount,
+            out bool hasActiveNavMesh,
             out ExportFailure failure)
         {
             outputPath = Path.Combine(Paths.PluginPath, "navmesh_export.live.json");
             triangleCount = 0;
             transitionCount = 0;
+            hasActiveNavMesh = false;
             failure = ExportFailure.None;
 
             try
             {
                 NavMeshTriangulation triangulation = NavMesh.CalculateTriangulation();
-                if (triangulation.vertices == null || triangulation.vertices.Length == 0 || triangulation.indices == null || triangulation.indices.Length < 3)
-                {
-                    failure = ExportFailure.NoNavMesh;
-                    return false;
-                }
-
-                triangleCount = triangulation.indices.Length / 3;
+                hasActiveNavMesh = triangulation.vertices != null &&
+                    triangulation.vertices.Length > 0 &&
+                    triangulation.indices != null &&
+                    triangulation.indices.Length >= 3;
+                triangleCount = hasActiveNavMesh ? triangulation.indices.Length / 3 : 0;
                 List<NavigationGraph.PathStep> steps = NavigationGraph.GetAllPathSteps();
                 transitionCount = steps.Count;
 
@@ -116,12 +125,14 @@ namespace DateEverythingAccess
                     GeneratedAtUtc = DateTime.UtcNow.ToString("o"),
                     ActiveScene = SceneManager.GetActiveScene().name,
                     LoadedScenes = GetLoadedScenes(),
-                    VertexCount = triangulation.vertices.Length,
+                    HasActiveNavMesh = hasActiveNavMesh,
+                    ExportStatus = hasActiveNavMesh ? "LiveTriangulation" : "NoActiveNavMesh",
+                    VertexCount = hasActiveNavMesh ? triangulation.vertices.Length : 0,
                     TriangleCount = triangleCount,
-                    Vertices = triangulation.vertices,
-                    Indices = triangulation.indices,
-                    Areas = triangulation.areas,
-                    Bounds = BuildBounds(triangulation.vertices),
+                    Vertices = hasActiveNavMesh ? triangulation.vertices : Array.Empty<Vector3>(),
+                    Indices = hasActiveNavMesh ? triangulation.indices : Array.Empty<int>(),
+                    Areas = hasActiveNavMesh ? triangulation.areas : Array.Empty<int>(),
+                    Bounds = hasActiveNavMesh ? BuildBounds(triangulation.vertices) : null,
                     TransitionCount = transitionCount,
                     TransitionChecks = BuildTransitionChecks(steps)
                 };
@@ -129,7 +140,16 @@ namespace DateEverythingAccess
                 string json = JsonUtility.ToJson(exportData, prettyPrint: true);
                 Directory.CreateDirectory(Paths.PluginPath);
                 File.WriteAllText(outputPath, json);
-                Main.Log.LogInfo("Navmesh export written to " + outputPath + " triangles=" + triangleCount + " transitions=" + transitionCount);
+                if (hasActiveNavMesh)
+                {
+                    Main.Log.LogInfo("Navmesh export written to " + outputPath + " triangles=" + triangleCount + " transitions=" + transitionCount);
+                }
+                else
+                {
+                    Main.Log.LogWarning(
+                        "Navmesh export wrote diagnostic report without active navmesh. outputPath=" + outputPath +
+                        " transitions=" + transitionCount);
+                }
                 return true;
             }
             catch (IOException ex)
@@ -190,12 +210,21 @@ namespace DateEverythingAccess
                 AnchorCheckData toWaypoint = BuildAnchorCheck(step.ToWaypoint);
                 AnchorCheckData fromCrossingAnchor = BuildAnchorCheck(step.FromCrossingAnchor);
                 AnchorCheckData toCrossingAnchor = BuildAnchorCheck(step.ToCrossingAnchor);
+                AnchorCheckData sourceApproachPoint = BuildAnchorCheck(step.SourceApproachPoint);
+                AnchorCheckData sourceClearPoint = BuildAnchorCheck(step.SourceClearPoint);
+                AnchorCheckData destinationClearPoint = BuildAnchorCheck(step.DestinationClearPoint);
+                AnchorCheckData destinationApproachPoint = BuildAnchorCheck(step.DestinationApproachPoint);
+                AnchorCheckData connectorObjectPosition = BuildAnchorCheck(step.ConnectorObjectPosition);
 
                 var issues = new List<string>();
                 CollectAnchorIssues(issues, "FromWaypoint", fromWaypoint);
                 CollectAnchorIssues(issues, "ToWaypoint", toWaypoint);
                 CollectAnchorIssues(issues, "FromCrossingAnchor", fromCrossingAnchor);
                 CollectAnchorIssues(issues, "ToCrossingAnchor", toCrossingAnchor);
+                CollectAnchorIssues(issues, "SourceApproachPoint", sourceApproachPoint);
+                CollectAnchorIssues(issues, "SourceClearPoint", sourceClearPoint);
+                CollectAnchorIssues(issues, "DestinationClearPoint", destinationClearPoint);
+                CollectAnchorIssues(issues, "DestinationApproachPoint", destinationApproachPoint);
 
                 PathCheckData waypointPath = BuildPathCheck(fromWaypoint, toWaypoint);
                 PathCheckData crossingPath = BuildPathCheck(fromCrossingAnchor, toCrossingAnchor);
@@ -211,10 +240,17 @@ namespace DateEverythingAccess
                     ConnectorName = step.ConnectorName,
                     RequiresInteraction = step.RequiresInteraction,
                     TransitionWaitSeconds = step.TransitionWaitSeconds,
+                    ValidationTimeoutSeconds = step.ValidationTimeoutSeconds,
+                    StaticSuspicionScore = step.StaticSuspicionScore,
+                    ConnectorObjectPosition = connectorObjectPosition,
                     FromWaypoint = fromWaypoint,
                     ToWaypoint = toWaypoint,
                     FromCrossingAnchor = fromCrossingAnchor,
                     ToCrossingAnchor = toCrossingAnchor,
+                    SourceApproachPoint = sourceApproachPoint,
+                    SourceClearPoint = sourceClearPoint,
+                    DestinationClearPoint = destinationClearPoint,
+                    DestinationApproachPoint = destinationApproachPoint,
                     WaypointPath = waypointPath,
                     CrossingPath = crossingPath,
                     Issues = issues.ToArray()

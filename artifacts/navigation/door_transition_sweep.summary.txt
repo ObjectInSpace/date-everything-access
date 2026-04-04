@@ -1,0 +1,17 @@
+Sweep report import summary
+Kind: Door
+Imported at: 2026-04-04T21:34:16.5962311Z
+Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\door_transition_sweep.live.json
+Output: .\artifacts\navigation\door_transition_sweep.live.json
+Report generated at: 04/04/2026 21:32:17
+Active scene: ThirdPersonGreybox
+Merged totals: total=20 passed=14 failed=6 pending=0
+Imported status changes: newEntries=0 newlyPassed=2 newlyFailed=0 newlyPending=0 unchanged=4
+Door failure breakdown: interactionFalse=0 missingConnectorName=2 highSuspicion=1
+Remaining failed transitions:
+- bathroom1 -> hallway | suspicion=2 | connector=Doors_Bathroom1 | step timeout currentZone=bathroom1 player=(1.56, -0.60, 7.67)
+- bathroom2 -> bedroom | suspicion=2 | connector=Doors_Bedroom_Bathroom | step timeout currentZone=bathroom2 player=(-24.14, 12.82, -5.17)
+- bedroom -> bathroom2 | suspicion=2 | connector=Doors_Bedroom_Bathroom | step timeout currentZone=bedroom4 player=(-26.52, 12.82, -6.99)
+- gym_closet -> gym | suspicion=2 | connector=<none> | step timeout currentZone=gym_closet2 player=(-3.31, 12.82, 20.66)
+- office -> office_closet | suspicion=2 | connector=<none> | step timeout currentZone=office5 player=(5.52, -0.60, 25.38)
+- upper_hallway -> attic | suspicion=4 | connector=AtticDoors | step timeout currentZone=upper_hallway2 player=(-0.03, 12.82, 6.81)

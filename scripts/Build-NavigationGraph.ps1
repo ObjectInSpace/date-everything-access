@@ -71,6 +71,138 @@ function Distance {
     return [Math]::Sqrt(($dx * $dx) + ($dy * $dy) + ($dz * $dz))
 }
 
+function Test-ZeroVector {
+    param(
+        [Parameter()]
+        $Vector
+    )
+
+    if ($null -eq $Vector) {
+        return $true
+    }
+
+    return [Math]::Abs([double]$Vector.x) -lt 0.0001 -and
+        [Math]::Abs([double]$Vector.y) -lt 0.0001 -and
+        [Math]::Abs([double]$Vector.z) -lt 0.0001
+}
+
+function Lerp-Vec3 {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$A,
+
+        [Parameter(Mandatory = $true)]
+        [object]$B,
+
+        [Parameter(Mandatory = $true)]
+        [double]$T
+    )
+
+    $clamped = Clamp-Value -Value $T -Minimum 0.0 -Maximum 1.0
+    return New-Vec3 `
+        -X ([double]$A.x + (([double]$B.x - [double]$A.x) * $clamped)) `
+        -Y ([double]$A.y + (([double]$B.y - [double]$A.y) * $clamped)) `
+        -Z ([double]$A.z + (([double]$B.z - [double]$A.z) * $clamped))
+}
+
+function Get-NormalizedFlatDirection {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$FromPoint,
+
+        [Parameter(Mandatory = $true)]
+        [object]$ToPoint
+    )
+
+    $dx = [double]$ToPoint.x - [double]$FromPoint.x
+    $dz = [double]$ToPoint.z - [double]$FromPoint.z
+    $length = [Math]::Sqrt(($dx * $dx) + ($dz * $dz))
+    if ($length -le 0.0001) {
+        return [ordered]@{
+            x = 0.0
+            z = 0.0
+        }
+    }
+
+    return [ordered]@{
+        x = $dx / $length
+        z = $dz / $length
+    }
+}
+
+function Get-OffsetPoint {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Origin,
+
+        [Parameter(Mandatory = $true)]
+        [object]$Direction,
+
+        [Parameter(Mandatory = $true)]
+        [double]$Distance
+    )
+
+    return New-Vec3 `
+        -X ([double]$Origin.x + ([double]$Direction.x * $Distance)) `
+        -Y ([double]$Origin.y) `
+        -Z ([double]$Origin.z + ([double]$Direction.z * $Distance))
+}
+
+function Get-UniqueStringArray {
+    param(
+        [Parameter()]
+        [AllowNull()]
+        [object[]]$Values
+    )
+
+    $result = New-Object System.Collections.Generic.List[string]
+    $seen = @{}
+    foreach ($value in @($Values)) {
+        if ($null -eq $value) {
+            continue
+        }
+
+        $text = [string]$value
+        if ([string]::IsNullOrWhiteSpace($text) -or $seen.ContainsKey($text)) {
+            continue
+        }
+
+        $seen[$text] = $true
+        $result.Add($text)
+    }
+
+    return $result.ToArray()
+}
+
+function Get-DeduplicatedVectorSequence {
+    param(
+        [Parameter()]
+        [AllowNull()]
+        [object[]]$Points
+    )
+
+    $result = New-Object System.Collections.Generic.List[object]
+    foreach ($point in @($Points)) {
+        if (Test-ZeroVector $point) {
+            continue
+        }
+
+        $duplicate = $false
+        foreach ($existing in $result) {
+            if ((Distance -A $existing -B $point) -le 0.05) {
+                $duplicate = $true
+                break
+            }
+        }
+
+        if (-not $duplicate) {
+            $result.Add((Copy-Vec3 $point))
+        }
+    }
+
+    return $result.ToArray()
+}
+
 function Get-MetadataValue {
     param(
         [Parameter(Mandatory = $true)]
@@ -309,6 +441,15 @@ foreach ($teleporter in @($sceneData.Teleporters)) {
     $teleporterByName[$teleporter.Name] = $teleporter
 }
 
+$doorByName = @{}
+foreach ($door in @($sceneData.DoorObjects)) {
+    if ([string]::IsNullOrWhiteSpace($door.Name) -or $doorByName.ContainsKey($door.Name)) {
+        continue
+    }
+
+    $doorByName[$door.Name] = $door
+}
+
 function Get-ZoneWaypoint {
     param(
         [Parameter(Mandatory = $true)]
@@ -351,6 +492,275 @@ function Get-TeleporterWaypoint {
 
     $teleporter = $teleporterByName[$TeleporterName]
     return Copy-Vec3 $teleporter.$PropertyName.Position
+}
+
+function Get-GraphZoneSceneCandidates {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ZoneName
+    )
+
+    return @(Get-ZoneFamilyCandidates -ZoneName $ZoneName)
+}
+
+function Get-ConnectorObjectPosition {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$StepKind,
+
+        [Parameter()]
+        [AllowNull()]
+        [string]$ConnectorName,
+
+        [Parameter(Mandatory = $true)]
+        [object]$FromWaypoint,
+
+        [Parameter(Mandatory = $true)]
+        [object]$ToWaypoint
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($ConnectorName)) {
+        if ($doorByName.ContainsKey($ConnectorName) -and $null -ne $doorByName[$ConnectorName].Position) {
+            return Copy-Vec3 $doorByName[$ConnectorName].Position
+        }
+
+        if ($teleporterByName.ContainsKey($ConnectorName) -and $null -ne $teleporterByName[$ConnectorName].Position) {
+            return Copy-Vec3 $teleporterByName[$ConnectorName].Position
+        }
+    }
+
+    return Lerp-Vec3 -A $FromWaypoint -B $ToWaypoint -T 0.5
+}
+
+function Get-SceneZoneNodeId {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$GraphZoneName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SceneZoneName
+    )
+
+    return "zone:$GraphZoneName|scene:$SceneZoneName"
+}
+
+function Resolve-NearestSceneZoneNodeId {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$GraphZoneName,
+
+        [Parameter(Mandatory = $true)]
+        [object]$ReferencePoint,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable]$SceneZoneNodeIdByName
+    )
+
+    $candidates = @(Get-GraphZoneSceneCandidates -ZoneName $GraphZoneName)
+    if ($candidates.Count -eq 0) {
+        return $null
+    }
+
+    $bestNodeId = $null
+    $bestDistance = [double]::PositiveInfinity
+    foreach ($candidate in $candidates) {
+        if ($null -eq $candidate -or [string]::IsNullOrWhiteSpace($candidate.Name)) {
+            continue
+        }
+
+        if (-not $SceneZoneNodeIdByName.ContainsKey($candidate.Name)) {
+            continue
+        }
+
+        $distance = Distance -A $candidate.Position -B $ReferencePoint
+        if ($distance -lt $bestDistance) {
+            $bestDistance = $distance
+            $bestNodeId = $SceneZoneNodeIdByName[$candidate.Name]
+        }
+    }
+
+    return $bestNodeId
+}
+
+function Get-ZoneValidationCandidates {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$GraphZoneName,
+
+        [Parameter()]
+        [AllowNull()]
+        [string]$PrimarySceneZoneName
+    )
+
+    $names = New-Object System.Collections.Generic.List[string]
+    if (-not [string]::IsNullOrWhiteSpace($PrimarySceneZoneName)) {
+        $names.Add($PrimarySceneZoneName)
+    }
+
+    foreach ($candidate in @(Get-GraphZoneSceneCandidates -ZoneName $GraphZoneName)) {
+        if ($null -eq $candidate -or [string]::IsNullOrWhiteSpace($candidate.Name)) {
+            continue
+        }
+
+        $names.Add($candidate.Name)
+    }
+
+    if ($names.Count -eq 0) {
+        $names.Add($GraphZoneName)
+    }
+
+    return Get-UniqueStringArray -Values $names.ToArray()
+}
+
+function Get-ConnectorGeometry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$StepKind,
+
+        [Parameter(Mandatory = $true)]
+        [object]$WaypointPair,
+
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Specialized.OrderedDictionary]$Metadata
+    )
+
+    $fromWaypoint = Copy-Vec3 $WaypointPair.FromWaypoint
+    $toWaypoint = Copy-Vec3 $WaypointPair.ToWaypoint
+    $fromCrossingAnchor = Get-MetadataValue -Metadata $WaypointPair -Key "FromCrossingAnchor"
+    $toCrossingAnchor = Get-MetadataValue -Metadata $WaypointPair -Key "ToCrossingAnchor"
+    $connectorName = Get-MetadataValue -Metadata $Metadata -Key "ConnectorName"
+    $connectorPosition = Get-ConnectorObjectPosition -StepKind $StepKind -ConnectorName $connectorName -FromWaypoint $fromWaypoint -ToWaypoint $toWaypoint
+    $direction = Get-NormalizedFlatDirection -FromPoint $fromWaypoint -ToPoint $toWaypoint
+    $clearDistance = if ($StepKind -eq "Door") { 0.8 } elseif ($StepKind -eq "Stairs") { 1.1 } else { 0.65 }
+    $sourceApproachPoint = $fromWaypoint
+    $destinationApproachPoint = $toWaypoint
+    $sourceClearPoint = $null
+    $destinationClearPoint = $null
+    $assetDerivationSource = "ZoneCenterFallback"
+
+    switch ($StepKind) {
+        "OpenPassage" {
+            $sourceClearPoint = if (-not (Test-ZeroVector $fromCrossingAnchor)) { Copy-Vec3 $fromCrossingAnchor } else { Lerp-Vec3 -A $fromWaypoint -B $toWaypoint -T 0.4 }
+            $destinationClearPoint = if (-not (Test-ZeroVector $toCrossingAnchor)) { Copy-Vec3 $toCrossingAnchor } else { Lerp-Vec3 -A $fromWaypoint -B $toWaypoint -T 0.6 }
+            $assetDerivationSource = "CameraSpaceBoundaryGeometry"
+            break
+        }
+        "Teleporter" {
+            $sourceClearPoint = $fromWaypoint
+            $destinationClearPoint = $toWaypoint
+            $assetDerivationSource = "TeleporterEndpoints"
+            break
+        }
+        "Door" {
+            $sourceClearPoint = Get-OffsetPoint -Origin $connectorPosition -Direction $direction -Distance (-1.0 * $clearDistance)
+            $destinationClearPoint = Get-OffsetPoint -Origin $connectorPosition -Direction $direction -Distance $clearDistance
+            $assetDerivationSource = if (-not [string]::IsNullOrWhiteSpace($connectorName)) { "DoorObjectAndCameraWaypoints" } else { "DoorCameraWaypoints" }
+            break
+        }
+        "Stairs" {
+            $sourceClearPoint = Lerp-Vec3 -A $fromWaypoint -B $toWaypoint -T 0.4
+            $destinationClearPoint = Lerp-Vec3 -A $fromWaypoint -B $toWaypoint -T 0.6
+            $assetDerivationSource = "StairCameraWaypoints"
+            break
+        }
+        default {
+            $sourceClearPoint = Lerp-Vec3 -A $fromWaypoint -B $toWaypoint -T 0.4
+            $destinationClearPoint = Lerp-Vec3 -A $fromWaypoint -B $toWaypoint -T 0.6
+            break
+        }
+    }
+
+    return [ordered]@{
+        SourceApproachPoint = $sourceApproachPoint
+        SourceClearPoint = $sourceClearPoint
+        DestinationClearPoint = $destinationClearPoint
+        DestinationApproachPoint = $destinationApproachPoint
+        ConnectorObjectPosition = $connectorPosition
+        NavigationPoints = @(Get-DeduplicatedVectorSequence -Points @(
+                $sourceApproachPoint,
+                $sourceClearPoint,
+                $destinationClearPoint,
+                $destinationApproachPoint))
+        AssetDerivationSource = $assetDerivationSource
+    }
+}
+
+function Get-TransitionValidationMetadata {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$TransitionData
+    )
+
+    $issues = New-Object System.Collections.Generic.List[string]
+    $score = 0
+
+    $fromWaypointMissing = Test-ZeroVector $TransitionData.FromWaypoint
+    $toWaypointMissing = Test-ZeroVector $TransitionData.ToWaypoint
+    $fromCrossMissing = Test-ZeroVector $TransitionData.FromCrossingAnchor
+    $toCrossMissing = Test-ZeroVector $TransitionData.ToCrossingAnchor
+    $sourceClearMissing = Test-ZeroVector $TransitionData.SourceClearPoint
+    $destinationClearMissing = Test-ZeroVector $TransitionData.DestinationClearPoint
+
+    if ($fromWaypointMissing) { $issues.Add("MissingFromWaypoint"); $score += 4 }
+    if ($toWaypointMissing) { $issues.Add("MissingToWaypoint"); $score += 4 }
+    if ($sourceClearMissing) { $issues.Add("MissingSourceClearPoint"); $score += 2 }
+    if ($destinationClearMissing) { $issues.Add("MissingDestinationClearPoint"); $score += 2 }
+
+    $waypointDistance = if ($fromWaypointMissing -or $toWaypointMissing) { -1 } else { Distance -A $TransitionData.FromWaypoint -B $TransitionData.ToWaypoint }
+    $crossingDistance = if ($fromCrossMissing -or $toCrossMissing) { -1 } else { Distance -A $TransitionData.FromCrossingAnchor -B $TransitionData.ToCrossingAnchor }
+    $heightDelta = if ($fromWaypointMissing -or $toWaypointMissing) { -1 } else { [Math]::Abs([double]$TransitionData.ToWaypoint.y - [double]$TransitionData.FromWaypoint.y) }
+    $sourceApproachToClearDistance = if ($fromWaypointMissing -or $sourceClearMissing) { -1 } else { Distance -A $TransitionData.FromWaypoint -B $TransitionData.SourceClearPoint }
+    $destinationClearToApproachDistance = if ($toWaypointMissing -or $destinationClearMissing) { -1 } else { Distance -A $TransitionData.DestinationClearPoint -B $TransitionData.ToWaypoint }
+
+    if ($waypointDistance -gt 18) { $issues.Add("LongWaypointSpan"); $score += 2 }
+    if ($heightDelta -gt 4) { $issues.Add("LargeHeightDelta"); $score += 2 }
+
+    if ($TransitionData.StepKind -eq "OpenPassage") {
+        if ($fromCrossMissing) { $issues.Add("MissingFromCrossingAnchor"); $score += 3 }
+        if ($toCrossMissing) { $issues.Add("MissingToCrossingAnchor"); $score += 3 }
+        if ($crossingDistance -gt 5) { $issues.Add("WideCrossingGap"); $score += 2 }
+        if ($crossingDistance -ge 0 -and $crossingDistance -lt 0.25) { $issues.Add("CollapsedCrossingGap"); $score += 2 }
+    } else {
+        if (-not (Test-ZeroVector $TransitionData.ConnectorObjectPosition) -and $sourceApproachToClearDistance -gt 8) {
+            $issues.Add("FarFromConnectorSourceApproach")
+            $score += 1
+        }
+
+        if (-not (Test-ZeroVector $TransitionData.ConnectorObjectPosition) -and $destinationClearToApproachDistance -gt 8) {
+            $issues.Add("FarFromConnectorDestinationApproach")
+            $score += 1
+        }
+    }
+
+    if (($TransitionData.StepKind -eq "Door" -or $TransitionData.StepKind -eq "Teleporter") -and -not $TransitionData.RequiresInteraction) {
+        $issues.Add("InteractionStepWithoutInteractionFlag")
+        $score += 2
+    }
+
+    if ($TransitionData.StepKind -eq "Stairs" -and $heightDelta -lt 1 -and $heightDelta -ge 0) {
+        $issues.Add("StairsWithSmallHeightDelta")
+        $score += 1
+    }
+
+    $recommendedTimeoutSeconds = 5.0
+    if ($TransitionData.TransitionWaitSeconds -gt 0.0) {
+        $recommendedTimeoutSeconds = [Math]::Round([Math]::Max(5.0, [double]$TransitionData.TransitionWaitSeconds + 3.0), 2)
+    } elseif ($TransitionData.StepKind -eq "Door") {
+        $recommendedTimeoutSeconds = 8.0
+    } elseif ($TransitionData.StepKind -eq "Stairs") {
+        $recommendedTimeoutSeconds = 7.0
+    }
+
+    return [ordered]@{
+        AcceptedSourceZones = @(Get-ZoneValidationCandidates -GraphZoneName $TransitionData.FromZone -PrimarySceneZoneName $TransitionData.SourceSceneZoneName)
+        AcceptedDestinationZones = @(Get-ZoneValidationCandidates -GraphZoneName $TransitionData.ToZone -PrimarySceneZoneName $TransitionData.DestinationSceneZoneName)
+        StepTimeoutSeconds = $recommendedTimeoutSeconds
+        StaticSuspicionScore = $score
+        StaticIssues = @($issues)
+        AssetDerivationSource = $TransitionData.AssetDerivationSource
+        SourceSceneZoneName = $TransitionData.SourceSceneZoneName
+        DestinationSceneZoneName = $TransitionData.DestinationSceneZoneName
+    }
 }
 
 $directedOverrides = @{
@@ -470,7 +880,68 @@ $stepMetadata = @{
     }
 }
 
-$generatedLinks = New-Object System.Collections.Generic.List[object]
+$graphZoneNames = New-Object System.Collections.Generic.List[string]
+$seenGraphZones = @{}
+foreach ($link in @($inputGraph.Links)) {
+    foreach ($zoneName in @($link.FromZone, $link.ToZone)) {
+        if ([string]::IsNullOrWhiteSpace($zoneName) -or $seenGraphZones.ContainsKey($zoneName)) {
+            continue
+        }
+
+        $seenGraphZones[$zoneName] = $true
+        $graphZoneNames.Add($zoneName)
+    }
+}
+
+$generatedZones = New-Object System.Collections.Generic.List[object]
+$generatedNodes = New-Object System.Collections.Generic.List[object]
+$nodeById = @{}
+$sceneZoneNodeIdByName = @{}
+
+foreach ($graphZoneName in $graphZoneNames) {
+    $sceneCandidates = @(Get-GraphZoneSceneCandidates -ZoneName $graphZoneName)
+    $nodeIds = New-Object System.Collections.Generic.List[string]
+    $sceneZoneNames = New-Object System.Collections.Generic.List[string]
+
+    foreach ($sceneZone in $sceneCandidates) {
+        if ($null -eq $sceneZone -or [string]::IsNullOrWhiteSpace($sceneZone.Name)) {
+            continue
+        }
+
+        $nodeId = Get-SceneZoneNodeId -GraphZoneName $graphZoneName -SceneZoneName $sceneZone.Name
+        $sceneZoneNodeIdByName[$sceneZone.Name] = $nodeId
+        $sceneZoneNames.Add($sceneZone.Name)
+        $nodeIds.Add($nodeId)
+
+        $node = [ordered]@{
+            Id = $nodeId
+            Zone = $graphZoneName
+            SceneZoneName = $sceneZone.Name
+            Kind = if ($sceneZone.Name -eq $graphZoneName) { "ZoneCenter" } else { "RoomSubZone" }
+            Position = Copy-Vec3 $sceneZone.Position
+            Scale = Copy-Vec3 $sceneZone.Scale
+            Source = "CameraSpaces"
+        }
+
+        $generatedNodes.Add($node)
+        $nodeById[$nodeId] = $node
+    }
+
+    $exactNodeId = $null
+    if ($zonesByName.ContainsKey($graphZoneName)) {
+        $exactNodeId = Get-SceneZoneNodeId -GraphZoneName $graphZoneName -SceneZoneName $graphZoneName
+    }
+
+    $generatedZones.Add([ordered]@{
+        Id = "zone:$graphZoneName"
+        Name = $graphZoneName
+        NodeIds = @($nodeIds)
+        CenterNodeId = if (-not [string]::IsNullOrWhiteSpace($exactNodeId)) { $exactNodeId } elseif ($nodeIds.Count -gt 0) { $nodeIds[0] } else { $null }
+        SceneZoneNames = @(Get-UniqueStringArray -Values $sceneZoneNames.ToArray())
+    })
+}
+
+$generatedTransitions = New-Object System.Collections.Generic.List[object]
 foreach ($link in @($inputGraph.Links)) {
     $key = "$($link.FromZone)|$($link.ToZone)"
     $waypointPair = $null
@@ -501,24 +972,100 @@ foreach ($link in @($inputGraph.Links)) {
         $cost = 1.0
     }
 
-    $generatedLinks.Add([ordered]@{
+    $connectorGeometry = Get-ConnectorGeometry -StepKind $stepKind -WaypointPair $waypointPair -Metadata $metadata
+    $fromNodeId = Resolve-NearestSceneZoneNodeId -GraphZoneName $link.FromZone -ReferencePoint $connectorGeometry.SourceApproachPoint -SceneZoneNodeIdByName $sceneZoneNodeIdByName
+    $toNodeId = Resolve-NearestSceneZoneNodeId -GraphZoneName $link.ToZone -ReferencePoint $connectorGeometry.DestinationApproachPoint -SceneZoneNodeIdByName $sceneZoneNodeIdByName
+    $sourceSceneZoneName = if ($null -ne $fromNodeId -and $nodeById.ContainsKey($fromNodeId)) { $nodeById[$fromNodeId].SceneZoneName } else { $null }
+    $destinationSceneZoneName = if ($null -ne $toNodeId -and $nodeById.ContainsKey($toNodeId)) { $nodeById[$toNodeId].SceneZoneName } else { $null }
+
+    $transition = [ordered]@{
+        Id = "transition:$($link.FromZone)->$($link.ToZone)"
         FromZone = $link.FromZone
         ToZone = $link.ToZone
+        FromNodeId = $fromNodeId
+        ToNodeId = $toNodeId
         FromWaypoint = $waypointPair.FromWaypoint
         ToWaypoint = $waypointPair.ToWaypoint
         FromCrossingAnchor = Get-MetadataValue -Metadata $waypointPair -Key "FromCrossingAnchor"
         ToCrossingAnchor = Get-MetadataValue -Metadata $waypointPair -Key "ToCrossingAnchor"
+        SourceApproachPoint = $connectorGeometry.SourceApproachPoint
+        SourceClearPoint = $connectorGeometry.SourceClearPoint
+        DestinationClearPoint = $connectorGeometry.DestinationClearPoint
+        DestinationApproachPoint = $connectorGeometry.DestinationApproachPoint
+        NavigationPoints = $connectorGeometry.NavigationPoints
+        ConnectorObjectPosition = $connectorGeometry.ConnectorObjectPosition
         Cost = $cost
         StepKind = $stepKind
         ConnectorName = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
         RequiresInteraction = [bool](Get-MetadataValue -Metadata $metadata -Key "RequiresInteraction" -DefaultValue $false)
         TransitionWaitSeconds = [double](Get-MetadataValue -Metadata $metadata -Key "TransitionWaitSeconds" -DefaultValue 0.0)
-    })
+        Connector = [ordered]@{
+            Name = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
+            ObjectPosition = $connectorGeometry.ConnectorObjectPosition
+            SourceApproachPoint = $connectorGeometry.SourceApproachPoint
+            SourceClearPoint = $connectorGeometry.SourceClearPoint
+            DestinationClearPoint = $connectorGeometry.DestinationClearPoint
+            DestinationApproachPoint = $connectorGeometry.DestinationApproachPoint
+            NavigationPoints = $connectorGeometry.NavigationPoints
+            AssetDerivationSource = $connectorGeometry.AssetDerivationSource
+        }
+        SourceSceneZoneName = $sourceSceneZoneName
+        DestinationSceneZoneName = $destinationSceneZoneName
+        AssetDerivationSource = $connectorGeometry.AssetDerivationSource
+    }
+
+    $transition.Validation = Get-TransitionValidationMetadata -TransitionData $transition
+    $generatedTransitions.Add($transition)
+
+    $reverseTransition = [ordered]@{
+        Id = "transition:$($link.ToZone)->$($link.FromZone)"
+        FromZone = $link.ToZone
+        ToZone = $link.FromZone
+        FromNodeId = $toNodeId
+        ToNodeId = $fromNodeId
+        FromWaypoint = Copy-Vec3 $waypointPair.ToWaypoint
+        ToWaypoint = Copy-Vec3 $waypointPair.FromWaypoint
+        FromCrossingAnchor = Get-MetadataValue -Metadata $waypointPair -Key "ToCrossingAnchor"
+        ToCrossingAnchor = Get-MetadataValue -Metadata $waypointPair -Key "FromCrossingAnchor"
+        SourceApproachPoint = $connectorGeometry.DestinationApproachPoint
+        SourceClearPoint = $connectorGeometry.DestinationClearPoint
+        DestinationClearPoint = $connectorGeometry.SourceClearPoint
+        DestinationApproachPoint = $connectorGeometry.SourceApproachPoint
+        NavigationPoints = @(Get-DeduplicatedVectorSequence -Points @([array]$connectorGeometry.NavigationPoints[-1..0]))
+        ConnectorObjectPosition = $connectorGeometry.ConnectorObjectPosition
+        Cost = $cost
+        StepKind = $stepKind
+        ConnectorName = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
+        RequiresInteraction = [bool](Get-MetadataValue -Metadata $metadata -Key "RequiresInteraction" -DefaultValue $false)
+        TransitionWaitSeconds = [double](Get-MetadataValue -Metadata $metadata -Key "TransitionWaitSeconds" -DefaultValue 0.0)
+        Connector = [ordered]@{
+            Name = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
+            ObjectPosition = $connectorGeometry.ConnectorObjectPosition
+            SourceApproachPoint = $connectorGeometry.DestinationApproachPoint
+            SourceClearPoint = $connectorGeometry.DestinationClearPoint
+            DestinationClearPoint = $connectorGeometry.SourceClearPoint
+            DestinationApproachPoint = $connectorGeometry.SourceApproachPoint
+            NavigationPoints = @(Get-DeduplicatedVectorSequence -Points @([array]$connectorGeometry.NavigationPoints[-1..0]))
+            AssetDerivationSource = $connectorGeometry.AssetDerivationSource
+        }
+        SourceSceneZoneName = $destinationSceneZoneName
+        DestinationSceneZoneName = $sourceSceneZoneName
+        AssetDerivationSource = $connectorGeometry.AssetDerivationSource
+    }
+
+    $reverseTransition.Validation = Get-TransitionValidationMetadata -TransitionData $reverseTransition
+    $generatedTransitions.Add($reverseTransition)
 }
 
 $outputGraph = [ordered]@{
+    SchemaVersion = 2
+    GeneratedAtUtc = [DateTime]::UtcNow.ToString("o")
     SceneName = $inputGraph.SceneName
-    Links = $generatedLinks
+    SourceSceneDataPath = (Resolve-Path -LiteralPath $SceneDataPath).Path
+    SourceGraphPath = (Resolve-Path -LiteralPath $InputGraphPath).Path
+    Zones = $generatedZones
+    Nodes = $generatedNodes
+    Transitions = $generatedTransitions
 }
 
 $outputDirectory = Split-Path -Parent $OutputPath
@@ -526,5 +1073,5 @@ if (-not [string]::IsNullOrWhiteSpace($outputDirectory)) {
     New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
 }
 
-$outputGraph | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $OutputPath
-Write-Host "Wrote navigation graph to $OutputPath"
+$outputGraph | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $OutputPath
+Write-Host "Wrote navigation graph to $OutputPath (zones=$($generatedZones.Count) nodes=$($generatedNodes.Count) transitions=$($generatedTransitions.Count))"

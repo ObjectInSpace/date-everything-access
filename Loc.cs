@@ -109,6 +109,9 @@ namespace DateEverythingAccess
             Add("navmesh_export_success",
                 "Navmesh exportiert. {0} Dreiecke. {1} Uebergangspruefungen.",
                 "Navmesh exported. {0} triangles. {1} transition checks.");
+            Add("navmesh_export_diagnostic",
+                "Navmesh-Diagnose exportiert. In dieser Szene ist kein aktives Navmesh verfuegbar. {0} Uebergangspruefungen wurden trotzdem geschrieben.",
+                "Navmesh diagnostic exported. No active navmesh is available in this scene. {0} transition checks were still written.");
             Add("navmesh_export_no_navmesh",
                 "In der aktuellen Szene ist kein aktives Navmesh verfuegbar.",
                 "No active navmesh is available in the current scene.");

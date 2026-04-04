@@ -32,6 +32,12 @@ namespace DateEverythingAccess
             public Vector3 ToWaypoint;
             public Vector3 FromCrossingAnchor;
             public Vector3 ToCrossingAnchor;
+            public Vector3 SourceApproachPoint;
+            public Vector3 SourceClearPoint;
+            public Vector3 DestinationClearPoint;
+            public Vector3 DestinationApproachPoint;
+            public float ValidationTimeoutSeconds;
+            public int StaticSuspicionScore;
         }
 
         internal static string GetDefaultOutputPath()
@@ -66,7 +72,13 @@ namespace DateEverythingAccess
                 FromWaypoint = step != null ? step.FromWaypoint : Vector3.zero,
                 ToWaypoint = step != null ? step.ToWaypoint : Vector3.zero,
                 FromCrossingAnchor = step != null ? step.FromCrossingAnchor : Vector3.zero,
-                ToCrossingAnchor = step != null ? step.ToCrossingAnchor : Vector3.zero
+                ToCrossingAnchor = step != null ? step.ToCrossingAnchor : Vector3.zero,
+                SourceApproachPoint = step != null ? step.SourceApproachPoint : Vector3.zero,
+                SourceClearPoint = step != null ? step.SourceClearPoint : Vector3.zero,
+                DestinationClearPoint = step != null ? step.DestinationClearPoint : Vector3.zero,
+                DestinationApproachPoint = step != null ? step.DestinationApproachPoint : Vector3.zero,
+                ValidationTimeoutSeconds = step != null ? step.ValidationTimeoutSeconds : 0f,
+                StaticSuspicionScore = step != null ? step.StaticSuspicionScore : 0
             };
         }
 
@@ -117,6 +129,8 @@ namespace DateEverythingAccess
                     passedCount,
                     failedCount,
                     pendingCount));
+
+            PersistPassedKeys(outputPath, entries);
         }
 
         internal static HashSet<string> LoadPassedKeys(string reportPath)
@@ -126,6 +140,7 @@ namespace DateEverythingAccess
                 : reportPath;
 
             var passedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            LoadPassedKeysFromCachePath(GetPassedKeyCachePath(resolvedPath), passedKeys);
             if (!File.Exists(resolvedPath))
                 return passedKeys;
 
@@ -173,6 +188,86 @@ namespace DateEverythingAccess
             }
 
             return passedKeys;
+        }
+
+        private static void PersistPassedKeys(string reportPath, List<MutableEntry> entries)
+        {
+            var passedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string cachePath = GetPassedKeyCachePath(reportPath);
+            LoadPassedKeysFromCachePath(cachePath, passedKeys);
+
+            if (entries != null)
+            {
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    MutableEntry entry = entries[i];
+                    if (entry == null ||
+                        !string.Equals(entry.Status, "passed", StringComparison.OrdinalIgnoreCase) ||
+                        string.IsNullOrWhiteSpace(entry.Key))
+                    {
+                        continue;
+                    }
+
+                    passedKeys.Add(entry.Key);
+                }
+            }
+
+            if (passedKeys.Count == 0)
+                return;
+
+            try
+            {
+                string directory = Path.GetDirectoryName(cachePath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                    Directory.CreateDirectory(directory);
+
+                var orderedKeys = new List<string>(passedKeys);
+                orderedKeys.Sort(StringComparer.OrdinalIgnoreCase);
+                File.WriteAllLines(cachePath, orderedKeys.ToArray());
+            }
+            catch (Exception ex)
+            {
+                Main.Log.LogWarning("Failed to persist passed transition sweep keys: " + ex.Message);
+            }
+        }
+
+        private static void LoadPassedKeysFromCachePath(string cachePath, HashSet<string> passedKeys)
+        {
+            if (passedKeys == null)
+                return;
+            if (!File.Exists(cachePath))
+                return;
+
+            try
+            {
+                string[] lines = File.ReadAllLines(cachePath);
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    string key = lines[i];
+                    if (string.IsNullOrWhiteSpace(key))
+                        continue;
+
+                    passedKeys.Add(key.Trim());
+                }
+            }
+            catch (Exception ex)
+            {
+                Main.Log.LogWarning("Failed to load cached passed transition sweep keys: " + ex.Message);
+            }
+        }
+
+        private static string GetPassedKeyCachePath(string reportPath)
+        {
+            string resolvedPath = string.IsNullOrWhiteSpace(reportPath)
+                ? GetDefaultOutputPath()
+                : reportPath;
+
+            string directory = Path.GetDirectoryName(resolvedPath);
+            string fileName = Path.GetFileNameWithoutExtension(resolvedPath);
+            if (string.IsNullOrWhiteSpace(fileName))
+                fileName = "transition_sweep";
+
+            return Path.Combine(directory ?? Paths.PluginPath, fileName + ".passed.txt");
         }
 
         private static bool TryExtractJsonStringProperty(string line, string propertyName, out string value)
@@ -275,7 +370,13 @@ namespace DateEverythingAccess
             AppendVector(builder, "FromWaypoint", entry != null ? entry.FromWaypoint : Vector3.zero, indentLevel + 1, trailingComma: true);
             AppendVector(builder, "ToWaypoint", entry != null ? entry.ToWaypoint : Vector3.zero, indentLevel + 1, trailingComma: true);
             AppendVector(builder, "FromCrossingAnchor", entry != null ? entry.FromCrossingAnchor : Vector3.zero, indentLevel + 1, trailingComma: true);
-            AppendVector(builder, "ToCrossingAnchor", entry != null ? entry.ToCrossingAnchor : Vector3.zero, indentLevel + 1, trailingComma: false);
+            AppendVector(builder, "ToCrossingAnchor", entry != null ? entry.ToCrossingAnchor : Vector3.zero, indentLevel + 1, trailingComma: true);
+            AppendVector(builder, "SourceApproachPoint", entry != null ? entry.SourceApproachPoint : Vector3.zero, indentLevel + 1, trailingComma: true);
+            AppendVector(builder, "SourceClearPoint", entry != null ? entry.SourceClearPoint : Vector3.zero, indentLevel + 1, trailingComma: true);
+            AppendVector(builder, "DestinationClearPoint", entry != null ? entry.DestinationClearPoint : Vector3.zero, indentLevel + 1, trailingComma: true);
+            AppendVector(builder, "DestinationApproachPoint", entry != null ? entry.DestinationApproachPoint : Vector3.zero, indentLevel + 1, trailingComma: true);
+            AppendProperty(builder, "ValidationTimeoutSeconds", entry != null ? entry.ValidationTimeoutSeconds : 0f, indentLevel + 1, trailingComma: true);
+            AppendProperty(builder, "StaticSuspicionScore", entry != null ? entry.StaticSuspicionScore : 0, indentLevel + 1, trailingComma: false);
             builder.Append(indent);
             builder.Append("}");
             if (trailingComma)

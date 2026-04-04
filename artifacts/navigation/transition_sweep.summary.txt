@@ -1,0 +1,38 @@
+Sweep report import summary
+Kind: OpenPassage
+Imported at: 2026-04-04T21:34:16.7833305Z
+Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\transition_sweep.live.json
+Output: .\artifacts\navigation\transition_sweep.live.json
+Report generated at: 04/04/2026 21:31:34
+Active scene: ThirdPersonGreybox
+Merged totals: total=82 passed=55 failed=27 pending=0
+Imported status changes: newEntries=0 newlyPassed=0 newlyFailed=0 newlyPending=0 unchanged=2
+Open-passage override refresh: added=0 refreshed=25 preservedManualWaypoints=0 failedWithoutWaypoint=2 retainedWithoutCurrentFailure=2 totalEntries=29
+Remaining failed transitions:
+- bathroom2 -> dorian_bathroom2 | suspicion=6 | connector=<none> | step timeout currentZone=bathroom2 player=(-18.89, 12.82, -3.85)
+- bathroom2 -> dorian_bathroom2_2 | suspicion=2 | connector=<none> | navigation blocked currentZone=bathroom2 step=bathroom2->dorian_bathroom2_2 kind=OpenPassage interaction=False connector=<null> from=(-24.80, 18.23, -4.28) to=(-25.46, 17.84, -12.64) fromCross=(-25.46, 18.23, -5.07) toCross=(-25.46, 17.84, -12.64)
+- bedroom_closet -> dorian_irondoor | suspicion=6 | connector=<none> | step timeout currentZone=bedroom_closet player=(-9.82, 12.82, -7.65)
+- dining_room -> living_room | suspicion=2 | connector=<none> | step timeout currentZone=dining_room4 player=(-17.35, 6.10, -5.65)
+- dining_room -> piano_room | suspicion=0 | connector=<none> | navigation blocked currentZone=dining_room step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13)
+- dorian_backdoor -> laundry_room | suspicion=4 | connector=<none> | step timeout currentZone=kitchen3 player=(-26.30, -0.60, 20.13)
+- dorian_bathroom2_2 -> bathroom2 | suspicion=2 | connector=<none> | step timeout currentZone=bedroom4 player=(-24.31, 12.82, -7.55)
+- dorian_gym2 -> gym | suspicion=2 | connector=<none> | step timeout currentZone=upper_hallway player=(-9.64, 12.81, 6.45)
+- dorian_gym4 -> gym | suspicion=2 | connector=<none> | step timeout currentZone=bathroom2_4 player=(-25.21, 12.82, 6.56)
+- dorian_gymcloset1 -> gym_closet | suspicion=2 | connector=<none> | step timeout currentZone=gym4 player=(-5.35, 12.82, 23.36)
+- dorian_office_closet1 -> office_closet | suspicion=2 | connector=<none> | step timeout currentZone=office5 player=(5.16, -0.60, 25.17)
+- dorian_office2 -> office | suspicion=2 | connector=<none> | step timeout currentZone=hallway6 player=(9.21, -0.60, 5.06)
+- gym -> dorian_gym2 | suspicion=2 | connector=<none> | step timeout currentZone=gym8 player=(-6.83, 12.82, 8.98)
+- gym -> dorian_gym4 | suspicion=2 | connector=<none> | step timeout currentZone=gym2 player=(-23.83, 12.82, 8.94)
+- gym_closet -> dorian_gymcloset1 | suspicion=2 | connector=<none> | step timeout currentZone=gym_closet2 player=(-3.52, 12.82, 20.93)
+- kitchen_tutorial -> kitchen | suspicion=4 | connector=<none> | step timeout currentZone=piano_room11 player=(-11.00, -0.60, -9.90)
+- laundry_room -> dorian_backdoor | suspicion=4 | connector=<none> | step timeout currentZone=laundry_room2 player=(-25.17, -0.60, 29.97)
+- laundry_room -> dorian_laundry1 | suspicion=2 | connector=<none> | step timeout currentZone=laundry_room player=(-17.87, -0.60, 29.47)
+- laundry_room -> upper_hallway | suspicion=6 | connector=<none> | step timeout currentZone=laundry_room player=(-16.38, -0.60, 29.47)
+- living_room -> hallway | suspicion=0 | connector=<none> | step timeout currentZone=living_room2 player=(9.56, -0.60, -9.87)
+- office -> dorian_office2 | suspicion=2 | connector=<none> | step timeout currentZone=office6 player=(9.09, -0.60, 7.24)
+- office -> dorian_trapdoor1 | suspicion=0 | connector=<none> | step timeout currentZone=office5 player=(5.64, -0.60, 25.50)
+- office -> dorian_trapdoor2 | suspicion=4 | connector=<none> | step timeout currentZone=office5 player=(5.64, -0.60, 25.50)
+- office -> office_1love | suspicion=2 | connector=<none> | step timeout currentZone=office6 player=(6.86, -0.60, 7.58)
+- office_1love -> office | suspicion=2 | connector=<none> | step timeout currentZone=hallway6 player=(5.33, -0.61, 4.82)
+- office_closet -> dorian_office_closet1 | suspicion=2 | connector=<none> | step timeout currentZone=office_closet player=(3.20, -0.60, 24.52)
+- upper_hallway -> laundry_room | suspicion=6 | connector=<none> | step timeout currentZone=upper_hallway5 player=(-16.05, 12.82, 6.57)

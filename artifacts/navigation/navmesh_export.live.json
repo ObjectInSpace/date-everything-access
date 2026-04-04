@@ -1,0 +1,15 @@
+{
+    "GeneratedAtUtc": "2026-04-04T18:40:33.9443223Z",
+    "ActiveScene": "ThirdPersonGreybox",
+    "LoadedScenes": [
+        "ThirdPersonGreybox"
+    ],
+    "HasActiveNavMesh": false,
+    "ExportStatus": "NoActiveNavMesh",
+    "VertexCount": 0,
+    "TriangleCount": 0,
+    "Vertices": [],
+    "Indices": [],
+    "Areas": [],
+    "TransitionCount": 112
+}

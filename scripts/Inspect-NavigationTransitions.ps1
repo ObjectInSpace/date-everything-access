@@ -55,12 +55,20 @@ if (-not (Test-Path -LiteralPath $InputPath)) {
 }
 
 $graph = Get-Content -LiteralPath $InputPath -Raw | ConvertFrom-Json
-$links = @($graph.Links)
-if ($links.Count -eq 0) {
-    throw "Navigation graph did not contain any links: $InputPath"
+$transitions = @()
+if ($graph.PSObject.Properties.Match("Transitions").Count -gt 0) {
+    $transitions = @($graph.Transitions)
 }
 
-$reportEntries = foreach ($link in $links) {
+if ($transitions.Count -eq 0 -and $graph.PSObject.Properties.Match("Links").Count -gt 0) {
+    $transitions = @($graph.Links)
+}
+
+if ($transitions.Count -eq 0) {
+    throw "Navigation graph did not contain any transitions: $InputPath"
+}
+
+$reportEntries = foreach ($link in $transitions) {
     $issues = [System.Collections.Generic.List[string]]::new()
     $score = 0
 
@@ -68,18 +76,30 @@ $reportEntries = foreach ($link in $links) {
     $toWaypointMissing = Test-ZeroVector $link.ToWaypoint
     $fromCrossMissing = Test-ZeroVector $link.FromCrossingAnchor
     $toCrossMissing = Test-ZeroVector $link.ToCrossingAnchor
+    $sourceApproachMissing = Test-ZeroVector $link.SourceApproachPoint
+    $sourceClearMissing = Test-ZeroVector $link.SourceClearPoint
+    $destinationClearMissing = Test-ZeroVector $link.DestinationClearPoint
+    $destinationApproachMissing = Test-ZeroVector $link.DestinationApproachPoint
 
     if ($fromWaypointMissing) { Add-Issue $issues ([ref]$score) "MissingFromWaypoint" 4 }
     if ($toWaypointMissing) { Add-Issue $issues ([ref]$score) "MissingToWaypoint" 4 }
+    if ($sourceApproachMissing) { Add-Issue $issues ([ref]$score) "MissingSourceApproachPoint" 2 }
+    if ($sourceClearMissing) { Add-Issue $issues ([ref]$score) "MissingSourceClearPoint" 2 }
+    if ($destinationClearMissing) { Add-Issue $issues ([ref]$score) "MissingDestinationClearPoint" 2 }
+    if ($destinationApproachMissing) { Add-Issue $issues ([ref]$score) "MissingDestinationApproachPoint" 2 }
 
     $waypointDistance = if ($fromWaypointMissing -or $toWaypointMissing) { -1 } else { Get-VectorDistance $link.FromWaypoint $link.ToWaypoint }
     $crossingDistance = if ($fromCrossMissing -or $toCrossMissing) { -1 } else { Get-VectorDistance $link.FromCrossingAnchor $link.ToCrossingAnchor }
     $heightDelta = if ($fromWaypointMissing -or $toWaypointMissing) { -1 } else { [Math]::Abs([double]$link.ToWaypoint.y - [double]$link.FromWaypoint.y) }
     $fromWaypointToCrossing = if ($fromWaypointMissing -or $fromCrossMissing) { -1 } else { Get-VectorDistance $link.FromWaypoint $link.FromCrossingAnchor }
     $toWaypointToCrossing = if ($toWaypointMissing -or $toCrossMissing) { -1 } else { Get-VectorDistance $link.ToWaypoint $link.ToCrossingAnchor }
+    $sourceApproachToClear = if ($sourceApproachMissing -or $sourceClearMissing) { -1 } else { Get-VectorDistance $link.SourceApproachPoint $link.SourceClearPoint }
+    $destinationClearToApproach = if ($destinationClearMissing -or $destinationApproachMissing) { -1 } else { Get-VectorDistance $link.DestinationClearPoint $link.DestinationApproachPoint }
 
     if ($waypointDistance -gt 18) { Add-Issue $issues ([ref]$score) "LongWaypointSpan" 2 }
     if ($heightDelta -gt 4) { Add-Issue $issues ([ref]$score) "LargeHeightDelta" 2 }
+    if ($sourceApproachToClear -gt 8) { Add-Issue $issues ([ref]$score) "FarFromSourceApproachToClear" 1 }
+    if ($destinationClearToApproach -gt 8) { Add-Issue $issues ([ref]$score) "FarFromDestinationClearToApproach" 1 }
 
     if ($link.StepKind -eq "OpenPassage") {
         if ($fromCrossMissing) { Add-Issue $issues ([ref]$score) "MissingFromCrossingAnchor" 3 }
@@ -103,14 +123,21 @@ $reportEntries = foreach ($link in $links) {
         FromZone = $link.FromZone
         ToZone = $link.ToZone
         StepKind = $link.StepKind
+        FromNodeId = $link.FromNodeId
+        ToNodeId = $link.ToNodeId
         ConnectorName = $link.ConnectorName
         RequiresInteraction = [bool]$link.RequiresInteraction
+        ValidationTimeoutSeconds = if ($null -ne $link.Validation) { [double]$link.Validation.StepTimeoutSeconds } else { 0.0 }
+        BuilderSuspicionScore = if ($null -ne $link.Validation) { [int]$link.Validation.StaticSuspicionScore } else { 0 }
         SuspicionScore = $score
         WaypointDistance = $waypointDistance
         CrossingDistance = $crossingDistance
         HeightDelta = $heightDelta
         FromWaypointToCrossingDistance = $fromWaypointToCrossing
         ToWaypointToCrossingDistance = $toWaypointToCrossing
+        SourceApproachToClearDistance = $sourceApproachToClear
+        DestinationClearToApproachDistance = $destinationClearToApproach
+        BuilderIssues = if ($null -ne $link.Validation) { @($link.Validation.StaticIssues) } else { @() }
         Issues = @($issues)
     }
 }
