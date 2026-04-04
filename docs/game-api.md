@@ -163,6 +163,7 @@ That means hardcoding letter keys for core controls is riskier than function key
 
 - `F1`: help
 - `Ctrl+F1`: repeat the most recently spoken mod line
+- `F6`: report the current room and room objects relative to the direction the player is facing
 - `Ctrl+F6`: track the current tutorial objective
 - `Ctrl+Shift+F6`: open and cycle the current-room object list
 - `Ctrl+Alt+F6`: toggle auto-walk to the tracked object
@@ -176,8 +177,8 @@ That means hardcoding letter keys for core controls is riskier than function key
 
 - No gameplay consumer for `F1` was found in the decompiled game code.
 - `Ctrl+F1` reuses the same safe `F1` function key with an added modifier, so it stays outside the game's observed Rewired gameplay bindings.
-- No gameplay consumer for `F6` was found in the decompiled game code.
-- The four `Ctrl`-modified `F6` bindings stay outside the game's observed Rewired gameplay bindings and do not conflict with the shipped `F2`, `F3`, or `F8` debug keys.
+- No gameplay consumer for plain `F6` was found in the decompiled game code.
+- The plain plus `Ctrl`-modified `F6` bindings stay outside the game's observed Rewired gameplay bindings and do not conflict with the shipped `F2`, `F3`, or `F8` debug keys.
 - No gameplay consumer for `F9` was found in the decompiled game code.
 - `Ctrl+F9` reuses the same safe `F9` function key with an added modifier, so it stays outside the game's observed Rewired gameplay bindings.
 - `Ctrl+Shift+F9` reuses the same safe `F9` function key with one more modifier and is explicitly filtered in the hotkey handler so it does not also trigger plain debug toggle or the settings menu.
@@ -490,7 +491,7 @@ This is the cleanest room identifier found for house navigation speech.
 - `.\scripts\Import-TransitionSweepReport.ps1` copies that live sweep report into `artifacts\navigation\transition_sweep.live.json` for repo-side inspection
 - `.\scripts\Import-DoorTransitionSweepReport.ps1` copies the live door sweep report into `artifacts\navigation\door_transition_sweep.live.json` for repo-side inspection
 - `.\scripts\Inspect-NavigationTransitions.ps1` writes `artifacts\navigation\transition_validation.static.json`, which scores every generated transition with static geometry heuristics so suspicious links can be prioritized before runtime testing
-  - `ObjectTracker` beeps now follow the tracked object or current waypoint chosen by the watcher, use stereo panning for left or right guidance, map pitch to the target's height relative to the camera, map beep rate to target proximity, and raise volume as the player gets closer
+  - `ObjectTracker` beeps now follow the tracked object or current waypoint chosen by the watcher, use stereo panning for left or right guidance, map pitch to the target's vertical position in the camera frame with a stable center pitch near mid-screen, map beep rate to target proximity, and raise volume as the player gets closer
   - practical consequence:
     - the navigation graph currently uses coarse authored zones such as `office`
     - live `CameraSpaces.PlayerZone()` can return finer runtime subzones such as `office2`, `office5`, and `office6`
@@ -522,7 +523,8 @@ Important consequence:
 Important consequence:
 
 - `InteractableManager` uses `AlternateInteractions[0].Name` as the visible in-world object label for normal house interactions.
-- Accessibility tracker labels and current-room object lists should prefer that object-facing label before falling back to `mainText`, scene object names, or internal names.
+- Accessibility tracker labels and current-room object lists should prefer stable noun-style object labels.
+- If `mainText` or `AlternateInteractions[0].Name` looks like an imperative action prompt such as `Turn on`, prefer the scene object name or internal name instead.
 - Nearby-object speech should not always use the dateable name.
 - `InteractableObj.StartDialogue()` calls `Save.MeetDatableIfUnmet(InternalName())`, so `GetDateStatus(...) != Unmet` is the correct "player knows this character" boundary.
 - Before that point, prefer the object's own label, starting with `InteractableObj.mainText` when it is populated, then falling back to the scene object name.
@@ -667,6 +669,7 @@ Good Harmony targets for future feature work:
 - Nearby interactable announcements
 - Dateviators equip/charge change announcements
 - `Ctrl+F6` current tutorial objective tracking
+- `F6` room report with facing-relative object grouping
 - `Ctrl+Shift+F6` current-room object listing
 - `Ctrl+Alt+F6` auto-walk to the tracked object
 

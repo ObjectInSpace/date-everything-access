@@ -62,6 +62,19 @@ namespace DateEverythingAccess
             Door
         }
 
+        private enum FacingRelativeDirection
+        {
+            Here,
+            Ahead,
+            AheadRight,
+            Right,
+            BehindRight,
+            Behind,
+            BehindLeft,
+            Left,
+            AheadLeft
+        }
+
         private sealed class OpenPassageTransitionOverride
         {
             public string[] AcceptedSourceZones;
@@ -250,6 +263,7 @@ namespace DateEverythingAccess
         private static Type _engagementType;
         private static Type _loadingFactsType;
         private static int _repeatLastSpeechRequested;
+        private static int _describeCurrentRoomRequested;
         private static int _navigateToObjectiveRequested;
         private static int _selectNavigationTargetRequested;
         private static int _autoWalkRequested;
@@ -394,6 +408,11 @@ namespace DateEverythingAccess
         internal static void RequestRepeatLastSpeech()
         {
             Interlocked.Exchange(ref _repeatLastSpeechRequested, 1);
+        }
+
+        internal static void RequestDescribeCurrentRoom()
+        {
+            Interlocked.Exchange(ref _describeCurrentRoomRequested, 1);
         }
 
         internal static void RequestNavigateToObjective()
@@ -580,6 +599,9 @@ namespace DateEverythingAccess
 
         private void HandleNavigationRequests()
         {
+            if (Interlocked.Exchange(ref _describeCurrentRoomRequested, 0) != 0)
+                DescribeCurrentRoom();
+
             if (Interlocked.Exchange(ref _selectNavigationTargetRequested, 0) != 0)
                 CycleNavigationTarget();
 
@@ -1046,6 +1068,76 @@ namespace DateEverythingAccess
             _roomObjectTargets = targets;
             _lastRoomObjectListZone = currentZone;
             OpenRoomObjectPicker();
+        }
+
+        private void DescribeCurrentRoom()
+        {
+            Loc.RefreshLanguage();
+
+            if (!CanUseNavigationNow())
+            {
+                ScreenReader.Say(Loc.Get("room_scan_unavailable"), remember: false);
+                return;
+            }
+
+            string currentZone = GetCurrentZoneNameForNavigation();
+            string roomName = GetCurrentRoomScanName(currentZone);
+            if (!TryGetRoomObjectTargets(currentZone, out List<RoomObjectTarget> targets) || targets.Count == 0)
+            {
+                ScreenReader.Say(Loc.Get("room_scan_empty", roomName), remember: false);
+                return;
+            }
+
+            string report = BuildFacingRelativeRoomReport(roomName, targets);
+            ScreenReader.Say(report, remember: false);
+        }
+
+        private string BuildFacingRelativeRoomReport(string roomName, List<RoomObjectTarget> targets)
+        {
+            var groupedLabels = new Dictionary<FacingRelativeDirection, List<string>>();
+            for (int i = 0; i < targets.Count; i++)
+            {
+                RoomObjectTarget target = targets[i];
+                if (target == null || target.Interactable == null)
+                    continue;
+
+                FacingRelativeDirection direction = GetFacingRelativeDirection(target.Interactable.transform.position);
+                if (!groupedLabels.TryGetValue(direction, out List<string> labels))
+                {
+                    labels = new List<string>();
+                    groupedLabels[direction] = labels;
+                }
+
+                if (!labels.Contains(target.Label))
+                    labels.Add(target.Label);
+            }
+
+            var parts = new List<string>();
+            parts.Add(Loc.Get("room_scan_title", roomName));
+
+            FacingRelativeDirection[] orderedDirections =
+            {
+                FacingRelativeDirection.Here,
+                FacingRelativeDirection.Ahead,
+                FacingRelativeDirection.AheadRight,
+                FacingRelativeDirection.Right,
+                FacingRelativeDirection.BehindRight,
+                FacingRelativeDirection.Behind,
+                FacingRelativeDirection.BehindLeft,
+                FacingRelativeDirection.Left,
+                FacingRelativeDirection.AheadLeft
+            };
+
+            for (int i = 0; i < orderedDirections.Length; i++)
+            {
+                FacingRelativeDirection direction = orderedDirections[i];
+                if (!groupedLabels.TryGetValue(direction, out List<string> labels) || labels.Count == 0)
+                    continue;
+
+                parts.Add(Loc.Get("room_scan_group", GetFacingRelativeDirectionLabel(direction), string.Join(", ", labels.ToArray())));
+            }
+
+            return string.Join(". ", parts.ToArray());
         }
 
         private void OpenRoomObjectPicker()
@@ -4719,7 +4811,7 @@ namespace DateEverythingAccess
             if (targets == null || candidate == null)
                 return false;
 
-            string candidateInternalName = NormalizeText(candidate.InternalName());
+            string candidateIdentityKey = GetRoomObjectIdentityKey(candidate);
             for (int i = 0; i < targets.Count; i++)
             {
                 RoomObjectTarget existingTarget = targets[i];
@@ -4729,11 +4821,8 @@ namespace DateEverythingAccess
                 if (!string.Equals(existingTarget.Label, label, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                string existingInternalName = NormalizeText(existingTarget.Interactable.InternalName());
-                if (!string.Equals(existingInternalName, candidateInternalName, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                if (Vector3.Distance(existingTarget.Interactable.transform.position, candidate.transform.position) > 2.5f)
+                string existingIdentityKey = GetRoomObjectIdentityKey(existingTarget.Interactable);
+                if (!string.Equals(existingIdentityKey, candidateIdentityKey, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 equivalentTarget = existingTarget;
@@ -4741,6 +4830,22 @@ namespace DateEverythingAccess
             }
 
             return false;
+        }
+
+        private static string GetRoomObjectIdentityKey(InteractableObj interactable)
+        {
+            if (interactable == null)
+                return null;
+
+            string internalName = NormalizeText(interactable.InternalName());
+            if (!string.IsNullOrEmpty(internalName))
+                return internalName;
+
+            string sceneName = NormalizeIdentifierName(interactable.name);
+            if (!string.IsNullOrEmpty(sceneName))
+                return sceneName;
+
+            return NormalizeText(interactable.Id);
         }
 
         private static bool IsUsableRoomObjectLabel(string label)
@@ -4758,9 +4863,68 @@ namespace DateEverythingAccess
             return true;
         }
 
-        private bool ShouldSuppressNavigationAmbientSpeech()
+        private static FacingRelativeDirection GetFacingRelativeDirection(Vector3 targetPosition)
         {
-            return _isNavigationActive || _isRoomObjectPickerOpen || ObjectTracker.IsTracking;
+            if (BetterPlayerControl.Instance == null)
+                return FacingRelativeDirection.Ahead;
+
+            Transform playerTransform = BetterPlayerControl.Instance.transform;
+            Vector3 toTarget = targetPosition - playerTransform.position;
+            toTarget.y = 0f;
+            if (toTarget.sqrMagnitude <= 1f)
+                return FacingRelativeDirection.Here;
+
+            Vector3 forward = playerTransform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude <= 0.0001f)
+                forward = Vector3.forward;
+            else
+                forward.Normalize();
+
+            toTarget.Normalize();
+            float angle = Vector3.SignedAngle(forward, toTarget, Vector3.up);
+
+            if (angle >= -22.5f && angle < 22.5f)
+                return FacingRelativeDirection.Ahead;
+            if (angle >= 22.5f && angle < 67.5f)
+                return FacingRelativeDirection.AheadRight;
+            if (angle >= 67.5f && angle < 112.5f)
+                return FacingRelativeDirection.Right;
+            if (angle >= 112.5f && angle < 157.5f)
+                return FacingRelativeDirection.BehindRight;
+            if (angle >= 157.5f || angle < -157.5f)
+                return FacingRelativeDirection.Behind;
+            if (angle >= -157.5f && angle < -112.5f)
+                return FacingRelativeDirection.BehindLeft;
+            if (angle >= -112.5f && angle < -67.5f)
+                return FacingRelativeDirection.Left;
+            return FacingRelativeDirection.AheadLeft;
+        }
+
+        private static string GetFacingRelativeDirectionLabel(FacingRelativeDirection direction)
+        {
+            switch (direction)
+            {
+                case FacingRelativeDirection.Here:
+                    return Loc.Get("room_scan_direction_here");
+                case FacingRelativeDirection.Ahead:
+                    return Loc.Get("room_scan_direction_ahead");
+                case FacingRelativeDirection.AheadRight:
+                    return Loc.Get("room_scan_direction_ahead_right");
+                case FacingRelativeDirection.Right:
+                    return Loc.Get("room_scan_direction_right");
+                case FacingRelativeDirection.BehindRight:
+                    return Loc.Get("room_scan_direction_behind_right");
+                case FacingRelativeDirection.Behind:
+                    return Loc.Get("room_scan_direction_behind");
+                case FacingRelativeDirection.BehindLeft:
+                    return Loc.Get("room_scan_direction_behind_left");
+                case FacingRelativeDirection.Left:
+                    return Loc.Get("room_scan_direction_left");
+                case FacingRelativeDirection.AheadLeft:
+                default:
+                    return Loc.Get("room_scan_direction_ahead_left");
+            }
         }
 
         private static bool CanUseNavigationNow()
@@ -5615,12 +5779,6 @@ namespace DateEverythingAccess
             }
 
             string summary = BuildScreenSummary();
-            if (ShouldSuppressNavigationAmbientSpeech())
-            {
-                _lastScreenSummary = summary;
-                return;
-            }
-
             if (summary == _lastScreenSummary)
                 return;
 
@@ -5647,12 +5805,6 @@ namespace DateEverythingAccess
                 return;
 
             string roomName = GetCurrentRoomName();
-            if (ShouldSuppressNavigationAmbientSpeech())
-            {
-                _lastRoomName = roomName;
-                return;
-            }
-
             if (string.IsNullOrEmpty(roomName) || roomName == _lastRoomName)
                 return;
 
@@ -5678,12 +5830,6 @@ namespace DateEverythingAccess
                 return;
 
             InteractableObj interactable = Singleton<InteractableManager>.Instance.activeObject;
-            if (ShouldSuppressNavigationAmbientSpeech())
-            {
-                _lastInteractableId = interactable != null ? interactable.Id : null;
-                return;
-            }
-
             if (interactable == null)
             {
                 _lastInteractableId = null;
@@ -6035,12 +6181,6 @@ namespace DateEverythingAccess
             if (!TryBuildTutorialAnnouncement(out announcement))
             {
                 _lastTutorialAnnouncement = null;
-                return;
-            }
-
-            if (ShouldSuppressNavigationAmbientSpeech())
-            {
-                _lastTutorialAnnouncement = announcement;
                 return;
             }
 
@@ -8508,6 +8648,18 @@ namespace DateEverythingAccess
             return NormalizeIdentifierName(zone.Name);
         }
 
+        private static string GetCurrentRoomScanName(string currentZone)
+        {
+            string roomName = GetCurrentRoomName();
+            if (!string.IsNullOrEmpty(roomName))
+                return roomName;
+
+            string normalizedZoneName = NormalizeIdentifierName(currentZone);
+            return !string.IsNullOrEmpty(normalizedZoneName)
+                ? normalizedZoneName
+                : Loc.Get("room_scan_unknown_room");
+        }
+
         private static bool TryGetCurrentTutorialObjectiveText(out string objectiveText)
         {
             objectiveText = null;
@@ -8529,22 +8681,19 @@ namespace DateEverythingAccess
             if (interactable == null)
                 return Loc.Get("unknown_object");
 
-            string displayName = NormalizeText(interactable.mainText);
-            if (!string.IsNullOrEmpty(displayName) &&
-                !displayName.StartsWith("Default hover text for ", StringComparison.OrdinalIgnoreCase))
-            {
-                return displayName;
-            }
+            string mainTextName = NormalizeObjectLabelCandidate(interactable.mainText);
+            if (!IsActionStyleObjectLabel(mainTextName))
+                return mainTextName;
 
-            displayName = GetAlternateInteractionDisplayName(interactable);
+            string alternateInteractionName = NormalizeObjectLabelCandidate(GetAlternateInteractionDisplayName(interactable));
+            if (!IsActionStyleObjectLabel(alternateInteractionName))
+                return alternateInteractionName;
+
+            string displayName = NormalizeObjectIdentifierName(interactable.name);
             if (!string.IsNullOrEmpty(displayName))
                 return displayName;
 
-            displayName = NormalizeIdentifierName(interactable.name);
-            if (!string.IsNullOrEmpty(displayName))
-                return displayName;
-
-            displayName = NormalizeIdentifierName(interactable.InternalName());
+            displayName = NormalizeObjectIdentifierName(interactable.InternalName());
             return string.IsNullOrEmpty(displayName) ? Loc.Get("unknown_object") : displayName;
         }
 
@@ -8599,6 +8748,80 @@ namespace DateEverythingAccess
 
             Interactable alternateInteraction = interactable.AlternateInteractions[0];
             return NormalizeText(alternateInteraction != null ? alternateInteraction.Name : null);
+        }
+
+        private static string NormalizeObjectLabelCandidate(string value)
+        {
+            string normalized = NormalizeText(value);
+            if (string.IsNullOrEmpty(normalized))
+                return null;
+
+            if (normalized.StartsWith("Default hover text for ", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            if (string.Equals(normalized, "Main Camera", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            return normalized;
+        }
+
+        private static string NormalizeObjectIdentifierName(string value)
+        {
+            string normalized = NormalizeIdentifierName(value);
+            if (string.IsNullOrEmpty(normalized))
+                return null;
+
+            normalized = Regex.Replace(normalized, "(?<=[a-z])(?=[A-Z])", " ");
+            normalized = Regex.Replace(normalized, "(?<=[A-Za-z])(?=[0-9])", " ");
+            normalized = Regex.Replace(normalized, "(?<=[0-9])(?=[A-Za-z])", " ");
+            while (normalized.Contains("  "))
+            {
+                normalized = normalized.Replace("  ", " ");
+            }
+
+            return normalized.Trim();
+        }
+
+        private static bool IsActionStyleObjectLabel(string label)
+        {
+            label = NormalizeObjectLabelCandidate(label);
+            if (string.IsNullOrEmpty(label))
+                return true;
+
+            string lowered = label.ToLowerInvariant();
+            string[] actionPrefixes =
+            {
+                "turn ",
+                "turn on",
+                "turn off",
+                "switch ",
+                "open ",
+                "close ",
+                "check ",
+                "look ",
+                "talk ",
+                "use ",
+                "pick up",
+                "grab ",
+                "awaken ",
+                "start ",
+                "stop ",
+                "inspect ",
+                "examine ",
+                "enter ",
+                "leave ",
+                "read ",
+                "press ",
+                "activate "
+            };
+
+            for (int i = 0; i < actionPrefixes.Length; i++)
+            {
+                if (lowered.StartsWith(actionPrefixes[i], StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
         }
 
         private static bool ContainsToken(string value, string token)

@@ -12,12 +12,13 @@ namespace DateEverythingAccess
         private const string LogSource = "ObjectTracker";
         private const int SampleRate = 44100;
         private const float BaseFrequency = 880f;
-        private const float MinPitch = 0.4f;
-        private const float MaxPitch = 2f;
-        private const float MinVolume = 0.7f;
-        private const float MaxVolume = 1f;
+        private const float CenterPitch = 1f;
+        private const float MinPitch = 0.72f;
+        private const float MaxPitch = 1.38f;
+        private const float MinVolume = 0.18f;
+        private const float MaxVolume = 0.32f;
         private const float MaxTrackingDistance = 100f;
-        private const float MaxVerticalPitchOffset = 6f;
+        private const float CenterViewportDeadZone = 0.08f;
         private const float ClipDurationSeconds = 1f;
         private const float TargetRefreshDistance = 0.2f;
         private const float DebugUpdateIntervalSeconds = 1f;
@@ -156,9 +157,9 @@ namespace DateEverythingAccess
             Vector3 toTarget = _targetPosition - referenceTransform.position;
             float distance = toTarget.magnitude;
             float proximityAmount = Mathf.Clamp01(1f - (distance / MaxTrackingDistance));
+            float verticalPitchAmount = GetVerticalPitchAmount(referenceTransform);
 
-            float verticalAmount = Mathf.InverseLerp(-MaxVerticalPitchOffset, MaxVerticalPitchOffset, toTarget.y);
-            audioSource.pitch = Mathf.Lerp(MinPitch, MaxPitch, verticalAmount);
+            audioSource.pitch = GetPitchForVerticalAmount(verticalPitchAmount);
             float proximityVolume = Mathf.Lerp(MinVolume, MaxVolume, proximityAmount);
             audioSource.volume = _requiresInteraction
                 ? Mathf.Min(1f, proximityVolume + 0.1f)
@@ -179,6 +180,7 @@ namespace DateEverythingAccess
                     " distance=" + distance.ToString("0.00") +
                     " volume=" + audioSource.volume.ToString("0.00") +
                     " pitch=" + audioSource.pitch.ToString("0.00") +
+                    " verticalPitchAmount=" + verticalPitchAmount.ToString("0.00") +
                     " spatialBlend=" + audioSource.spatialBlend.ToString("0.00") +
                     " spatialize=" + audioSource.spatialize);
             }
@@ -275,6 +277,40 @@ namespace DateEverythingAccess
             AudioClip clip = AudioClip.Create("DateEverythingNavigationTone", sampleCount, 1, SampleRate, false);
             clip.SetData(samples, 0);
             return clip;
+        }
+
+        private static float GetVerticalPitchAmount(Transform referenceTransform)
+        {
+            Camera mainCamera = Camera.main;
+            if (mainCamera != null)
+            {
+                Vector3 viewportPoint = mainCamera.WorldToViewportPoint(_targetPosition);
+                if (viewportPoint.z > 0f)
+                    return Mathf.Clamp01(viewportPoint.y);
+            }
+
+            Vector3 localTarget = referenceTransform.InverseTransformPoint(_targetPosition);
+            if (Mathf.Abs(localTarget.z) > 0.01f)
+            {
+                float verticalAngle = Mathf.Atan2(localTarget.y, Mathf.Abs(localTarget.z));
+                return Mathf.Clamp01(0.5f + (verticalAngle / (Mathf.PI * 0.5f)) * 0.5f);
+            }
+
+            return localTarget.y >= 0f ? 1f : 0f;
+        }
+
+        private static float GetPitchForVerticalAmount(float verticalAmount)
+        {
+            float centeredOffset = Mathf.Clamp(verticalAmount - 0.5f, -0.5f, 0.5f);
+            float offsetMagnitude = Mathf.Abs(centeredOffset);
+            if (offsetMagnitude <= CenterViewportDeadZone)
+                return CenterPitch;
+
+            float normalizedOffset = Mathf.InverseLerp(CenterViewportDeadZone, 0.5f, offsetMagnitude);
+            if (centeredOffset > 0f)
+                return Mathf.Lerp(CenterPitch, MaxPitch, normalizedOffset);
+
+            return Mathf.Lerp(CenterPitch, MinPitch, normalizedOffset);
         }
 
         private static Transform GetReferenceTransform()

@@ -24,12 +24,13 @@ namespace DateEverythingAccess
         private const int DebugHotkeyId = 2;
         private const int SettingsHotkeyId = 3;
         private const int RepeatSpeechHotkeyId = 4;
-        private const int NavigateToObjectiveHotkeyId = 5;
-        private const int SelectNavigationTargetHotkeyId = 6;
-        private const int AutoWalkHotkeyId = 7;
-        private const int ExportNavMeshHotkeyId = 8;
-        private const int TransitionSweepHotkeyId = 9;
-        private const int DoorTransitionSweepHotkeyId = 10;
+        private const int DescribeCurrentRoomHotkeyId = 5;
+        private const int NavigateToObjectiveHotkeyId = 6;
+        private const int SelectNavigationTargetHotkeyId = 7;
+        private const int AutoWalkHotkeyId = 8;
+        private const int ExportNavMeshHotkeyId = 9;
+        private const int TransitionSweepHotkeyId = 10;
+        private const int DoorTransitionSweepHotkeyId = 11;
 
         private Thread _hotkeyThread;
         private volatile bool _hotkeyThreadRunning;
@@ -160,6 +161,7 @@ namespace DateEverythingAccess
                 RegisterHotkeyOrThrow(DebugHotkeyId, VkF9, "F9");
                 RegisterHotkeyOrThrow(SettingsHotkeyId, ModControl | ModNoRepeat, VkF9, "Ctrl+F9");
                 RegisterHotkeyOrThrow(RepeatSpeechHotkeyId, ModControl | ModNoRepeat, VkF1, "Ctrl+F1");
+                RegisterHotkeyOrThrow(DescribeCurrentRoomHotkeyId, VkF6, "F6");
                 RegisterHotkeyOrThrow(NavigateToObjectiveHotkeyId, ModControl | ModNoRepeat, VkF6, "Ctrl+F6");
                 RegisterHotkeyOrThrow(SelectNavigationTargetHotkeyId, ModControl | ModShift | ModNoRepeat, VkF6, "Ctrl+Shift+F6");
                 RegisterHotkeyOrThrow(AutoWalkHotkeyId, ModControl | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+F6");
@@ -191,6 +193,7 @@ namespace DateEverythingAccess
                 UnregisterHotKey(IntPtr.Zero, DebugHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, SettingsHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, RepeatSpeechHotkeyId);
+                UnregisterHotKey(IntPtr.Zero, DescribeCurrentRoomHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, NavigateToObjectiveHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, SelectNavigationTargetHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, AutoWalkHotkeyId);
@@ -248,6 +251,16 @@ namespace DateEverythingAccess
             if (hotkeyId == RepeatSpeechHotkeyId)
             {
                 RepeatLastSpeech();
+                return;
+            }
+
+            if (hotkeyId == DescribeCurrentRoomHotkeyId)
+            {
+                if (IsModifierKeyDown(0x10) || IsModifierKeyDown(0x11) || IsModifierKeyDown(0x12))
+                    return;
+
+                Logger.LogInfo("Describe current room hotkey detected");
+                AccessibilityWatcher.RequestDescribeCurrentRoom();
                 return;
             }
 
