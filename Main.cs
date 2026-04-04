@@ -28,6 +28,8 @@ namespace DateEverythingAccess
         private const int SelectNavigationTargetHotkeyId = 6;
         private const int AutoWalkHotkeyId = 7;
         private const int ExportNavMeshHotkeyId = 8;
+        private const int TransitionSweepHotkeyId = 9;
+        private const int DoorTransitionSweepHotkeyId = 10;
 
         private Thread _hotkeyThread;
         private volatile bool _hotkeyThreadRunning;
@@ -162,6 +164,8 @@ namespace DateEverythingAccess
                 RegisterHotkeyOrThrow(SelectNavigationTargetHotkeyId, ModControl | ModShift | ModNoRepeat, VkF6, "Ctrl+Shift+F6");
                 RegisterHotkeyOrThrow(AutoWalkHotkeyId, ModControl | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+F6");
                 RegisterHotkeyOrThrow(ExportNavMeshHotkeyId, ModControl | ModShift | ModNoRepeat, VkF9, "Ctrl+Shift+F9");
+                RegisterHotkeyOrThrow(TransitionSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF9, "Ctrl+Alt+Shift+F9");
+                RegisterHotkeyOrThrow(DoorTransitionSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+Shift+F6");
                 Logger.LogInfo("Background hotkey message loop active");
 
                 NativeMessage message;
@@ -191,6 +195,8 @@ namespace DateEverythingAccess
                 UnregisterHotKey(IntPtr.Zero, SelectNavigationTargetHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, AutoWalkHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, ExportNavMeshHotkeyId);
+                UnregisterHotKey(IntPtr.Zero, TransitionSweepHotkeyId);
+                UnregisterHotKey(IntPtr.Zero, DoorTransitionSweepHotkeyId);
                 Logger.LogInfo("Background hotkey thread exiting");
             }
         }
@@ -275,6 +281,16 @@ namespace DateEverythingAccess
                 return;
             }
 
+            if (hotkeyId == DoorTransitionSweepHotkeyId)
+            {
+                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || !IsModifierKeyDown(0x12))
+                    return;
+
+                Logger.LogInfo("Door transition sweep hotkey detected");
+                AccessibilityWatcher.RequestToggleDoorTransitionSweep();
+                return;
+            }
+
             if (hotkeyId == ExportNavMeshHotkeyId)
             {
                 if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || IsModifierKeyDown(0x12))
@@ -282,6 +298,16 @@ namespace DateEverythingAccess
 
                 Logger.LogInfo("Navmesh export hotkey detected");
                 AccessibilityWatcher.RequestExportNavMesh();
+                return;
+            }
+
+            if (hotkeyId == TransitionSweepHotkeyId)
+            {
+                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || !IsModifierKeyDown(0x12))
+                    return;
+
+                Logger.LogInfo("Transition sweep hotkey detected");
+                AccessibilityWatcher.RequestToggleTransitionSweep();
             }
         }
 

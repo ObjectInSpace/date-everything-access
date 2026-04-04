@@ -96,11 +96,11 @@ namespace DateEverythingAccess
         private static void InitializeStrings()
         {
             Add("mod_loaded",
-                "Date Everything Access geladen. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen werden automatisch vorgelesen. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen. Strg+Umschalt+F9 exportiert die Navmesh-Daten. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Objektliste fuer den aktuellen Raum. Strg+Alt+F6 schaltet den Auto-Lauf zum verfolgten Objekt um.",
-                "Date Everything Access loaded. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes are spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings. Ctrl+Shift+F9 exports navmesh data. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the current room object list. Ctrl+Alt+F6 toggles auto-walk to the tracked object.");
+                "Date Everything Access geladen. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen werden automatisch vorgelesen. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen. Strg+Umschalt+F9 exportiert die Navmesh-Daten. Strg+Alt+Umschalt+F9 startet oder stoppt den Uebergangstestlauf. Strg+Alt+Umschalt+F6 startet oder stoppt den Tuer-Uebergangstestlauf. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Objektliste fuer den aktuellen Raum. Strg+Alt+F6 schaltet den Auto-Lauf zum verfolgten Objekt um.",
+                "Date Everything Access loaded. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes are spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings. Ctrl+Shift+F9 exports navmesh data. Ctrl+Alt+Shift+F9 starts or stops the transition sweep. Ctrl+Alt+Shift+F6 starts or stops the door transition sweep. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the current room object list. Ctrl+Alt+F6 toggles auto-walk to the tracked object.");
             Add("help_text",
-                "Date Everything Access. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen koennen automatisch vorgelesen werden. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen. Strg+Umschalt+F9 exportiert die Navmesh-Daten. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Objektliste fuer den aktuellen Raum. Strg+Alt+F6 schaltet den Auto-Lauf zum verfolgten Objekt um.",
-                "Date Everything Access. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes can be spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings. Ctrl+Shift+F9 exports navmesh data. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the current room object list. Ctrl+Alt+F6 toggles auto-walk to the tracked object.");
+                "Date Everything Access. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen koennen automatisch vorgelesen werden. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen. Strg+Umschalt+F9 exportiert die Navmesh-Daten. Strg+Alt+Umschalt+F9 startet oder stoppt den Uebergangstestlauf. Strg+Alt+Umschalt+F6 startet oder stoppt den Tuer-Uebergangstestlauf. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Objektliste fuer den aktuellen Raum. Strg+Alt+F6 schaltet den Auto-Lauf zum verfolgten Objekt um.",
+                "Date Everything Access. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes can be spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings. Ctrl+Shift+F9 exports navmesh data. Ctrl+Alt+Shift+F9 starts or stops the transition sweep. Ctrl+Alt+Shift+F6 starts or stops the door transition sweep. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the current room object list. Ctrl+Alt+F6 toggles auto-walk to the tracked object.");
             Add("debug_mode_enabled", "Debug-Modus aktiviert.", "Debug mode enabled.");
             Add("debug_mode_enabled_with_mapping_dump",
                 "Debug-Modus aktiviert. Aktuelle Eingabebelegungen fuer {0} Geraete wurden ins Protokoll geschrieben.",
@@ -244,6 +244,30 @@ namespace DateEverythingAccess
             Add("navigation_target_awakened", "Geweckt", "Awakened");
             Add("navigation_autowalk_started", "Auto-Lauf begonnen.", "Auto-walk started.");
             Add("navigation_autowalk_stopped", "Auto-Lauf gestoppt.", "Auto-walk stopped.");
+            Add("transition_sweep_started",
+                "Uebergangstestlauf gestartet. {0} Uebergaenge in der Warteschlange.",
+                "Transition sweep started. {0} transitions queued.");
+            Add("transition_sweep_complete",
+                "Uebergangstestlauf abgeschlossen. {0} Uebergaenge. {1} bestanden. {2} fehlgeschlagen.",
+                "Transition sweep complete. {0} transitions. {1} passed. {2} failed.");
+            Add("transition_sweep_stopped",
+                "Uebergangstestlauf gestoppt.",
+                "Transition sweep stopped.");
+            Add("transition_sweep_unavailable",
+                "Uebergangstestlauf ist hier gerade nicht verfuegbar.",
+                "Transition sweep is not available right now.");
+            Add("door_transition_sweep_started",
+                "Tuer-Uebergangstestlauf gestartet. {0} Uebergaenge in der Warteschlange.",
+                "Door transition sweep started. {0} transitions queued.");
+            Add("door_transition_sweep_complete",
+                "Tuer-Uebergangstestlauf abgeschlossen. {0} Uebergaenge. {1} bestanden. {2} fehlgeschlagen.",
+                "Door transition sweep complete. {0} transitions. {1} passed. {2} failed.");
+            Add("door_transition_sweep_stopped",
+                "Tuer-Uebergangstestlauf gestoppt.",
+                "Door transition sweep stopped.");
+            Add("door_transition_sweep_unavailable",
+                "Tuer-Uebergangstestlauf ist hier gerade nicht verfuegbar.",
+                "Door transition sweep is not available right now.");
         }
     }
 }

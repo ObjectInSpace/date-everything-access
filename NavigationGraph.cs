@@ -469,15 +469,18 @@ namespace DateEverythingAccess
             if (colonIndex < 0)
                 return null;
 
-            int quoteStart = obj.IndexOf('"', colonIndex + 1);
-            if (quoteStart < 0)
+            int valueStart = colonIndex + 1;
+            while (valueStart < obj.Length && char.IsWhiteSpace(obj[valueStart]))
+                valueStart++;
+
+            if (valueStart >= obj.Length || obj[valueStart] != '"')
                 return null;
 
-            int quoteEnd = obj.IndexOf('"', quoteStart + 1);
+            int quoteEnd = obj.IndexOf('"', valueStart + 1);
             if (quoteEnd < 0)
                 return null;
 
-            return obj.Substring(quoteStart + 1, quoteEnd - quoteStart - 1);
+            return obj.Substring(valueStart + 1, quoteEnd - valueStart - 1);
         }
 
         private static Vector3 ExtractJsonVector3(string obj, string key)

@@ -166,19 +166,22 @@ That means hardcoding letter keys for core controls is riskier than function key
 - `Ctrl+F6`: track the current tutorial objective
 - `Ctrl+Shift+F6`: open and cycle the current-room object list
 - `Ctrl+Alt+F6`: toggle auto-walk to the tracked object
+- `Ctrl+Alt+Shift+F6`: start or stop the dev-only door transition sweep
 - `F9`: toggle debug
 - `Ctrl+F9`: accessibility settings menu
 - `Ctrl+Shift+F9`: export live navmesh triangulation and transition checks
+- `Ctrl+Alt+Shift+F9`: start or stop the dev-only transition sweep
 
 ### Why these are safe
 
 - No gameplay consumer for `F1` was found in the decompiled game code.
 - `Ctrl+F1` reuses the same safe `F1` function key with an added modifier, so it stays outside the game's observed Rewired gameplay bindings.
 - No gameplay consumer for `F6` was found in the decompiled game code.
-- The three `Ctrl`-modified `F6` bindings stay outside the game's observed Rewired gameplay bindings and do not conflict with the shipped `F2`, `F3`, or `F8` debug keys.
+- The four `Ctrl`-modified `F6` bindings stay outside the game's observed Rewired gameplay bindings and do not conflict with the shipped `F2`, `F3`, or `F8` debug keys.
 - No gameplay consumer for `F9` was found in the decompiled game code.
 - `Ctrl+F9` reuses the same safe `F9` function key with an added modifier, so it stays outside the game's observed Rewired gameplay bindings.
 - `Ctrl+Shift+F9` reuses the same safe `F9` function key with one more modifier and is explicitly filtered in the hotkey handler so it does not also trigger plain debug toggle or the settings menu.
+- `Ctrl+Alt+Shift+F9` stays on the same safe `F9` key family, adds a third modifier, and is explicitly filtered so it does not also trigger debug, settings, or navmesh export.
 - They sit outside the Rewired action flow the game relies on for normal keyboard/controller input.
 
 ### Keys to avoid
@@ -472,9 +475,21 @@ This is the cleanest room identifier found for house navigation speech.
   - `AccessibilityWatcher` now tracks a concrete interactable target, falls back to the current step waypoint while that target is still in another zone, and switches back to the live object position after entering the target room
   - `AccessibilityWatcher` treats teleporter links as interaction-driven transitions, waits through the crawlspace animation while player control is disabled, and can retry door interactions before declaring navigation blocked
   - `AccessibilityWatcher` now uses authored open-passage crossing anchors when present instead of inferring the entire crossing line from room-center waypoints at runtime
-  - `Ctrl+Shift+F9` now runs a live navmesh export through `UnityEngine.AI.NavMesh.CalculateTriangulation()` and writes `BepInEx\plugins\navmesh_export.live.json`
-  - the export samples each directed `NavigationGraph` step's waypoints and crossing anchors onto the current navmesh and records the resulting path status and any missing or suspicious anchors
-  - `.\scripts\Import-NavMeshExport.ps1` copies that live export into `artifacts\navigation\navmesh_export.live.json` for repo-side inspection
+- `Ctrl+Shift+F9` now runs a live navmesh export through `UnityEngine.AI.NavMesh.CalculateTriangulation()` and writes `BepInEx\plugins\navmesh_export.live.json`
+- the export samples each directed `NavigationGraph` step's waypoints and crossing anchors onto the current navmesh and records the resulting path status and any missing or suspicious anchors
+- `.\scripts\Import-NavMeshExport.ps1` copies that live export into `artifacts\navigation\navmesh_export.live.json` for repo-side inspection
+- `Ctrl+Alt+Shift+F9` now runs a dev-only `OpenPassage` transition sweep that teleports the player to each directed graph step's source, forces a single-step auto-walk attempt, and writes `BepInEx\plugins\transition_sweep.live.json`
+- `Ctrl+Alt+Shift+F6` now runs a separate dev-only `Door` transition sweep that teleports to a stand-clear source-side position, shifts slightly off-center so the player is less likely to block the swing, snaps to an interaction-ready stance near the door, tries the door interaction before movement, waits briefly for the door to open, then forces a single-step auto-walk attempt and writes `BepInEx\plugins\door_transition_sweep.live.json`
+- For door sweeps, `AccessibilityWatcher` now retries the first interaction from the opposite lateral side when the initial stance fails, scores door candidates against the full `FromWaypoint -> ToWaypoint` route instead of only source proximity, and after a successful interaction commits to a short destination-side push-through target so movement does not fall back to the source-side waypoint immediately after the door opens
+- Each sweep entry now includes `StepIndex`, `TransitionKind`, and `StatusDetail` so repo-side analysis can distinguish transition classes without inferring from raw log lines
+- `AccessibilityWatcher` now also carries a directed open-passage override table for the worst confirmed runtime failures; those overrides can bias destination approach targeting deeper into the destination side without regenerating the whole graph
+- Sweep reruns now read the existing `BepInEx\plugins\transition_sweep.live.json` file with a simple manual JSON line parser and skip any transition whose last recorded status was `passed`, so repeated sweeps focus on unresolved failures without relying on `JsonUtility` deserialization
+- Door-sweep reruns do the same against `BepInEx\plugins\door_transition_sweep.live.json`, so already-passed door links are skipped on the next pass
+- For the worst confirmed open-passage failures, the watcher can now traverse in explicit segments `FromWaypoint -> FromCrossingAnchor -> ToCrossingAnchor -> ToWaypoint` instead of one long straight-line handoff, which is intended to avoid cutting through bad doorway or stairwell geometry
+- Open-passage override data is now externalized in `navigation_transition_overrides.json`, copied into `BepInEx\plugins\`, and loaded at runtime through `DataContractJsonSerializer`; each directed entry can define accepted source/destination subzones, destination approach bias, explicit intermediate waypoints, explicit-crossing mode, and an optional per-transition timeout
+- `.\scripts\Import-TransitionSweepReport.ps1` copies that live sweep report into `artifacts\navigation\transition_sweep.live.json` for repo-side inspection
+- `.\scripts\Import-DoorTransitionSweepReport.ps1` copies the live door sweep report into `artifacts\navigation\door_transition_sweep.live.json` for repo-side inspection
+- `.\scripts\Inspect-NavigationTransitions.ps1` writes `artifacts\navigation\transition_validation.static.json`, which scores every generated transition with static geometry heuristics so suspicious links can be prioritized before runtime testing
   - `ObjectTracker` beeps now follow the tracked object or current waypoint chosen by the watcher, use stereo panning for left or right guidance, map pitch to the target's height relative to the camera, map beep rate to target proximity, and raise volume as the player gets closer
   - practical consequence:
     - the navigation graph currently uses coarse authored zones such as `office`

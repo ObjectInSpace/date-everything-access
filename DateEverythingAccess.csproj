@@ -15,6 +15,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="navigation_transition_overrides.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="BepInEx">
       <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\core\BepInEx.dll</HintPath>
       <Private>false</Private>
@@ -82,6 +88,7 @@
 
   <Target Name="CopyToPlugins" AfterTargets="Build" Condition="'$(SkipCopyToPlugins)' != 'true'">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\" />
+    <Copy SourceFiles="$(ProjectDir)navigation_transition_overrides.json" DestinationFolder="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\" Condition="Exists('$(ProjectDir)navigation_transition_overrides.json')" />
     <Message Text="Copied $(TargetFileName) to BepInEx plugins folder" Importance="High" />
   </Target>
 
