@@ -42,7 +42,7 @@ function Read-JsonDocument {
         return $null
     }
 
-    return $raw | ConvertFrom-Json -Depth 64
+    return $raw | ConvertFrom-Json
 }
 
 function Write-JsonDocument {

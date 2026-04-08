@@ -23,11 +23,18 @@
   <PropertyGroup>
     <NavigationGraphSourcePath>$(ProjectDir)artifacts\navigation\navigation_graph.generated.json</NavigationGraphSourcePath>
     <NavigationGraphOutputPath>$(ProjectDir)bin\$(Configuration)\net472\navigation_graph.json</NavigationGraphOutputPath>
+    <LocalNavigationMapsSourcePath>$(ProjectDir)artifacts\navigation\local_navigation_maps.generated.json</LocalNavigationMapsSourcePath>
+    <LocalNavigationMapsOutputPath>$(ProjectDir)bin\$(Configuration)\net472\local_navigation_maps.generated.json</LocalNavigationMapsOutputPath>
   </PropertyGroup>
 
   <Target Name="CopyNavigationGraphToOutput" AfterTargets="Build" Condition="Exists('$(NavigationGraphSourcePath)')">
     <Copy SourceFiles="$(NavigationGraphSourcePath)" DestinationFiles="$(NavigationGraphOutputPath)" />
     <Message Text="Copied navigation graph JSON to $(NavigationGraphOutputPath)" Importance="High" />
+  </Target>
+
+  <Target Name="CopyLocalNavigationMapsToOutput" AfterTargets="Build" Condition="Exists('$(LocalNavigationMapsSourcePath)')">
+    <Copy SourceFiles="$(LocalNavigationMapsSourcePath)" DestinationFiles="$(LocalNavigationMapsOutputPath)" />
+    <Message Text="Copied local navigation maps JSON to $(LocalNavigationMapsOutputPath)" Importance="High" />
   </Target>
 
   <ItemGroup>
@@ -100,6 +107,7 @@
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\" />
     <Copy SourceFiles="$(ProjectDir)navigation_transition_overrides.json" DestinationFolder="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\" Condition="Exists('$(ProjectDir)navigation_transition_overrides.json')" />
     <Copy SourceFiles="$(NavigationGraphSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json" Condition="Exists('$(NavigationGraphSourcePath)')" />
+    <Copy SourceFiles="$(LocalNavigationMapsSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\local_navigation_maps.generated.json" Condition="Exists('$(LocalNavigationMapsSourcePath)')" />
     <Message Text="Copied $(TargetFileName) to BepInEx plugins folder" Importance="High" />
   </Target>
 

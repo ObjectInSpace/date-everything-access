@@ -1,0 +1,703 @@
+using BepInEx;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
+using UnityEngine;
+
+namespace DateEverythingAccess
+{
+    /// <summary>
+    /// Loads generated local occupancy maps and computes short in-room routes over walkable cells.
+    /// </summary>
+    internal static class LocalNavigationMaps
+    {
+        private const int DefaultNearestCellSearchRadius = 8;
+        private static readonly object SyncRoot = new object();
+        private static readonly Dictionary<string, ZoneMap> ZonesByName =
+            new Dictionary<string, ZoneMap>(StringComparer.OrdinalIgnoreCase);
+
+        private static bool _isInitialized;
+        private static bool _isAvailable;
+
+        [DataContract]
+        private sealed class Document
+        {
+            [DataMember(Name = "SchemaVersion")]
+            public int SchemaVersion = 0;
+
+            [DataMember(Name = "Zones")]
+            public ZoneRecord[] Zones = null;
+        }
+
+        [DataContract]
+        private sealed class ZoneRecord
+        {
+            [DataMember(Name = "Zone")]
+            public string Zone = null;
+
+            [DataMember(Name = "CellSize")]
+            public float CellSize = 0f;
+
+            [DataMember(Name = "Bounds2D")]
+            public Bounds2DRecord Bounds2D = null;
+
+            [DataMember(Name = "GridWidth")]
+            public int GridWidth = 0;
+
+            [DataMember(Name = "GridHeight")]
+            public int GridHeight = 0;
+
+            [DataMember(Name = "EnvelopeIndices")]
+            public int[] EnvelopeIndices = null;
+
+            [DataMember(Name = "BlockedIndices")]
+            public int[] BlockedIndices = null;
+        }
+
+        [DataContract]
+        private sealed class Bounds2DRecord
+        {
+            [DataMember(Name = "MinX")]
+            public float MinX = 0f;
+
+            [DataMember(Name = "MaxX")]
+            public float MaxX = 0f;
+
+            [DataMember(Name = "MinZ")]
+            public float MinZ = 0f;
+
+            [DataMember(Name = "MaxZ")]
+            public float MaxZ = 0f;
+        }
+
+        private sealed class ZoneMap
+        {
+            public string Zone;
+            public float CellSize;
+            public float MinX;
+            public float MaxX;
+            public float MinZ;
+            public float MaxZ;
+            public int GridWidth;
+            public int GridHeight;
+            public bool[] Walkable;
+        }
+
+        /// <summary>
+        /// Gets whether the generated local map file was loaded successfully.
+        /// </summary>
+        public static bool IsAvailable
+        {
+            get
+            {
+                Initialize();
+                return _isAvailable;
+            }
+        }
+
+        /// <summary>
+        /// Attempts to compute a walkable cell path inside the given navigation zone.
+        /// </summary>
+        public static bool TryFindPath(
+            string zoneName,
+            Vector3 startPosition,
+            Vector3 targetPosition,
+            out List<Vector3> pathPoints,
+            out string failureReason)
+        {
+            pathPoints = null;
+            failureReason = null;
+
+            Initialize();
+            if (!_isAvailable)
+            {
+                failureReason = "LocalNavigationMapsUnavailable";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(zoneName))
+            {
+                failureReason = "MissingZoneName";
+                return false;
+            }
+
+            if (!ZonesByName.TryGetValue(zoneName, out ZoneMap zone))
+            {
+                failureReason = "ZoneNotFound";
+                return false;
+            }
+
+            if (zone.Walkable == null || zone.Walkable.Length == 0)
+            {
+                failureReason = "ZoneHasNoWalkableCells";
+                return false;
+            }
+
+            if (!TryFindNearestWalkableCellIndex(
+                    zone,
+                    startPosition,
+                    out int startIndex,
+                    out Vector3 snappedStartPosition,
+                    out string startSnapDetail))
+            {
+                failureReason =
+                    "NoWalkableStartCell zone=" + zone.Zone +
+                    " detail=" + (startSnapDetail ?? "<null>");
+                return false;
+            }
+
+            if (!TryFindNearestWalkableCellIndex(
+                    zone,
+                    targetPosition,
+                    out int targetIndex,
+                    out Vector3 snappedTargetPosition,
+                    out string targetSnapDetail))
+            {
+                failureReason =
+                    "NoWalkableTargetCell zone=" + zone.Zone +
+                    " detail=" + (targetSnapDetail ?? "<null>");
+                return false;
+            }
+
+            if (startIndex == targetIndex)
+            {
+                pathPoints = new List<Vector3> { snappedTargetPosition };
+                return true;
+            }
+
+            int cellCount = zone.Walkable.Length;
+            var gScores = new float[cellCount];
+            var fScores = new float[cellCount];
+            var cameFrom = new int[cellCount];
+            var states = new byte[cellCount];
+            for (int i = 0; i < cellCount; i++)
+            {
+                gScores[i] = float.PositiveInfinity;
+                fScores[i] = float.PositiveInfinity;
+                cameFrom[i] = -1;
+            }
+
+            var openSet = new List<int>();
+            gScores[startIndex] = 0f;
+            fScores[startIndex] = ComputeHeuristic(zone, startIndex, targetIndex);
+            openSet.Add(startIndex);
+            states[startIndex] = 1;
+
+            bool pathFound = false;
+            while (openSet.Count > 0)
+            {
+                int currentIndex = GetLowestScoreIndex(openSet, fScores);
+                if (currentIndex == targetIndex)
+                {
+                    pathFound = true;
+                    break;
+                }
+
+                openSet.Remove(currentIndex);
+                states[currentIndex] = 2;
+
+                GetCellCoordinates(zone, currentIndex, out int currentColumn, out int currentRow);
+                for (int rowOffset = -1; rowOffset <= 1; rowOffset++)
+                {
+                    for (int columnOffset = -1; columnOffset <= 1; columnOffset++)
+                    {
+                        if (rowOffset == 0 && columnOffset == 0)
+                            continue;
+
+                        int neighborColumn = currentColumn + columnOffset;
+                        int neighborRow = currentRow + rowOffset;
+                        if (!TryGetIndex(zone, neighborColumn, neighborRow, out int neighborIndex))
+                            continue;
+
+                        if (!zone.Walkable[neighborIndex] || states[neighborIndex] == 2)
+                            continue;
+
+                        float traversalCost = (columnOffset != 0 && rowOffset != 0) ? 1.4142135f : 1f;
+                        float tentativeGScore = gScores[currentIndex] + traversalCost;
+                        if (tentativeGScore >= gScores[neighborIndex])
+                            continue;
+
+                        cameFrom[neighborIndex] = currentIndex;
+                        gScores[neighborIndex] = tentativeGScore;
+                        fScores[neighborIndex] = tentativeGScore + ComputeHeuristic(zone, neighborIndex, targetIndex);
+                        if (states[neighborIndex] != 1)
+                        {
+                            openSet.Add(neighborIndex);
+                            states[neighborIndex] = 1;
+                        }
+                    }
+                }
+            }
+
+            if (!pathFound)
+            {
+                failureReason =
+                    "NoPath zone=" + zone.Zone +
+                    " start={" + (startSnapDetail ?? "<null>") + "}" +
+                    " target={" + (targetSnapDetail ?? "<null>") + "}";
+                return false;
+            }
+
+            pathPoints = ReconstructPath(zone, cameFrom, startIndex, targetIndex, snappedStartPosition, snappedTargetPosition);
+            if (pathPoints == null || pathPoints.Count == 0)
+            {
+                failureReason =
+                    "EmptyPath zone=" + zone.Zone +
+                    " start={" + (startSnapDetail ?? "<null>") + "}" +
+                    " target={" + (targetSnapDetail ?? "<null>") + "}";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static void Initialize()
+        {
+            if (_isInitialized)
+                return;
+
+            lock (SyncRoot)
+            {
+                if (_isInitialized)
+                    return;
+
+                _isInitialized = true;
+                _isAvailable = false;
+                ZonesByName.Clear();
+
+                try
+                {
+                    string jsonPath = Path.Combine(Paths.PluginPath, "local_navigation_maps.generated.json");
+                    if (!File.Exists(jsonPath))
+                    {
+                        Main.Log?.LogWarning("Local navigation maps file not found: " + jsonPath);
+                        return;
+                    }
+
+                    using (var stream = File.OpenRead(jsonPath))
+                    {
+                        var serializer = new DataContractJsonSerializer(typeof(Document));
+                        Document document = serializer.ReadObject(stream) as Document;
+                        if (document == null || document.Zones == null || document.Zones.Length == 0)
+                        {
+                            Main.Log?.LogWarning("Local navigation maps file did not contain any zones: " + jsonPath);
+                            return;
+                        }
+
+                        for (int i = 0; i < document.Zones.Length; i++)
+                        {
+                            ZoneMap zone = BuildZoneMap(document.Zones[i]);
+                            if (zone == null || string.IsNullOrWhiteSpace(zone.Zone))
+                                continue;
+
+                            ZonesByName[zone.Zone] = zone;
+                        }
+                    }
+
+                    _isAvailable = ZonesByName.Count > 0;
+                    Main.Log?.LogInfo(
+                        "Loaded local navigation maps zones=" + ZonesByName.Count +
+                        " path=" + Path.Combine(Paths.PluginPath, "local_navigation_maps.generated.json"));
+                }
+                catch (Exception ex)
+                {
+                    Main.Log?.LogError("Failed to load local navigation maps: " + ex);
+                    ZonesByName.Clear();
+                    _isAvailable = false;
+                }
+            }
+        }
+
+        private static ZoneMap BuildZoneMap(ZoneRecord record)
+        {
+            if (record == null ||
+                string.IsNullOrWhiteSpace(record.Zone) ||
+                record.Bounds2D == null ||
+                record.GridWidth <= 0 ||
+                record.GridHeight <= 0 ||
+                record.CellSize <= 0f)
+            {
+                return null;
+            }
+
+            int cellCount = record.GridWidth * record.GridHeight;
+            if (cellCount <= 0)
+                return null;
+
+            var walkable = new bool[cellCount];
+            if (record.EnvelopeIndices != null)
+            {
+                for (int i = 0; i < record.EnvelopeIndices.Length; i++)
+                {
+                    int index = record.EnvelopeIndices[i];
+                    if (index >= 0 && index < cellCount)
+                        walkable[index] = true;
+                }
+            }
+
+            if (record.BlockedIndices != null)
+            {
+                for (int i = 0; i < record.BlockedIndices.Length; i++)
+                {
+                    int index = record.BlockedIndices[i];
+                    if (index >= 0 && index < cellCount)
+                        walkable[index] = false;
+                }
+            }
+
+            return new ZoneMap
+            {
+                Zone = record.Zone,
+                CellSize = record.CellSize,
+                MinX = record.Bounds2D.MinX,
+                MaxX = record.Bounds2D.MaxX,
+                MinZ = record.Bounds2D.MinZ,
+                MaxZ = record.Bounds2D.MaxZ,
+                GridWidth = record.GridWidth,
+                GridHeight = record.GridHeight,
+                Walkable = walkable
+            };
+        }
+
+        private static bool TryFindNearestWalkableCellIndex(
+            ZoneMap zone,
+            Vector3 position,
+            out int index,
+            out Vector3 snappedPosition,
+            out string detail)
+        {
+            index = -1;
+            snappedPosition = Vector3.zero;
+            detail = null;
+            if (zone == null)
+                return false;
+
+            int approximateColumn = Mathf.Clamp(
+                Mathf.FloorToInt((position.x - zone.MinX) / zone.CellSize),
+                0,
+                zone.GridWidth - 1);
+            int approximateRow = Mathf.Clamp(
+                Mathf.FloorToInt((position.z - zone.MinZ) / zone.CellSize),
+                0,
+                zone.GridHeight - 1);
+
+            if (TryGetIndex(zone, approximateColumn, approximateRow, out int approximateIndex) &&
+                zone.Walkable[approximateIndex])
+            {
+                index = approximateIndex;
+                snappedPosition = GetCellCenter(zone, approximateIndex, position.y);
+                detail = BuildCellSnapDetail(
+                    zone,
+                    approximateIndex,
+                    position,
+                    snappedPosition,
+                    approximateColumn,
+                    approximateRow,
+                    "exact",
+                    0);
+                return true;
+            }
+
+            if (TryFindNearestWalkableCellIndexInRadius(
+                    zone,
+                    position,
+                    approximateColumn,
+                    approximateRow,
+                    DefaultNearestCellSearchRadius,
+                    out index,
+                    out snappedPosition,
+                    out int radiusUsed))
+            {
+                detail = BuildCellSnapDetail(
+                    zone,
+                    index,
+                    position,
+                    snappedPosition,
+                    approximateColumn,
+                    approximateRow,
+                    "radius",
+                    radiusUsed);
+                return true;
+            }
+
+            if (TryFindNearestWalkableCellIndexInWholeZone(zone, position, out index, out snappedPosition))
+            {
+                detail = BuildCellSnapDetail(
+                    zone,
+                    index,
+                    position,
+                    snappedPosition,
+                    approximateColumn,
+                    approximateRow,
+                    "full-zone",
+                    -1);
+                return true;
+            }
+
+            detail =
+                "position=" + FormatPosition(position) +
+                " approxCell=(" + approximateColumn + "," + approximateRow + ")" +
+                " searchRadius=" + DefaultNearestCellSearchRadius;
+            return false;
+        }
+
+        private static bool TryFindNearestWalkableCellIndexInRadius(
+            ZoneMap zone,
+            Vector3 position,
+            int approximateColumn,
+            int approximateRow,
+            int maximumRadius,
+            out int index,
+            out Vector3 snappedPosition,
+            out int radiusUsed)
+        {
+            index = -1;
+            snappedPosition = Vector3.zero;
+            radiusUsed = -1;
+            if (zone == null)
+                return false;
+
+            float bestDistanceSquared = float.PositiveInfinity;
+            for (int radius = 1; radius <= maximumRadius; radius++)
+            {
+                bool foundAtRadius = false;
+                int minimumColumn = Mathf.Max(0, approximateColumn - radius);
+                int maximumColumn = Mathf.Min(zone.GridWidth - 1, approximateColumn + radius);
+                int minimumRow = Mathf.Max(0, approximateRow - radius);
+                int maximumRow = Mathf.Min(zone.GridHeight - 1, approximateRow + radius);
+
+                for (int row = minimumRow; row <= maximumRow; row++)
+                {
+                    for (int column = minimumColumn; column <= maximumColumn; column++)
+                    {
+                        if (column > minimumColumn &&
+                            column < maximumColumn &&
+                            row > minimumRow &&
+                            row < maximumRow)
+                        {
+                            continue;
+                        }
+
+                        if (!TryGetIndex(zone, column, row, out int candidateIndex) || !zone.Walkable[candidateIndex])
+                            continue;
+
+                        Vector3 candidatePosition = GetCellCenter(zone, candidateIndex, position.y);
+                        Vector3 offset = candidatePosition - position;
+                        offset.y = 0f;
+                        float candidateDistanceSquared = offset.sqrMagnitude;
+                        if (candidateDistanceSquared >= bestDistanceSquared)
+                            continue;
+
+                        bestDistanceSquared = candidateDistanceSquared;
+                        index = candidateIndex;
+                        snappedPosition = candidatePosition;
+                        radiusUsed = radius;
+                        foundAtRadius = true;
+                    }
+                }
+
+                if (foundAtRadius)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryFindNearestWalkableCellIndexInWholeZone(
+            ZoneMap zone,
+            Vector3 position,
+            out int index,
+            out Vector3 snappedPosition)
+        {
+            index = -1;
+            snappedPosition = Vector3.zero;
+            if (zone == null || zone.Walkable == null)
+                return false;
+
+            float bestDistanceSquared = float.PositiveInfinity;
+            for (int candidateIndex = 0; candidateIndex < zone.Walkable.Length; candidateIndex++)
+            {
+                if (!zone.Walkable[candidateIndex])
+                    continue;
+
+                Vector3 candidatePosition = GetCellCenter(zone, candidateIndex, position.y);
+                Vector3 offset = candidatePosition - position;
+                offset.y = 0f;
+                float candidateDistanceSquared = offset.sqrMagnitude;
+                if (candidateDistanceSquared >= bestDistanceSquared)
+                    continue;
+
+                bestDistanceSquared = candidateDistanceSquared;
+                index = candidateIndex;
+                snappedPosition = candidatePosition;
+            }
+
+            return index >= 0;
+        }
+
+        private static string BuildCellSnapDetail(
+            ZoneMap zone,
+            int cellIndex,
+            Vector3 originalPosition,
+            Vector3 snappedPosition,
+            int approximateColumn,
+            int approximateRow,
+            string mode,
+            int radius)
+        {
+            if (zone == null || cellIndex < 0)
+                return "mode=" + (mode ?? "unknown");
+
+            GetCellCoordinates(zone, cellIndex, out int column, out int row);
+            Vector3 flatOffset = snappedPosition - originalPosition;
+            flatOffset.y = 0f;
+            string detail =
+                "mode=" + (mode ?? "unknown") +
+                " snappedCell=(" + column + "," + row + ")" +
+                " approxCell=(" + approximateColumn + "," + approximateRow + ")" +
+                " distance=" + Mathf.Sqrt(flatOffset.sqrMagnitude).ToString("0.00", CultureInfo.InvariantCulture) +
+                " original=" + FormatPosition(originalPosition) +
+                " snapped=" + FormatPosition(snappedPosition);
+            if (radius >= 0)
+                detail += " radius=" + radius;
+
+            return detail;
+        }
+
+        private static string FormatPosition(Vector3 position)
+        {
+            return "(" +
+                position.x.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
+                position.y.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
+                position.z.ToString("0.00", CultureInfo.InvariantCulture) + ")";
+        }
+
+        private static List<Vector3> ReconstructPath(
+            ZoneMap zone,
+            int[] cameFrom,
+            int startIndex,
+            int targetIndex,
+            Vector3 snappedStartPosition,
+            Vector3 snappedTargetPosition)
+        {
+            var reversed = new List<Vector3>();
+            int currentIndex = targetIndex;
+            while (currentIndex >= 0)
+            {
+                Vector3 currentPosition = currentIndex == targetIndex
+                    ? snappedTargetPosition
+                    : currentIndex == startIndex
+                        ? snappedStartPosition
+                        : GetCellCenter(zone, currentIndex, snappedTargetPosition.y);
+                reversed.Add(currentPosition);
+
+                if (currentIndex == startIndex)
+                    break;
+
+                currentIndex = cameFrom[currentIndex];
+            }
+
+            if (reversed.Count == 0 || currentIndex != startIndex)
+                return null;
+
+            reversed.Reverse();
+            return CompressCollinearPoints(reversed);
+        }
+
+        private static List<Vector3> CompressCollinearPoints(List<Vector3> points)
+        {
+            if (points == null || points.Count < 3)
+                return points;
+
+            var compressed = new List<Vector3>(points.Count);
+            compressed.Add(points[0]);
+
+            for (int i = 1; i < points.Count - 1; i++)
+            {
+                Vector3 previous = compressed[compressed.Count - 1];
+                Vector3 current = points[i];
+                Vector3 next = points[i + 1];
+
+                Vector3 previousDirection = current - previous;
+                previousDirection.y = 0f;
+                Vector3 nextDirection = next - current;
+                nextDirection.y = 0f;
+
+                if (previousDirection.sqrMagnitude <= 0.0001f || nextDirection.sqrMagnitude <= 0.0001f)
+                {
+                    compressed.Add(current);
+                    continue;
+                }
+
+                previousDirection.Normalize();
+                nextDirection.Normalize();
+                if (Vector3.Dot(previousDirection, nextDirection) < 0.999f)
+                    compressed.Add(current);
+            }
+
+            compressed.Add(points[points.Count - 1]);
+            return compressed;
+        }
+
+        private static int GetLowestScoreIndex(List<int> openSet, float[] fScores)
+        {
+            int bestIndex = openSet[0];
+            float bestScore = fScores[bestIndex];
+            for (int i = 1; i < openSet.Count; i++)
+            {
+                int candidateIndex = openSet[i];
+                float candidateScore = fScores[candidateIndex];
+                if (candidateScore < bestScore)
+                {
+                    bestIndex = candidateIndex;
+                    bestScore = candidateScore;
+                }
+            }
+
+            return bestIndex;
+        }
+
+        private static float ComputeHeuristic(ZoneMap zone, int fromIndex, int toIndex)
+        {
+            GetCellCoordinates(zone, fromIndex, out int fromColumn, out int fromRow);
+            GetCellCoordinates(zone, toIndex, out int toColumn, out int toRow);
+            int columnDistance = Math.Abs(toColumn - fromColumn);
+            int rowDistance = Math.Abs(toRow - fromRow);
+            return Mathf.Sqrt(columnDistance * columnDistance + rowDistance * rowDistance);
+        }
+
+        private static bool TryGetIndex(ZoneMap zone, int column, int row, out int index)
+        {
+            index = -1;
+            if (zone == null ||
+                column < 0 ||
+                row < 0 ||
+                column >= zone.GridWidth ||
+                row >= zone.GridHeight)
+            {
+                return false;
+            }
+
+            index = row * zone.GridWidth + column;
+            return true;
+        }
+
+        private static void GetCellCoordinates(ZoneMap zone, int index, out int column, out int row)
+        {
+            row = index / zone.GridWidth;
+            column = index % zone.GridWidth;
+        }
+
+        private static Vector3 GetCellCenter(ZoneMap zone, int index, float y)
+        {
+            GetCellCoordinates(zone, index, out int column, out int row);
+            return new Vector3(
+                zone.MinX + column * zone.CellSize + zone.CellSize * 0.5f,
+                y,
+                zone.MinZ + row * zone.CellSize + zone.CellSize * 0.5f);
+        }
+    }
+}

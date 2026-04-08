@@ -433,6 +433,8 @@ This is the cleanest room identifier found for house navigation speech.
   - resolves the player's current room zone at runtime
 - `BetterPlayerControl`
   - private `move` and `look` fields can be written by reflection for accessibility auto-walk input
+  - movement is applied in `FixedUpdate()` through the player's `Rigidbody` and `Collider`
+  - the controller uses a `CapsuleCollider` for player body sizing, rotates the rigidbody from `look`, writes horizontal motion into `_rigidbody.velocity`, and uses a downward physics raycast for ground clamping
   - `STATE == BetterPlayerControl.PlayerState.CanControl` is the safe gate before applying movement
 - `BepInEx\plugins\navigation_graph.json`
   - the current game-directory copy now uses schema version `2` with top-level `Zones`, `Nodes`, and directed `Transitions`
@@ -465,6 +467,22 @@ This is the cleanest room identifier found for house navigation speech.
   - writes `artifacts\navigation\thirdpersongreybox-navigation-data.json`
   - emits world-space door objects, camera objects, teleporter endpoints, and `CameraSpaces`
   - `artifacts\navigation\README.md` lists the currently identified door, stair, closet, and crawlspace connector assets for the main graph links
+- Blocker-export helper in this repo
+  - `.\scripts\Export-SceneBlockerData.ps1`
+  - writes `artifacts\navigation\thirdpersongreybox-blockers.json`
+  - currently exports primitive colliders only, filters out triggers, inactive objects, door and teleporter connectors, rigidbody-driven objects, tiny footprints, and blockers outside the player-height band
+  - current `ThirdPersonGreybox` export finds `623` primitive colliders, keeps `67` filtered navigation blockers, and also records `2317` mesh colliders plus `1` terrain collider that are not yet converted into blocker footprints
+  - practical consequence:
+    - this is enough data to begin blocker-aware local planning and debugging
+    - mesh and terrain support are still a future refinement, not part of the first occupancy pass
+- Local-map builder in this repo
+  - `.\scripts\Build-LocalNavigationMaps.ps1`
+  - writes `artifacts\navigation\local_navigation_maps.generated.json`
+  - uses `CameraSpaces` family bounds as the per-zone walk envelope and subtracts filtered primitive blocker footprints on a fixed grid
+  - current output covers all `57` graph zones with no missing `CameraSpaces` matches
+  - practical consequence:
+    - the repo now has an offline per-zone occupancy artifact for blocker-aware runtime steering
+    - the current runtime pass loads this file from `BepInEx\plugins\local_navigation_maps.generated.json` and uses it for short in-room waypoint planning, but only for zones covered by the generated graph and only with primitive-blocker occupancy so far
 - Graph-construction helper in this repo
   - `.\scripts\Build-NavigationGraph.ps1`
   - writes `artifacts\navigation\navigation_graph.generated.json`
@@ -479,12 +497,29 @@ This is the cleanest room identifier found for house navigation speech.
   - `NavigationGraph.FindPathSteps(...)` now parses and returns directed transition records from the schema-v2 `Transitions` array instead of mirroring a legacy undirected link list at runtime
   - runtime follow-up: Unity `JsonUtility` did not reliably materialize the generated schema-v2 `Transitions` array in-game once the richer nested metadata was added, even though the file itself was present and current; `NavigationGraph` now falls back to `DataContractJsonSerializer` for that graph file and also seeds its known-zone set from the top-level `Zones` list before parsing links
   - each `PathStep` now carries room-node ids, explicit source and destination connector approach and clear points, ordered navigation points, accepted source and destination runtime subzones, validation timeout recommendations, static suspicion score, and asset-derivation metadata
+- `LocalNavigationMaps`
+  - loads `BepInEx\plugins\local_navigation_maps.generated.json` through `DataContractJsonSerializer`
+  - resolves the nearest walkable start and goal cells inside one graph zone, runs an 8-neighbor A* search over the exported occupancy grid, and returns compressed cell-center waypoints
+  - start and goal snapping now first search the normal nearby cell radius, then fall back to the nearest walkable cell anywhere in the same zone before failing; the returned failure reason now includes the snap detail used for both ends when a local path cannot be built
+  - practical consequence:
+    - the runtime mod can now replace a raw in-room target with a short locally planned waypoint when the player is navigating inside one source or destination zone
+    - crossing a doorway threshold still depends on the existing connector and open-passage stage logic; the local planner is currently an in-zone steering layer, not a full multi-zone navmesh replacement
 - `NavigationGraph.FindPathSteps(...)` now also accepts optional live start and end positions so the first step is biased from the player's current location and the final step is biased toward the tracked object's live location
-- `AccessibilityWatcher` now tracks a concrete interactable target, falls back to the current step waypoint while that target is still in another zone, and switches back to the live object position after entering the target room
+- `AccessibilityWatcher` now tracks a concrete interactable target, falls back to the current step waypoint while that target is still in another zone, and switches back to a stable object-specific approach position after entering the target room
+- same-zone tracked-object guidance now builds candidate approach points from the interactable's live collider or renderer bounds, caches the chosen target while that object stays stable, and prefers the shortest reachable candidate when local occupancy data is available
 - `AccessibilityWatcher` now refreshes navigation when the live position-aware search picks a different first step, and same-family runtime subzones such as `office2` and `office6` can now keep direct-object guidance instead of falling back to a stale room anchor
 - `AccessibilityWatcher` now uses those explicit connector points for open-passage handoff and door sweep stance or push-through selection, and falls back to the coarse waypoint fields only when the richer points are absent
 - `AccessibilityWatcher` now also turns directed override waypoints plus graph-supplied `NavigationPoints`, `SourceClearPoint`, `DestinationClearPoint`, and final approach data into one ordered guided open-passage path, then walks that path in short progressive chunks instead of jumping straight from one source-side override point to a far destination waypoint
+- `AccessibilityWatcher` now runs local path selection ahead of movement and tracker beeps:
+  - same-zone direct-object tracking now routes toward the chosen object-approach target instead of the raw object pivot, and can still use the local occupancy grid to reach that target around blockers
+  - source-side open-passage movement can route around static blockers while approaching the source guidance or source handoff point
+  - destination-side open-passage movement can route around blockers while settling toward the destination approach point
+  - door, stairs, and other non-open-passage steps can route to their current in-zone waypoint through the local occupancy grid before falling back to raw straight-line movement
 - `AccessibilityWatcher` treats teleporter links as interaction-driven transitions, waits through the crawlspace animation while player control is disabled, can retry door interactions before declaring navigation blocked, and now falls back to per-transition validation timeout and accepted-subzone defaults from the graph when no directed override entry exists
+  - when navigation still blocks, the watcher now keeps the most recent blocked-detail string and writes it into debug output plus transition-sweep failure detail so doorway and threshold stalls can be triaged from the live report instead of appearing only as a generic block
+  - practical consequence:
+    - the current auto-walk layer is now hybrid: graph-driven for room-to-room routing and occupancy-grid-driven for short in-zone steering
+    - same-zone tracked-object arrival is now bounds-aware, but the stack is still not a full local avoidance system because mesh and terrain colliders are not rasterized yet and final blocked-recovery tuning is still follow-up work
 - `Ctrl+Shift+F9` now runs a live navmesh export through `UnityEngine.AI.NavMesh.CalculateTriangulation()` and writes `BepInEx\plugins\navmesh_export.live.json`
 - when `CalculateTriangulation()` returns no active scene navmesh, the exporter now still writes a diagnostic `navmesh_export.live.json` with `HasActiveNavMesh = false`, zero triangles, loaded-scene metadata, and the per-transition anchor checks instead of aborting without a file
 - the export samples each directed `NavigationGraph` step's waypoints and crossing anchors onto the current navmesh and records the resulting path status and any missing or suspicious anchors
