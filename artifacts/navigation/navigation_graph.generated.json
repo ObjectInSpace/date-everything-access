@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 2,
-  "GeneratedAtUtc": "2026-04-08T21:05:41.0310620Z",
+  "GeneratedAtUtc": "2026-04-08T23:05:52.7851159Z",
   "SceneName": "Date Everything House",
   "SourceSceneDataPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\thirdpersongreybox-navigation-data.json",
   "SourceGraphPath": "D:\\SteamLibrary\\steamapps\\Common\\Date Everything\\BepInEx\\plugins\\navigation_graph.json",
@@ -9695,30 +9695,22 @@
         "y": 18.23,
         "z": -4.284243
       },
-      "FromCrossingAnchor": {
-        "x": -25.461765,
-        "y": 17.84,
-        "z": -12.635586
-      },
-      "ToCrossingAnchor": {
-        "x": -25.461765,
-        "y": 18.23,
-        "z": -5.07021
-      },
+      "FromCrossingAnchor": null,
+      "ToCrossingAnchor": null,
       "SourceApproachPoint": {
         "x": -25.461765,
         "y": 17.84,
         "z": -12.635586
       },
       "SourceClearPoint": {
-        "x": -25.461765,
-        "y": 17.84,
-        "z": -12.635586
+        "x": -23.725722,
+        "y": 12.824811,
+        "z": -7.121537
       },
       "DestinationClearPoint": {
-        "x": -25.461765,
-        "y": 18.23,
-        "z": -5.07021
+        "x": -23.600278,
+        "y": 12.824811,
+        "z": -5.526463
       },
       "DestinationApproachPoint": {
         "x": -24.804977,
@@ -9732,9 +9724,14 @@
           "z": -12.635586
         },
         {
-          "x": -25.461765,
-          "y": 18.23,
-          "z": -5.07021
+          "x": -23.725722,
+          "y": 12.824811,
+          "z": -7.121537
+        },
+        {
+          "x": -23.600278,
+          "y": 12.824811,
+          "z": -5.526463
         },
         {
           "x": -24.804977,
@@ -9743,21 +9740,21 @@
         }
       ],
       "ConnectorObjectPosition": {
-        "x": -25.133371,
-        "y": 18.035,
-        "z": -8.459914
+        "x": -23.663,
+        "y": 12.824811,
+        "z": -6.324
       },
       "Cost": 8.3862,
-      "StepKind": "OpenPassage",
-      "ConnectorName": null,
-      "RequiresInteraction": false,
+      "StepKind": "Door",
+      "ConnectorName": "Doors_Bedroom_Bathroom",
+      "RequiresInteraction": true,
       "TransitionWaitSeconds": 0.0,
       "Connector": {
-        "Name": null,
+        "Name": "Doors_Bedroom_Bathroom",
         "ObjectPosition": {
-          "x": -25.133371,
-          "y": 18.035,
-          "z": -8.459914
+          "x": -23.663,
+          "y": 12.824811,
+          "z": -6.324
         },
         "SourceApproachPoint": {
           "x": -25.461765,
@@ -9765,14 +9762,14 @@
           "z": -12.635586
         },
         "SourceClearPoint": {
-          "x": -25.461765,
-          "y": 17.84,
-          "z": -12.635586
+          "x": -23.725722,
+          "y": 12.824811,
+          "z": -7.121537
         },
         "DestinationClearPoint": {
-          "x": -25.461765,
-          "y": 18.23,
-          "z": -5.07021
+          "x": -23.600278,
+          "y": 12.824811,
+          "z": -5.526463
         },
         "DestinationApproachPoint": {
           "x": -24.804977,
@@ -9786,9 +9783,14 @@
             "z": -12.635586
           },
           {
-            "x": -25.461765,
-            "y": 18.23,
-            "z": -5.07021
+            "x": -23.725722,
+            "y": 12.824811,
+            "z": -7.121537
+          },
+          {
+            "x": -23.600278,
+            "y": 12.824811,
+            "z": -5.526463
           },
           {
             "x": -24.804977,
@@ -9796,11 +9798,11 @@
             "z": -4.284243
           }
         ],
-        "AssetDerivationSource": "CameraSpaceBoundaryGeometry"
+        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
       },
       "SourceSceneZoneName": "dorian_bathroom2_2",
       "DestinationSceneZoneName": "bathroom2",
-      "AssetDerivationSource": "CameraSpaceBoundaryGeometry",
+      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
       "Validation": {
         "AcceptedSourceZones": [
           "dorian_bathroom2_2"
@@ -9808,14 +9810,131 @@
         "AcceptedDestinationZones": [
           "bathroom2"
         ],
-        "StepTimeoutSeconds": 5.0,
-        "StaticSuspicionScore": 2,
-        "StaticIssues": [
-          "WideCrossingGap"
-        ],
-        "AssetDerivationSource": "CameraSpaceBoundaryGeometry",
+        "StepTimeoutSeconds": 8.0,
+        "StaticSuspicionScore": 0,
+        "StaticIssues": [],
+        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
         "SourceSceneZoneName": "dorian_bathroom2_2",
         "DestinationSceneZoneName": "bathroom2"
+      }
+    },
+    {
+      "Id": "transition:bathroom2->dorian_bathroom2_2",
+      "FromZone": "bathroom2",
+      "ToZone": "dorian_bathroom2_2",
+      "FromNodeId": "zone:bathroom2|scene:bathroom2",
+      "ToNodeId": "zone:dorian_bathroom2_2|scene:dorian_bathroom2_2",
+      "FromWaypoint": {
+        "x": -24.804977,
+        "y": 18.23,
+        "z": -4.284243
+      },
+      "ToWaypoint": {
+        "x": -25.461765,
+        "y": 17.84,
+        "z": -12.635586
+      },
+      "FromCrossingAnchor": null,
+      "ToCrossingAnchor": null,
+      "SourceApproachPoint": {
+        "x": -24.804977,
+        "y": 18.23,
+        "z": -4.284243
+      },
+      "SourceClearPoint": {
+        "x": -23.600278,
+        "y": 12.824811,
+        "z": -5.526463
+      },
+      "DestinationClearPoint": {
+        "x": -23.725722,
+        "y": 12.824811,
+        "z": -7.121537
+      },
+      "DestinationApproachPoint": {
+        "x": -25.461765,
+        "y": 17.84,
+        "z": -12.635586
+      },
+      "NavigationPoints": [
+        {
+          "x": -24.804977,
+          "y": 18.23,
+          "z": -4.284243
+        },
+        {
+          "x": -25.461765,
+          "y": 17.84,
+          "z": -12.635586
+        }
+      ],
+      "ConnectorObjectPosition": {
+        "x": -23.663,
+        "y": 12.824811,
+        "z": -6.324
+      },
+      "Cost": 8.3862,
+      "StepKind": "Door",
+      "ConnectorName": "Doors_Bedroom_Bathroom",
+      "RequiresInteraction": true,
+      "TransitionWaitSeconds": 0.0,
+      "Connector": {
+        "Name": "Doors_Bedroom_Bathroom",
+        "ObjectPosition": {
+          "x": -23.663,
+          "y": 12.824811,
+          "z": -6.324
+        },
+        "SourceApproachPoint": {
+          "x": -24.804977,
+          "y": 18.23,
+          "z": -4.284243
+        },
+        "SourceClearPoint": {
+          "x": -23.600278,
+          "y": 12.824811,
+          "z": -5.526463
+        },
+        "DestinationClearPoint": {
+          "x": -23.725722,
+          "y": 12.824811,
+          "z": -7.121537
+        },
+        "DestinationApproachPoint": {
+          "x": -25.461765,
+          "y": 17.84,
+          "z": -12.635586
+        },
+        "NavigationPoints": [
+          {
+            "x": -24.804977,
+            "y": 18.23,
+            "z": -4.284243
+          },
+          {
+            "x": -25.461765,
+            "y": 17.84,
+            "z": -12.635586
+          }
+        ],
+        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
+      },
+      "SourceSceneZoneName": "bathroom2",
+      "DestinationSceneZoneName": "dorian_bathroom2_2",
+      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "Validation": {
+        "AcceptedSourceZones": [
+          "bathroom2"
+        ],
+        "AcceptedDestinationZones": [
+          "dorian_bathroom2_2"
+        ],
+        "StepTimeoutSeconds": 8.0,
+        "StaticSuspicionScore": 0,
+        "StaticIssues": [],
+        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+        "SourceSceneZoneName": "bathroom2",
+        "DestinationSceneZoneName": "dorian_bathroom2_2"
       }
     },
     {
@@ -18628,135 +18747,6 @@
         "AssetDerivationSource": "CameraSpaceBoundaryGeometry",
         "SourceSceneZoneName": "bedroom_closet",
         "DestinationSceneZoneName": "dorian_irondoor"
-      }
-    },
-    {
-      "Id": "transition:bathroom2->dorian_bathroom2_2",
-      "FromZone": "bathroom2",
-      "ToZone": "dorian_bathroom2_2",
-      "FromNodeId": "zone:bathroom2|scene:bathroom2",
-      "ToNodeId": "zone:dorian_bathroom2_2|scene:dorian_bathroom2_2",
-      "FromWaypoint": {
-        "x": -24.804977,
-        "y": 18.23,
-        "z": -4.284243
-      },
-      "ToWaypoint": {
-        "x": -25.461765,
-        "y": 17.84,
-        "z": -12.635586
-      },
-      "FromCrossingAnchor": {
-        "x": -25.461765,
-        "y": 18.23,
-        "z": -5.07021
-      },
-      "ToCrossingAnchor": {
-        "x": -25.461765,
-        "y": 17.84,
-        "z": -12.635586
-      },
-      "SourceApproachPoint": {
-        "x": -24.804977,
-        "y": 18.23,
-        "z": -4.284243
-      },
-      "SourceClearPoint": {
-        "x": -25.461765,
-        "y": 18.23,
-        "z": -5.07021
-      },
-      "DestinationClearPoint": {
-        "x": -25.461765,
-        "y": 17.84,
-        "z": -12.635586
-      },
-      "DestinationApproachPoint": {
-        "x": -25.461765,
-        "y": 17.84,
-        "z": -12.635586
-      },
-      "NavigationPoints": [
-        {
-          "x": -24.804977,
-          "y": 18.23,
-          "z": -4.284243
-        },
-        {
-          "x": -25.461765,
-          "y": 17.84,
-          "z": -12.635586
-        }
-      ],
-      "ConnectorObjectPosition": {
-        "x": -25.133371,
-        "y": 18.035,
-        "z": -8.459914
-      },
-      "Cost": 8.3862,
-      "StepKind": "OpenPassage",
-      "ConnectorName": null,
-      "RequiresInteraction": false,
-      "TransitionWaitSeconds": 0.0,
-      "Connector": {
-        "Name": null,
-        "ObjectPosition": {
-          "x": -25.133371,
-          "y": 18.035,
-          "z": -8.459914
-        },
-        "SourceApproachPoint": {
-          "x": -24.804977,
-          "y": 18.23,
-          "z": -4.284243
-        },
-        "SourceClearPoint": {
-          "x": -25.461765,
-          "y": 18.23,
-          "z": -5.07021
-        },
-        "DestinationClearPoint": {
-          "x": -25.461765,
-          "y": 17.84,
-          "z": -12.635586
-        },
-        "DestinationApproachPoint": {
-          "x": -25.461765,
-          "y": 17.84,
-          "z": -12.635586
-        },
-        "NavigationPoints": [
-          {
-            "x": -24.804977,
-            "y": 18.23,
-            "z": -4.284243
-          },
-          {
-            "x": -25.461765,
-            "y": 17.84,
-            "z": -12.635586
-          }
-        ],
-        "AssetDerivationSource": "CameraSpaceBoundaryGeometry"
-      },
-      "SourceSceneZoneName": "bathroom2",
-      "DestinationSceneZoneName": "dorian_bathroom2_2",
-      "AssetDerivationSource": "CameraSpaceBoundaryGeometry",
-      "Validation": {
-        "AcceptedSourceZones": [
-          "bathroom2"
-        ],
-        "AcceptedDestinationZones": [
-          "dorian_bathroom2_2"
-        ],
-        "StepTimeoutSeconds": 5.0,
-        "StaticSuspicionScore": 2,
-        "StaticIssues": [
-          "WideCrossingGap"
-        ],
-        "AssetDerivationSource": "CameraSpaceBoundaryGeometry",
-        "SourceSceneZoneName": "bathroom2",
-        "DestinationSceneZoneName": "dorian_bathroom2_2"
       }
     }
   ]

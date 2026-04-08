@@ -905,6 +905,10 @@ $stepMetadata = @{
         StepKind = "Door"
         ConnectorName = "Doors_Bedroom_Bathroom"
     }
+    "dorian_bathroom2_2|bathroom2" = [ordered]@{
+        StepKind = "Door"
+        ConnectorName = "Doors_Bedroom_Bathroom"
+    }
     "hallway|bathroom1" = [ordered]@{
         StepKind = "Door"
         ConnectorName = "Doors_Bathroom1"
@@ -940,13 +944,6 @@ foreach ($link in $inputLinks) {
         $seenGraphZones[$zoneName] = $true
         $graphZoneNames.Add($zoneName)
     }
-}
-
-$skipSyntheticReverseTransitionKeys = @{
-    # `dorian_bathroom2_2` is the bedroom-bathroom door camera subzone, not a free
-    # bidirectional room-to-room passage. Keep the authored subzone -> room escape,
-    # but do not synthesize the reverse `bathroom2 -> dorian_bathroom2_2` step.
-    "dorian_bathroom2_2|bathroom2" = $true
 }
 
 $generatedZones = New-Object System.Collections.Generic.List[object]
@@ -1073,11 +1070,6 @@ foreach ($link in $inputLinks) {
 
     $transition.Validation = Get-TransitionValidationMetadata -TransitionData $transition
     $generatedTransitions.Add($transition)
-
-    $forwardTransitionKey = "$($link.FromZone)|$($link.ToZone)"
-    if ($stepKind -eq "OpenPassage" -and $skipSyntheticReverseTransitionKeys.ContainsKey($forwardTransitionKey)) {
-        continue
-    }
 
     $reverseTransition = [ordered]@{
         Id = "transition:$($link.ToZone)->$($link.FromZone)"
