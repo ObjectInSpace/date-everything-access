@@ -1,0 +1,108 @@
+version=1
+
+# This file caches language service data to improve the performance of C# Dev Kit.
+# It is not intended for manual editing. It can safely be deleted and will be
+# regenerated automatically.
+#
+# To exclude from version control, add *.lscache to your .gitignore file.
+#
+# To disable caching, add the following to your VS Code settings:
+#   "dotnet.projectsystem.enableLanguageServiceCache": false
+
+[project]
+language=C#
+primary
+lastDtbSucceeded
+
+[properties]
+AssemblyName=DateEverythingAccess
+CommandLineArgsForDesignTimeEvaluation=-langversion:latest -define:TRACE
+CompilerGeneratedFilesOutputPath=
+MaxSupportedLangVersion=7.3
+ProjectAssetsFile=<PATH>obj/project.assets.json
+RootNamespace=DateEverythingAccess
+RunAnalyzers=
+RunAnalyzersDuringLiveAnalysis=
+SolutionPath=<PATH>mod template.sln
+TargetFrameworkIdentifier=.NETFramework
+TargetPath=<PATH>bin/Debug/net472/DateEverythingAccess.dll
+TargetRefPath=
+TemporaryDependencyNodeTargetIdentifier=net472
+
+[commandLineArguments]
+/noconfig
+/unsafe-
+/checked-
+/nowarn:1701,1702,1701,1702
+/fullpaths
+/nostdlib+
+/errorreport:prompt
+/warn:4
+/define:TRACE;DEBUG;NETFRAMEWORK;NET472;NET20_OR_GREATER;NET30_OR_GREATER;NET35_OR_GREATER;NET40_OR_GREATER;NET45_OR_GREATER;NET451_OR_GREATER;NET452_OR_GREATER;NET46_OR_GREATER;NET461_OR_GREATER;NET462_OR_GREATER;NET47_OR_GREATER;NET471_OR_GREATER;NET472_OR_GREATER
+/highentropyva+
+/nullable:disable
+/debug+
+/debug:portable
+/filealign:512
+/optimize-
+/out:obj\Debug\net472\DateEverythingAccess.dll
+/subsystemversion:6.00
+/target:library
+/warnaserror-
+/utf8output
+/deterministic+
+/langversion:latest
+/warnaserror+:NU1605
+
+[sourceFiles]
+AccessibilityWatcher.cs
+DateADexPatches.cs
+DebugLogger.cs
+InputMappingReporter.cs
+Loc.cs
+LocalNavigationMaps.cs
+Main.cs
+ModConfig.cs
+NavigationGraph.cs
+NavMeshExporter.cs
+obj/Debug/net472/
+ .NETFramework,Version=v4.7.2.AssemblyAttributes.cs
+ DateEverythingAccess.AssemblyInfo.cs
+ObjectTracker.cs
+ScreenReader.cs
+TransitionSweepReporter.cs
+
+[metadataReferences]
+<NUGET>/microsoft.netframework.referenceassemblies.net472/1.0.3/build/.NETFramework/v4.7.2/
+ Facades/netstandard.dll
+ mscorlib.dll
+ System.Core.dll
+ System.Data.dll
+ System.dll
+ System.Drawing.dll
+ System.IO.Compression.FileSystem.dll
+ System.Numerics.dll
+ System.Runtime.Serialization.dll
+ System.Xml.dll
+ System.Xml.Linq.dll
+artifacts/release-staging/DateEverythingAccess-portable-v0.1.0/BepInEx/core/
+ 0Harmony.dll
+ BepInEx.dll
+D:/SteamLibrary/steamapps/Common/Date Everything/Date Everything_Data/Managed/
+ Assembly-CSharp-firstpass.dll
+ Assembly-CSharp.dll
+ Rewired_Core.dll
+ Team17.Common.dll
+ Unity.TextMeshPro.dll
+ UnityEngine.AIModule.dll
+ UnityEngine.AudioModule.dll
+ UnityEngine.CoreModule.dll
+ UnityEngine.dll
+ UnityEngine.InputLegacyModule.dll
+ UnityEngine.JSONSerializeModule.dll
+ UnityEngine.PhysicsModule.dll
+ UnityEngine.UI.dll
+
+[analyzerConfigFiles]
+.editorconfig
+obj/Debug/net472/DateEverythingAccess.GeneratedMSBuildEditorConfig.editorconfig
