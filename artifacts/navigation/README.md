@@ -107,6 +107,7 @@ For live door sweep data:
   - Door cameras: `Camera_DorianOfficeDoor1`, `Camera_DorianOfficeDoor2`
 
 - `office -> office_closet`
+  - Door object: `Doors_Office_Closet`
   - Door cameras: `Camera_DorianOfficeClosetDoor1`, `Camera_DorianOfficeClosetDoor2`
   - Supporting room camera: `Camera_OfficeCloset`
 
@@ -147,6 +148,7 @@ For live door sweep data:
   - Stair cameras: `Camera_StairsUp`, `Camera_StairsDown`
 
 - `laundry_room -> laundry_room_closet`
+  - Door object: `Doors_Laundry_Closet`
   - Door camera: `Camera_DorianLaundryCloset1`
   - Supporting room camera: `Camera_Laundry Room_Closet`
 

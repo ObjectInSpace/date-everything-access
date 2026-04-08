@@ -490,6 +490,10 @@ This is the cleanest room identifier found for house navigation speech.
   - emits `57` coarse zones, `139` in-room nodes sourced from `CameraSpaces`, and `112` explicit directed transitions
   - each transition now resolves source and destination room-node ids, explicit connector approach and clear points, ordered traversal points, connector object position when available, and builder-side validation metadata such as accepted runtime subzones, timeout recommendations, and static suspicion issues
   - all `OpenPassage` links now derive `FromWaypoint`, `ToWaypoint`, `FromCrossingAnchor`, and `ToCrossingAnchor` from the scene's own `CameraSpaces` geometry by comparing the exact graph zone plus same-family numbered variants and choosing the smallest scene-side boundary gap
+  - scene-export follow-up:
+    - `office -> office_closet` should use door object `Doors_Office_Closet`, not only the paired `Camera_DorianOfficeClosetDoor1/2` waypoints
+    - `laundry_room -> laundry_room_closet` should use door object `Doors_Laundry_Closet`, not only `Camera_DorianLaundryCloset1` plus `Camera_Laundry Room_Closet`
+    - `dorian_bathroom2_1` and `dorian_bathroom2_2` are the exact `Camera_DorianBathroom2Door1/2` subzones for `Doors_Bedroom_Bathroom`; `bathroom2 -> dorian_bathroom2_2` should be treated as a door-camera classification problem, not as a standalone open passage
   - practical consequence:
     - the builder no longer needs hand-picked open-passage room-pair overrides for the current graph
     - the generated graph now carries scene-derived threshold anchors even for subzone-to-room open passages such as `dorian_office2 -> office`
