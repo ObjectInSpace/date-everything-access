@@ -426,6 +426,53 @@ if (-not (Test-Path -LiteralPath $InputGraphPath)) {
 $sceneData = Get-Content -LiteralPath $SceneDataPath -Raw | ConvertFrom-Json
 $inputGraph = Get-Content -LiteralPath $InputGraphPath -Raw | ConvertFrom-Json
 
+$inputLinks = @()
+$linksProperty = $inputGraph.PSObject.Properties["Links"]
+if ($null -ne $linksProperty -and $null -ne $linksProperty.Value) {
+    $inputLinks = @($linksProperty.Value)
+} else {
+    $transitionsProperty = $inputGraph.PSObject.Properties["Transitions"]
+    if ($null -eq $transitionsProperty -or $null -eq $transitionsProperty.Value) {
+        throw "Input navigation graph does not expose Links or Transitions."
+    }
+
+    $links = New-Object System.Collections.ArrayList
+    $seenUndirectedKeys = @{}
+    foreach ($transition in @($transitionsProperty.Value)) {
+        if ($null -eq $transition -or
+            [string]::IsNullOrWhiteSpace($transition.FromZone) -or
+            [string]::IsNullOrWhiteSpace($transition.ToZone)) {
+            continue
+        }
+
+        $fromZone = [string]$transition.FromZone
+        $toZone = [string]$transition.ToZone
+        if ([System.StringComparer]::OrdinalIgnoreCase.Compare($fromZone, $toZone) -le 0) {
+            $undirectedKey = $fromZone + "|" + $toZone
+        } else {
+            $undirectedKey = $toZone + "|" + $fromZone
+        }
+
+        if ($seenUndirectedKeys.ContainsKey($undirectedKey)) {
+            continue
+        }
+
+        $seenUndirectedKeys[$undirectedKey] = $true
+        [void]$links.Add([pscustomobject]@{
+            FromZone = $fromZone
+            ToZone = $toZone
+        })
+    }
+
+    $inputLinks = @($links)
+}
+$sceneNameProperty = $inputGraph.PSObject.Properties["SceneName"]
+$inputSceneName = if ($null -ne $sceneNameProperty -and -not [string]::IsNullOrWhiteSpace($sceneNameProperty.Value)) {
+    [string]$sceneNameProperty.Value
+} else {
+    "Date Everything House"
+}
+
 $zonesByName = @{}
 foreach ($zone in $sceneData.CameraSpaces) {
     $zonesByName[$zone.Name] = $zone
@@ -839,6 +886,7 @@ $stepMetadata = @{
     }
     "office|office_closet" = [ordered]@{
         StepKind = "Door"
+        ConnectorName = "Doors_Office_Closet"
     }
     "office|crawlspace" = [ordered]@{
         StepKind = "Teleporter"
@@ -866,6 +914,7 @@ $stepMetadata = @{
     }
     "laundry_room|laundry_room_closet" = [ordered]@{
         StepKind = "Door"
+        ConnectorName = "Doors_Laundry_Closet"
     }
     "upper_hallway|gym" = [ordered]@{
         StepKind = "Door"
@@ -882,7 +931,7 @@ $stepMetadata = @{
 
 $graphZoneNames = New-Object System.Collections.Generic.List[string]
 $seenGraphZones = @{}
-foreach ($link in @($inputGraph.Links)) {
+foreach ($link in $inputLinks) {
     foreach ($zoneName in @($link.FromZone, $link.ToZone)) {
         if ([string]::IsNullOrWhiteSpace($zoneName) -or $seenGraphZones.ContainsKey($zoneName)) {
             continue
@@ -891,6 +940,13 @@ foreach ($link in @($inputGraph.Links)) {
         $seenGraphZones[$zoneName] = $true
         $graphZoneNames.Add($zoneName)
     }
+}
+
+$skipSyntheticReverseTransitionKeys = @{
+    # `dorian_bathroom2_2` is the bedroom-bathroom door camera subzone, not a free
+    # bidirectional room-to-room passage. Keep the authored subzone -> room escape,
+    # but do not synthesize the reverse `bathroom2 -> dorian_bathroom2_2` step.
+    "dorian_bathroom2_2|bathroom2" = $true
 }
 
 $generatedZones = New-Object System.Collections.Generic.List[object]
@@ -942,7 +998,7 @@ foreach ($graphZoneName in $graphZoneNames) {
 }
 
 $generatedTransitions = New-Object System.Collections.Generic.List[object]
-foreach ($link in @($inputGraph.Links)) {
+foreach ($link in $inputLinks) {
     $key = "$($link.FromZone)|$($link.ToZone)"
     $waypointPair = $null
     $metadata = $stepMetadata[$key]
@@ -953,6 +1009,7 @@ foreach ($link in @($inputGraph.Links)) {
     }
 
     $stepKind = Get-MetadataValue -Metadata $metadata -Key "StepKind" -DefaultValue "OpenPassage"
+    $requiresInteraction = [bool](Get-MetadataValue -Metadata $metadata -Key "RequiresInteraction" -DefaultValue ($stepKind -eq "Door" -or $stepKind -eq "Teleporter"))
 
     if ($directedOverrides.ContainsKey($key)) {
         $waypointPair = $directedOverrides[$key]
@@ -997,7 +1054,7 @@ foreach ($link in @($inputGraph.Links)) {
         Cost = $cost
         StepKind = $stepKind
         ConnectorName = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
-        RequiresInteraction = [bool](Get-MetadataValue -Metadata $metadata -Key "RequiresInteraction" -DefaultValue $false)
+        RequiresInteraction = $requiresInteraction
         TransitionWaitSeconds = [double](Get-MetadataValue -Metadata $metadata -Key "TransitionWaitSeconds" -DefaultValue 0.0)
         Connector = [ordered]@{
             Name = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
@@ -1016,6 +1073,11 @@ foreach ($link in @($inputGraph.Links)) {
 
     $transition.Validation = Get-TransitionValidationMetadata -TransitionData $transition
     $generatedTransitions.Add($transition)
+
+    $forwardTransitionKey = "$($link.FromZone)|$($link.ToZone)"
+    if ($stepKind -eq "OpenPassage" -and $skipSyntheticReverseTransitionKeys.ContainsKey($forwardTransitionKey)) {
+        continue
+    }
 
     $reverseTransition = [ordered]@{
         Id = "transition:$($link.ToZone)->$($link.FromZone)"
@@ -1036,7 +1098,7 @@ foreach ($link in @($inputGraph.Links)) {
         Cost = $cost
         StepKind = $stepKind
         ConnectorName = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
-        RequiresInteraction = [bool](Get-MetadataValue -Metadata $metadata -Key "RequiresInteraction" -DefaultValue $false)
+        RequiresInteraction = $requiresInteraction
         TransitionWaitSeconds = [double](Get-MetadataValue -Metadata $metadata -Key "TransitionWaitSeconds" -DefaultValue 0.0)
         Connector = [ordered]@{
             Name = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
@@ -1057,10 +1119,72 @@ foreach ($link in @($inputGraph.Links)) {
     $generatedTransitions.Add($reverseTransition)
 }
 
+$generatedTransitionIds = @{}
+foreach ($transition in [object[]]$generatedTransitions.ToArray()) {
+    if ($null -eq $transition -or [string]::IsNullOrWhiteSpace($transition.Id)) {
+        continue
+    }
+
+    $generatedTransitionIds[$transition.Id] = $true
+}
+
+foreach ($transition in [object[]]$generatedTransitions.ToArray()) {
+    if ($null -eq $transition -or
+        [string]::IsNullOrWhiteSpace($transition.FromZone) -or
+        [string]::IsNullOrWhiteSpace($transition.ToZone)) {
+        continue
+    }
+
+    $reverseId = "transition:$($transition.ToZone)->$($transition.FromZone)"
+    if ($generatedTransitionIds.ContainsKey($reverseId)) {
+        continue
+    }
+
+    $reverseTransition = [ordered]@{
+        Id = $reverseId
+        FromZone = $transition.ToZone
+        ToZone = $transition.FromZone
+        FromNodeId = $transition.ToNodeId
+        ToNodeId = $transition.FromNodeId
+        FromWaypoint = Copy-Vec3 $transition.ToWaypoint
+        ToWaypoint = Copy-Vec3 $transition.FromWaypoint
+        FromCrossingAnchor = if (-not (Test-ZeroVector $transition.ToCrossingAnchor)) { Copy-Vec3 $transition.ToCrossingAnchor } else { $null }
+        ToCrossingAnchor = if (-not (Test-ZeroVector $transition.FromCrossingAnchor)) { Copy-Vec3 $transition.FromCrossingAnchor } else { $null }
+        SourceApproachPoint = Copy-Vec3 $transition.DestinationApproachPoint
+        SourceClearPoint = Copy-Vec3 $transition.DestinationClearPoint
+        DestinationClearPoint = Copy-Vec3 $transition.SourceClearPoint
+        DestinationApproachPoint = Copy-Vec3 $transition.SourceApproachPoint
+        NavigationPoints = @(Get-DeduplicatedVectorSequence -Points @([array]$transition.NavigationPoints[-1..0]))
+        ConnectorObjectPosition = Copy-Vec3 $transition.ConnectorObjectPosition
+        Cost = $transition.Cost
+        StepKind = $transition.StepKind
+        ConnectorName = $transition.ConnectorName
+        RequiresInteraction = [bool]$transition.RequiresInteraction
+        TransitionWaitSeconds = [double]$transition.TransitionWaitSeconds
+        Connector = [ordered]@{
+            Name = $transition.ConnectorName
+            ObjectPosition = Copy-Vec3 $transition.ConnectorObjectPosition
+            SourceApproachPoint = Copy-Vec3 $transition.DestinationApproachPoint
+            SourceClearPoint = Copy-Vec3 $transition.DestinationClearPoint
+            DestinationClearPoint = Copy-Vec3 $transition.SourceClearPoint
+            DestinationApproachPoint = Copy-Vec3 $transition.SourceApproachPoint
+            NavigationPoints = @(Get-DeduplicatedVectorSequence -Points @([array]$transition.NavigationPoints[-1..0]))
+            AssetDerivationSource = $transition.AssetDerivationSource
+        }
+        SourceSceneZoneName = $transition.DestinationSceneZoneName
+        DestinationSceneZoneName = $transition.SourceSceneZoneName
+        AssetDerivationSource = $transition.AssetDerivationSource
+    }
+
+    $reverseTransition.Validation = Get-TransitionValidationMetadata -TransitionData $reverseTransition
+    $generatedTransitions.Add($reverseTransition)
+    $generatedTransitionIds[$reverseId] = $true
+}
+
 $outputGraph = [ordered]@{
     SchemaVersion = 2
     GeneratedAtUtc = [DateTime]::UtcNow.ToString("o")
-    SceneName = $inputGraph.SceneName
+    SceneName = $inputSceneName
     SourceSceneDataPath = (Resolve-Path -LiteralPath $SceneDataPath).Path
     SourceGraphPath = (Resolve-Path -LiteralPath $InputGraphPath).Path
     Zones = $generatedZones
