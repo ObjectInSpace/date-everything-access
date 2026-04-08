@@ -6355,39 +6355,37 @@ namespace DateEverythingAccess
             if (string.IsNullOrEmpty(contextKey) || !string.Equals(_virtualChatChoiceContextKey, contextKey, StringComparison.Ordinal))
             {
                 _virtualChatChoiceContextKey = contextKey;
-                _virtualChatChoiceIndex = GetCurrentChoiceIndex(choices);
+                _virtualChatChoiceIndex = GetCurrentChoiceIndex(choices, allowVirtualChatFallback: false);
             }
 
-            int currentIndex = _virtualChatChoiceIndex;
-            if (currentIndex < 0 || currentIndex >= choices.Count)
-                currentIndex = 0;
-
+            int currentIndex = GetCurrentChoiceIndex(choices);
+            bool hasCurrentSelection = currentIndex >= 0 && currentIndex < choices.Count;
             bool hasMultipleChoices = choices.Count > 1;
             if (hasMultipleChoices && WasChoiceKeyPressed(KeyCode.UpArrow, VkUp, ref _choiceUpWasDown))
             {
-                currentIndex = (currentIndex + choices.Count - 1) % choices.Count;
-                SetVirtualChatChoiceIndex(currentIndex, choices);
+                int targetIndex = hasCurrentSelection ? (currentIndex + choices.Count - 1) % choices.Count : choices.Count - 1;
+                FocusChatChoice(targetIndex, choices, ControllerMenuUI.Direction.Up);
                 return true;
             }
 
             if (hasMultipleChoices && WasChoiceKeyPressed(KeyCode.LeftArrow, VkLeft, ref _choiceLeftWasDown))
             {
-                currentIndex = (currentIndex + choices.Count - 1) % choices.Count;
-                SetVirtualChatChoiceIndex(currentIndex, choices);
+                int targetIndex = hasCurrentSelection ? (currentIndex + choices.Count - 1) % choices.Count : choices.Count - 1;
+                FocusChatChoice(targetIndex, choices, ControllerMenuUI.Direction.Left);
                 return true;
             }
 
             if (hasMultipleChoices && WasChoiceKeyPressed(KeyCode.DownArrow, VkDown, ref _choiceDownWasDown))
             {
-                currentIndex = (currentIndex + 1) % choices.Count;
-                SetVirtualChatChoiceIndex(currentIndex, choices);
+                int targetIndex = hasCurrentSelection ? (currentIndex + 1) % choices.Count : 0;
+                FocusChatChoice(targetIndex, choices, ControllerMenuUI.Direction.Down);
                 return true;
             }
 
             if (hasMultipleChoices && WasChoiceKeyPressed(KeyCode.RightArrow, VkRight, ref _choiceRightWasDown))
             {
-                currentIndex = (currentIndex + 1) % choices.Count;
-                SetVirtualChatChoiceIndex(currentIndex, choices);
+                int targetIndex = hasCurrentSelection ? (currentIndex + 1) % choices.Count : 0;
+                FocusChatChoice(targetIndex, choices, ControllerMenuUI.Direction.Right);
                 return true;
             }
 
@@ -6395,7 +6393,7 @@ namespace DateEverythingAccess
                 WasChoiceKeyPressed(KeyCode.KeypadEnter, VkReturn, ref _choiceReturnWasDown) ||
                 WasChoiceKeyPressed(KeyCode.Space, VkSpace, ref _choiceSpaceWasDown))
             {
-                if (currentIndex >= 0 && currentIndex < choices.Count)
+                if (hasCurrentSelection)
                 {
                     ActivateChoice(choices[currentIndex]);
                     return true;
@@ -6430,7 +6428,7 @@ namespace DateEverythingAccess
 
             GameObject selectedObject = GetCurrentSelectedObject();
             if (selectedObject == null)
-                return false;
+                return true;
 
             if (GetCurrentChoiceIndex(choices) >= 0)
                 return true;
@@ -8995,27 +8993,8 @@ namespace DateEverythingAccess
             return false;
         }
 
-        private static void SetVirtualChatChoiceIndex(int choiceIndex, IList<Button> choices)
-        {
-            _virtualChatChoiceIndex = choiceIndex;
-            SpeakVirtualChoiceAnnouncement(choiceIndex, choices);
-        }
 
-        private static void SpeakVirtualChoiceAnnouncement(int choiceIndex, IList<Button> choices)
-        {
-            if (choices == null || choiceIndex < 0 || choiceIndex >= choices.Count)
-                return;
 
-            Button choice = choices[choiceIndex];
-            if (choice == null)
-                return;
-
-            string choiceText = NormalizeText(ExtractTextFromObject(choice.gameObject));
-            if (string.IsNullOrEmpty(choiceText))
-                return;
-
-            ScreenReader.Say(Loc.Get("choice_announcement", choiceIndex + 1, choices.Count, choiceText), interrupt: false);
-        }
 
         private static string GetActiveChatChoiceContextKey()
         {
@@ -9033,30 +9012,48 @@ namespace DateEverythingAccess
 
         private static int GetCurrentChoiceIndex(IList<Button> choices)
         {
+            return GetCurrentChoiceIndex(choices, allowVirtualChatFallback: true);
+        }
+
+        private static int GetCurrentChoiceIndex(IList<Button> choices, bool allowVirtualChatFallback)
+        {
             GameObject selectedObject = GetCurrentSelectedObject();
-            if (selectedObject == null)
-                return -1;
-
-            for (int i = 0; i < choices.Count; i++)
+            if (selectedObject != null)
             {
-                Button button = choices[i];
-                if (button == null)
-                    continue;
+                for (int i = 0; i < choices.Count; i++)
+                {
+                    Button button = choices[i];
+                    if (button == null)
+                        continue;
 
-                if (selectedObject == button.gameObject || selectedObject.transform.IsChildOf(button.transform))
-                    return i;
+                    if (selectedObject == button.gameObject || selectedObject.transform.IsChildOf(button.transform))
+                        return i;
+                }
             }
 
-            string activeChatContextKey = GetActiveChatChoiceContextKey();
-            if (!string.IsNullOrEmpty(activeChatContextKey) &&
-                string.Equals(activeChatContextKey, _virtualChatChoiceContextKey, StringComparison.Ordinal) &&
-                _virtualChatChoiceIndex >= 0 &&
-                _virtualChatChoiceIndex < choices.Count)
+            if (allowVirtualChatFallback)
             {
-                return _virtualChatChoiceIndex;
+                string activeChatContextKey = GetActiveChatChoiceContextKey();
+                if (!string.IsNullOrEmpty(activeChatContextKey) &&
+                    string.Equals(activeChatContextKey, _virtualChatChoiceContextKey, StringComparison.Ordinal) &&
+                    _virtualChatChoiceIndex >= 0 &&
+                    _virtualChatChoiceIndex < choices.Count)
+                {
+                    return _virtualChatChoiceIndex;
+                }
             }
 
             return -1;
+        }
+
+        private static void FocusChatChoice(int choiceIndex, IList<Button> choices, ControllerMenuUI.Direction direction)
+        {
+            if (choices == null || choiceIndex < 0 || choiceIndex >= choices.Count)
+                return;
+
+            _virtualChatChoiceContextKey = GetActiveChatChoiceContextKey();
+            _virtualChatChoiceIndex = choiceIndex;
+            FocusChoice(choices[choiceIndex], direction);
         }
 
         private static void FocusChoice(Button choice, ControllerMenuUI.Direction direction)
@@ -9064,7 +9061,7 @@ namespace DateEverythingAccess
             if (choice == null)
                 return;
 
-            ControllerMenuUI.SetCurrentlySelected(choice.gameObject, direction, manualSelected: true);
+            ControllerMenuUI.SetCurrentlySelected(choice.gameObject, direction, manualSelected: true, isViaPointer: true);
         }
 
         private static void ActivateChoice(Button choice)

@@ -211,6 +211,7 @@ Important consequence:
 
 - Dialogue quick-response buttons do not reliably accept normal manual focus moves.
 - The successful accessibility fix used `isViaPointer: true` when focusing choice buttons.
+- Keyboard-driven accessibility navigation should keep using pointer-style focus writes for both dialogue choices and chat quick responses; plain manual selection has regressed in runtime.
 
 ### Dialogue UI
 
@@ -313,6 +314,7 @@ Important consequence:
     - For full text coverage, the best live source is the active `ParallelChat` UI plus Ink `currentText/currentChoices`, not only the saved `AppMessage` data
     - Accessibility summaries should read only the `ChatTextBox` entries that overlap the current `ScrollRect` viewport, because the full chat history remains mounted in the hierarchy even when older messages are scrolled off-screen
     - Accessibility focus fallback for chat replies should treat `ParallelChat.Options` like dialogue choices, not like generic chat-panel focus, or the spoken result collapses to the chat header instead of the selected reply text
+    - If accessibility keeps a virtual reply index as a fallback, it must reset or reseed that index from the real selected reply when the active `ParallelChat` instance changes; carrying a stale index into a new chat makes the first arrow move land on the wrong option
 
 - `MusicPlayer`
   - Each list row is a `MusicEntryButton`
