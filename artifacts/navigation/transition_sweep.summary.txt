@@ -1,16 +1,16 @@
-Sweep report import summary
+﻿Sweep report import summary
 Kind: OpenPassage
-Imported at: 2026-04-04T21:34:16.7833305Z
+Imported at: 2026-04-08T19:14:46.9691947Z
 Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\transition_sweep.live.json
 Output: .\artifacts\navigation\transition_sweep.live.json
-Report generated at: 04/04/2026 21:31:34
+Report generated at: 2026-04-08T19:11:02.3565057Z
 Active scene: ThirdPersonGreybox
 Merged totals: total=82 passed=55 failed=27 pending=0
 Imported status changes: newEntries=0 newlyPassed=0 newlyFailed=0 newlyPending=0 unchanged=2
-Open-passage override refresh: added=0 refreshed=25 preservedManualWaypoints=0 failedWithoutWaypoint=2 retainedWithoutCurrentFailure=2 totalEntries=29
+Open-passage override refresh: added=0 refreshed=26 preservedManualWaypoints=0 failedWithoutWaypoint=1 retainedWithoutCurrentFailure=2 totalEntries=29
 Remaining failed transitions:
 - bathroom2 -> dorian_bathroom2 | suspicion=6 | connector=<none> | step timeout currentZone=bathroom2 player=(-18.89, 12.82, -3.85)
-- bathroom2 -> dorian_bathroom2_2 | suspicion=2 | connector=<none> | navigation blocked currentZone=bathroom2 step=bathroom2->dorian_bathroom2_2 kind=OpenPassage interaction=False connector=<null> from=(-24.80, 18.23, -4.28) to=(-25.46, 17.84, -12.64) fromCross=(-25.46, 18.23, -5.07) toCross=(-25.46, 17.84, -12.64)
+- bathroom2 -> dorian_bathroom2_2 | suspicion=2 | connector=<none> | step timeout currentZone=bathroom2 player=(-24.06, 12.82, -5.11)
 - bedroom_closet -> dorian_irondoor | suspicion=6 | connector=<none> | step timeout currentZone=bedroom_closet player=(-9.82, 12.82, -7.65)
 - dining_room -> living_room | suspicion=2 | connector=<none> | step timeout currentZone=dining_room4 player=(-17.35, 6.10, -5.65)
 - dining_room -> piano_room | suspicion=0 | connector=<none> | navigation blocked currentZone=dining_room step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13)
