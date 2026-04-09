@@ -103,6 +103,48 @@ namespace DateEverythingAccess
             }
         }
 
+        internal static bool TrySnapPositionToNearestWalkableCell(
+            string zoneName,
+            Vector3 position,
+            out Vector3 snappedPosition,
+            out string detail)
+        {
+            snappedPosition = Vector3.zero;
+            detail = null;
+
+            Initialize();
+            if (!_isAvailable)
+            {
+                detail = "LocalNavigationMapsUnavailable";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(zoneName))
+            {
+                detail = "MissingZoneName";
+                return false;
+            }
+
+            if (!ZonesByName.TryGetValue(zoneName, out ZoneMap zone))
+            {
+                detail = "ZoneNotFound";
+                return false;
+            }
+
+            if (zone.Walkable == null || zone.Walkable.Length == 0)
+            {
+                detail = "ZoneHasNoWalkableCells";
+                return false;
+            }
+
+            return TryFindNearestWalkableCellIndex(
+                zone,
+                position,
+                out _,
+                out snappedPosition,
+                out detail);
+        }
+
         /// <summary>
         /// Attempts to compute a walkable cell path inside the given navigation zone.
         /// </summary>
