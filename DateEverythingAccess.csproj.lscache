@@ -73,7 +73,7 @@ ScreenReader.cs
 TransitionSweepReporter.cs
 
 [metadataReferences]
-<NUGET>/microsoft.netframework.referenceassemblies.net472/1.0.3/build/.NETFramework/v4.7.2/
+.dotnet_cli_home/.nuget/packages/microsoft.netframework.referenceassemblies.net472/1.0.3/build/.NETFramework/v4.7.2/
  Facades/netstandard.dll
  mscorlib.dll
  System.Core.dll

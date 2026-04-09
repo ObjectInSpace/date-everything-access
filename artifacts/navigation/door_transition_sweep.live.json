@@ -1,6 +1,6 @@
 {
-  "GeneratedAtUtc": "2026-04-09T01:22:27.2612139Z",
-  "ImportedAtUtc": "2026-04-09T01:24:38.2622532Z",
+  "GeneratedAtUtc": "2026-04-09T01:46:18.4506556Z",
+  "ImportedAtUtc": "2026-04-09T01:47:41.0381113Z",
   "ActiveScene": "ThirdPersonGreybox",
   "SweepKind": "Door",
   "IsComplete": true,
@@ -1082,7 +1082,7 @@
     },
     {
       "Index": 17,
-      "StepIndex": 1,
+      "StepIndex": 0,
       "Key": "office->office_closet|(9.36, 4.17, 24.47)|(-1.07, 4.17, 23.96)",
       "FromZone": "office",
       "ToZone": "office_closet",
@@ -1093,7 +1093,7 @@
       "Status": "failed",
       "StatusDetail": "step timeout currentZone=office5 player=(5.52, -0.60, 25.38)",
       "FailureReason": "step timeout currentZone=office5 player=(5.52, -0.60, 25.38)",
-      "DurationSeconds": 8.116,
+      "DurationSeconds": 8.05,
       "SpawnSource": "door_clearance",
       "SpawnPosition": {
         "x": 5.386,

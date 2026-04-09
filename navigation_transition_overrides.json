@@ -61,27 +61,32 @@
       "ToZone": "piano_room",
       "DestinationApproachBias": 0.45,
       "UseExplicitCrossingSegments": false,
-      "StepTimeoutSeconds": 8.0,
+      "StepTimeoutSeconds": 10.0,
       "IntermediateWaypoints": [
         {
-          "x": -18.25,
+          "x": -18.899,
           "y": 4.196,
-          "z": -9.55
+          "z": -9.381
         },
         {
-          "x": -17.1,
+          "x": -18.399,
           "y": 4.196,
-          "z": -9.92
+          "z": -9.381
         },
         {
-          "x": -15.76,
-          "y": 4.519433,
-          "z": -10.57
+          "x": -17.899,
+          "y": 4.196,
+          "z": -9.881
         },
         {
-          "x": -14.95,
+          "x": -16.534,
           "y": 4.842866,
-          "z": -11.12
+          "z": -10.474
+        },
+        {
+          "x": -15.534,
+          "y": 4.842866,
+          "z": -10.974
         }
       ]
     },
