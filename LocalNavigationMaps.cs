@@ -5,6 +5,8 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
+using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace DateEverythingAccess
@@ -15,6 +17,9 @@ namespace DateEverythingAccess
     internal static class LocalNavigationMaps
     {
         private const int DefaultNearestCellSearchRadius = 8;
+        private static readonly Regex ScalarIndexArrayPattern = new Regex(
+            "(\"(?:EnvelopeIndices|BlockedIndices)\"\\s*:\\s*)(-?\\d+)",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private static readonly object SyncRoot = new object();
         private static readonly Dictionary<string, ZoneMap> ZonesByName =
             new Dictionary<string, ZoneMap>(StringComparer.OrdinalIgnoreCase);
@@ -277,7 +282,17 @@ namespace DateEverythingAccess
                         return;
                     }
 
-                    using (var stream = File.OpenRead(jsonPath))
+                    int normalizedScalarArrayCount = 0;
+                    string json = NormalizeScalarIndexArrays(File.ReadAllText(jsonPath), out normalizedScalarArrayCount);
+                    if (normalizedScalarArrayCount > 0)
+                    {
+                        Main.Log?.LogWarning(
+                            "Normalized malformed local navigation map index arrays count=" +
+                            normalizedScalarArrayCount +
+                            " path=" + jsonPath);
+                    }
+
+                    using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(json)))
                     {
                         var serializer = new DataContractJsonSerializer(typeof(Document));
                         Document document = serializer.ReadObject(stream) as Document;
@@ -309,6 +324,26 @@ namespace DateEverythingAccess
                     _isAvailable = false;
                 }
             }
+        }
+
+        private static string NormalizeScalarIndexArrays(string json, out int replacementCount)
+        {
+            int normalizedCount = 0;
+            if (string.IsNullOrEmpty(json))
+            {
+                replacementCount = 0;
+                return json;
+            }
+
+            string normalizedJson = ScalarIndexArrayPattern.Replace(
+                json,
+                match =>
+                {
+                    normalizedCount++;
+                    return match.Groups[1].Value + "[" + match.Groups[2].Value + "]";
+                });
+            replacementCount = normalizedCount;
+            return normalizedJson;
         }
 
         private static ZoneMap BuildZoneMap(ZoneRecord record)

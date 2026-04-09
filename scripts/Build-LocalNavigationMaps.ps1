@@ -39,13 +39,35 @@ function Get-UniqueStrings {
 }
 
 function Get-CameraSpaceBounds2D {
-    param([Parameter(Mandatory = $true)][object]$CameraSpace)
+    param(
+        [Parameter(Mandatory = $true)][object]$CameraSpace,
+        [Parameter()][double]$MinimumHalfExtent = 0.0
+    )
 
-    $halfX = [Math]::Abs([double]$CameraSpace.Scale.x) / 2.0
-    $halfZ = [Math]::Abs([double]$CameraSpace.Scale.z) / 2.0
+    $halfX = [Math]::Max([Math]::Abs([double]$CameraSpace.Scale.x) / 2.0, $MinimumHalfExtent)
+    $halfZ = [Math]::Max([Math]::Abs([double]$CameraSpace.Scale.z) / 2.0, $MinimumHalfExtent)
     return [ordered]@{
         MinX = [double]$CameraSpace.Position.x - $halfX
         MaxX = [double]$CameraSpace.Position.x + $halfX
+        MinZ = [double]$CameraSpace.Position.z - $halfZ
+        MaxZ = [double]$CameraSpace.Position.z + $halfZ
+    }
+}
+
+function Get-CameraSpaceBounds3D {
+    param(
+        [Parameter(Mandatory = $true)][object]$CameraSpace,
+        [Parameter()][double]$MinimumHorizontalHalfExtent = 0.0
+    )
+
+    $halfX = [Math]::Max([Math]::Abs([double]$CameraSpace.Scale.x) / 2.0, $MinimumHorizontalHalfExtent)
+    $halfY = [Math]::Abs([double]$CameraSpace.Scale.y) / 2.0
+    $halfZ = [Math]::Max([Math]::Abs([double]$CameraSpace.Scale.z) / 2.0, $MinimumHorizontalHalfExtent)
+    return [ordered]@{
+        MinX = [double]$CameraSpace.Position.x - $halfX
+        MaxX = [double]$CameraSpace.Position.x + $halfX
+        MinY = [double]$CameraSpace.Position.y - $halfY
+        MaxY = [double]$CameraSpace.Position.y + $halfY
         MinZ = [double]$CameraSpace.Position.z - $halfZ
         MaxZ = [double]$CameraSpace.Position.z + $halfZ
     }
@@ -63,6 +85,17 @@ function Test-BoundsIntersect2D {
     return $Left.MinX -le $Right.MaxX -and $Left.MaxX -ge $Right.MinX -and $Left.MinZ -le $Right.MaxZ -and $Left.MaxZ -ge $Right.MinZ
 }
 
+function Test-BoundsIntersect3D {
+    param([object]$Left, [object]$Right)
+
+    if ($null -eq $Left -or $null -eq $Right) { return $false }
+    return (
+        $Left.MinX -le $Right.MaxX -and $Left.MaxX -ge $Right.MinX -and
+        $Left.MinY -le $Right.MaxY -and $Left.MaxY -ge $Right.MinY -and
+        $Left.MinZ -le $Right.MaxZ -and $Left.MaxZ -ge $Right.MinZ
+    )
+}
+
 function Get-ZoneFamilyCameraSpaces {
     param([object[]]$CameraSpaces, [string]$ZoneName)
 
@@ -71,7 +104,10 @@ function Get-ZoneFamilyCameraSpaces {
 }
 
 function Get-ZoneUnionBounds {
-    param([AllowEmptyCollection()][object[]]$CameraSpaces)
+    param(
+        [AllowEmptyCollection()][object[]]$CameraSpaces,
+        [Parameter()][double]$MinimumHalfExtent = 0.0
+    )
 
     if ($CameraSpaces.Count -lt 1) { return $null }
     $minX = [double]::PositiveInfinity
@@ -79,7 +115,7 @@ function Get-ZoneUnionBounds {
     $minZ = [double]::PositiveInfinity
     $maxZ = [double]::NegativeInfinity
     foreach ($cameraSpace in $CameraSpaces) {
-        $bounds = Get-CameraSpaceBounds2D -CameraSpace $cameraSpace
+        $bounds = Get-CameraSpaceBounds2D -CameraSpace $cameraSpace -MinimumHalfExtent $MinimumHalfExtent
         $minX = [Math]::Min($minX, $bounds.MinX)
         $maxX = [Math]::Max($maxX, $bounds.MaxX)
         $minZ = [Math]::Min($minZ, $bounds.MinZ)
@@ -149,7 +185,8 @@ function Test-BlockerContainsPoint2D {
 
 function Convert-IndicesToIntArray {
     param([System.Collections.Generic.List[int]]$Indices)
-    return @($Indices.ToArray())
+    if ($null -eq $Indices) { return @() }
+    return $Indices.ToArray()
 }
 
 if (-not (Test-Path -LiteralPath $NavigationDataPath)) { throw "Navigation data file not found: $NavigationDataPath" }
@@ -185,9 +222,31 @@ foreach ($zoneName in (Get-UniqueStrings -Values $graphZoneNames)) {
         continue
     }
 
-    $sceneZoneBounds = @($sceneZones | ForEach-Object { Get-CameraSpaceBounds2D -CameraSpace $_ })
-    $unionBounds = Get-ZoneUnionBounds -CameraSpaces $sceneZones
-    $intersectingBlockers = @($navigationBlockers | Where-Object { $_.Bounds2D -ne $null -and (Test-BoundsIntersect2D -Left $_.Bounds2D -Right $unionBounds) })
+    $minimumHorizontalHalfExtent = [double]$CellSize / 2.0
+    $sceneZoneBounds2D = @($sceneZones | ForEach-Object { Get-CameraSpaceBounds2D -CameraSpace $_ -MinimumHalfExtent $minimumHorizontalHalfExtent })
+    $sceneZoneBounds3D = @($sceneZones | ForEach-Object { Get-CameraSpaceBounds3D -CameraSpace $_ -MinimumHorizontalHalfExtent $minimumHorizontalHalfExtent })
+    $unionBounds = Get-ZoneUnionBounds -CameraSpaces $sceneZones -MinimumHalfExtent $minimumHorizontalHalfExtent
+    $intersectingBlockers = @(
+        $navigationBlockers | Where-Object {
+            if ($_.Bounds2D -eq $null -or $_.Bounds3D -eq $null) { return $false }
+            foreach ($sceneZoneBounds3DEntry in $sceneZoneBounds3D) {
+                $blockerBounds3D = [ordered]@{
+                    MinX = [double]$_.Bounds3D.Min.x
+                    MaxX = [double]$_.Bounds3D.Max.x
+                    MinY = [double]$_.Bounds3D.Min.y
+                    MaxY = [double]$_.Bounds3D.Max.y
+                    MinZ = [double]$_.Bounds3D.Min.z
+                    MaxZ = [double]$_.Bounds3D.Max.z
+                }
+
+                if (Test-BoundsIntersect3D -Left $blockerBounds3D -Right $sceneZoneBounds3DEntry) {
+                    return $true
+                }
+            }
+
+            return $false
+        }
+    )
     $width = [Math]::Max(1, [int][Math]::Ceiling($unionBounds.Width / $CellSize))
     $height = [Math]::Max(1, [int][Math]::Ceiling($unionBounds.Depth / $CellSize))
     $envelopeIndices = New-Object System.Collections.Generic.List[int]
@@ -199,7 +258,7 @@ foreach ($zoneName in (Get-UniqueStrings -Values $graphZoneNames)) {
             $cellX = [double]$unionBounds.MinX + ($column * $CellSize) + ($CellSize / 2.0)
             $index = ($row * $width) + $column
             $insideEnvelope = $false
-            foreach ($sceneZoneBoundsEntry in $sceneZoneBounds) {
+            foreach ($sceneZoneBoundsEntry in $sceneZoneBounds2D) {
                 if (Test-BoundsContainsPoint2D -Bounds $sceneZoneBoundsEntry -X $cellX -Z $cellZ) { $insideEnvelope = $true; break }
             }
             if (-not $insideEnvelope) { continue }
@@ -222,8 +281,8 @@ foreach ($zoneName in (Get-UniqueStrings -Values $graphZoneNames)) {
         BlockedCellCount = $blockedIndices.Count
         WalkableCellCount = $envelopeIndices.Count - $blockedIndices.Count
         IntersectingBlockerCount = $intersectingBlockers.Count
-        EnvelopeIndices = Convert-IndicesToIntArray -Indices $envelopeIndices
-        BlockedIndices = Convert-IndicesToIntArray -Indices $blockedIndices
+        EnvelopeIndices = @(Convert-IndicesToIntArray -Indices $envelopeIndices)
+        BlockedIndices = @(Convert-IndicesToIntArray -Indices $blockedIndices)
         SampleBlockers = @($intersectingBlockers | Select-Object -First 12 | ForEach-Object { [ordered]@{ ComponentId = $_.ComponentId; Name = $_.Name; ColliderType = $_.ColliderType } })
         Notes = @("PrimitiveBlockersOnly")
     })

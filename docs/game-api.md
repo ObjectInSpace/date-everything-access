@@ -471,6 +471,7 @@ This is the cleanest room identifier found for house navigation speech.
   - `.\scripts\Export-SceneBlockerData.ps1`
   - writes `artifacts\navigation\thirdpersongreybox-blockers.json`
   - currently exports primitive colliders only, filters out triggers, inactive objects, door and teleporter connectors, rigidbody-driven objects, tiny footprints, and blockers outside the player-height band
+  - retained blocker records include `Bounds3D`, `Bounds2D`, `BottomY`, `TopY`, and a flattened footprint so later tooling can reject blockers that only overlap a zone in `x/z` while sitting on a different floor
   - current `ThirdPersonGreybox` export finds `623` primitive colliders, keeps `67` filtered navigation blockers, and also records `2317` mesh colliders plus `1` terrain collider that are not yet converted into blocker footprints
   - practical consequence:
     - this is enough data to begin blocker-aware local planning and debugging
@@ -479,6 +480,8 @@ This is the cleanest room identifier found for house navigation speech.
   - `.\scripts\Build-LocalNavigationMaps.ps1`
   - writes `artifacts\navigation\local_navigation_maps.generated.json`
   - uses `CameraSpaces` family bounds as the per-zone walk envelope and subtracts filtered primitive blocker footprints on a fixed grid
+  - blocker rasterization is now height-aware per zone: a blocker is only applied when its `Bounds3D` overlaps the zone's camera-space volume, which prevents downstairs furniture from blocking upstairs bathroom, gym, or hallway zones that only overlap in `x/z`
+  - point-sized `CameraSpaces` are expanded to a minimum half-cell envelope during rasterization so microzones such as `dorian_*` connector nodes and `office_1love` still get a usable occupancy cell instead of an empty `1x1` map
   - current output covers all `57` graph zones with no missing `CameraSpaces` matches
   - practical consequence:
     - the repo now has an offline per-zone occupancy artifact for blocker-aware runtime steering
@@ -503,6 +506,8 @@ This is the cleanest room identifier found for house navigation speech.
   - each `PathStep` now carries room-node ids, explicit source and destination connector approach and clear points, ordered navigation points, accepted source and destination runtime subzones, validation timeout recommendations, static suspicion score, and asset-derivation metadata
 - `LocalNavigationMaps`
   - loads `BepInEx\plugins\local_navigation_maps.generated.json` through `DataContractJsonSerializer`
+  - runtime follow-up from the `2026-04-08` rerun: the live build exposed that older generated files could serialize single-entry `EnvelopeIndices` or `BlockedIndices` values as scalars instead of arrays, which breaks `DataContractJsonSerializer` at `EnvelopeIndices`
+  - implementation follow-up from the same session: `LocalNavigationMaps.Initialize()` now normalizes those malformed scalar index properties before deserialization, and `.\scripts\Build-LocalNavigationMaps.ps1` now emits proper JSON arrays again for fresh generated files
   - resolves the nearest walkable start and goal cells inside one graph zone, runs an 8-neighbor A* search over the exported occupancy grid, and returns compressed cell-center waypoints
   - start and goal snapping now first search the normal nearby cell radius, then fall back to the nearest walkable cell anywhere in the same zone before failing; the returned failure reason now includes the snap detail used for both ends when a local path cannot be built
   - practical consequence:
@@ -538,6 +543,7 @@ This is the cleanest room identifier found for house navigation speech.
 - Door-sweep reruns do the same against `BepInEx\plugins\door_transition_sweep.live.json`, so already-passed door links are skipped on the next pass
 - For the worst confirmed open-passage failures, the watcher can now traverse in explicit segments `FromWaypoint -> FromCrossingAnchor -> ToCrossingAnchor -> ToWaypoint` instead of one long straight-line handoff, which is intended to avoid cutting through bad doorway or stairwell geometry
 - Open-passage override data is now externalized in `navigation_transition_overrides.json`, copied into `BepInEx\plugins\`, and loaded at runtime through `DataContractJsonSerializer`; each directed entry can define accepted source/destination subzones, destination approach bias, explicit intermediate waypoints, explicit-crossing mode, and an optional per-transition timeout
+- Optional open-passage door recovery is now candidate-driven instead of exact-source-zone-driven once a route-adjacent live door has already been resolved during a forced sweep; this avoids the earlier `shouldAttempt=false` skip when the player drifts into a sibling runtime zone like `hallway6` or `office5` before the retry fires
 - `.\scripts\Import-TransitionSweepReport.ps1` now imports that live sweep report into `artifacts\navigation\transition_sweep.live.json`, merges rerun fragments with the existing repo-side artifact so previously passed steps are preserved, writes `artifacts\navigation\transition_sweep.summary.txt`, and refreshes `navigation_transition_overrides.json` from failed entries that include stalled player positions
 - `.\scripts\Import-DoorTransitionSweepReport.ps1` now imports the live door sweep report into `artifacts\navigation\door_transition_sweep.live.json`, merges rerun fragments with the existing repo-side artifact, and writes `artifacts\navigation\door_transition_sweep.summary.txt` with grouped remaining-failure details
 - `.\scripts\Inspect-NavigationTransitions.ps1` writes `artifacts\navigation\transition_validation.static.json`, which scores every generated transition with static geometry heuristics so suspicious links can be prioritized before runtime testing
