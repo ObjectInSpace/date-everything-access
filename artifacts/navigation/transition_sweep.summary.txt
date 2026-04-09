@@ -1,9 +1,9 @@
 Sweep report import summary
 Kind: OpenPassage
-Imported at: 2026-04-09T01:24:38.9223085Z
+Imported at: 2026-04-09T01:47:41.2002661Z
 Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\transition_sweep.live.json
 Output: .\artifacts\navigation\transition_sweep.live.json
-Report generated at: 04/09/2026 01:22:14
+Report generated at: 04/09/2026 01:45:57
 Active scene: ThirdPersonGreybox
 Merged totals: total=80 passed=79 failed=1 pending=0
 Imported status changes: newEntries=0 newlyPassed=0 newlyFailed=0 newlyPending=0 unchanged=1

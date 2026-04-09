@@ -184,6 +184,7 @@ namespace DateEverythingAccess
             public bool DoorInteractionTriggered;
             public Vector3 DoorPushThroughPosition;
             public bool DoorTimeoutRecoveryUsed;
+            public bool DoorTimeoutFinalGraceUsed;
         }
 
         private const float PopupSelectionSuppressionSeconds = 0.75f;
@@ -230,6 +231,7 @@ namespace DateEverythingAccess
         private const float DoorTransitionSweepInteractionSettleSeconds = 0.75f;
         private const float DoorTransitionSweepPushThroughDistance = 1.35f;
         private const float DoorTransitionSweepMaximumPushThroughDistance = 3.25f;
+        private const float DoorTransitionSweepPostRecoveryGraceSeconds = 1.5f;
         private const float DoorPushThroughSourceAdvanceDistance = 1f;
         private const float DoorPushThroughArrivalDistance = 2.15f;
         private const float DoorPushThroughBlockedTimeoutSeconds = 3f;
@@ -834,6 +836,7 @@ namespace DateEverythingAccess
             _transitionSweepSession.DoorInteractionTriggered = false;
             _transitionSweepSession.DoorPushThroughPosition = Vector3.zero;
             _transitionSweepSession.DoorTimeoutRecoveryUsed = false;
+            _transitionSweepSession.DoorTimeoutFinalGraceUsed = false;
             _transitionSweepSession.Phase = TransitionSweepPhase.AwaitingTeleportSettle;
             _transitionSweepSession.NextActionTime = Time.unscaledTime + TransitionSweepTeleportSettleSeconds;
 
@@ -1041,21 +1044,39 @@ namespace DateEverythingAccess
         {
             if (_transitionSweepSession == null ||
                 step == null ||
-                step.Kind != NavigationGraph.StepKind.Door ||
-                _transitionSweepSession.DoorTimeoutRecoveryUsed)
+                step.Kind != NavigationGraph.StepKind.Door)
             {
                 return false;
             }
 
-            if (!TryRecoverAutoWalk(step, NavigationTargetKind.ZoneFallback))
-                return false;
+            if (!_transitionSweepSession.DoorTimeoutRecoveryUsed)
+            {
+                if (!TryRecoverAutoWalk(step, NavigationTargetKind.ZoneFallback))
+                    return false;
 
-            _transitionSweepSession.DoorTimeoutRecoveryUsed = true;
-            _transitionSweepSession.StepStartedAt = now;
+                _transitionSweepSession.DoorTimeoutRecoveryUsed = true;
+                _transitionSweepSession.StepStartedAt = now;
+                _transitionSweepSession.LastHeartbeatAt = 0f;
+                _transitionSweepSession.NextActionTime = now + 0.1f;
+                Main.Log.LogInfo(
+                    "Transition sweep timeout recovery granted step=" +
+                    DescribeNavigationStep(step));
+                return true;
+            }
+
+            if (_transitionSweepSession.DoorTimeoutFinalGraceUsed ||
+                !TryRecoverAutoWalk(step, NavigationTargetKind.ZoneFallback))
+            {
+                return false;
+            }
+
+            _transitionSweepSession.DoorTimeoutFinalGraceUsed = true;
+            float timeoutSeconds = GetOpenPassageTransitionOverrideTimeoutSeconds(step);
+            _transitionSweepSession.StepStartedAt = now - Mathf.Max(0f, timeoutSeconds - DoorTransitionSweepPostRecoveryGraceSeconds);
             _transitionSweepSession.LastHeartbeatAt = 0f;
             _transitionSweepSession.NextActionTime = now + 0.1f;
             Main.Log.LogInfo(
-                "Transition sweep timeout recovery granted step=" +
+                "Transition sweep timeout final recovery grace granted step=" +
                 DescribeNavigationStep(step));
             return true;
         }
@@ -4614,6 +4635,12 @@ namespace DateEverythingAccess
                     IsZoneEquivalentToNavigationZone(currentZone, step.FromZone);
                 bool isInDestinationZone = !string.IsNullOrEmpty(step.ToZone) &&
                     IsZoneEquivalentToNavigationZone(currentZone, step.ToZone);
+                bool useOverrideOnlyDesiredGoal =
+                    desiredPosition != Vector3.zero &&
+                    TryGetOpenPassageTransitionOverride(step, out OpenPassageTransitionOverride transitionOverride) &&
+                    transitionOverride.IntermediateWaypoints != null &&
+                    transitionOverride.IntermediateWaypoints.Length > 0 &&
+                    !transitionOverride.UseExplicitCrossingSegments;
 
                 if (isInSourceZone)
                 {
@@ -4623,6 +4650,12 @@ namespace DateEverythingAccess
                     string sourcePlanningContext = _openPassageTraversalStage == OpenPassageTraversalStage.SourceWaypoint
                         ? "open-passage-source"
                         : "open-passage-handoff";
+                    if (useOverrideOnlyDesiredGoal)
+                    {
+                        sourceGoal = desiredPosition;
+                        sourcePlanningContext = "open-passage-override-source";
+                    }
+
                     if (sourceGoal != Vector3.zero &&
                         ShouldUseLocalNavigationGoal(
                             playerPosition,
@@ -4641,6 +4674,13 @@ namespace DateEverythingAccess
                 if (isInDestinationZone)
                 {
                     Vector3 destinationGoal = GetOpenPassageDestinationApproachPosition(step);
+                    string destinationPlanningContext = "open-passage-destination";
+                    if (useOverrideOnlyDesiredGoal)
+                    {
+                        destinationGoal = desiredPosition;
+                        destinationPlanningContext = "open-passage-override-destination";
+                    }
+
                     if (destinationGoal == Vector3.zero)
                         destinationGoal = desiredPosition;
 
@@ -4648,11 +4688,11 @@ namespace DateEverythingAccess
                         ShouldUseLocalNavigationGoal(
                             playerPosition,
                             destinationGoal,
-                            GetLocalNavigationGoalReachedDistance("open-passage-destination")))
+                            GetLocalNavigationGoalReachedDistance(destinationPlanningContext)))
                     {
                         planningZone = step.ToZone;
                         planningGoal = destinationGoal;
-                        planningContext = "open-passage-destination";
+                        planningContext = destinationPlanningContext;
                         return true;
                     }
 
