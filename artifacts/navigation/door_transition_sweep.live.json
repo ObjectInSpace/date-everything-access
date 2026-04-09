@@ -1,12 +1,12 @@
 {
-  "GeneratedAtUtc": "2026-04-09T01:05:13.9261164Z",
-  "ImportedAtUtc": "2026-04-09T01:15:15.4797377Z",
+  "GeneratedAtUtc": "2026-04-09T01:22:27.2612139Z",
+  "ImportedAtUtc": "2026-04-09T01:24:38.2622532Z",
   "ActiveScene": "ThirdPersonGreybox",
   "SweepKind": "Door",
   "IsComplete": true,
   "TotalCount": 22,
-  "PassedCount": 20,
-  "FailedCount": 2,
+  "PassedCount": 21,
+  "FailedCount": 1,
   "PendingCount": 0,
   "Entries": [
     {
@@ -82,10 +82,10 @@
       "TransitionKind": "Door",
       "ConnectorName": "Doors_Bathroom1",
       "RequiresInteraction": true,
-      "Status": "failed",
-      "StatusDetail": "step timeout currentZone=bathroom1 player=(1.67, -0.60, 7.78)",
-      "FailureReason": "step timeout currentZone=bathroom1 player=(1.67, -0.60, 7.78)",
-      "DurationSeconds": 8.033,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.1,
       "SpawnSource": "door_clearance",
       "SpawnPosition": {
         "x": 0.966,
@@ -1082,7 +1082,7 @@
     },
     {
       "Index": 17,
-      "StepIndex": 2,
+      "StepIndex": 1,
       "Key": "office->office_closet|(9.36, 4.17, 24.47)|(-1.07, 4.17, 23.96)",
       "FromZone": "office",
       "ToZone": "office_closet",
@@ -1091,9 +1091,9 @@
       "ConnectorName": "Doors_Office_Closet",
       "RequiresInteraction": true,
       "Status": "failed",
-      "StatusDetail": "step timeout currentZone=office5 player=(5.64, -0.60, 25.50)",
-      "FailureReason": "step timeout currentZone=office5 player=(5.64, -0.60, 25.50)",
-      "DurationSeconds": 8.05,
+      "StatusDetail": "step timeout currentZone=office5 player=(5.52, -0.60, 25.38)",
+      "FailureReason": "step timeout currentZone=office5 player=(5.52, -0.60, 25.38)",
+      "DurationSeconds": 8.116,
       "SpawnSource": "door_clearance",
       "SpawnPosition": {
         "x": 5.386,

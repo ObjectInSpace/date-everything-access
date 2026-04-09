@@ -183,6 +183,7 @@ namespace DateEverythingAccess
             public bool UsedZoneFallbackSpawn;
             public bool DoorInteractionTriggered;
             public Vector3 DoorPushThroughPosition;
+            public bool DoorTimeoutRecoveryUsed;
         }
 
         private const float PopupSelectionSuppressionSeconds = 0.75f;
@@ -832,6 +833,7 @@ namespace DateEverythingAccess
             _transitionSweepSession.UsedZoneFallbackSpawn = false;
             _transitionSweepSession.DoorInteractionTriggered = false;
             _transitionSweepSession.DoorPushThroughPosition = Vector3.zero;
+            _transitionSweepSession.DoorTimeoutRecoveryUsed = false;
             _transitionSweepSession.Phase = TransitionSweepPhase.AwaitingTeleportSettle;
             _transitionSweepSession.NextActionTime = Time.unscaledTime + TransitionSweepTeleportSettleSeconds;
 
@@ -992,6 +994,9 @@ namespace DateEverythingAccess
             if (_transitionSweepSession.StepStartedAt > 0f &&
                 now - _transitionSweepSession.StepStartedAt >= GetOpenPassageTransitionOverrideTimeoutSeconds(currentStep))
             {
+                if (TryRecoverTimedOutDoorTransitionSweepStep(currentStep, now))
+                    return;
+
                 string currentZone = GetCurrentZoneNameInternal();
                 RecordTransitionSweepFailure(
                     "step timeout currentZone=" + (currentZone ?? "<null>") +
@@ -1030,6 +1035,29 @@ namespace DateEverythingAccess
 
             if (!TryBeginForcedTransitionSweepNavigation(_transitionSweepSession.CurrentStep))
                 RecordTransitionSweepFailure("forced navigation start failed");
+        }
+
+        private bool TryRecoverTimedOutDoorTransitionSweepStep(NavigationGraph.PathStep step, float now)
+        {
+            if (_transitionSweepSession == null ||
+                step == null ||
+                step.Kind != NavigationGraph.StepKind.Door ||
+                _transitionSweepSession.DoorTimeoutRecoveryUsed)
+            {
+                return false;
+            }
+
+            if (!TryRecoverAutoWalk(step, NavigationTargetKind.ZoneFallback))
+                return false;
+
+            _transitionSweepSession.DoorTimeoutRecoveryUsed = true;
+            _transitionSweepSession.StepStartedAt = now;
+            _transitionSweepSession.LastHeartbeatAt = 0f;
+            _transitionSweepSession.NextActionTime = now + 0.1f;
+            Main.Log.LogInfo(
+                "Transition sweep timeout recovery granted step=" +
+                DescribeNavigationStep(step));
+            return true;
         }
 
         private bool HasForcedTransitionSweepStepSucceeded(NavigationGraph.PathStep step)
@@ -7127,16 +7155,22 @@ namespace DateEverythingAccess
 
             var candidates = new List<GuidedNavigationPoint>();
             int sequence = 0;
+            bool useOverrideOnlyNavigationPoints = false;
             if (TryGetOpenPassageTransitionOverride(step, out OpenPassageTransitionOverride transitionOverride) &&
                 transitionOverride.IntermediateWaypoints != null)
             {
+                useOverrideOnlyNavigationPoints =
+                    transitionOverride.IntermediateWaypoints.Length > 0 &&
+                    !transitionOverride.UseExplicitCrossingSegments;
+
                 for (int i = 0; i < transitionOverride.IntermediateWaypoints.Length; i++)
                 {
                     AddGuidedNavigationPoint(candidates, transitionOverride.IntermediateWaypoints[i], sourceStart, finalApproachPoint, ref sequence);
                 }
             }
 
-            if (step.NavigationPoints != null)
+            if (!useOverrideOnlyNavigationPoints &&
+                step.NavigationPoints != null)
             {
                 for (int i = 0; i < step.NavigationPoints.Length; i++)
                 {
@@ -7161,15 +7195,20 @@ namespace DateEverythingAccess
             }
 
             Vector3 sourceClearPoint = GetOpenPassageSourceHandoffOrigin(step);
-            if (sourceClearPoint != Vector3.zero &&
+            if (!useOverrideOnlyNavigationPoints &&
+                sourceClearPoint != Vector3.zero &&
                 (sourceStart == Vector3.zero ||
                  Vector3.Distance(sourceClearPoint, sourceStart) > OpenPassageGuidedWaypointDedupDistance))
             {
                 AddGuidedNavigationPoint(candidates, sourceClearPoint, sourceStart, finalApproachPoint, ref sequence);
             }
 
-            Vector3 destinationClearPoint = GetOpenPassageDestinationClearPosition(step);
-            AddGuidedNavigationPoint(candidates, destinationClearPoint, sourceStart, finalApproachPoint, ref sequence);
+            if (!useOverrideOnlyNavigationPoints)
+            {
+                Vector3 destinationClearPoint = GetOpenPassageDestinationClearPosition(step);
+                AddGuidedNavigationPoint(candidates, destinationClearPoint, sourceStart, finalApproachPoint, ref sequence);
+            }
+
             AddGuidedNavigationPoint(candidates, finalApproachPoint, sourceStart, finalApproachPoint, ref sequence);
 
             if (candidates.Count == 0)

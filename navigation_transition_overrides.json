@@ -59,19 +59,29 @@
     {
       "FromZone": "dining_room",
       "ToZone": "piano_room",
-      "DestinationApproachBias": 0.6,
-      "UseExplicitCrossingSegments": true,
-      "StepTimeoutSeconds": 5.0,
+      "DestinationApproachBias": 0.45,
+      "UseExplicitCrossingSegments": false,
+      "StepTimeoutSeconds": 8.0,
       "IntermediateWaypoints": [
         {
-          "x": -17.9,
+          "x": -18.25,
           "y": 4.196,
-          "z": -9.88
+          "z": -9.55
         },
         {
-          "x": -16.87,
+          "x": -17.1,
+          "y": 4.196,
+          "z": -9.92
+        },
+        {
+          "x": -15.76,
+          "y": 4.519433,
+          "z": -10.57
+        },
+        {
+          "x": -14.95,
           "y": 4.842866,
-          "z": -10.8
+          "z": -11.12
         }
       ]
     },
