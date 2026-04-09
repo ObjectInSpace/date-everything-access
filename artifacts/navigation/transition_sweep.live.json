@@ -1,6 +1,6 @@
 {
-  "GeneratedAtUtc": "2026-04-09T01:04:48.1602364Z",
-  "ImportedAtUtc": "2026-04-09T01:15:15.5659167Z",
+  "GeneratedAtUtc": "2026-04-09T01:22:14.6900539Z",
+  "ImportedAtUtc": "2026-04-09T01:24:38.8236892Z",
   "ActiveScene": "ThirdPersonGreybox",
   "SweepKind": "OpenPassage",
   "IsComplete": true,
@@ -650,9 +650,9 @@
       "ConnectorName": null,
       "RequiresInteraction": false,
       "Status": "failed",
-      "StatusDetail": "navigation blocked currentZone=dining_room detail=auto-walk progress timeout targetKind=EntryWaypoint step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13)",
-      "FailureReason": "navigation blocked currentZone=dining_room detail=auto-walk progress timeout targetKind=EntryWaypoint step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13)",
-      "DurationSeconds": 6.433,
+      "StatusDetail": "navigation blocked currentZone=dining_room detail=auto-walk progress timeout targetKind=ZoneFallback step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13)",
+      "FailureReason": "navigation blocked currentZone=dining_room detail=auto-walk progress timeout targetKind=ZoneFallback step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13)",
+      "DurationSeconds": 6.383,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -19.959,

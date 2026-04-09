@@ -1,13 +1,12 @@
 Sweep report import summary
 Kind: Door
-Imported at: 2026-04-09T01:15:15.5070814Z
+Imported at: 2026-04-09T01:24:38.2833099Z
 Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\door_transition_sweep.live.json
 Output: .\artifacts\navigation\door_transition_sweep.live.json
-Report generated at: 04/09/2026 01:05:13
+Report generated at: 04/09/2026 01:22:27
 Active scene: ThirdPersonGreybox
-Merged totals: total=22 passed=20 failed=2 pending=0
-Imported status changes: newEntries=0 newlyPassed=0 newlyFailed=0 newlyPending=0 unchanged=3
+Merged totals: total=22 passed=21 failed=1 pending=0
+Imported status changes: newEntries=0 newlyPassed=1 newlyFailed=0 newlyPending=0 unchanged=1
 Door failure breakdown: interactionFalse=0 missingConnectorName=0 highSuspicion=0
 Remaining failed transitions:
-- bathroom1 -> hallway | suspicion=0 | connector=Doors_Bathroom1 | step timeout currentZone=bathroom1 player=(1.67, -0.60, 7.78)
-- office -> office_closet | suspicion=0 | connector=Doors_Office_Closet | step timeout currentZone=office5 player=(5.64, -0.60, 25.50)
+- office -> office_closet | suspicion=0 | connector=Doors_Office_Closet | step timeout currentZone=office5 player=(5.52, -0.60, 25.38)
