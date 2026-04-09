@@ -1,6 +1,6 @@
 {
-  "GeneratedAtUtc": "2026-04-09T04:04:14.1461108Z",
-  "ImportedAtUtc": "2026-04-09T04:12:21.1697598Z",
+  "GeneratedAtUtc": "2026-04-09T18:41:52.5616351Z",
+  "ImportedAtUtc": "2026-04-09T18:42:37.3644940Z",
   "ActiveScene": "ThirdPersonGreybox",
   "SweepKind": "Door",
   "IsComplete": true,
@@ -1091,9 +1091,9 @@
       "ConnectorName": "Doors_Office_Closet",
       "RequiresInteraction": true,
       "Status": "failed",
-      "StatusDetail": "step timeout currentZone=office5 player=(5.64, -0.60, 25.50)",
-      "FailureReason": "step timeout currentZone=office5 player=(5.64, -0.60, 25.50)",
-      "DurationSeconds": 8.067,
+      "StatusDetail": "step timeout currentZone=office5 player=(5.55, -0.60, 25.41)",
+      "FailureReason": "step timeout currentZone=office5 player=(5.55, -0.60, 25.41)",
+      "DurationSeconds": 8.083,
       "SpawnSource": "door_clearance",
       "SpawnPosition": {
         "x": 5.386,
