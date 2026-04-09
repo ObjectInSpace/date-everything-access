@@ -1,12 +1,12 @@
 Sweep report import summary
 Kind: OpenPassage
-Imported at: 2026-04-09T04:12:21.3728266Z
+Imported at: 2026-04-09T18:42:37.6384124Z
 Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\transition_sweep.live.json
 Output: .\artifacts\navigation\transition_sweep.live.json
-Report generated at: 04/09/2026 04:03:52
+Report generated at: 04/09/2026 18:41:29
 Active scene: ThirdPersonGreybox
 Merged totals: total=80 passed=79 failed=1 pending=0
 Imported status changes: newEntries=0 newlyPassed=0 newlyFailed=0 newlyPending=0 unchanged=1
 Open-passage override refresh: added=0 refreshed=0 preservedManualWaypoints=0 failedWithoutWaypoint=1 retainedWithoutCurrentFailure=28 totalEntries=29
 Remaining failed transitions:
-- dining_room -> piano_room | suspicion=0 | connector=<none> | navigation blocked currentZone=dining_room detail=auto-walk progress timeout targetKind=ZoneFallback step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13)
+- dining_room -> piano_room | suspicion=0 | connector=<none> | navigation blocked currentZone=dining_room detail=auto-walk progress timeout targetKind=LocalWaypoint step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13)
