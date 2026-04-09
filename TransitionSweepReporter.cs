@@ -40,6 +40,16 @@ namespace DateEverythingAccess
             public int StaticSuspicionScore;
         }
 
+        [Serializable]
+        internal sealed class EntryStatus
+        {
+            public string Key;
+            public string StepKind;
+            public string Status;
+            public string StatusDetail;
+            public string FailureReason;
+        }
+
         internal static string GetDefaultOutputPath()
         {
             return GetOutputPath("transition_sweep.live.json");
@@ -190,6 +200,88 @@ namespace DateEverythingAccess
             return passedKeys;
         }
 
+        internal static Dictionary<string, EntryStatus> LoadEntryStatuses(string reportPath)
+        {
+            string resolvedPath = string.IsNullOrWhiteSpace(reportPath)
+                ? GetDefaultOutputPath()
+                : reportPath;
+
+            var statuses = new Dictionary<string, EntryStatus>(StringComparer.OrdinalIgnoreCase);
+            if (!File.Exists(resolvedPath))
+                return statuses;
+
+            try
+            {
+                string[] lines = File.ReadAllLines(resolvedPath);
+                bool inEntries = false;
+                int entryDepth = 0;
+                EntryStatus currentEntry = null;
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    string line = lines[i];
+                    if (string.IsNullOrWhiteSpace(line))
+                        continue;
+
+                    string trimmedLine = line.Trim();
+                    if (!inEntries)
+                    {
+                        if (trimmedLine.StartsWith("\"Entries\"", StringComparison.Ordinal))
+                            inEntries = true;
+
+                        continue;
+                    }
+
+                    if (entryDepth == 0)
+                    {
+                        if (trimmedLine.StartsWith("{", StringComparison.Ordinal))
+                        {
+                            currentEntry = new EntryStatus();
+                            entryDepth += CountCharacter(line, '{') - CountCharacter(line, '}');
+                        }
+
+                        continue;
+                    }
+
+                    if (TryExtractJsonStringProperty(line, "\"Key\"", out string key))
+                    {
+                        currentEntry.Key = key;
+                    }
+                    else if (TryExtractJsonStringProperty(line, "\"StepKind\"", out string stepKind))
+                    {
+                        currentEntry.StepKind = stepKind;
+                    }
+                    else if (TryExtractJsonStringProperty(line, "\"Status\"", out string status))
+                    {
+                        currentEntry.Status = status;
+                    }
+                    else if (TryExtractJsonNullableStringProperty(line, "\"StatusDetail\"", out string statusDetail))
+                    {
+                        currentEntry.StatusDetail = statusDetail;
+                    }
+                    else if (TryExtractJsonNullableStringProperty(line, "\"FailureReason\"", out string failureReason))
+                    {
+                        currentEntry.FailureReason = failureReason;
+                    }
+
+                    entryDepth += CountCharacter(line, '{') - CountCharacter(line, '}');
+                    if (entryDepth > 0)
+                        continue;
+
+                    if (currentEntry != null && !string.IsNullOrWhiteSpace(currentEntry.Key))
+                        statuses[currentEntry.Key] = currentEntry;
+
+                    currentEntry = null;
+                    entryDepth = 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                Main.Log.LogWarning("Failed to load transition sweep entry statuses: " + ex.Message);
+            }
+
+            return statuses;
+        }
+
         private static void PersistPassedKeys(string reportPath, List<MutableEntry> entries)
         {
             var passedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -294,6 +386,42 @@ namespace DateEverythingAccess
 
             value = UnescapeJson(line.Substring(firstQuoteIndex + 1, lastQuoteIndex - firstQuoteIndex - 1));
             return true;
+        }
+
+        private static bool TryExtractJsonNullableStringProperty(string line, string propertyName, out string value)
+        {
+            value = null;
+            if (string.IsNullOrWhiteSpace(line) || string.IsNullOrWhiteSpace(propertyName))
+                return false;
+
+            int propertyIndex = line.IndexOf(propertyName, StringComparison.Ordinal);
+            if (propertyIndex < 0)
+                return false;
+
+            int colonIndex = line.IndexOf(':', propertyIndex + propertyName.Length);
+            if (colonIndex < 0)
+                return false;
+
+            string rawValue = line.Substring(colonIndex + 1).Trim().TrimEnd(',');
+            if (string.Equals(rawValue, "null", StringComparison.Ordinal))
+                return true;
+
+            return TryExtractJsonStringProperty(line, propertyName, out value);
+        }
+
+        private static int CountCharacter(string value, char character)
+        {
+            if (string.IsNullOrEmpty(value))
+                return 0;
+
+            int count = 0;
+            for (int i = 0; i < value.Length; i++)
+            {
+                if (value[i] == character)
+                    count++;
+            }
+
+            return count;
         }
 
         private static string UnescapeJson(string value)

@@ -847,6 +847,24 @@ namespace DateEverythingAccess
         }
 
         /// <summary>
+        /// Returns every known graph zone in stable sorted order.
+        /// </summary>
+        public static List<string> GetAllZones()
+        {
+            Initialize();
+
+            var zones = new List<string>(_knownZones.Count);
+            foreach (string zone in _knownZones)
+            {
+                if (!string.IsNullOrWhiteSpace(zone))
+                    zones.Add(zone);
+            }
+
+            zones.Sort(StringComparer.OrdinalIgnoreCase);
+            return zones;
+        }
+
+        /// <summary>
         /// Returns every directed step currently loaded from the live navigation graph.
         /// </summary>
         public static List<PathStep> GetAllPathSteps()

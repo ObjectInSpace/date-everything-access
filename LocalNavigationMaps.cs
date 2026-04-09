@@ -89,6 +89,17 @@ namespace DateEverythingAccess
             public int GridWidth;
             public int GridHeight;
             public bool[] Walkable;
+            public int[] ComponentIds;
+            public WalkableComponentSummary[] ComponentSummaries;
+            public bool ComponentsComputed;
+        }
+
+        [Serializable]
+        internal sealed class WalkableComponentSummary
+        {
+            public int ComponentId;
+            public int CellCount;
+            public Vector3 RepresentativeWorldPosition;
         }
 
         /// <summary>
@@ -301,6 +312,123 @@ namespace DateEverythingAccess
             return true;
         }
 
+        /// <summary>
+        /// Returns the cached connected walkable components for the supplied zone.
+        /// </summary>
+        internal static List<WalkableComponentSummary> GetWalkableComponents(string zoneName)
+        {
+            Initialize();
+            if (!_isAvailable || string.IsNullOrWhiteSpace(zoneName))
+                return new List<WalkableComponentSummary>();
+
+            if (!ZonesByName.TryGetValue(zoneName, out ZoneMap zone))
+                return new List<WalkableComponentSummary>();
+
+            EnsureComponentCache(zone);
+            if (zone.ComponentSummaries == null || zone.ComponentSummaries.Length == 0)
+                return new List<WalkableComponentSummary>();
+
+            return new List<WalkableComponentSummary>(zone.ComponentSummaries);
+        }
+
+        /// <summary>
+        /// Resolves the walkable component at a world position after snapping the position to the nearest walkable cell.
+        /// </summary>
+        internal static bool TryGetWalkableComponentId(
+            string zoneName,
+            Vector3 position,
+            out int componentId,
+            out Vector3 snappedPosition,
+            out string detail)
+        {
+            componentId = -1;
+            snappedPosition = Vector3.zero;
+            detail = null;
+
+            Initialize();
+            if (!_isAvailable)
+            {
+                detail = "LocalNavigationMapsUnavailable";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(zoneName))
+            {
+                detail = "MissingZoneName";
+                return false;
+            }
+
+            if (!ZonesByName.TryGetValue(zoneName, out ZoneMap zone))
+            {
+                detail = "ZoneNotFound";
+                return false;
+            }
+
+            if (!TryFindNearestWalkableCellIndex(
+                    zone,
+                    position,
+                    out int cellIndex,
+                    out snappedPosition,
+                    out string snapDetail))
+            {
+                detail = "SnapFailed " + (snapDetail ?? "<null>");
+                return false;
+            }
+
+            EnsureComponentCache(zone);
+            if (zone.ComponentIds == null ||
+                cellIndex < 0 ||
+                cellIndex >= zone.ComponentIds.Length)
+            {
+                detail = "ComponentCacheUnavailable";
+                return false;
+            }
+
+            componentId = zone.ComponentIds[cellIndex];
+            if (componentId < 0)
+            {
+                detail = "ComponentNotAssigned";
+                return false;
+            }
+
+            detail = "snap=" + snapDetail + " componentId=" + componentId;
+            return true;
+        }
+
+        /// <summary>
+        /// Returns whether the snapped world position belongs to the specified connected walkable component.
+        /// </summary>
+        internal static bool IsWorldPositionInComponent(
+            string zoneName,
+            Vector3 position,
+            int componentId,
+            out Vector3 snappedPosition,
+            out string detail)
+        {
+            snappedPosition = Vector3.zero;
+            detail = null;
+
+            if (componentId < 0)
+            {
+                detail = "InvalidComponentId";
+                return false;
+            }
+
+            if (!TryGetWalkableComponentId(
+                    zoneName,
+                    position,
+                    out int resolvedComponentId,
+                    out snappedPosition,
+                    out string resolvedDetail))
+            {
+                detail = resolvedDetail;
+                return false;
+            }
+
+            detail = resolvedDetail + " requestedComponentId=" + componentId + " resolvedComponentId=" + resolvedComponentId;
+            return resolvedComponentId == componentId;
+        }
+
         private static void Initialize()
         {
             if (_isInitialized)
@@ -353,6 +481,9 @@ namespace DateEverythingAccess
                             ZonesByName[zone.Zone] = zone;
                         }
                     }
+
+                    foreach (ZoneMap zone in ZonesByName.Values)
+                        EnsureComponentCache(zone);
 
                     _isAvailable = ZonesByName.Count > 0;
                     Main.Log?.LogInfo(
@@ -435,8 +566,102 @@ namespace DateEverythingAccess
                 MaxZ = record.Bounds2D.MaxZ,
                 GridWidth = record.GridWidth,
                 GridHeight = record.GridHeight,
-                Walkable = walkable
+                Walkable = walkable,
+                ComponentIds = null,
+                ComponentSummaries = null,
+                ComponentsComputed = false
             };
+        }
+
+        private static void EnsureComponentCache(ZoneMap zone)
+        {
+            if (zone == null || zone.ComponentsComputed)
+                return;
+
+            lock (SyncRoot)
+            {
+                if (zone == null || zone.ComponentsComputed)
+                    return;
+
+                BuildComponentCache(zone);
+                zone.ComponentsComputed = true;
+            }
+        }
+
+        private static void BuildComponentCache(ZoneMap zone)
+        {
+            if (zone == null)
+                return;
+
+            if (zone.Walkable == null)
+            {
+                zone.ComponentIds = Array.Empty<int>();
+                zone.ComponentSummaries = Array.Empty<WalkableComponentSummary>();
+                return;
+            }
+
+            int cellCount = zone.Walkable.Length;
+            zone.ComponentIds = new int[cellCount];
+            for (int i = 0; i < cellCount; i++)
+                zone.ComponentIds[i] = -1;
+
+            var summaries = new List<WalkableComponentSummary>();
+            var queue = new Queue<int>();
+
+            for (int cellIndex = 0; cellIndex < cellCount; cellIndex++)
+            {
+                if (!zone.Walkable[cellIndex] || zone.ComponentIds[cellIndex] >= 0)
+                    continue;
+
+                int componentId = summaries.Count;
+                int componentCellCount = 0;
+                Vector3 representativePosition = Vector3.zero;
+                bool hasRepresentative = false;
+
+                zone.ComponentIds[cellIndex] = componentId;
+                queue.Enqueue(cellIndex);
+
+                while (queue.Count > 0)
+                {
+                    int currentIndex = queue.Dequeue();
+                    componentCellCount++;
+                    if (!hasRepresentative)
+                    {
+                        representativePosition = GetCellCenter(zone, currentIndex, 0f);
+                        hasRepresentative = true;
+                    }
+
+                    GetCellCoordinates(zone, currentIndex, out int currentColumn, out int currentRow);
+                    for (int rowOffset = -1; rowOffset <= 1; rowOffset++)
+                    {
+                        for (int columnOffset = -1; columnOffset <= 1; columnOffset++)
+                        {
+                            if (rowOffset == 0 && columnOffset == 0)
+                                continue;
+
+                            int neighborColumn = currentColumn + columnOffset;
+                            int neighborRow = currentRow + rowOffset;
+                            if (!TryGetIndex(zone, neighborColumn, neighborRow, out int neighborIndex))
+                                continue;
+
+                            if (!zone.Walkable[neighborIndex] || zone.ComponentIds[neighborIndex] >= 0)
+                                continue;
+
+                            zone.ComponentIds[neighborIndex] = componentId;
+                            queue.Enqueue(neighborIndex);
+                        }
+                    }
+                }
+
+                summaries.Add(new WalkableComponentSummary
+                {
+                    ComponentId = componentId,
+                    CellCount = componentCellCount,
+                    RepresentativeWorldPosition = representativePosition
+                });
+            }
+
+            zone.ComponentSummaries = summaries.ToArray();
         }
 
         private static bool TryFindNearestWalkableCellIndex(

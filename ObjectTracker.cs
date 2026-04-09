@@ -65,15 +65,31 @@ namespace DateEverythingAccess
         {
             Initialize();
 
+            Vector3 previousTargetPosition = _targetPosition;
             bool shouldRestartTone = !_isTracking ||
                 _requiresInteraction != requiresInteraction ||
                 Vector3.Distance(_lastStartedTargetPosition, targetPosition) > TargetRefreshDistance;
+            bool didRetargetWithoutRestart = _isTracking &&
+                !shouldRestartTone &&
+                Vector3.Distance(previousTargetPosition, targetPosition) > 0.01f;
 
             _targetPosition = targetPosition;
             _requiresInteraction = requiresInteraction;
             _isTracking = true;
             if (_trackerAnchorObject != null)
                 _trackerAnchorObject.transform.position = targetPosition;
+
+            if (didRetargetWithoutRestart)
+            {
+                DebugLogger.Log(
+                    LogCategory.State,
+                    LogSource,
+                    "RetargetTracking target=" + targetPosition +
+                    " previousTarget=" + previousTargetPosition +
+                    " step=" + stepKind +
+                    " requiresInteraction=" + requiresInteraction +
+                    " restart=False");
+            }
 
             if (!shouldRestartTone)
                 return;
@@ -190,6 +206,16 @@ namespace DateEverythingAccess
         /// Gets whether tracking is currently active.
         /// </summary>
         public static bool IsTracking => _isTracking;
+
+        /// <summary>
+        /// Gets the current tracked target state when tracking is active.
+        /// </summary>
+        public static bool TryGetCurrentTargetState(out Vector3 targetPosition, out bool requiresInteraction)
+        {
+            targetPosition = _targetPosition;
+            requiresInteraction = _requiresInteraction;
+            return _isTracking;
+        }
 
         private static void StartTonePlayback()
         {
