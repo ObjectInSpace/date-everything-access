@@ -27,6 +27,10 @@ function Get-JsonPropertyValue {
     return $property.Value
 }
 
+function New-Utf8NoBomEncoding {
+    return New-Object System.Text.UTF8Encoding($false)
+}
+
 function Read-JsonDocument {
     param(
         [Parameter(Mandatory = $true)]
@@ -61,7 +65,7 @@ function Write-JsonDocument {
     }
 
     $json = $Document | ConvertTo-Json -Depth 64
-    Set-Content -LiteralPath $Path -Value $json -Encoding utf8
+    [System.IO.File]::WriteAllText($Path, $json, (New-Utf8NoBomEncoding))
 }
 
 function Write-TextDocument {
@@ -78,7 +82,7 @@ function Write-TextDocument {
         New-Item -ItemType Directory -Path $directory -Force | Out-Null
     }
 
-    Set-Content -LiteralPath $Path -Value $Lines -Encoding utf8
+    [System.IO.File]::WriteAllLines($Path, $Lines, (New-Utf8NoBomEncoding))
 }
 
 function Convert-ToInvariantDouble {
