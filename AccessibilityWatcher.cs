@@ -1273,6 +1273,52 @@ namespace DateEverythingAccess
             return false;
         }
 
+        private bool TryGetDoorThresholdAdvanceTarget(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            out Vector3 sourceTarget)
+        {
+            sourceTarget = Vector3.zero;
+            if (!TryGetDoorPushThroughSourceTarget(step, out sourceTarget) ||
+                sourceTarget == Vector3.zero)
+            {
+                return false;
+            }
+
+            if (step == null ||
+                string.IsNullOrEmpty(step.FromZone) ||
+                string.IsNullOrEmpty(currentZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone))
+            {
+                return true;
+            }
+
+            if (!LocalNavigationMaps.TrySnapPositionToNearestWalkableCell(
+                    step.FromZone,
+                    sourceTarget,
+                    out Vector3 snappedSourceTarget,
+                    out string snapDetail))
+            {
+                return true;
+            }
+
+            Vector3 originalSourceTarget = sourceTarget;
+            if (GetFlatDistance(originalSourceTarget, snappedSourceTarget) > DoorTransitionSweepDoorClearanceDistance)
+                return true;
+
+            if (GetFlatDistance(originalSourceTarget, snappedSourceTarget) > 0.05f)
+            {
+                sourceTarget = snappedSourceTarget;
+                LogNavigationTrackerDebug(
+                    "Snapped door threshold source target original=" + FormatVector3(originalSourceTarget) +
+                    " snapped=" + FormatVector3(sourceTarget) +
+                    " detail=" + (snapDetail ?? "<null>") +
+                    " step=" + DescribeNavigationStep(step));
+            }
+
+            return true;
+        }
+
         private static bool ShouldKeepDoorThresholdAdvance(
             Vector3 playerPosition,
             Vector3 sourceTarget,
@@ -4097,15 +4143,19 @@ namespace DateEverythingAccess
                 float sourceThresholdDistance = float.PositiveInfinity;
                 float pushThroughDistance = float.PositiveInfinity;
                 Vector3 sourceTarget = Vector3.zero;
-                if (TryGetDoorPushThroughSourceTarget(step, out sourceTarget))
+                if (TryGetDoorThresholdAdvanceTarget(step, currentZone, out sourceTarget))
                 {
                     sourceThresholdDistance = GetPlanarDistanceToTarget(playerPosition, sourceTarget);
                 }
 
                 pushThroughDistance = GetPlanarDistanceToTarget(playerPosition, _transitionSweepSession.DoorPushThroughPosition);
+                bool hasReachedSourceThreshold =
+                    sourceThresholdDistance <= DoorPushThroughLocalNavigationGoalReachedDistance;
 
-                if (sourceThresholdDistance > DoorPushThroughSourceAdvanceDistance ||
-                    ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, _transitionSweepSession.DoorPushThroughPosition))
+                if (sourceTarget != Vector3.zero &&
+                    !hasReachedSourceThreshold &&
+                    (sourceThresholdDistance > DoorPushThroughSourceAdvanceDistance ||
+                     ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, _transitionSweepSession.DoorPushThroughPosition)))
                 {
                     position = sourceTarget;
                     targetKind = NavigationTargetKind.ZoneFallback;
@@ -4170,15 +4220,19 @@ namespace DateEverythingAccess
                 float sourceThresholdDistance = float.PositiveInfinity;
                 float pushThroughDistance = float.PositiveInfinity;
                 Vector3 sourceTarget = Vector3.zero;
-                if (TryGetDoorPushThroughSourceTarget(step, out sourceTarget))
+                if (TryGetDoorThresholdAdvanceTarget(step, currentZone, out sourceTarget))
                 {
                     sourceThresholdDistance = GetPlanarDistanceToTarget(playerPosition, sourceTarget);
                 }
 
                 pushThroughDistance = GetPlanarDistanceToTarget(playerPosition, _doorTraversalPushThroughPosition);
+                bool hasReachedSourceThreshold =
+                    sourceThresholdDistance <= DoorPushThroughLocalNavigationGoalReachedDistance;
 
-                if (sourceThresholdDistance > DoorPushThroughSourceAdvanceDistance ||
-                    ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, _doorTraversalPushThroughPosition))
+                if (sourceTarget != Vector3.zero &&
+                    !hasReachedSourceThreshold &&
+                    (sourceThresholdDistance > DoorPushThroughSourceAdvanceDistance ||
+                     ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, _doorTraversalPushThroughPosition)))
                 {
                     position = sourceTarget;
                     targetKind = NavigationTargetKind.ZoneFallback;
@@ -5125,8 +5179,10 @@ namespace DateEverythingAccess
 
         private bool TryAdvanceOpenPassageGuidedWaypoint(NavigationGraph.PathStep step)
         {
-            if (step == null || step.Kind != NavigationGraph.StepKind.OpenPassage)
-                return false;
+            if (step == null ||
+                step.Kind != NavigationGraph.StepKind.OpenPassage ||
+                BetterPlayerControl.Instance == null)
+            return false;
 
             List<Vector3> navigationPoints = BuildOpenPassageGuidedNavigationPoints(step);
             if (navigationPoints == null || navigationPoints.Count < 2)
@@ -5135,6 +5191,19 @@ namespace DateEverythingAccess
             int currentIndex = Mathf.Clamp(_openPassageOverrideWaypointIndex, 0, navigationPoints.Count - 1);
             if (currentIndex >= navigationPoints.Count - 1)
                 return false;
+
+            Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
+            Vector3 currentTarget = navigationPoints[currentIndex];
+            currentTarget.y = playerPosition.y;
+            float currentDistance = Vector3.Distance(playerPosition, currentTarget);
+            if (currentDistance > OpenPassageGuidedWaypointAdvanceDistance)
+            {
+                LogNavigationAutoWalkDebug(
+                    "Preserved guided open-passage waypoint index=" + (currentIndex + 1) + " of " + navigationPoints.Count +
+                    " distance=" + currentDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " step=" + DescribeNavigationStep(step));
+                return false;
+            }
 
             _openPassageOverrideWaypointIndex = currentIndex + 1;
             LogNavigationAutoWalkDebug(

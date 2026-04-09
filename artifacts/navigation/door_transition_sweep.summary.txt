@@ -1,9 +1,9 @@
 Sweep report import summary
 Kind: Door
-Imported at: 2026-04-09T01:47:41.0559008Z
+Imported at: 2026-04-09T03:42:31.3513097Z
 Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\door_transition_sweep.live.json
 Output: .\artifacts\navigation\door_transition_sweep.live.json
-Report generated at: 04/09/2026 01:46:18
+Report generated at: 2026-04-09T03:33:48.7518809Z
 Active scene: ThirdPersonGreybox
 Merged totals: total=22 passed=21 failed=1 pending=0
 Imported status changes: newEntries=0 newlyPassed=0 newlyFailed=0 newlyPending=0 unchanged=1
