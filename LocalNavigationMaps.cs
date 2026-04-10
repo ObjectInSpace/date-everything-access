@@ -429,6 +429,126 @@ namespace DateEverythingAccess
             return resolvedComponentId == componentId;
         }
 
+        /// <summary>
+        /// Resolves a walkable approach target while constraining candidates to a specific connected component.
+        /// </summary>
+        internal static bool TryResolveApproachTargetForComponent(
+            string zoneName,
+            Vector3 playerPosition,
+            Vector3 referencePosition,
+            List<Vector3> candidateTargets,
+            int preferredComponentId,
+            out Vector3 targetPosition,
+            out string detail)
+        {
+            targetPosition = Vector3.zero;
+            detail = null;
+
+            Initialize();
+            if (!_isAvailable)
+            {
+                detail = "LocalNavigationMapsUnavailable";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(zoneName))
+            {
+                detail = "MissingZoneName";
+                return false;
+            }
+
+            if (candidateTargets == null || candidateTargets.Count == 0)
+            {
+                detail = "NoCandidateTargets";
+                return false;
+            }
+
+            if (!ZonesByName.TryGetValue(zoneName, out ZoneMap zone))
+            {
+                detail = "ZoneNotFound";
+                return false;
+            }
+
+            if (zone.Walkable == null || zone.Walkable.Length == 0)
+            {
+                detail = "ZoneHasNoWalkableCells";
+                return false;
+            }
+
+            bool foundCandidate = false;
+            float bestPathDistance = float.PositiveInfinity;
+            float bestReferenceDistance = float.PositiveInfinity;
+            int bestComponentId = -1;
+            string bestComponentDetail = null;
+
+            for (int i = 0; i < candidateTargets.Count; i++)
+            {
+                Vector3 candidateTarget = candidateTargets[i];
+                if (!TryGetWalkableComponentId(
+                        zoneName,
+                        candidateTarget,
+                        out int candidateComponentId,
+                        out Vector3 snappedCandidateTarget,
+                        out string componentDetail))
+                {
+                    continue;
+                }
+
+                if (preferredComponentId >= 0 && candidateComponentId != preferredComponentId)
+                    continue;
+
+                if (!TryFindPath(
+                        zoneName,
+                        playerPosition,
+                        snappedCandidateTarget,
+                        out List<Vector3> pathPoints,
+                        out _ ) ||
+                    pathPoints == null ||
+                    pathPoints.Count == 0)
+                {
+                    continue;
+                }
+
+                float pathDistance = ComputePathDistance(playerPosition, pathPoints);
+                float referenceDistance = ComputeFlatDistance(snappedCandidateTarget, referencePosition);
+                if (foundCandidate &&
+                    pathDistance > bestPathDistance + 0.01f)
+                {
+                    continue;
+                }
+
+                if (foundCandidate &&
+                    Mathf.Abs(pathDistance - bestPathDistance) <= 0.01f &&
+                    referenceDistance >= bestReferenceDistance)
+                {
+                    continue;
+                }
+
+                foundCandidate = true;
+                bestPathDistance = pathDistance;
+                bestReferenceDistance = referenceDistance;
+                bestComponentId = candidateComponentId;
+                bestComponentDetail = componentDetail;
+                targetPosition = snappedCandidateTarget;
+            }
+
+            if (!foundCandidate)
+            {
+                detail = "mode=component-path-selected preferredComponentId=" + preferredComponentId + " resolution=failed";
+                return false;
+            }
+
+            targetPosition.y = playerPosition.y;
+            detail =
+                "mode=component-path-selected" +
+                " componentId=" + bestComponentId +
+                " componentDetail=" + (bestComponentDetail ?? "<null>") +
+                " pathDistance=" + bestPathDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                " referenceDistance=" + bestReferenceDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                " preferredComponentId=" + preferredComponentId;
+            return true;
+        }
+
         private static void Initialize()
         {
             if (_isInitialized)
@@ -1000,6 +1120,32 @@ namespace DateEverythingAccess
                 zone.MinX + column * zone.CellSize + zone.CellSize * 0.5f,
                 y,
                 zone.MinZ + row * zone.CellSize + zone.CellSize * 0.5f);
+        }
+
+        private static float ComputePathDistance(Vector3 startPosition, List<Vector3> pathPoints)
+        {
+            if (pathPoints == null || pathPoints.Count == 0)
+                return 0f;
+
+            float distance = 0f;
+            Vector3 previousPoint = startPosition;
+            previousPoint.y = 0f;
+            for (int i = 0; i < pathPoints.Count; i++)
+            {
+                Vector3 currentPoint = pathPoints[i];
+                currentPoint.y = 0f;
+                distance += Vector3.Distance(previousPoint, currentPoint);
+                previousPoint = currentPoint;
+            }
+
+            return distance;
+        }
+
+        private static float ComputeFlatDistance(Vector3 left, Vector3 right)
+        {
+            left.y = 0f;
+            right.y = 0f;
+            return Vector3.Distance(left, right);
         }
     }
 }

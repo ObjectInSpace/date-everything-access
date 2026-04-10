@@ -20,7 +20,7 @@ using UnityEngine.UI;
 
 namespace DateEverythingAccess
 {
-    internal sealed class AccessibilityWatcher : MonoBehaviour
+    internal sealed partial class AccessibilityWatcher : MonoBehaviour
     {
         private enum SpecsAnnouncementMode
         {
@@ -989,7 +989,9 @@ namespace DateEverythingAccess
                 return entry;
             }
 
-            bool approachResolved = TryResolveSelectedObjectCoverageApproachTarget(
+            bool approachResolved = TryResolveSelectedObjectCoverageApproachTargetForStartComponent(
+                startZone,
+                component,
                 selectedInteractable,
                 targetNavigationZone,
                 representativeStart,
@@ -1783,6 +1785,34 @@ namespace DateEverythingAccess
                 return;
             }
 
+            string navigationUnavailableReason = GetNavigationUnavailableReason();
+            if (_transitionSweepSession.StepStartedAt > 0f &&
+                !CanUseNavigationNow() &&
+                IsExpectedTeleporterSweepControlLock(currentStep, navigationUnavailableReason))
+            {
+                if (_transitionSweepSession.LastHeartbeatAt <= 0f ||
+                    now - _transitionSweepSession.LastHeartbeatAt >= TransitionSweepHeartbeatSeconds)
+                {
+                    _transitionSweepSession.LastHeartbeatAt = now;
+                    Main.Log.LogInfo(
+                        "Transition sweep waiting for teleporter control restore elapsed=" +
+                        (now - _transitionSweepSession.StepStartedAt).ToString("0.00", CultureInfo.InvariantCulture) +
+                        " currentZone=" + (GetCurrentZoneNameInternal() ?? "<null>") +
+                        " player=" + (BetterPlayerControl.Instance != null ? FormatVector3(BetterPlayerControl.Instance.transform.position) : "<null>") +
+                        " step=" + DescribeNavigationStep(currentStep));
+                    WriteTransitionSweepReport(isComplete: false);
+                }
+
+                _transitionSweepSession.NextActionTime = now + 0.1f;
+                return;
+            }
+
+            if (!CanUseNavigationNow())
+            {
+                RecordTransitionSweepFailure("navigation unavailable " + navigationUnavailableReason);
+                return;
+            }
+
             if (currentStep.Kind == NavigationGraph.StepKind.Door &&
                 now - _transitionSweepSession.StepStartedAt >= 0.5f)
             {
@@ -2114,7 +2144,7 @@ namespace DateEverythingAccess
             playerOffset.y = 0f;
 
             float forwardProgress = Vector3.Dot(playerOffset, handoffDirection);
-            if (forwardProgress < handoffDistance * 0.5f)
+            if (forwardProgress < handoffDistance * 0.75f)
                 return true;
 
             Vector3 lateralOffset = playerOffset - handoffDirection * forwardProgress;
@@ -2590,6 +2620,15 @@ namespace DateEverythingAccess
             _transitionSweepSession.NextActionTime = Time.unscaledTime + 0.1f;
             Main.Log.LogInfo("Transition sweep forced navigation active step=" + DescribeNavigationStep(step));
             return true;
+        }
+
+        private static bool IsExpectedTeleporterSweepControlLock(
+            NavigationGraph.PathStep step,
+            string navigationUnavailableReason)
+        {
+            return step != null &&
+                step.Kind == NavigationGraph.StepKind.Teleporter &&
+                string.Equals(navigationUnavailableReason, "playerState=CantControl", StringComparison.Ordinal);
         }
 
         private bool TryPrepareDoorTransitionSweepNavigation(NavigationGraph.PathStep step)
@@ -3435,12 +3474,14 @@ namespace DateEverythingAccess
             if (HandlePendingNavigationTransition())
                 return;
 
-            if (!CanUseNavigationNow() || string.IsNullOrEmpty(_navigationTargetZone))
+            string navigationUnavailableReason = GetNavigationUnavailableReason();
+            if ((!CanUseNavigationNow() || string.IsNullOrEmpty(_navigationTargetZone)) &&
+                !IsExpectedTeleporterSweepControlLock(GetCurrentNavigationStep(), navigationUnavailableReason))
             {
                 if (_isAutoWalking)
                 {
                     StopNavigationBlocked(
-                        "navigation unavailable reason=" + GetNavigationUnavailableReason() +
+                        "navigation unavailable reason=" + navigationUnavailableReason +
                         " targetZone=" + (_navigationTargetZone ?? "<null>"));
                 }
                 else
@@ -3483,10 +3524,12 @@ namespace DateEverythingAccess
             if (HandlePendingNavigationTransition())
                 return;
 
-            if (!CanUseNavigationNow() || BetterPlayerControl.Instance == null)
+            string navigationUnavailableReason = GetNavigationUnavailableReason();
+            if ((BetterPlayerControl.Instance == null || !CanUseNavigationNow()) &&
+                !IsExpectedTeleporterSweepControlLock(GetCurrentNavigationStep(), navigationUnavailableReason))
             {
-                LogNavigationAutoWalkDebug("Auto-walk blocked: navigation unavailable reason=" + GetNavigationUnavailableReason());
-                StopNavigationBlocked("auto-walk unavailable reason=" + GetNavigationUnavailableReason());
+                LogNavigationAutoWalkDebug("Auto-walk blocked: navigation unavailable reason=" + navigationUnavailableReason);
+                StopNavigationBlocked("auto-walk unavailable reason=" + navigationUnavailableReason);
                 return;
             }
 
@@ -4683,177 +4726,8 @@ namespace DateEverythingAccess
                     return true;
                 }
 
-                if (step.Kind == NavigationGraph.StepKind.OpenPassage &&
-                    !string.IsNullOrEmpty(step.FromZone) &&
-                    !string.IsNullOrEmpty(step.ToZone) &&
-                    step.FromWaypoint != Vector3.zero &&
-                    step.ToWaypoint != Vector3.zero)
-                {
-                    Vector3 fromWaypoint = step.FromWaypoint;
-                    fromWaypoint.y = playerPosition.y;
-                    float fromDistance = Vector3.Distance(playerPosition, fromWaypoint);
-                    Vector3 sourceSegmentTarget = GetOpenPassageSourceSegmentTarget(step);
-                    sourceSegmentTarget.y = playerPosition.y;
-                    float sourceSegmentDistance = Vector3.Distance(playerPosition, sourceSegmentTarget);
-                    Vector3 destinationWaypointPosition = GetOpenPassageDestinationWaypointPosition(step);
-                    destinationWaypointPosition.y = playerPosition.y;
-                    float destinationWaypointDistance = Vector3.Distance(playerPosition, destinationWaypointPosition);
-                    OpenPassageTraversalStage traversalStage = GetOpenPassageTraversalStage(
-                        step,
-                        currentZone,
-                        fromDistance,
-                        sourceSegmentDistance,
-                        destinationWaypointDistance);
-
-                    switch (traversalStage)
-                    {
-                        case OpenPassageTraversalStage.SourceWaypoint:
-                            position = step.FromWaypoint;
-                            targetKind = NavigationTargetKind.ExitWaypoint;
-                            LogNavigationTrackerDebug(
-                                "Next navigation target kind=ExitWaypoint position=" + FormatVector3(position) +
-                                " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " sourceSegmentDistance=" + sourceSegmentDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " destinationWaypointDistance=" + destinationWaypointDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " stage=SourceWaypoint" +
-                                " step=" + DescribeNavigationStep(step));
-                            return true;
-
-                        case OpenPassageTraversalStage.SourceHandoff:
-                            if (TryGetOpenPassageGuidedNavigationTarget(
-                                step,
-                                playerPosition,
-                                out Vector3 sourceOverrideTarget,
-                                out int sourceOverrideIndex,
-                                out int sourceOverrideCount,
-                                out bool sourceOverrideIsFinal))
-                            {
-                                position = BuildOpenPassageGuidedMovementTarget(playerPosition, sourceOverrideTarget);
-                                targetKind = sourceOverrideIsFinal
-                                    ? NavigationTargetKind.EntryWaypoint
-                                    : NavigationTargetKind.ZoneFallback;
-                                LogNavigationTrackerDebug(
-                                    "Next navigation target kind=" + targetKind +
-                                    " position=" + FormatVector3(position) +
-                                    " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                    " sourceSegmentDistance=" + sourceSegmentDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                    " destinationWaypointDistance=" + destinationWaypointDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                    " overrideWaypoint=" + (sourceOverrideIndex + 1) + " of " + sourceOverrideCount +
-                                    " stage=SourceHandoff" +
-                                    " reason=override navigation_transition_overrides.json" +
-                                    " step=" + DescribeNavigationStep(step));
-                                return true;
-                            }
-
-                            int sourceHandoffRecoveryAttempts = GetOpenPassageRecoveryAttemptsForStage(traversalStage);
-                            float sourceHandoffDistance = AutoWalkOpenPassageHandoffDistance;
-                            position = BuildOpenPassageSourceHandoffPosition(
-                                step,
-                                playerPosition,
-                                sourceHandoffDistance,
-                                _openPassageSourceHandoffProgressFloor,
-                                out float sourceHandoffProgress);
-                            _openPassageSourceHandoffProgressFloor = Mathf.Max(_openPassageSourceHandoffProgressFloor, sourceHandoffProgress);
-                            targetKind = NavigationTargetKind.ZoneFallback;
-                            LogNavigationTrackerDebug(
-                                "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
-                                " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " sourceSegmentDistance=" + sourceSegmentDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " destinationWaypointDistance=" + destinationWaypointDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " recoveryAttempts=" + sourceHandoffRecoveryAttempts +
-                                " progressFloor=" + _openPassageSourceHandoffProgressFloor.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " stage=SourceHandoff" +
-                                " reason=push through open-passage source threshold" +
-                                " step=" + DescribeNavigationStep(step));
-                            return true;
-
-                        case OpenPassageTraversalStage.DestinationWaypoint:
-                            if (TryGetOpenPassageGuidedNavigationTarget(
-                                step,
-                                playerPosition,
-                                out Vector3 destinationOverrideTarget,
-                                out int destinationOverrideIndex,
-                                out int destinationOverrideCount,
-                                out bool destinationOverrideIsFinal))
-                            {
-                                position = BuildOpenPassageGuidedMovementTarget(playerPosition, destinationOverrideTarget);
-                                targetKind = destinationOverrideIsFinal
-                                    ? NavigationTargetKind.EntryWaypoint
-                                    : NavigationTargetKind.ZoneFallback;
-                                LogNavigationTrackerDebug(
-                                    "Next navigation target kind=" + targetKind +
-                                    " position=" + FormatVector3(position) +
-                                    " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                    " sourceSegmentDistance=" + sourceSegmentDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                    " destinationWaypointDistance=" + destinationWaypointDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                    " overrideWaypoint=" + (destinationOverrideIndex + 1) + " of " + destinationOverrideCount +
-                                    " stage=DestinationWaypoint" +
-                                    " reason=override navigation_transition_overrides.json" +
-                                    " step=" + DescribeNavigationStep(step));
-                                return true;
-                            }
-
-                            position = destinationWaypointPosition;
-                            targetKind = NavigationTargetKind.EntryWaypoint;
-                            LogNavigationTrackerDebug(
-                                "Next navigation target kind=EntryWaypoint position=" + FormatVector3(position) +
-                                " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " sourceSegmentDistance=" + sourceSegmentDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " destinationWaypointDistance=" + destinationWaypointDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " stage=DestinationWaypoint" +
-                                " reason=approach open-passage destination threshold" +
-                                " step=" + DescribeNavigationStep(step));
-                            return true;
-
-                        case OpenPassageTraversalStage.DestinationHandoff:
-                            if (TryGetOpenPassageGuidedNavigationTarget(
-                                step,
-                                playerPosition,
-                                out Vector3 handoffOverrideTarget,
-                                out int handoffOverrideIndex,
-                                out int handoffOverrideCount,
-                                out bool handoffOverrideIsFinal))
-                            {
-                                position = BuildOpenPassageGuidedMovementTarget(playerPosition, handoffOverrideTarget);
-                                targetKind = handoffOverrideIsFinal
-                                    ? NavigationTargetKind.EntryWaypoint
-                                    : NavigationTargetKind.ZoneFallback;
-                                LogNavigationTrackerDebug(
-                                    "Next navigation target kind=" + targetKind +
-                                    " position=" + FormatVector3(position) +
-                                    " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                    " sourceSegmentDistance=" + sourceSegmentDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                    " destinationWaypointDistance=" + destinationWaypointDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                    " overrideWaypoint=" + (handoffOverrideIndex + 1) + " of " + handoffOverrideCount +
-                                    " stage=DestinationHandoff" +
-                                    " reason=override navigation_transition_overrides.json" +
-                                    " step=" + DescribeNavigationStep(step));
-                                return true;
-                            }
-
-                            int destinationHandoffRecoveryAttempts = GetOpenPassageRecoveryAttemptsForStage(traversalStage);
-                            float destinationHandoffDistance = AutoWalkOpenPassageHandoffDistance;
-                            position = BuildOpenPassageDestinationHandoffPosition(
-                                step,
-                                playerPosition,
-                                destinationHandoffDistance,
-                                _openPassageDestinationHandoffProgressFloor,
-                                out float destinationHandoffProgress);
-                            _openPassageDestinationHandoffProgressFloor = Mathf.Max(_openPassageDestinationHandoffProgressFloor, destinationHandoffProgress);
-                            targetKind = NavigationTargetKind.ZoneFallback;
-                            LogNavigationTrackerDebug(
-                                "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
-                                " fromDistance=" + fromDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " sourceSegmentDistance=" + sourceSegmentDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " destinationWaypointDistance=" + destinationWaypointDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " recoveryAttempts=" + destinationHandoffRecoveryAttempts +
-                                " progressFloor=" + _openPassageDestinationHandoffProgressFloor.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " stage=DestinationHandoff" +
-                                " reason=push beyond open-passage destination threshold" +
-                                " step=" + DescribeNavigationStep(step));
-                            return true;
-                    }
-                }
+                if (TryGetOpenPassageNavigationTarget(step, currentZone, playerPosition, out position, out targetKind))
+                    return true;
 
                 if (!string.IsNullOrEmpty(step.FromZone) &&
                     IsZoneEquivalentToNavigationZone(currentZone, step.FromZone))
@@ -4962,100 +4836,12 @@ namespace DateEverythingAccess
             out Vector3 position,
             out NavigationTargetKind targetKind)
         {
-            position = Vector3.zero;
-            targetKind = NavigationTargetKind.ZoneFallback;
-            if (_transitionSweepSession == null ||
-                _transitionSweepSession.Kind != TransitionSweepKind.Door ||
-                _transitionSweepSession.Phase != TransitionSweepPhase.Running ||
-                step == null ||
-                step.Kind != NavigationGraph.StepKind.Door)
-            {
-                return false;
-            }
-
-            if (!string.Equals(
-                BuildNavigationStepKey(step),
-                BuildNavigationStepKey(_transitionSweepSession.CurrentStep),
-                StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            bool isInSourceZone = !string.IsNullOrEmpty(step.FromZone) &&
-                IsZoneEquivalentToNavigationZone(currentZone, step.FromZone);
-            if (!isInSourceZone)
-                return false;
-
-            if (_transitionSweepSession.DoorInteractionTriggered &&
-                _transitionSweepSession.DoorPushThroughPosition != Vector3.zero)
-            {
-                float sourceThresholdDistance = float.PositiveInfinity;
-                float pushThroughDistance = float.PositiveInfinity;
-                Vector3 sourceTarget = Vector3.zero;
-                if (TryGetDoorThresholdAdvanceTarget(step, currentZone, out sourceTarget))
-                {
-                    sourceThresholdDistance = GetPlanarDistanceToTarget(playerPosition, sourceTarget);
-                }
-
-                pushThroughDistance = GetPlanarDistanceToTarget(playerPosition, _transitionSweepSession.DoorPushThroughPosition);
-                bool shouldKeepDoorThresholdAdvance = sourceTarget != Vector3.zero &&
-                    ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, _transitionSweepSession.DoorPushThroughPosition);
-
-                if (sourceTarget != Vector3.zero &&
-                    sourceThresholdDistance > DoorPushThroughSourceAdvanceDistance)
-                {
-                    position = sourceTarget;
-                    targetKind = NavigationTargetKind.ZoneFallback;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
-                        " sourceThresholdDistance=" + sourceThresholdDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " stage=DoorThresholdAdvance" +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-
-                if (sourceTarget != Vector3.zero &&
-                    shouldKeepDoorThresholdAdvance)
-                {
-                    position = BuildDoorThresholdHandoffPosition(
-                        sourceTarget,
-                        _transitionSweepSession.DoorPushThroughPosition);
-                    targetKind = NavigationTargetKind.ZoneFallback;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
-                        " sourceThresholdDistance=" + sourceThresholdDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " stage=DoorThresholdHandoff" +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-
-                if (pushThroughDistance > DoorPushThroughArrivalDistance)
-                {
-                    position = _transitionSweepSession.DoorPushThroughPosition;
-                    targetKind = NavigationTargetKind.ZoneFallback;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
-                        " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " stage=DoorPushThrough" +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-            }
-
-            if (!_transitionSweepSession.DoorInteractionTriggered)
-            {
-                position = step.FromWaypoint != Vector3.zero ? step.FromWaypoint : playerPosition;
-                targetKind = NavigationTargetKind.TransitionInteractable;
-                LogNavigationTrackerDebug(
-                    "Next navigation target kind=TransitionInteractable position=" + FormatVector3(position) +
-                    " stage=DoorInteractionRetry" +
-                    " step=" + DescribeNavigationStep(step));
-                return true;
-            }
-
-            return false;
+            return TryGetDoorTransitionSweepNavigationTargetCore(
+                step,
+                currentZone,
+                playerPosition,
+                out position,
+                out targetKind);
         }
 
         private bool TryGetDoorTraversalNavigationTarget(
@@ -5065,109 +4851,20 @@ namespace DateEverythingAccess
             out Vector3 position,
             out NavigationTargetKind targetKind)
         {
-            position = Vector3.zero;
-            targetKind = NavigationTargetKind.ZoneFallback;
             if (step == null || step.Kind != NavigationGraph.StepKind.Door)
+            {
+                position = Vector3.zero;
+                targetKind = NavigationTargetKind.ZoneFallback;
                 return false;
+            }
 
             SyncDoorTraversalState(step);
-
-            if (string.IsNullOrEmpty(step.FromZone) ||
-                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone))
-            {
-                return false;
-            }
-
-            if (_doorTraversalInteractionTriggered && _doorTraversalPushThroughPosition != Vector3.zero)
-            {
-                float sourceThresholdDistance = float.PositiveInfinity;
-                float pushThroughDistance = float.PositiveInfinity;
-                Vector3 sourceTarget = Vector3.zero;
-                if (TryGetDoorThresholdAdvanceTarget(step, currentZone, out sourceTarget))
-                {
-                    sourceThresholdDistance = GetPlanarDistanceToTarget(playerPosition, sourceTarget);
-                }
-
-                pushThroughDistance = GetPlanarDistanceToTarget(playerPosition, _doorTraversalPushThroughPosition);
-                bool shouldKeepDoorThresholdAdvance = sourceTarget != Vector3.zero &&
-                    ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, _doorTraversalPushThroughPosition);
-
-                if (sourceTarget != Vector3.zero &&
-                    sourceThresholdDistance > DoorPushThroughSourceAdvanceDistance)
-                {
-                    position = sourceTarget;
-                    targetKind = NavigationTargetKind.ZoneFallback;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
-                        " sourceThresholdDistance=" + sourceThresholdDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " stage=DoorThresholdAdvance" +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-
-                if (sourceTarget != Vector3.zero &&
-                    shouldKeepDoorThresholdAdvance)
-                {
-                    position = BuildDoorThresholdHandoffPosition(
-                        sourceTarget,
-                        _doorTraversalPushThroughPosition);
-                    targetKind = NavigationTargetKind.ZoneFallback;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
-                        " sourceThresholdDistance=" + sourceThresholdDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " stage=DoorThresholdHandoff" +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-
-                if (pushThroughDistance > DoorPushThroughArrivalDistance)
-                {
-                    position = _doorTraversalPushThroughPosition;
-                    targetKind = NavigationTargetKind.ZoneFallback;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
-                        " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " stage=DoorPushThrough" +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-
-                if (step.ToWaypoint != Vector3.zero)
-                {
-                    position = step.ToWaypoint;
-                    targetKind = NavigationTargetKind.EntryWaypoint;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=EntryWaypoint position=" + FormatVector3(position) +
-                        " stage=DoorEntryAdvance" +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-
-                if (TryGetZonePosition(step.ToZone, out position))
-                {
-                    targetKind = NavigationTargetKind.ZoneFallback;
-                    LogNavigationTrackerDebug(
-                        "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
-                        " stage=DoorEntryAdvance" +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-            }
-
-            if (!_doorTraversalInteractionTriggered)
-            {
-                position = step.FromWaypoint != Vector3.zero ? step.FromWaypoint : playerPosition;
-                targetKind = NavigationTargetKind.TransitionInteractable;
-                LogNavigationTrackerDebug(
-                    "Next navigation target kind=TransitionInteractable position=" + FormatVector3(position) +
-                    " stage=DoorInteractionRetry" +
-                    " step=" + DescribeNavigationStep(step));
-                return true;
-            }
-
-            return false;
+            return TryGetDoorTraversalNavigationTargetCore(
+                step,
+                currentZone,
+                playerPosition,
+                out position,
+                out targetKind);
         }
 
         private bool NeedsNavigationPathRefresh(out string reason)
@@ -5638,113 +5335,30 @@ namespace DateEverythingAccess
                     GetLocalNavigationGoalReachedDistance(planningContext));
             }
 
-            if (step != null && step.Kind == NavigationGraph.StepKind.OpenPassage)
+            if (TryResolveOpenPassageLocalNavigationGoal(
+                    currentZone,
+                    step,
+                    playerPosition,
+                    desiredPosition,
+                    out planningZone,
+                    out planningGoal,
+                    out planningContext))
             {
-                bool isInSourceZone = !string.IsNullOrEmpty(step.FromZone) &&
-                    IsZoneEquivalentToNavigationZone(currentZone, step.FromZone);
-                bool isInDestinationZone = !string.IsNullOrEmpty(step.ToZone) &&
-                    IsZoneEquivalentToNavigationZone(currentZone, step.ToZone);
-                bool useOverrideOnlyDesiredGoal =
-                    desiredPosition != Vector3.zero &&
-                    TryGetOpenPassageTransitionOverride(step, out OpenPassageTransitionOverride transitionOverride) &&
-                    transitionOverride.IntermediateWaypoints != null &&
-                    transitionOverride.IntermediateWaypoints.Length > 0 &&
-                    !transitionOverride.UseExplicitCrossingSegments;
-
-                if (isInSourceZone)
-                {
-                    Vector3 sourceGoal = _openPassageTraversalStage == OpenPassageTraversalStage.SourceWaypoint
-                        ? GetOpenPassageSourceGuidanceOrigin(step)
-                        : GetOpenPassageSourceHandoffOrigin(step);
-                    string sourcePlanningContext = _openPassageTraversalStage == OpenPassageTraversalStage.SourceWaypoint
-                        ? "open-passage-source"
-                        : "open-passage-handoff";
-                    if (useOverrideOnlyDesiredGoal)
-                    {
-                        sourceGoal = desiredPosition;
-                        sourcePlanningContext = "open-passage-override-source";
-                    }
-
-                    if (sourceGoal != Vector3.zero &&
-                        ShouldUseLocalNavigationGoal(
-                            playerPosition,
-                            sourceGoal,
-                            GetLocalNavigationGoalReachedDistance(sourcePlanningContext)))
-                    {
-                        planningZone = step.FromZone;
-                        planningGoal = sourceGoal;
-                        planningContext = sourcePlanningContext;
-                        return true;
-                    }
-
-                    return false;
-                }
-
-                if (isInDestinationZone)
-                {
-                    Vector3 destinationGoal = GetOpenPassageDestinationApproachPosition(step);
-                    string destinationPlanningContext = "open-passage-destination";
-                    if (useOverrideOnlyDesiredGoal)
-                    {
-                        destinationGoal = desiredPosition;
-                        destinationPlanningContext = "open-passage-override-destination";
-                    }
-
-                    if (destinationGoal == Vector3.zero)
-                        destinationGoal = desiredPosition;
-
-                    if (destinationGoal != Vector3.zero &&
-                        ShouldUseLocalNavigationGoal(
-                            playerPosition,
-                            destinationGoal,
-                            GetLocalNavigationGoalReachedDistance(destinationPlanningContext)))
-                    {
-                        planningZone = step.ToZone;
-                        planningGoal = destinationGoal;
-                        planningContext = destinationPlanningContext;
-                        return true;
-                    }
-
-                    return false;
-                }
-
-                return false;
+                return true;
             }
 
             if (step != null)
             {
-                if (!string.IsNullOrEmpty(step.FromZone) &&
-                    IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) &&
-                    TryGetDoorThresholdAdvanceTarget(step, currentZone, out Vector3 doorThresholdTarget))
+                if (TryResolveDoorLocalNavigationGoal(
+                        currentZone,
+                        step,
+                        playerPosition,
+                        desiredPosition,
+                        out planningZone,
+                        out planningGoal,
+                        out planningContext))
                 {
-                    if (GetFlatDistance(doorThresholdTarget, desiredPosition) <= DoorPushThroughSourceAdvanceDistance &&
-                        ShouldUseLocalNavigationGoal(
-                            playerPosition,
-                            desiredPosition,
-                            GetLocalNavigationGoalReachedDistance("door-threshold-handoff")))
-                    {
-                        planningZone = step.FromZone;
-                        planningGoal = desiredPosition;
-                        planningContext = "door-threshold-handoff";
-                        return true;
-                    }
-                }
-
-                if (TryGetActiveDoorPushThroughPosition(step, currentZone, out Vector3 activeDoorPushThroughPosition) &&
-                    GetFlatDistance(activeDoorPushThroughPosition, desiredPosition) <= 0.35f)
-                {
-                    if (ShouldUseLocalNavigationGoal(
-                            playerPosition,
-                            desiredPosition,
-                            GetLocalNavigationGoalReachedDistance("door-push-through")))
-                    {
-                        planningZone = step.FromZone;
-                        planningGoal = desiredPosition;
-                        planningContext = "door-push-through";
-                        return true;
-                    }
-
-                    return false;
+                    return true;
                 }
 
                 if (!string.IsNullOrEmpty(step.FromZone) &&
