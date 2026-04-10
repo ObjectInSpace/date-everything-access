@@ -16,6 +16,28 @@
     },
     {
       "FromZone": "bathroom2",
+      "ToZone": "dorian_bathroom2_1",
+      "AcceptedSourceZones": [
+        "bathroom2_3"
+      ],
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": false,
+      "StepTimeoutSeconds": 10.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -25.407,
+          "y": 18.23,
+          "z": -3.498
+        },
+        {
+          "x": -25.407,
+          "y": 17.84,
+          "z": 0.034
+        }
+      ]
+    },
+    {
+      "FromZone": "bathroom2",
       "ToZone": "dorian_bathroom2_2",
       "DestinationApproachBias": 1.0,
       "UseExplicitCrossingSegments": true,
@@ -25,6 +47,25 @@
           "x": -24.37,
           "y": 12.82,
           "z": -5.38
+        }
+      ]
+    },
+    {
+      "FromZone": "bedroom",
+      "ToZone": "dorian_bedroom1",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": false,
+      "StepTimeoutSeconds": 10.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -12.604,
+          "y": 16.73,
+          "z": -7.238
+        },
+        {
+          "x": -12.604,
+          "y": 17.84,
+          "z": 0.034
         }
       ]
     },
@@ -41,6 +82,13 @@
           "z": -7.65
         }
       ]
+    },
+    {
+      "FromZone": "crawlspace",
+      "ToZone": "office",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 15.0
     },
     {
       "FromZone": "dining_room",
@@ -259,6 +307,28 @@
       ]
     },
     {
+      "FromZone": "hallway",
+      "ToZone": "hallway_arma",
+      "AcceptedSourceZones": [
+        "hallway4"
+      ],
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": false,
+      "StepTimeoutSeconds": 10.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 9.563,
+          "y": 4.352,
+          "z": -3.642
+        },
+        {
+          "x": 5.837,
+          "y": 9.952,
+          "z": -3.642
+        }
+      ]
+    },
+    {
       "FromZone": "kitchen_tutorial",
       "ToZone": "kitchen",
       "DestinationApproachBias": 1.0,
@@ -317,14 +387,36 @@
     {
       "FromZone": "living_room",
       "ToZone": "hallway",
+      "AcceptedSourceZones": [
+        "living_room2"
+      ],
       "DestinationApproachBias": 1.0,
-      "UseExplicitCrossingSegments": true,
-      "StepTimeoutSeconds": 5.0,
+      "UseExplicitCrossingSegments": false,
+      "StepTimeoutSeconds": 10.0,
       "IntermediateWaypoints": [
         {
-          "x": 11.6,
+          "x": 9.371,
+          "y": 4.67,
+          "z": -6.627
+        },
+        {
+          "x": 9.563,
+          "y": 4.352,
+          "z": -5.6
+        }
+      ]
+    },
+    {
+      "FromZone": "office",
+      "ToZone": "crawlspace",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 15.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -1.92,
           "y": -0.6,
-          "z": -9.87
+          "z": 21.47
         }
       ]
     },

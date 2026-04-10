@@ -56,6 +56,9 @@ TemporaryDependencyNodeTargetIdentifier=net472
 
 [sourceFiles]
 AccessibilityWatcher.cs
+AccessibilityWatcher.DoorNavigation.cs
+AccessibilityWatcher.OpenPassageNavigation.cs
+AccessibilityWatcher.SelectedObjectCoverageApproach.cs
 DateADexPatches.cs
 DebugLogger.cs
 InputMappingReporter.cs
