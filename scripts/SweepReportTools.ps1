@@ -19,6 +19,16 @@ function Get-JsonPropertyValue {
         return $Default
     }
 
+    if ($InputObject -is [System.Collections.IDictionary]) {
+        foreach ($key in $InputObject.Keys) {
+            if ([string]::Equals([string]$key, $Name, [System.StringComparison]::OrdinalIgnoreCase)) {
+                return $InputObject[$key]
+            }
+        }
+
+        return $Default
+    }
+
     $property = $InputObject.PSObject.Properties[$Name]
     if ($null -eq $property) {
         return $Default
@@ -157,6 +167,11 @@ function Convert-SweepEntryRecord {
         DestinationApproachPoint = Convert-VectorRecord (Get-JsonPropertyValue -InputObject $Entry -Name "DestinationApproachPoint" -Default $null)
         ValidationTimeoutSeconds = Convert-ToInvariantDouble (Get-JsonPropertyValue -InputObject $Entry -Name "ValidationTimeoutSeconds" -Default 0.0)
         StaticSuspicionScore = [int](Get-JsonPropertyValue -InputObject $Entry -Name "StaticSuspicionScore" -Default 0)
+        CurrentZoneAtResult = Get-JsonPropertyValue -InputObject $Entry -Name "CurrentZoneAtResult" -Default $null
+        PlayerPositionAtResult = Convert-VectorRecord (Get-JsonPropertyValue -InputObject $Entry -Name "PlayerPositionAtResult" -Default $null)
+        LastTargetKind = Get-JsonPropertyValue -InputObject $Entry -Name "LastTargetKind" -Default $null
+        LastTargetPosition = Convert-VectorRecord (Get-JsonPropertyValue -InputObject $Entry -Name "LastTargetPosition" -Default $null)
+        LastLocalNavigationContext = Get-JsonPropertyValue -InputObject $Entry -Name "LastLocalNavigationContext" -Default $null
     }
 }
 
@@ -288,6 +303,17 @@ function Merge-SweepReportDocuments {
         ImportedAtUtc = [DateTime]::UtcNow.ToString("o")
         ActiveScene = Get-JsonPropertyValue -InputObject $ImportedReport -Name "ActiveScene" -Default $null
         SweepKind = $sweepKind
+        PluginVersion = Get-JsonPropertyValue -InputObject $ImportedReport -Name "PluginVersion" -Default $null
+        RuntimeBuildStamp = Get-JsonPropertyValue -InputObject $ImportedReport -Name "RuntimeBuildStamp" -Default $null
+        RuntimeAssemblyPath = Get-JsonPropertyValue -InputObject $ImportedReport -Name "RuntimeAssemblyPath" -Default $null
+        RuntimeAssemblySha256 = Get-JsonPropertyValue -InputObject $ImportedReport -Name "RuntimeAssemblySha256" -Default $null
+        OpenPassageOverrideStatus = Get-JsonPropertyValue -InputObject $ImportedReport -Name "OpenPassageOverrideStatus" -Default $null
+        OpenPassageOverrideDetail = Get-JsonPropertyValue -InputObject $ImportedReport -Name "OpenPassageOverrideDetail" -Default $null
+        OpenPassageOverrideEntryCount = [int](Get-JsonPropertyValue -InputObject $ImportedReport -Name "OpenPassageOverrideEntryCount" -Default 0)
+        OpenPassageOverrideNormalizedScalarArrays = [bool](Get-JsonPropertyValue -InputObject $ImportedReport -Name "OpenPassageOverrideNormalizedScalarArrays" -Default $false)
+        OpenPassageOverridePath = Get-JsonPropertyValue -InputObject $ImportedReport -Name "OpenPassageOverridePath" -Default $null
+        OpenPassageOverrideFileSha256 = Get-JsonPropertyValue -InputObject $ImportedReport -Name "OpenPassageOverrideFileSha256" -Default $null
+        OpenPassageOverrideFileLastWriteUtc = Get-JsonPropertyValue -InputObject $ImportedReport -Name "OpenPassageOverrideFileLastWriteUtc" -Default $null
         IsComplete = [bool](Get-JsonPropertyValue -InputObject $ImportedReport -Name "IsComplete" -Default $false) -and ($counts.Pending -eq 0)
         TotalCount = $counts.Total
         PassedCount = $counts.Passed
@@ -392,12 +418,31 @@ function Copy-TransitionOverrideEntry {
     $acceptedSourceZones = @(Get-JsonPropertyValue -InputObject $Entry -Name "AcceptedSourceZones" -Default @())
     $acceptedDestinationZones = @(Get-JsonPropertyValue -InputObject $Entry -Name "AcceptedDestinationZones" -Default @())
     $intermediateWaypoints = @(Get-JsonPropertyValue -InputObject $Entry -Name "IntermediateWaypoints" -Default @())
+    $normalizedAcceptedSourceZones = @(
+        $acceptedSourceZones |
+            ForEach-Object { [string]$_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+    $normalizedAcceptedDestinationZones = @(
+        $acceptedDestinationZones |
+            ForEach-Object { [string]$_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+    $acceptedSourceZonesValue = $null
+    if ($normalizedAcceptedSourceZones.Count -gt 0) {
+        $acceptedSourceZonesValue = [string[]]@($normalizedAcceptedSourceZones)
+    }
+
+    $acceptedDestinationZonesValue = $null
+    if ($normalizedAcceptedDestinationZones.Count -gt 0) {
+        $acceptedDestinationZonesValue = [string[]]@($normalizedAcceptedDestinationZones)
+    }
 
     return [ordered]@{
         FromZone = Get-JsonPropertyValue -InputObject $Entry -Name "FromZone" -Default $null
         ToZone = Get-JsonPropertyValue -InputObject $Entry -Name "ToZone" -Default $null
-        AcceptedSourceZones = if ($acceptedSourceZones.Count -gt 0) { @($acceptedSourceZones) } else { $null }
-        AcceptedDestinationZones = if ($acceptedDestinationZones.Count -gt 0) { @($acceptedDestinationZones) } else { $null }
+        AcceptedSourceZones = $acceptedSourceZonesValue
+        AcceptedDestinationZones = $acceptedDestinationZonesValue
         DestinationApproachBias = Convert-ToInvariantDouble (Get-JsonPropertyValue -InputObject $Entry -Name "DestinationApproachBias" -Default 1.0)
         UseExplicitCrossingSegments = [bool](Get-JsonPropertyValue -InputObject $Entry -Name "UseExplicitCrossingSegments" -Default $true)
         StepTimeoutSeconds = Convert-ToInvariantDouble (Get-JsonPropertyValue -InputObject $Entry -Name "StepTimeoutSeconds" -Default 0.0)
@@ -484,10 +529,6 @@ function Update-OpenPassageOverridesFromReport {
             if ((Convert-ToInvariantDouble (Get-JsonPropertyValue -InputObject $overrideEntry -Name "StepTimeoutSeconds" -Default 0.0)) -le 0.0) {
                 $overrideEntry.StepTimeoutSeconds = [Math]::Max((Convert-ToInvariantDouble (Get-JsonPropertyValue -InputObject $entry -Name "ValidationTimeoutSeconds" -Default 0.0)), 5.0)
             }
-
-            if (-not [bool](Get-JsonPropertyValue -InputObject $overrideEntry -Name "UseExplicitCrossingSegments" -Default $false)) {
-                $overrideEntry.UseExplicitCrossingSegments = $true
-            }
         }
 
         $playerPosition = Try-ParseStalledPlayerPosition -Text ([string](Get-JsonPropertyValue -InputObject $entry -Name "StatusDetail" -Default $null))
@@ -505,7 +546,11 @@ function Update-OpenPassageOverridesFromReport {
                 ForEach-Object { Convert-VectorRecord $_ }
         )
 
-        if ($existingWaypoints.Count -gt 1) {
+        $preserveManualGuidedOverride =
+            $existingWaypoints.Count -gt 1 -or
+            -not [bool](Get-JsonPropertyValue -InputObject $overrideEntry -Name "UseExplicitCrossingSegments" -Default $true)
+
+        if ($preserveManualGuidedOverride) {
             $preservedManualWaypoints++
             continue
         }
@@ -619,7 +664,20 @@ function Format-SweepSummaryLines {
     $lines.Add("Output: $OutputPath")
     $lines.Add("Report generated at: $([string](Get-JsonPropertyValue -InputObject $ImportedReport -Name 'GeneratedAtUtc' -Default 'unknown'))")
     $lines.Add("Active scene: $([string](Get-JsonPropertyValue -InputObject $MergedReport -Name 'ActiveScene' -Default 'unknown'))")
-    $lines.Add("Merged totals: total=$([int](Get-JsonPropertyValue -InputObject $MergedReport -Name 'TotalCount' -Default 0)) passed=$([int](Get-JsonPropertyValue -InputObject $MergedReport -Name 'PassedCount' -Default 0)) failed=$([int](Get-JsonPropertyValue -InputObject $MergedReport -Name 'FailedCount' -Default 0)) pending=$([int](Get-JsonPropertyValue -InputObject $MergedReport -Name 'PendingCount' -Default 0))")
+    $runtimeBuildStamp = [string](Get-JsonPropertyValue -InputObject $MergedReport -Name 'RuntimeBuildStamp' -Default $null)
+    if (-not [string]::IsNullOrWhiteSpace($runtimeBuildStamp)) {
+        $lines.Add("Runtime build: $runtimeBuildStamp")
+    }
+
+    $overrideStatus = [string](Get-JsonPropertyValue -InputObject $MergedReport -Name 'OpenPassageOverrideStatus' -Default $null)
+    if (-not [string]::IsNullOrWhiteSpace($overrideStatus)) {
+        $overrideEntryCount = [int](Get-JsonPropertyValue -InputObject $MergedReport -Name 'OpenPassageOverrideEntryCount' -Default 0)
+        $overrideNormalized = [string](Get-JsonPropertyValue -InputObject $MergedReport -Name 'OpenPassageOverrideNormalizedScalarArrays' -Default $false)
+        $overrideDetail = [string](Get-JsonPropertyValue -InputObject $MergedReport -Name 'OpenPassageOverrideDetail' -Default $null)
+        $lines.Add("Override load: status=$overrideStatus entries=$overrideEntryCount normalizedScalarArrays=$overrideNormalized detail=$overrideDetail")
+    }
+
+    $lines.Add("Latest report totals: total=$([int](Get-JsonPropertyValue -InputObject $MergedReport -Name 'TotalCount' -Default 0)) passed=$([int](Get-JsonPropertyValue -InputObject $MergedReport -Name 'PassedCount' -Default 0)) failed=$([int](Get-JsonPropertyValue -InputObject $MergedReport -Name 'FailedCount' -Default 0)) pending=$([int](Get-JsonPropertyValue -InputObject $MergedReport -Name 'PendingCount' -Default 0))")
     $lines.Add("Imported status changes: newEntries=$($StatusChanges.NewEntries) newlyPassed=$($StatusChanges.NewlyPassed) newlyFailed=$($StatusChanges.NewlyFailed) newlyPending=$($StatusChanges.NewlyPending) unchanged=$($StatusChanges.Unchanged)")
 
     if ($null -ne $OverrideUpdate) {

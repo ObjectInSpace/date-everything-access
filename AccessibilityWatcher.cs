@@ -251,6 +251,13 @@ namespace DateEverythingAccess
         private static readonly Dictionary<string, OpenPassageTransitionOverride> OpenPassageTransitionOverrides =
             new Dictionary<string, OpenPassageTransitionOverride>(StringComparer.OrdinalIgnoreCase);
         private static bool _openPassageTransitionOverridesLoaded;
+        private static string _openPassageTransitionOverrideLoadStatus = "uninitialized";
+        private static string _openPassageTransitionOverrideLoadDetail = "Overrides not checked yet.";
+        private static int _openPassageTransitionOverrideEntryCount;
+        private static bool _openPassageTransitionOverrideNormalizedScalarArrays;
+        private static string _openPassageTransitionOverridePath;
+        private static string _openPassageTransitionOverrideFileSha256;
+        private static string _openPassageTransitionOverrideFileLastWriteUtc;
 
         private static FieldInfo _talkingUiDialogBoxField;
         private static FieldInfo _dialogBoxNameTextField;
@@ -375,6 +382,7 @@ namespace DateEverythingAccess
         private string _trackedInteractableZone;
         private string _trackedInteractableApproachId;
         private string _trackedInteractableApproachZone;
+        private int _trackedInteractableApproachPreferredComponentId = -1;
         private string _lastRoomObjectListZone;
         private string _navigationTargetZone;
         private string _navigationTargetLabel;
@@ -386,6 +394,7 @@ namespace DateEverythingAccess
         private string _localNavigationPathZone;
         private string _localNavigationPathContext;
         private string _localNavigationPathStepKey;
+        private string _rawNavigationTargetContext;
         private string _lastTrackerTargetKind;
         private string _lastTrackerTargetStepKey;
         private Vector3 _lastAutoWalkPosition;
@@ -718,15 +727,38 @@ namespace DateEverythingAccess
         {
             SelectedObjectCoverageReporter.ReportData report = BuildSelectedObjectCoverageReport();
             overallStatus = report != null ? report.OverallStatus : null;
+            Main.Log.LogInfo(
+                "Selected object coverage export runtime build=" + Main.GetRuntimeBuildStamp() +
+                " overrides=" + GetOpenPassageTransitionOverrideDiagnosticSummary());
             return SelectedObjectCoverageReporter.TryWriteReport(report, out outputPath, out failureReason);
         }
 
         private SelectedObjectCoverageReporter.ReportData BuildSelectedObjectCoverageReport()
         {
+            GetOpenPassageTransitionOverrideDiagnostics(
+                out string overrideStatus,
+                out string overrideDetail,
+                out int overrideEntryCount,
+                out bool overrideNormalizedScalarArrays,
+                out string overridePath,
+                out string overrideFileSha256,
+                out string overrideFileLastWriteUtc);
+
             var report = new SelectedObjectCoverageReporter.ReportData
             {
                 GeneratedAtUtc = DateTime.UtcNow.ToString("o"),
                 ActiveScene = SceneManager.GetActiveScene().name,
+                PluginVersion = Main.GetPluginVersion(),
+                RuntimeBuildStamp = Main.GetRuntimeBuildStamp(),
+                RuntimeAssemblyPath = Main.RuntimeAssemblyPath,
+                RuntimeAssemblySha256 = Main.RuntimeAssemblySha256,
+                OpenPassageOverrideStatus = overrideStatus,
+                OpenPassageOverrideDetail = overrideDetail,
+                OpenPassageOverrideEntryCount = overrideEntryCount,
+                OpenPassageOverrideNormalizedScalarArrays = overrideNormalizedScalarArrays,
+                OpenPassageOverridePath = overridePath,
+                OpenPassageOverrideFileSha256 = overrideFileSha256,
+                OpenPassageOverrideFileLastWriteUtc = overrideFileLastWriteUtc,
                 Limitations = BuildSelectedObjectCoverageLimitations(),
                 Summary = new SelectedObjectCoverageReporter.SummaryData(),
                 TrackerAlignment = BuildSelectedObjectCoverageTrackerAlignment(),
@@ -1180,9 +1212,9 @@ namespace DateEverythingAccess
                     transitionStatuses.TryGetValue(stepKey, out TransitionSweepReporter.EntryStatus status))
                 {
                     validationStatus = NormalizeSelectedObjectCoverageStatus(status.Status);
-                    validationDetail = !string.IsNullOrWhiteSpace(status.FailureReason)
-                        ? status.FailureReason
-                        : status.StatusDetail;
+                    validationDetail = !string.IsNullOrWhiteSpace(status.StatusDetail)
+                        ? status.StatusDetail
+                        : status.FailureReason;
                 }
 
                 if (string.Equals(validationStatus, "failed", StringComparison.OrdinalIgnoreCase))
@@ -1282,6 +1314,17 @@ namespace DateEverythingAccess
             MergeSelectedObjectCoverageTransitionStatuses(
                 mergedStatuses,
                 TransitionSweepReporter.LoadEntryStatuses(TransitionSweepReporter.GetDefaultDoorOutputPath()));
+            MergeSelectedObjectCoveragePassedKeys(
+                mergedStatuses,
+                TransitionSweepReporter.LoadPassedKeys(TransitionSweepReporter.GetDefaultOutputPath()),
+                NavigationGraph.StepKind.OpenPassage.ToString(),
+                "Passed on the current runtime build according to the open-passage sweep passed-key cache.");
+            MergeSelectedObjectCoveragePassedKeys(
+                mergedStatuses,
+                TransitionSweepReporter.LoadPassedKeys(TransitionSweepReporter.GetDefaultDoorOutputPath()),
+                NavigationGraph.StepKind.Door.ToString(),
+                "Passed on the current runtime build according to the door sweep passed-key cache.");
+            ApplyExcludedTransitionSweepStatuses(mergedStatuses);
             return mergedStatuses;
         }
 
@@ -1298,6 +1341,57 @@ namespace DateEverythingAccess
                     continue;
 
                 destination[pair.Key] = pair.Value;
+            }
+        }
+
+        private static void MergeSelectedObjectCoveragePassedKeys(
+            Dictionary<string, TransitionSweepReporter.EntryStatus> destination,
+            HashSet<string> passedKeys,
+            string defaultStepKind,
+            string statusDetail)
+        {
+            if (destination == null || passedKeys == null || passedKeys.Count == 0)
+                return;
+
+            foreach (string key in passedKeys)
+            {
+                if (string.IsNullOrWhiteSpace(key) || destination.ContainsKey(key))
+                    continue;
+
+                destination[key] = new TransitionSweepReporter.EntryStatus
+                {
+                    Key = key,
+                    StepKind = defaultStepKind,
+                    Status = "passed",
+                    StatusDetail = statusDetail,
+                    FailureReason = null
+                };
+            }
+        }
+
+        private static void ApplyExcludedTransitionSweepStatuses(
+            Dictionary<string, TransitionSweepReporter.EntryStatus> statuses)
+        {
+            if (statuses == null)
+                return;
+
+            string[] excludedStepKeys =
+            {
+                "transition:crawlspace->office",
+                "transition:office->crawlspace"
+            };
+
+            for (int i = 0; i < excludedStepKeys.Length; i++)
+            {
+                string stepKey = excludedStepKeys[i];
+                statuses[stepKey] = new TransitionSweepReporter.EntryStatus
+                {
+                    Key = stepKey,
+                    StepKind = NavigationGraph.StepKind.Teleporter.ToString(),
+                    Status = "passed",
+                    StatusDetail = "Excluded from the automated transition sweep after manual ladder-cutscene verification on 2026-04-10.",
+                    FailureReason = null
+                };
             }
         }
 
@@ -1539,6 +1633,9 @@ namespace DateEverythingAccess
             };
 
             WriteTransitionSweepReport(isComplete: false);
+            Main.Log.LogInfo(
+                GetTransitionSweepLogLabel(sweepKind) + " runtime build=" + Main.GetRuntimeBuildStamp() +
+                " overrides=" + GetOpenPassageTransitionOverrideDiagnosticSummary());
             Main.Log.LogInfo(
                 GetTransitionSweepLogLabel(sweepKind) + " started. steps=" + steps.Count +
                 " skippedPreviouslyPassed=" + previouslyPassedKeys.Count);
@@ -2125,6 +2222,48 @@ namespace DateEverythingAccess
             return true;
         }
 
+        private bool TrySnapDoorSourceNavigationTarget(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 targetPosition,
+            float maxSnapDistance,
+            string context,
+            out Vector3 snappedTargetPosition)
+        {
+            snappedTargetPosition = targetPosition;
+            if (step == null ||
+                targetPosition == Vector3.zero ||
+                maxSnapDistance <= 0f ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                string.IsNullOrWhiteSpace(step.FromZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone))
+            {
+                return false;
+            }
+
+            if (!LocalNavigationMaps.TrySnapPositionToNearestWalkableCell(
+                    step.FromZone,
+                    targetPosition,
+                    out Vector3 candidatePosition,
+                    out string snapDetail))
+            {
+                return false;
+            }
+
+            float snapDistance = GetFlatDistance(targetPosition, candidatePosition);
+            if (snapDistance <= 0.05f || snapDistance > maxSnapDistance)
+                return false;
+
+            snappedTargetPosition = candidatePosition;
+            LogNavigationTrackerDebug(
+                "Snapped door navigation target original=" + FormatVector3(targetPosition) +
+                " snapped=" + FormatVector3(snappedTargetPosition) +
+                " context=" + (context ?? "<null>") +
+                " detail=" + (snapDetail ?? "<null>") +
+                " step=" + DescribeNavigationStep(step));
+            return true;
+        }
+
         private static bool ShouldKeepDoorThresholdAdvance(
             Vector3 playerPosition,
             Vector3 sourceTarget,
@@ -2191,6 +2330,69 @@ namespace DateEverythingAccess
                 ? pushThroughPosition.y
                 : sourceTarget.y;
             return handoffTarget;
+        }
+
+        private bool TryGetDoorThresholdHandoffTarget(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 sourceTarget,
+            Vector3 pushThroughPosition,
+            out Vector3 handoffTarget)
+        {
+            handoffTarget = BuildDoorThresholdHandoffPosition(sourceTarget, pushThroughPosition);
+            if (handoffTarget == Vector3.zero)
+                return false;
+
+            if (TrySnapDoorSourceNavigationTarget(
+                    step,
+                    currentZone,
+                    handoffTarget,
+                    DoorTransitionSweepDoorClearanceDistance,
+                    "door-threshold-handoff",
+                    out Vector3 snappedHandoffTarget))
+            {
+                handoffTarget = snappedHandoffTarget;
+            }
+
+            float forwardProgress = GetDoorThresholdForwardProgress(
+                sourceTarget,
+                pushThroughPosition,
+                handoffTarget);
+            if (forwardProgress <= 0.05f || GetFlatDistance(sourceTarget, handoffTarget) <= 0.05f)
+            {
+                LogNavigationTrackerDebug(
+                    "Discarded door threshold handoff target position=" + FormatVector3(handoffTarget) +
+                    " forwardProgress=" + forwardProgress.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " step=" + DescribeNavigationStep(step));
+                handoffTarget = Vector3.zero;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static float GetDoorThresholdForwardProgress(
+            Vector3 sourceTarget,
+            Vector3 pushThroughPosition,
+            Vector3 candidateTarget)
+        {
+            if (sourceTarget == Vector3.zero ||
+                pushThroughPosition == Vector3.zero ||
+                candidateTarget == Vector3.zero)
+            {
+                return 0f;
+            }
+
+            Vector3 pushThroughVector = pushThroughPosition - sourceTarget;
+            pushThroughVector.y = 0f;
+            float pushThroughDistance = pushThroughVector.magnitude;
+            if (pushThroughDistance <= 0.0001f)
+                return 0f;
+
+            Vector3 pushThroughDirection = pushThroughVector / pushThroughDistance;
+            Vector3 candidateOffset = candidateTarget - sourceTarget;
+            candidateOffset.y = 0f;
+            return Vector3.Dot(candidateOffset, pushThroughDirection);
         }
 
         private bool TryGetActiveDoorPushThroughPosition(
@@ -2263,7 +2465,10 @@ namespace DateEverythingAccess
 
         private float GetLocalNavigationGoalReachedDistance(string planningContext)
         {
-            return string.Equals(planningContext, "door-push-through", StringComparison.Ordinal) ||
+            return string.Equals(planningContext, "door-push-through-local", StringComparison.Ordinal) ||
+                string.Equals(planningContext, "door-threshold-handoff-local", StringComparison.Ordinal)
+                ? DoorTransitionSweepDoorClearanceDistance
+                : string.Equals(planningContext, "door-push-through", StringComparison.Ordinal) ||
                 string.Equals(planningContext, "door-threshold-handoff", StringComparison.Ordinal) ||
                 string.Equals(planningContext, "open-passage-handoff", StringComparison.Ordinal) ||
                 string.Equals(planningContext, "open-passage-override-source", StringComparison.Ordinal) ||
@@ -2274,6 +2479,13 @@ namespace DateEverythingAccess
                         ? DoorThresholdHandoffLocalNavigationGoalReachedDistance
                     : OpenPassageOverrideLocalNavigationGoalReachedDistance)
                 : LocalNavigationGoalReachedDistance;
+        }
+
+        private float GetRawNavigationGoalReachedDistance(string targetContext)
+        {
+            return string.Equals(targetContext, "open-passage-guided", StringComparison.Ordinal)
+                ? GetOpenPassageGuidedWaypointAdvanceDistance()
+                : AutoWalkArrivalDistance;
         }
 
         private float GetOpenPassageGuidedWaypointAdvanceDistance()
@@ -2290,6 +2502,9 @@ namespace DateEverythingAccess
             {
                 return GetLocalNavigationGoalReachedDistance(_localNavigationPathContext);
             }
+
+            if (!string.IsNullOrWhiteSpace(_rawNavigationTargetContext))
+                return GetRawNavigationGoalReachedDistance(_rawNavigationTargetContext);
 
             return AutoWalkArrivalDistance;
         }
@@ -2720,10 +2935,27 @@ namespace DateEverythingAccess
                     return true;
                 }
 
-                return IsAtticSweepZone(step.FromZone) || IsAtticSweepZone(step.ToZone);
+                return IsAtticSweepZone(step.FromZone) ||
+                    IsAtticSweepZone(step.ToZone) ||
+                    IsExcludedOpenTransitionSweepStep(step);
             }
 
             return step.Kind != NavigationGraph.StepKind.Door;
+        }
+
+        private static bool IsExcludedOpenTransitionSweepStep(NavigationGraph.PathStep step)
+        {
+            if (step == null || step.Kind != NavigationGraph.StepKind.Teleporter)
+                return false;
+
+            if (!string.Equals(step.ConnectorName, "CrawlspaceLadder", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return
+                (string.Equals(step.FromZone, "crawlspace", StringComparison.OrdinalIgnoreCase) &&
+                 string.Equals(step.ToZone, "office", StringComparison.OrdinalIgnoreCase)) ||
+                (string.Equals(step.FromZone, "office", StringComparison.OrdinalIgnoreCase) &&
+                 string.Equals(step.ToZone, "crawlspace", StringComparison.OrdinalIgnoreCase));
         }
 
         private static bool IsAtticSweepZone(string zoneName)
@@ -3405,14 +3637,36 @@ namespace DateEverythingAccess
 
             NavigationGraph.PathStep step = _transitionSweepSession.CurrentStep;
             TransitionSweepReporter.MutableEntry entry = GetCurrentTransitionSweepEntry();
+            string currentZoneAtResult = GetCurrentZoneNameInternal();
+            Vector3 playerPositionAtResult = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform.position
+                : Vector3.zero;
+            string lastLocalNavigationContext = _localNavigationPathContext;
+            string lastTargetKind = _lastTrackerTargetKind;
+            Vector3 lastTargetPosition = _hasLastTrackerTarget ? _lastTrackerTargetPosition : Vector3.zero;
             if (entry != null)
             {
+                string statusDetail = failureReason ?? status;
+                if (string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase))
+                {
+                    statusDetail +=
+                        " localContext=" + (lastLocalNavigationContext ?? "<null>") +
+                        " lastTargetKind=" + (lastTargetKind ?? "<null>");
+                    if (_hasLastTrackerTarget)
+                        statusDetail += " lastTarget=" + FormatVector3(lastTargetPosition);
+                }
+
                 entry.Status = status;
-                entry.StatusDetail = failureReason ?? status;
+                entry.StatusDetail = statusDetail;
                 entry.FailureReason = failureReason;
                 entry.DurationSeconds = _transitionSweepSession.StepStartedAt > 0f
                     ? Mathf.Max(0f, Time.unscaledTime - _transitionSweepSession.StepStartedAt)
                     : 0f;
+                entry.CurrentZoneAtResult = currentZoneAtResult;
+                entry.PlayerPositionAtResult = playerPositionAtResult;
+                entry.LastTargetKind = lastTargetKind;
+                entry.LastTargetPosition = lastTargetPosition;
+                entry.LastLocalNavigationContext = lastLocalNavigationContext;
             }
 
             Main.Log.LogInfo(
@@ -4650,12 +4904,13 @@ namespace DateEverythingAccess
         {
             position = Vector3.zero;
             targetKind = NavigationTargetKind.ZoneFallback;
+            _rawNavigationTargetContext = null;
             string currentZone = GetCurrentZoneNameForNavigation();
 
             if (TryGetTrackedInteractable(out InteractableObj trackedInteractable) &&
                 TryGetTrackedInteractableZone(trackedInteractable, out string trackedZone))
             {
-                if (AreZonesEquivalent(currentZone, trackedZone))
+                if (IsExactZoneMatch(currentZone, trackedZone))
                 {
                     if (BetterPlayerControl.Instance != null &&
                         TryGetTrackedInteractableNavigationTarget(
@@ -4670,7 +4925,7 @@ namespace DateEverythingAccess
                         LogNavigationTrackerDebug(
                             "Next navigation target kind=DirectObject position=" + FormatVector3(position) +
                             " trackedZone=" + trackedZone +
-                            " reason=" + (IsExactZoneMatch(currentZone, trackedZone) ? "exact-zone-match" : "equivalent-zone-match") +
+                            " reason=exact-zone-match" +
                             " detail=" + (trackedTargetDetail ?? "<null>") +
                             " interactable=" + DescribeInteractable(trackedInteractable));
                         return true;
@@ -4681,12 +4936,13 @@ namespace DateEverythingAccess
                     LogNavigationTrackerDebug(
                         "Next navigation target kind=DirectObject position=" + FormatVector3(position) +
                         " trackedZone=" + trackedZone +
-                        " reason=" + (IsExactZoneMatch(currentZone, trackedZone) ? "exact-zone-match" : "equivalent-zone-match") +
+                        " reason=exact-zone-match" +
                         " interactable=" + DescribeInteractable(trackedInteractable));
                     return true;
                 }
 
-                if (TryGetZonePosition(trackedZone, out position))
+                if (AreZonesEquivalent(currentZone, trackedZone) &&
+                    TryGetZonePosition(trackedZone, out position))
                 {
                     targetKind = NavigationTargetKind.ZoneFallback;
                     LogNavigationTrackerDebug(
@@ -4695,6 +4951,23 @@ namespace DateEverythingAccess
                         " reason=subzone anchor before direct object" +
                         " interactable=" + DescribeInteractable(trackedInteractable));
                     return true;
+                }
+
+                if (AreZonesEquivalent(currentZone, trackedZone))
+                {
+                    string trackedNavigationZone = GetNavigationZoneName(trackedZone);
+                    if (!string.IsNullOrEmpty(trackedNavigationZone) &&
+                        TryGetZonePosition(trackedNavigationZone, out position))
+                    {
+                        targetKind = NavigationTargetKind.ZoneFallback;
+                        LogNavigationTrackerDebug(
+                            "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
+                            " trackedZone=" + trackedZone +
+                            " trackedNavigationZone=" + trackedNavigationZone +
+                            " reason=navigation-zone anchor before direct object" +
+                            " interactable=" + DescribeInteractable(trackedInteractable));
+                        return true;
+                    }
                 }
             }
 
@@ -5837,6 +6110,7 @@ namespace DateEverythingAccess
         private OpenPassageTraversalStage GetOpenPassageTraversalStage(
             NavigationGraph.PathStep step,
             string currentZone,
+            Vector3 playerPosition,
             float fromDistance,
             float sourceSegmentDistance,
             float destinationWaypointDistance)
@@ -5865,7 +6139,11 @@ namespace DateEverythingAccess
                     break;
 
                 case OpenPassageTraversalStage.SourceHandoff:
-                    if (sourceSegmentDistance <= OpenPassageOverrideLocalNavigationGoalReachedDistance)
+                    if (ShouldAdvanceOpenPassageSourceHandoff(
+                            step,
+                            currentZone,
+                            playerPosition,
+                            sourceSegmentDistance))
                     {
                         _openPassageDestinationHandoffProgressFloor = 0f;
                         _openPassageTraversalStage = OpenPassageTraversalStage.DestinationWaypoint;
@@ -5909,6 +6187,44 @@ namespace DateEverythingAccess
                     step,
                     out optionalOpenPassageInteractable,
                     out optionalOpenPassageInteractionDetail);
+        }
+
+        private bool ShouldAdvanceOpenPassageSourceHandoff(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 playerPosition,
+            float sourceSegmentDistance)
+        {
+            if (step == null)
+                return false;
+
+            if (!UsesOverrideOnlyOpenPassageGuidance(step))
+                return sourceSegmentDistance <= OpenPassageOverrideLocalNavigationGoalReachedDistance;
+
+            if (!TryGetOpenPassageGuidedNavigationTarget(
+                    step,
+                    playerPosition,
+                    out Vector3 guidedTarget,
+                    out _,
+                    out _,
+                    out bool isFinalWaypoint) ||
+                !isFinalWaypoint ||
+                guidedTarget == Vector3.zero)
+            {
+                return false;
+            }
+
+            guidedTarget.y = playerPosition.y;
+            if (Vector3.Distance(playerPosition, guidedTarget) >
+                GetOpenPassageGuidedWaypointAdvanceDistance())
+            {
+                return false;
+            }
+
+            return !string.IsNullOrWhiteSpace(step.ToZone) &&
+                (IsZoneEquivalentToNavigationZone(currentZone, step.ToZone) ||
+                 IsAcceptedOverrideDestinationZone(step, currentZone) ||
+                 sourceSegmentDistance <= OpenPassageOverrideLocalNavigationGoalReachedDistance);
         }
 
         private bool TryRecoverAutoWalk(NavigationGraph.PathStep step, NavigationTargetKind targetKind)
@@ -6978,8 +7294,9 @@ namespace DateEverythingAccess
                 return false;
             }
 
+            string currentZone = GetCurrentZoneNameInternal();
             if (!TryGetTrackedInteractableZone(trackedInteractable, out string trackedZone) ||
-                !AreZonesEquivalent(trackedZone, GetCurrentZoneNameInternal()))
+                !IsExactZoneMatch(trackedZone, currentZone))
             {
                 return false;
             }
@@ -6988,7 +7305,7 @@ namespace DateEverythingAccess
             Vector3 targetPosition = trackedInteractable.transform.position;
             if (!TryGetTrackedInteractableNavigationTarget(
                     trackedInteractable,
-                    trackedZone,
+                    currentZone,
                     playerPosition,
                     out targetPosition,
                     out _))
@@ -7037,15 +7354,63 @@ namespace DateEverythingAccess
                 return true;
             }
 
-            if (CanReuseTrackedInteractableApproachTarget(interactable, navigationZone, referencePosition))
+            bool hasPreferredComponentId = TryGetTrackedInteractablePreferredComponentId(
+                navigationZone,
+                playerPosition,
+                out int preferredComponentId,
+                out string preferredComponentDetail);
+            if (CanReuseTrackedInteractableApproachTarget(
+                    interactable,
+                    navigationZone,
+                    referencePosition,
+                    hasPreferredComponentId ? preferredComponentId : -1))
             {
                 targetPosition = _trackedInteractableApproachTarget;
                 targetPosition.y = playerPosition.y;
                 debugDetail =
                     "mode=cached" +
                     " zone=" + navigationZone +
+                    (hasPreferredComponentId
+                        ? " preferredComponentId=" + preferredComponentId +
+                          " preferredComponentDetail=" + (preferredComponentDetail ?? "<null>")
+                        : string.Empty) +
                     " candidateSource=" + candidateDetail;
                 return true;
+            }
+
+            string preferredComponentFailureDetail = null;
+            int cachedPreferredComponentId = -1;
+            if (hasPreferredComponentId &&
+                LocalNavigationMaps.TryResolveApproachTargetForComponent(
+                    navigationZone,
+                    playerPosition,
+                    referencePosition,
+                    candidateTargets,
+                    preferredComponentId,
+                    out targetPosition,
+                    out string componentResolutionDetail))
+            {
+                cachedPreferredComponentId = preferredComponentId;
+                _trackedInteractableApproachId = interactable.Id;
+                _trackedInteractableApproachZone = navigationZone;
+                _trackedInteractableApproachPreferredComponentId = cachedPreferredComponentId;
+                _trackedInteractableApproachReferencePosition = referencePosition;
+                _trackedInteractableApproachTarget = targetPosition;
+                targetPosition.y = playerPosition.y;
+                debugDetail =
+                    componentResolutionDetail +
+                    " zone=" + navigationZone +
+                    " candidateSource=" + candidateDetail +
+                    " preferredComponentSource=player" +
+                    " preferredComponentDetail=" + (preferredComponentDetail ?? "<null>");
+                return true;
+            }
+            else if (hasPreferredComponentId)
+            {
+                preferredComponentFailureDetail =
+                    " preferredComponentResolution=failed" +
+                    " preferredComponentId=" + preferredComponentId +
+                    " preferredComponentDetail=" + (preferredComponentDetail ?? "<null>");
             }
 
             if (!TryResolveTrackedInteractableApproachTarget(
@@ -7064,12 +7429,14 @@ namespace DateEverythingAccess
 
             _trackedInteractableApproachId = interactable.Id;
             _trackedInteractableApproachZone = navigationZone;
+            _trackedInteractableApproachPreferredComponentId = cachedPreferredComponentId;
             _trackedInteractableApproachReferencePosition = referencePosition;
             _trackedInteractableApproachTarget = targetPosition;
             targetPosition.y = playerPosition.y;
             debugDetail =
                 resolutionDetail +
                 " zone=" + navigationZone +
+                preferredComponentFailureDetail +
                 " candidateSource=" + candidateDetail;
             return true;
         }
@@ -7078,6 +7445,7 @@ namespace DateEverythingAccess
         {
             _trackedInteractableApproachId = null;
             _trackedInteractableApproachZone = null;
+            _trackedInteractableApproachPreferredComponentId = -1;
             _trackedInteractableApproachReferencePosition = Vector3.zero;
             _trackedInteractableApproachTarget = Vector3.zero;
         }
@@ -7085,7 +7453,8 @@ namespace DateEverythingAccess
         private bool CanReuseTrackedInteractableApproachTarget(
             InteractableObj interactable,
             string navigationZone,
-            Vector3 referencePosition)
+            Vector3 referencePosition,
+            int preferredComponentId)
         {
             return interactable != null &&
                 !string.IsNullOrEmpty(interactable.Id) &&
@@ -7094,7 +7463,40 @@ namespace DateEverythingAccess
                 !string.IsNullOrEmpty(_trackedInteractableApproachZone) &&
                 string.Equals(_trackedInteractableApproachId, interactable.Id, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(_trackedInteractableApproachZone, navigationZone, StringComparison.OrdinalIgnoreCase) &&
+                _trackedInteractableApproachPreferredComponentId == preferredComponentId &&
                 GetFlatDistance(_trackedInteractableApproachReferencePosition, referencePosition) <= TrackedInteractableApproachRetargetDistance;
+        }
+
+        private bool TryGetTrackedInteractablePreferredComponentId(
+            string navigationZone,
+            Vector3 playerPosition,
+            out int preferredComponentId,
+            out string detail)
+        {
+            preferredComponentId = -1;
+            detail = null;
+            if (string.IsNullOrWhiteSpace(navigationZone) || !LocalNavigationMaps.IsAvailable)
+                return false;
+
+            List<LocalNavigationMaps.WalkableComponentSummary> components =
+                LocalNavigationMaps.GetWalkableComponents(navigationZone);
+            if (components == null || components.Count <= 1)
+                return false;
+
+            if (!LocalNavigationMaps.TryGetWalkableComponentId(
+                    navigationZone,
+                    playerPosition,
+                    out preferredComponentId,
+                    out Vector3 snappedPlayerPosition,
+                    out string componentDetail))
+            {
+                return false;
+            }
+
+            detail =
+                (componentDetail ?? "<null>") +
+                " snappedPlayer=" + FormatVector3(snappedPlayerPosition);
+            return preferredComponentId >= 0;
         }
 
         private bool TryResolveTrackedInteractableApproachTarget(
@@ -7640,6 +8042,43 @@ namespace DateEverythingAccess
             return (step.FromZone ?? "<null>") + "->" + (step.ToZone ?? "<null>");
         }
 
+        internal static void GetOpenPassageTransitionOverrideDiagnostics(
+            out string status,
+            out string detail,
+            out int entryCount,
+            out bool normalizedScalarArrays,
+            out string path,
+            out string fileSha256,
+            out string fileLastWriteUtc)
+        {
+            EnsureOpenPassageTransitionOverridesLoaded();
+            status = _openPassageTransitionOverrideLoadStatus;
+            detail = _openPassageTransitionOverrideLoadDetail;
+            entryCount = _openPassageTransitionOverrideEntryCount;
+            normalizedScalarArrays = _openPassageTransitionOverrideNormalizedScalarArrays;
+            path = _openPassageTransitionOverridePath;
+            fileSha256 = _openPassageTransitionOverrideFileSha256;
+            fileLastWriteUtc = _openPassageTransitionOverrideFileLastWriteUtc;
+        }
+
+        internal static string GetOpenPassageTransitionOverrideDiagnosticSummary()
+        {
+            GetOpenPassageTransitionOverrideDiagnostics(
+                out string status,
+                out string detail,
+                out int entryCount,
+                out bool normalizedScalarArrays,
+                out _,
+                out _,
+                out _);
+
+            return
+                "status=" + (status ?? "<null>") +
+                " entries=" + entryCount +
+                " normalizedScalarArrays=" + normalizedScalarArrays +
+                " detail=" + (detail ?? "<null>");
+        }
+
         private static void EnsureOpenPassageTransitionOverridesLoaded()
         {
             if (_openPassageTransitionOverridesLoaded)
@@ -7651,18 +8090,37 @@ namespace DateEverythingAccess
             try
             {
                 string path = Path.Combine(Paths.PluginPath, "navigation_transition_overrides.json");
+                _openPassageTransitionOverridePath = path;
+                _openPassageTransitionOverrideEntryCount = 0;
+                _openPassageTransitionOverrideNormalizedScalarArrays = false;
+                _openPassageTransitionOverrideFileSha256 = Main.TryComputeFileSha256(path);
+                _openPassageTransitionOverrideFileLastWriteUtc = File.Exists(path)
+                    ? File.GetLastWriteTimeUtc(path).ToString("o")
+                    : null;
                 if (!File.Exists(path))
                 {
+                    _openPassageTransitionOverrideLoadStatus = "missing";
+                    _openPassageTransitionOverrideLoadDetail = "Navigation transition overrides not found at: " + path;
                     Main.Log.LogWarning("Navigation transition overrides not found at: " + path);
                     return;
                 }
 
-                using (FileStream stream = File.OpenRead(path))
+                string rawJson = File.ReadAllText(path);
+                string normalizedJson = NormalizeOpenPassageTransitionOverrideJson(rawJson);
+                if (!string.Equals(rawJson, normalizedJson, StringComparison.Ordinal))
+                {
+                    _openPassageTransitionOverrideNormalizedScalarArrays = true;
+                    Main.Log.LogWarning("Normalized scalar transition override arrays at: " + path);
+                }
+
+                using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(normalizedJson)))
                 {
                     var serializer = new DataContractJsonSerializer(typeof(OpenPassageTransitionOverrideDocument));
                     OpenPassageTransitionOverrideDocument document = serializer.ReadObject(stream) as OpenPassageTransitionOverrideDocument;
                     if (document == null || document.Entries == null || document.Entries.Length == 0)
                     {
+                        _openPassageTransitionOverrideLoadStatus = "empty";
+                        _openPassageTransitionOverrideLoadDetail = "Navigation transition overrides file did not contain any usable entries.";
                         Main.Log.LogWarning("Navigation transition overrides file did not contain any usable entries.");
                         return;
                     }
@@ -7689,13 +8147,45 @@ namespace DateEverythingAccess
                         };
                     }
 
+                    _openPassageTransitionOverrideEntryCount = OpenPassageTransitionOverrides.Count;
+                    _openPassageTransitionOverrideLoadStatus = "loaded";
+                    _openPassageTransitionOverrideLoadDetail =
+                        "Entries=" + OpenPassageTransitionOverrides.Count +
+                        " normalizedScalarArrays=" + _openPassageTransitionOverrideNormalizedScalarArrays;
                     Main.Log.LogInfo("Navigation transition overrides loaded. Entries: " + OpenPassageTransitionOverrides.Count);
                 }
             }
             catch (Exception ex)
             {
+                _openPassageTransitionOverrideLoadStatus = "failed";
+                _openPassageTransitionOverrideLoadDetail = ex.GetType().Name + ": " + ex.Message;
                 Main.Log.LogError("Failed to load navigation transition overrides: " + ex);
             }
+        }
+
+        private static string NormalizeOpenPassageTransitionOverrideJson(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return json;
+
+            string normalized = NormalizeTransitionOverrideScalarArrayProperty(json, "AcceptedSourceZones");
+            normalized = NormalizeTransitionOverrideScalarArrayProperty(normalized, "AcceptedDestinationZones");
+            return normalized;
+        }
+
+        private static string NormalizeTransitionOverrideScalarArrayProperty(string json, string propertyName)
+        {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(propertyName))
+                return json;
+
+            string pattern = "\"" +
+                System.Text.RegularExpressions.Regex.Escape(propertyName) +
+                "\"\\s*:\\s*\"(?<value>(?:\\\\.|[^\"\\\\])*)\"";
+            return System.Text.RegularExpressions.Regex.Replace(
+                json,
+                pattern,
+                "\"" + propertyName + "\":[\"${value}\"]",
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant);
         }
 
         private static Vector3[] ConvertOverrideWaypoints(SerializableVector3[] serializedWaypoints)
@@ -7870,6 +8360,15 @@ namespace DateEverythingAccess
             waypointIndex = currentIndex;
             isFinalWaypoint = currentIndex >= waypointCount - 1;
             return true;
+        }
+
+        private static bool UsesOverrideOnlyOpenPassageGuidance(NavigationGraph.PathStep step)
+        {
+            return step != null &&
+                TryGetOpenPassageTransitionOverride(step, out OpenPassageTransitionOverride transitionOverride) &&
+                !transitionOverride.UseExplicitCrossingSegments &&
+                transitionOverride.IntermediateWaypoints != null &&
+                transitionOverride.IntermediateWaypoints.Length > 0;
         }
 
         private static List<Vector3> BuildOpenPassageGuidedNavigationPoints(NavigationGraph.PathStep step)

@@ -37,9 +37,14 @@ namespace DateEverythingAccess
                 return false;
             }
 
+            bool isSameNavigationZone =
+                !string.IsNullOrWhiteSpace(startZone) &&
+                string.Equals(startZone, navigationZone, StringComparison.OrdinalIgnoreCase);
+            Vector3 candidateEvaluationStart = evaluationStartPosition;
+
             if (!TryBuildTrackedInteractableApproachCandidates(
                     interactable,
-                    evaluationStartPosition,
+                    candidateEvaluationStart,
                     out List<Vector3> candidateTargets,
                     out Vector3 referencePosition,
                     out string candidateDetail) ||
@@ -53,12 +58,17 @@ namespace DateEverythingAccess
 
             referenceSource = candidateDetail;
 
+            List<LocalNavigationMaps.WalkableComponentSummary> navigationComponents =
+                LocalNavigationMaps.GetWalkableComponents(navigationZone);
+            bool hasMultipleNavigationComponents =
+                navigationComponents != null && navigationComponents.Count > 1;
+
             int preferredComponentId = -1;
             string preferredComponentSource = null;
             string preferredComponentDetail = null;
-            if (!string.IsNullOrWhiteSpace(startZone) &&
-                string.Equals(startZone, navigationZone, StringComparison.OrdinalIgnoreCase) &&
-                startComponent != null)
+            string preferredResolutionFailureDetail = null;
+            Vector3 preferredComponentEvaluationStart = candidateEvaluationStart;
+            if (isSameNavigationZone && startComponent != null)
             {
                 preferredComponentId = startComponent.ComponentId;
                 preferredComponentSource = "start-component";
@@ -70,16 +80,22 @@ namespace DateEverythingAccess
                          out Vector3 snappedReferencePosition,
                          out string componentDetail))
             {
-                preferredComponentId = objectComponentId;
-                preferredComponentSource = "object-component";
-                preferredComponentDetail = componentDetail + " snappedReference=" + FormatVector3(snappedReferencePosition);
+                bool shouldPreferObjectComponent =
+                    !hasMultipleNavigationComponents;
+                if (shouldPreferObjectComponent)
+                {
+                    preferredComponentId = objectComponentId;
+                    preferredComponentSource = "object-component";
+                    preferredComponentDetail = componentDetail + " snappedReference=" + FormatVector3(snappedReferencePosition);
+                    preferredComponentEvaluationStart = snappedReferencePosition;
+                }
             }
 
             if (preferredComponentId >= 0)
             {
                 if (!LocalNavigationMaps.TryResolveApproachTargetForComponent(
                         navigationZone,
-                        evaluationStartPosition,
+                        preferredComponentEvaluationStart,
                         referencePosition,
                         candidateTargets,
                         preferredComponentId,
@@ -87,30 +103,65 @@ namespace DateEverythingAccess
                         out string resolutionDetail))
                 {
                     targetPosition = interactable.transform.position;
-                    targetPosition.y = evaluationStartPosition.y;
-                    detail =
+                    preferredResolutionFailureDetail =
                         "mode=component-path-selected resolution=failed" +
                         " preferredComponentId=" + preferredComponentId +
                         " preferredComponentSource=" + (preferredComponentSource ?? "<null>") +
                         (string.IsNullOrWhiteSpace(preferredComponentDetail) ? string.Empty : " preferredComponentDetail=" + preferredComponentDetail);
-                    return false;
+                    if (isSameNavigationZone ||
+                        string.Equals(preferredComponentSource, "start-component", StringComparison.Ordinal))
+                    {
+                        detail = preferredResolutionFailureDetail;
+                        return false;
+                    }
                 }
+                else
+                {
+                    detail =
+                        resolutionDetail +
+                        " preferredComponentId=" + preferredComponentId +
+                        " preferredComponentSource=" + (preferredComponentSource ?? "<null>") +
+                        (string.IsNullOrWhiteSpace(preferredComponentDetail) ? string.Empty : " preferredComponentDetail=" + preferredComponentDetail);
+                    approachMode = ExtractSelectedObjectCoverageMode(detail);
+                    usesRawApproachFallback = false;
+                    return true;
+                }
+            }
 
-                targetPosition.y = evaluationStartPosition.y;
+            Vector3 autoSelectionEvaluationStart = evaluationStartPosition;
+            string autoSelectionEvaluationSource = "evaluation-start";
+
+            if (hasMultipleNavigationComponents &&
+                LocalNavigationMaps.TryResolveApproachTargetForComponent(
+                    navigationZone,
+                    autoSelectionEvaluationStart,
+                    referencePosition,
+                    candidateTargets,
+                    -1,
+                    out targetPosition,
+                    out string autoResolutionDetail))
+            {
                 detail =
-                    resolutionDetail +
-                    " preferredComponentId=" + preferredComponentId +
-                    " preferredComponentSource=" + (preferredComponentSource ?? "<null>") +
-                    (string.IsNullOrWhiteSpace(preferredComponentDetail) ? string.Empty : " preferredComponentDetail=" + preferredComponentDetail);
+                    autoResolutionDetail +
+                    " preferredComponentSource=auto-selected" +
+                    " autoSelectionEvaluationSource=" + autoSelectionEvaluationSource +
+                    " referenceSource=" + (referenceSource ?? "<null>");
                 approachMode = ExtractSelectedObjectCoverageMode(detail);
                 usesRawApproachFallback = false;
                 return true;
             }
 
+            if (!string.IsNullOrWhiteSpace(preferredResolutionFailureDetail))
+            {
+                targetPosition = interactable.transform.position;
+                detail = preferredResolutionFailureDetail;
+                return false;
+            }
+
             if (!TryResolveSelectedObjectCoverageApproachTarget(
                     interactable,
                     navigationZone,
-                    evaluationStartPosition,
+                    candidateEvaluationStart,
                     out targetPosition,
                     out approachMode,
                     out referenceSource,

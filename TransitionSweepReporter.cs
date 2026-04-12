@@ -10,6 +10,8 @@ namespace DateEverythingAccess
 {
     internal static class TransitionSweepReporter
     {
+        private const string PassedKeyCacheBuildPrefix = "# runtime-build-stamp=";
+
         [Serializable]
         internal sealed class MutableEntry
         {
@@ -38,6 +40,11 @@ namespace DateEverythingAccess
             public Vector3 DestinationApproachPoint;
             public float ValidationTimeoutSeconds;
             public int StaticSuspicionScore;
+            public string CurrentZoneAtResult;
+            public Vector3 PlayerPositionAtResult;
+            public string LastTargetKind;
+            public Vector3 LastTargetPosition;
+            public string LastLocalNavigationContext;
         }
 
         [Serializable]
@@ -88,7 +95,12 @@ namespace DateEverythingAccess
                 DestinationClearPoint = step != null ? step.DestinationClearPoint : Vector3.zero,
                 DestinationApproachPoint = step != null ? step.DestinationApproachPoint : Vector3.zero,
                 ValidationTimeoutSeconds = step != null ? step.ValidationTimeoutSeconds : 0f,
-                StaticSuspicionScore = step != null ? step.StaticSuspicionScore : 0
+                StaticSuspicionScore = step != null ? step.StaticSuspicionScore : 0,
+                CurrentZoneAtResult = null,
+                PlayerPositionAtResult = Vector3.zero,
+                LastTargetKind = null,
+                LastTargetPosition = Vector3.zero,
+                LastLocalNavigationContext = null
             };
         }
 
@@ -127,6 +139,15 @@ namespace DateEverythingAccess
                 }
             }
 
+            AccessibilityWatcher.GetOpenPassageTransitionOverrideDiagnostics(
+                out string overrideStatus,
+                out string overrideDetail,
+                out int overrideEntryCount,
+                out bool overrideNormalizedScalarArrays,
+                out string overridePath,
+                out string overrideFileSha256,
+                out string overrideFileLastWriteUtc);
+
             Directory.CreateDirectory(Paths.PluginPath);
             File.WriteAllText(
                 outputPath,
@@ -138,7 +159,18 @@ namespace DateEverythingAccess
                     entries,
                     passedCount,
                     failedCount,
-                    pendingCount));
+                    pendingCount,
+                    Main.GetPluginVersion(),
+                    Main.GetRuntimeBuildStamp(),
+                    Main.RuntimeAssemblyPath,
+                    Main.RuntimeAssemblySha256,
+                    overrideStatus,
+                    overrideDetail,
+                    overrideEntryCount,
+                    overrideNormalizedScalarArrays,
+                    overridePath,
+                    overrideFileSha256,
+                    overrideFileLastWriteUtc));
 
             PersistPassedKeys(outputPath, entries);
         }
@@ -156,11 +188,13 @@ namespace DateEverythingAccess
 
             try
             {
-                string json = File.ReadAllText(resolvedPath);
-                if (string.IsNullOrWhiteSpace(json))
+                string[] lines = File.ReadAllLines(resolvedPath);
+                if (lines == null || lines.Length == 0)
                     return passedKeys;
 
-                string[] lines = json.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+                if (!ReportMatchesCurrentBuild(lines))
+                    return passedKeys;
+
                 string currentKey = null;
                 string currentStatus = null;
                 for (int i = 0; i < lines.Length; i++)
@@ -213,6 +247,9 @@ namespace DateEverythingAccess
             try
             {
                 string[] lines = File.ReadAllLines(resolvedPath);
+                if (!ReportMatchesCurrentBuild(lines))
+                    return statuses;
+
                 bool inEntries = false;
                 int entryDepth = 0;
                 EntryStatus currentEntry = null;
@@ -313,8 +350,10 @@ namespace DateEverythingAccess
                 if (!string.IsNullOrWhiteSpace(directory))
                     Directory.CreateDirectory(directory);
 
+                string runtimeBuildStamp = Main.GetRuntimeBuildStamp() ?? string.Empty;
                 var orderedKeys = new List<string>(passedKeys);
                 orderedKeys.Sort(StringComparer.OrdinalIgnoreCase);
+                orderedKeys.Insert(0, PassedKeyCacheBuildPrefix + runtimeBuildStamp);
                 File.WriteAllLines(cachePath, orderedKeys.ToArray());
             }
             catch (Exception ex)
@@ -333,10 +372,33 @@ namespace DateEverythingAccess
             try
             {
                 string[] lines = File.ReadAllLines(cachePath);
+                if (lines == null || lines.Length == 0)
+                    return;
+
+                int firstContentLineIndex = -1;
                 for (int i = 0; i < lines.Length; i++)
+                {
+                    if (string.IsNullOrWhiteSpace(lines[i]))
+                        continue;
+
+                    firstContentLineIndex = i;
+                    break;
+                }
+
+                if (firstContentLineIndex < 0)
+                    return;
+
+                string expectedHeader = PassedKeyCacheBuildPrefix + (Main.GetRuntimeBuildStamp() ?? string.Empty);
+                if (!string.Equals(lines[firstContentLineIndex].Trim(), expectedHeader, StringComparison.Ordinal))
+                    return;
+
+                for (int i = firstContentLineIndex + 1; i < lines.Length; i++)
                 {
                     string key = lines[i];
                     if (string.IsNullOrWhiteSpace(key))
+                        continue;
+
+                    if (key.StartsWith("#", StringComparison.Ordinal))
                         continue;
 
                     passedKeys.Add(key.Trim());
@@ -360,6 +422,44 @@ namespace DateEverythingAccess
                 fileName = "transition_sweep";
 
             return Path.Combine(directory ?? Paths.PluginPath, fileName + ".passed.txt");
+        }
+
+        private static bool ReportMatchesCurrentBuild(string[] lines)
+        {
+            if (lines == null || lines.Length == 0)
+                return false;
+
+            string currentBuildStamp = Main.GetRuntimeBuildStamp();
+            if (string.IsNullOrWhiteSpace(currentBuildStamp))
+                return false;
+
+            if (!TryReadReportRuntimeBuildStamp(lines, out string reportBuildStamp))
+                return false;
+
+            return string.Equals(reportBuildStamp, currentBuildStamp, StringComparison.Ordinal);
+        }
+
+        private static bool TryReadReportRuntimeBuildStamp(string[] lines, out string runtimeBuildStamp)
+        {
+            runtimeBuildStamp = null;
+            if (lines == null || lines.Length == 0)
+                return false;
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                if (TryExtractJsonStringProperty(line, "\"RuntimeBuildStamp\"", out runtimeBuildStamp))
+                    return !string.IsNullOrWhiteSpace(runtimeBuildStamp);
+
+                if (line.IndexOf("\"Entries\"", StringComparison.Ordinal) >= 0)
+                    break;
+            }
+
+            runtimeBuildStamp = null;
+            return false;
         }
 
         private static bool TryExtractJsonStringProperty(string line, string propertyName, out string value)
@@ -445,13 +545,35 @@ namespace DateEverythingAccess
             List<MutableEntry> entries,
             int passedCount,
             int failedCount,
-            int pendingCount)
+            int pendingCount,
+            string pluginVersion,
+            string runtimeBuildStamp,
+            string runtimeAssemblyPath,
+            string runtimeAssemblySha256,
+            string openPassageOverrideStatus,
+            string openPassageOverrideDetail,
+            int openPassageOverrideEntryCount,
+            bool openPassageOverrideNormalizedScalarArrays,
+            string openPassageOverridePath,
+            string openPassageOverrideFileSha256,
+            string openPassageOverrideFileLastWriteUtc)
         {
             var builder = new StringBuilder(8192);
             builder.AppendLine("{");
             AppendProperty(builder, "GeneratedAtUtc", generatedAtUtc, 1, trailingComma: true);
             AppendProperty(builder, "ActiveScene", activeScene, 1, trailingComma: true);
             AppendProperty(builder, "SweepKind", sweepKind, 1, trailingComma: true);
+            AppendProperty(builder, "PluginVersion", pluginVersion, 1, trailingComma: true);
+            AppendProperty(builder, "RuntimeBuildStamp", runtimeBuildStamp, 1, trailingComma: true);
+            AppendProperty(builder, "RuntimeAssemblyPath", runtimeAssemblyPath, 1, trailingComma: true);
+            AppendProperty(builder, "RuntimeAssemblySha256", runtimeAssemblySha256, 1, trailingComma: true);
+            AppendProperty(builder, "OpenPassageOverrideStatus", openPassageOverrideStatus, 1, trailingComma: true);
+            AppendProperty(builder, "OpenPassageOverrideDetail", openPassageOverrideDetail, 1, trailingComma: true);
+            AppendProperty(builder, "OpenPassageOverrideEntryCount", openPassageOverrideEntryCount, 1, trailingComma: true);
+            AppendProperty(builder, "OpenPassageOverrideNormalizedScalarArrays", openPassageOverrideNormalizedScalarArrays, 1, trailingComma: true);
+            AppendProperty(builder, "OpenPassageOverridePath", openPassageOverridePath, 1, trailingComma: true);
+            AppendProperty(builder, "OpenPassageOverrideFileSha256", openPassageOverrideFileSha256, 1, trailingComma: true);
+            AppendProperty(builder, "OpenPassageOverrideFileLastWriteUtc", openPassageOverrideFileLastWriteUtc, 1, trailingComma: true);
             AppendProperty(builder, "IsComplete", isComplete, 1, trailingComma: true);
             AppendProperty(builder, "TotalCount", entries != null ? entries.Count : 0, 1, trailingComma: true);
             AppendProperty(builder, "PassedCount", passedCount, 1, trailingComma: true);
@@ -504,7 +626,12 @@ namespace DateEverythingAccess
             AppendVector(builder, "DestinationClearPoint", entry != null ? entry.DestinationClearPoint : Vector3.zero, indentLevel + 1, trailingComma: true);
             AppendVector(builder, "DestinationApproachPoint", entry != null ? entry.DestinationApproachPoint : Vector3.zero, indentLevel + 1, trailingComma: true);
             AppendProperty(builder, "ValidationTimeoutSeconds", entry != null ? entry.ValidationTimeoutSeconds : 0f, indentLevel + 1, trailingComma: true);
-            AppendProperty(builder, "StaticSuspicionScore", entry != null ? entry.StaticSuspicionScore : 0, indentLevel + 1, trailingComma: false);
+            AppendProperty(builder, "StaticSuspicionScore", entry != null ? entry.StaticSuspicionScore : 0, indentLevel + 1, trailingComma: true);
+            AppendProperty(builder, "CurrentZoneAtResult", entry != null ? entry.CurrentZoneAtResult : null, indentLevel + 1, trailingComma: true);
+            AppendVector(builder, "PlayerPositionAtResult", entry != null ? entry.PlayerPositionAtResult : Vector3.zero, indentLevel + 1, trailingComma: true);
+            AppendProperty(builder, "LastTargetKind", entry != null ? entry.LastTargetKind : null, indentLevel + 1, trailingComma: true);
+            AppendVector(builder, "LastTargetPosition", entry != null ? entry.LastTargetPosition : Vector3.zero, indentLevel + 1, trailingComma: true);
+            AppendProperty(builder, "LastLocalNavigationContext", entry != null ? entry.LastLocalNavigationContext : null, indentLevel + 1, trailingComma: false);
             builder.Append(indent);
             builder.Append("}");
             if (trailingComma)
