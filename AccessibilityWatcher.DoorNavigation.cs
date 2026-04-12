@@ -42,18 +42,32 @@ namespace DateEverythingAccess
             {
                 float sourceThresholdDistance = float.PositiveInfinity;
                 float pushThroughDistance = float.PositiveInfinity;
+                float handoffDistance = float.PositiveInfinity;
                 Vector3 sourceTarget = Vector3.zero;
+                Vector3 handoffTarget = Vector3.zero;
                 if (TryGetDoorThresholdAdvanceTarget(step, currentZone, out sourceTarget))
                 {
                     sourceThresholdDistance = GetPlanarDistanceToTarget(playerPosition, sourceTarget);
+                    if (TryGetDoorThresholdHandoffTarget(
+                            step,
+                            currentZone,
+                            sourceTarget,
+                            _transitionSweepSession.DoorPushThroughPosition,
+                            out handoffTarget))
+                    {
+                        handoffDistance = GetPlanarDistanceToTarget(playerPosition, handoffTarget);
+                    }
                 }
 
                 pushThroughDistance = GetPlanarDistanceToTarget(playerPosition, _transitionSweepSession.DoorPushThroughPosition);
                 bool shouldKeepDoorThresholdAdvance = sourceTarget != Vector3.zero &&
                     ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, _transitionSweepSession.DoorPushThroughPosition);
+                bool shouldContinueDoorThresholdAdvance =
+                    sourceTarget != Vector3.zero &&
+                    sourceThresholdDistance > DoorPushThroughSourceAdvanceDistance &&
+                    sourceThresholdDistance > DoorPushThroughArrivalDistance;
 
-                if (sourceTarget != Vector3.zero &&
-                    sourceThresholdDistance > DoorPushThroughSourceAdvanceDistance)
+                if (shouldContinueDoorThresholdAdvance)
                 {
                     position = sourceTarget;
                     targetKind = NavigationTargetKind.ZoneFallback;
@@ -67,16 +81,18 @@ namespace DateEverythingAccess
                 }
 
                 if (sourceTarget != Vector3.zero &&
+                    handoffTarget != Vector3.zero &&
+                    handoffDistance > GetLocalNavigationGoalReachedDistance("door-threshold-handoff") &&
                     (shouldKeepDoorThresholdAdvance ||
+                     sourceThresholdDistance <= DoorPushThroughArrivalDistance ||
                      pushThroughDistance <= DoorPushThroughArrivalDistance))
                 {
-                    position = BuildDoorThresholdHandoffPosition(
-                        sourceTarget,
-                        _transitionSweepSession.DoorPushThroughPosition);
+                    position = handoffTarget;
                     targetKind = NavigationTargetKind.ZoneFallback;
                     LogNavigationTrackerDebug(
                         "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
                         " sourceThresholdDistance=" + sourceThresholdDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " handoffDistance=" + handoffDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                         " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                         " stage=DoorThresholdHandoff" +
                         " step=" + DescribeNavigationStep(step));
@@ -129,18 +145,32 @@ namespace DateEverythingAccess
             {
                 float sourceThresholdDistance = float.PositiveInfinity;
                 float pushThroughDistance = float.PositiveInfinity;
+                float handoffDistance = float.PositiveInfinity;
                 Vector3 sourceTarget = Vector3.zero;
+                Vector3 handoffTarget = Vector3.zero;
                 if (TryGetDoorThresholdAdvanceTarget(step, currentZone, out sourceTarget))
                 {
                     sourceThresholdDistance = GetPlanarDistanceToTarget(playerPosition, sourceTarget);
+                    if (TryGetDoorThresholdHandoffTarget(
+                            step,
+                            currentZone,
+                            sourceTarget,
+                            _doorTraversalPushThroughPosition,
+                            out handoffTarget))
+                    {
+                        handoffDistance = GetPlanarDistanceToTarget(playerPosition, handoffTarget);
+                    }
                 }
 
                 pushThroughDistance = GetPlanarDistanceToTarget(playerPosition, _doorTraversalPushThroughPosition);
                 bool shouldKeepDoorThresholdAdvance = sourceTarget != Vector3.zero &&
                     ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, _doorTraversalPushThroughPosition);
+                bool shouldContinueDoorThresholdAdvance =
+                    sourceTarget != Vector3.zero &&
+                    sourceThresholdDistance > DoorPushThroughSourceAdvanceDistance &&
+                    sourceThresholdDistance > DoorPushThroughArrivalDistance;
 
-                if (sourceTarget != Vector3.zero &&
-                    sourceThresholdDistance > DoorPushThroughSourceAdvanceDistance)
+                if (shouldContinueDoorThresholdAdvance)
                 {
                     position = sourceTarget;
                     targetKind = NavigationTargetKind.ZoneFallback;
@@ -154,16 +184,18 @@ namespace DateEverythingAccess
                 }
 
                 if (sourceTarget != Vector3.zero &&
+                    handoffTarget != Vector3.zero &&
+                    handoffDistance > GetLocalNavigationGoalReachedDistance("door-threshold-handoff") &&
                     (shouldKeepDoorThresholdAdvance ||
+                     sourceThresholdDistance <= DoorPushThroughArrivalDistance ||
                      pushThroughDistance <= DoorPushThroughArrivalDistance))
                 {
-                    position = BuildDoorThresholdHandoffPosition(
-                        sourceTarget,
-                        _doorTraversalPushThroughPosition);
+                    position = handoffTarget;
                     targetKind = NavigationTargetKind.ZoneFallback;
                     LogNavigationTrackerDebug(
                         "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
                         " sourceThresholdDistance=" + sourceThresholdDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " handoffDistance=" + handoffDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                         " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                         " stage=DoorThresholdHandoff" +
                         " step=" + DescribeNavigationStep(step));
@@ -230,37 +262,75 @@ namespace DateEverythingAccess
             planningZone = null;
             planningGoal = Vector3.zero;
             planningContext = null;
-            if (step == null)
+            if (step == null || step.Kind != NavigationGraph.StepKind.Door)
                 return false;
+
+            bool hasActiveDoorPushThroughPosition = TryGetActiveDoorPushThroughPosition(
+                step,
+                currentZone,
+                out Vector3 activeDoorPushThroughPosition);
 
             if (!string.IsNullOrEmpty(step.FromZone) &&
                 IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) &&
                 TryGetDoorThresholdAdvanceTarget(step, currentZone, out Vector3 doorThresholdTarget))
             {
-                if (GetFlatDistance(doorThresholdTarget, desiredPosition) <= DoorPushThroughSourceAdvanceDistance &&
+                bool isThresholdAdvanceGoal =
+                    GetFlatDistance(doorThresholdTarget, desiredPosition) <= DoorPushThroughSourceAdvanceDistance;
+                bool isThresholdHandoffGoal = false;
+                if (hasActiveDoorPushThroughPosition &&
+                    activeDoorPushThroughPosition != Vector3.zero &&
+                    TryGetDoorThresholdHandoffTarget(
+                        step,
+                        currentZone,
+                        doorThresholdTarget,
+                        activeDoorPushThroughPosition,
+                        out Vector3 doorThresholdHandoffTarget))
+                {
+                    isThresholdHandoffGoal =
+                        GetFlatDistance(doorThresholdHandoffTarget, desiredPosition) <=
+                        GetLocalNavigationGoalReachedDistance("door-threshold-handoff");
+                }
+
+                if ((isThresholdAdvanceGoal || isThresholdHandoffGoal) &&
+                    TryGetDoorSourceLocalPlanningGoal(
+                        step,
+                        currentZone,
+                        desiredPosition,
+                        "door-threshold-handoff-local",
+                        out Vector3 doorThresholdPlanningGoal) &&
                     ShouldUseLocalNavigationGoal(
                         playerPosition,
-                        desiredPosition,
-                        GetLocalNavigationGoalReachedDistance("door-threshold-handoff")))
+                        doorThresholdPlanningGoal,
+                        GetLocalNavigationGoalReachedDistance("door-threshold-handoff-local")))
                 {
                     planningZone = step.FromZone;
-                    planningGoal = desiredPosition;
-                    planningContext = "door-threshold-handoff";
+                    planningGoal = doorThresholdPlanningGoal;
+                    planningContext = "door-threshold-handoff-local";
                     return true;
                 }
             }
 
-            if (TryGetActiveDoorPushThroughPosition(step, currentZone, out Vector3 activeDoorPushThroughPosition) &&
+            if (hasActiveDoorPushThroughPosition &&
                 GetFlatDistance(activeDoorPushThroughPosition, desiredPosition) <= 0.35f)
             {
+                if (!TryGetDoorSourceLocalPlanningGoal(
+                        step,
+                        currentZone,
+                        desiredPosition,
+                        "door-push-through-local",
+                        out Vector3 doorPushThroughPlanningGoal))
+                {
+                    return false;
+                }
+
                 if (ShouldUseLocalNavigationGoal(
                         playerPosition,
-                        desiredPosition,
-                        GetLocalNavigationGoalReachedDistance("door-push-through")))
+                        doorPushThroughPlanningGoal,
+                        GetLocalNavigationGoalReachedDistance("door-push-through-local")))
                 {
                     planningZone = step.FromZone;
-                    planningGoal = desiredPosition;
-                    planningContext = "door-push-through";
+                    planningGoal = doorPushThroughPlanningGoal;
+                    planningContext = "door-push-through-local";
                     return true;
                 }
 
@@ -268,6 +338,39 @@ namespace DateEverythingAccess
             }
 
             return false;
+        }
+
+        private bool TryGetDoorSourceLocalPlanningGoal(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 desiredPosition,
+            string planningContext,
+            out Vector3 planningGoal)
+        {
+            planningGoal = desiredPosition;
+            if (step == null ||
+                desiredPosition == Vector3.zero ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                string.IsNullOrWhiteSpace(step.FromZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone))
+            {
+                return planningGoal != Vector3.zero;
+            }
+
+            float maxSnapDistance = DoorTransitionSweepDoorClearanceDistance + DoorPushThroughArrivalDistance;
+            if (TrySnapDoorSourceNavigationTarget(
+                    step,
+                    currentZone,
+                    desiredPosition,
+                    maxSnapDistance,
+                    planningContext,
+                    out Vector3 snappedPlanningGoal) &&
+                snappedPlanningGoal != Vector3.zero)
+            {
+                planningGoal = snappedPlanningGoal;
+            }
+
+            return planningGoal != Vector3.zero;
         }
     }
 }

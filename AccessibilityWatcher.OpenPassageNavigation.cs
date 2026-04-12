@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 
@@ -36,6 +37,7 @@ namespace DateEverythingAccess
             OpenPassageTraversalStage traversalStage = GetOpenPassageTraversalStage(
                 step,
                 currentZone,
+                playerPosition,
                 fromDistance,
                 sourceSegmentDistance,
                 destinationWaypointDistance);
@@ -64,9 +66,8 @@ namespace DateEverythingAccess
                         out bool sourceOverrideIsFinal))
                     {
                         position = BuildOpenPassageGuidedMovementTarget(playerPosition, sourceOverrideTarget);
-                        targetKind = sourceOverrideIsFinal
-                            ? NavigationTargetKind.EntryWaypoint
-                            : NavigationTargetKind.ZoneFallback;
+                        targetKind = NavigationTargetKind.ZoneFallback;
+                        _rawNavigationTargetContext = "open-passage-guided";
                         LogNavigationTrackerDebug(
                             "Next navigation target kind=" + targetKind +
                             " position=" + FormatVector3(position) +
@@ -74,6 +75,7 @@ namespace DateEverythingAccess
                             " sourceSegmentDistance=" + sourceSegmentDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                             " destinationWaypointDistance=" + destinationWaypointDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                             " overrideWaypoint=" + (sourceOverrideIndex + 1) + " of " + sourceOverrideCount +
+                            " overrideFinal=" + sourceOverrideIsFinal +
                             " stage=SourceHandoff" +
                             " reason=override navigation_transition_overrides.json" +
                             " step=" + DescribeNavigationStep(step));
@@ -115,6 +117,7 @@ namespace DateEverythingAccess
                         targetKind = destinationOverrideIsFinal
                             ? NavigationTargetKind.EntryWaypoint
                             : NavigationTargetKind.ZoneFallback;
+                        _rawNavigationTargetContext = "open-passage-guided";
                         LogNavigationTrackerDebug(
                             "Next navigation target kind=" + targetKind +
                             " position=" + FormatVector3(position) +
@@ -153,6 +156,7 @@ namespace DateEverythingAccess
                         targetKind = handoffOverrideIsFinal
                             ? NavigationTargetKind.EntryWaypoint
                             : NavigationTargetKind.ZoneFallback;
+                        _rawNavigationTargetContext = "open-passage-guided";
                         LogNavigationTrackerDebug(
                             "Next navigation target kind=" + targetKind +
                             " position=" + FormatVector3(position) +
@@ -211,12 +215,10 @@ namespace DateEverythingAccess
                 IsZoneEquivalentToNavigationZone(currentZone, step.FromZone);
             bool isInDestinationZone = !string.IsNullOrEmpty(step.ToZone) &&
                 IsZoneEquivalentToNavigationZone(currentZone, step.ToZone);
-            bool useOverrideOnlyDesiredGoal =
-                desiredPosition != Vector3.zero &&
-                TryGetOpenPassageTransitionOverride(step, out OpenPassageTransitionOverride transitionOverride) &&
-                transitionOverride.IntermediateWaypoints != null &&
-                transitionOverride.IntermediateWaypoints.Length > 0 &&
-                !transitionOverride.UseExplicitCrossingSegments;
+            bool hasOverridePlanningGoal = TryGetOpenPassageOverridePlanningGoal(
+                step,
+                playerPosition,
+                out Vector3 overridePlanningGoal);
 
             if (isInSourceZone)
             {
@@ -226,9 +228,9 @@ namespace DateEverythingAccess
                 string sourcePlanningContext = _openPassageTraversalStage == OpenPassageTraversalStage.SourceWaypoint
                     ? "open-passage-source"
                     : "open-passage-handoff";
-                if (useOverrideOnlyDesiredGoal)
+                if (hasOverridePlanningGoal)
                 {
-                    sourceGoal = desiredPosition;
+                    sourceGoal = overridePlanningGoal;
                     sourcePlanningContext = "open-passage-override-source";
                 }
 
@@ -251,9 +253,9 @@ namespace DateEverythingAccess
             {
                 Vector3 destinationGoal = GetOpenPassageDestinationApproachPosition(step);
                 string destinationPlanningContext = "open-passage-destination";
-                if (useOverrideOnlyDesiredGoal)
+                if (hasOverridePlanningGoal)
                 {
-                    destinationGoal = desiredPosition;
+                    destinationGoal = overridePlanningGoal;
                     destinationPlanningContext = "open-passage-override-destination";
                 }
 
@@ -276,6 +278,43 @@ namespace DateEverythingAccess
             }
 
             return false;
+        }
+
+        private bool TryGetOpenPassageOverridePlanningGoal(
+            NavigationGraph.PathStep step,
+            Vector3 playerPosition,
+            out Vector3 planningGoal)
+        {
+            planningGoal = Vector3.zero;
+            if (step == null ||
+                !TryGetOpenPassageTransitionOverride(step, out OpenPassageTransitionOverride transitionOverride) ||
+                transitionOverride.UseExplicitCrossingSegments ||
+                transitionOverride.IntermediateWaypoints == null ||
+                transitionOverride.IntermediateWaypoints.Length == 0)
+            {
+                return false;
+            }
+
+            if (TryGetOpenPassageGuidedNavigationTarget(
+                    step,
+                    playerPosition,
+                    out Vector3 guidedTarget,
+                    out _,
+                    out _,
+                    out _)
+                && guidedTarget != Vector3.zero)
+            {
+                planningGoal = guidedTarget;
+                return true;
+            }
+
+            List<Vector3> navigationPoints = BuildOpenPassageGuidedNavigationPoints(step);
+            if (navigationPoints == null || navigationPoints.Count == 0)
+                return false;
+
+            int currentIndex = Mathf.Clamp(_openPassageOverrideWaypointIndex, 0, navigationPoints.Count - 1);
+            planningGoal = navigationPoints[currentIndex];
+            return planningGoal != Vector3.zero;
         }
     }
 }

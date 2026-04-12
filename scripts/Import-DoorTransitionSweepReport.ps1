@@ -25,19 +25,19 @@ if ($null -eq $importedReport) {
     throw "Door transition sweep report was empty or invalid JSON: $SourcePath"
 }
 
-$mergedReport = Merge-SweepReportDocuments -ExistingReport $existingReport -ImportedReport $importedReport -DefaultSweepKind "Door"
+$latestReport = Merge-SweepReportDocuments -ExistingReport $null -ImportedReport $importedReport -DefaultSweepKind "Door"
 $statusChanges = Get-SweepStatusChangeSummary -ExistingReport $existingReport -ImportedReport $importedReport
 $summaryLines = Format-SweepSummaryLines `
     -SourcePath $SourcePath `
     -OutputPath $OutputPath `
     -ImportedReport $importedReport `
-    -MergedReport $mergedReport `
+    -MergedReport $latestReport `
     -StatusChanges $statusChanges `
     -SummaryKind "Door"
 
-Write-JsonDocument -Path $OutputPath -Document $mergedReport
+Write-JsonDocument -Path $OutputPath -Document $latestReport
 Write-TextDocument -Path $SummaryPath -Lines $summaryLines
 
 Write-Host "Imported door transition sweep report to $OutputPath"
 Write-Host "Wrote door transition sweep summary to $SummaryPath"
-Write-Host "Merged totals: total=$($mergedReport.TotalCount) passed=$($mergedReport.PassedCount) failed=$($mergedReport.FailedCount) pending=$($mergedReport.PendingCount)"
+Write-Host "Latest report totals: total=$($latestReport.TotalCount) passed=$($latestReport.PassedCount) failed=$($latestReport.FailedCount) pending=$($latestReport.PendingCount)"

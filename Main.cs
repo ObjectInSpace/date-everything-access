@@ -2,13 +2,22 @@ using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Threading;
 using UnityEngine;
 
 namespace DateEverythingAccess
 {
-    [BepInPlugin("com.amock.dateeverythingaccess", "Date Everything Access", "0.1.1")]
+    internal static class PluginMetadata
+    {
+        internal const string Guid = "com.amock.dateeverythingaccess";
+        internal const string Name = "Date Everything Access";
+        internal const string Version = "0.1.1";
+    }
+
+    [BepInPlugin(PluginMetadata.Guid, PluginMetadata.Name, PluginMetadata.Version)]
     public class Main : BaseUnityPlugin
     {
         private const int VkF1 = 0x70;
@@ -43,6 +52,9 @@ namespace DateEverythingAccess
         public static ManualLogSource Log { get; private set; }
         public static Main Instance { get; private set; }
         public static bool IsShuttingDown { get; private set; }
+        public static string RuntimeAssemblyPath { get; private set; }
+        public static string RuntimeAssemblySha256 { get; private set; }
+        public static string RuntimeBuildStamp { get; private set; }
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -66,6 +78,7 @@ namespace DateEverythingAccess
         {
             Instance = this;
             Log = Logger;
+            InitializeRuntimeBuildMetadata();
             ScreenReader.Initialize();
             Loc.Initialize();
             ModConfig.Initialize(Config);
@@ -76,9 +89,72 @@ namespace DateEverythingAccess
             StartHotkeyThread();
             AccessibilityWatcher.EnsureCreated();
 
-            Logger.LogInfo("Date Everything Access initialized");
+            Logger.LogInfo("Date Everything Access initialized version=" + PluginMetadata.Version);
+            Logger.LogInfo(
+                "Runtime build metadata stamp=" + GetRuntimeBuildStamp() +
+                " assemblyPath=" + (RuntimeAssemblyPath ?? "<null>"));
             ScreenReader.Say(Loc.Get("mod_loaded"));
             Logger.LogInfo("Startup announcement queued");
+        }
+
+        internal static string GetPluginVersion()
+        {
+            return PluginMetadata.Version;
+        }
+
+        internal static string GetRuntimeBuildStamp()
+        {
+            return string.IsNullOrWhiteSpace(RuntimeBuildStamp)
+                ? PluginMetadata.Version + "|uninitialized"
+                : RuntimeBuildStamp;
+        }
+
+        internal static string TryComputeFileSha256(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                return null;
+
+            try
+            {
+                using (var stream = new FileStream(
+                    path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete))
+                using (var sha256 = SHA256.Create())
+                {
+                    byte[] hash = sha256.ComputeHash(stream);
+                    return BitConverter.ToString(hash).Replace("-", string.Empty);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log?.LogWarning("Failed to compute SHA256 for " + path + ": " + ex.Message);
+                return null;
+            }
+        }
+
+        private static void InitializeRuntimeBuildMetadata()
+        {
+            try
+            {
+                string assemblyPath = typeof(Main).Assembly.Location;
+                RuntimeAssemblyPath = assemblyPath;
+
+                string lastWriteUtc = File.Exists(assemblyPath)
+                    ? File.GetLastWriteTimeUtc(assemblyPath).ToString("o")
+                    : "missing";
+                RuntimeAssemblySha256 = TryComputeFileSha256(assemblyPath) ?? "unavailable";
+                RuntimeBuildStamp =
+                    PluginMetadata.Version +
+                    "|utc=" + lastWriteUtc +
+                    "|sha256=" + RuntimeAssemblySha256;
+            }
+            catch (Exception ex)
+            {
+                RuntimeBuildStamp = PluginMetadata.Version + "|build-metadata-error";
+                Log?.LogWarning("Failed to initialize runtime build metadata: " + ex.Message);
+            }
         }
 
         private void OnDestroy()
