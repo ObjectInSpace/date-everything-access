@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 2,
-  "GeneratedAtUtc": "2026-04-08T23:05:52.7851159Z",
+  "GeneratedAtUtc": "2026-04-16T18:30:05.2604472Z",
   "SceneName": "Date Everything House",
   "SourceSceneDataPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\thirdpersongreybox-navigation-data.json",
   "SourceGraphPath": "D:\\SteamLibrary\\steamapps\\Common\\Date Everything\\BepInEx\\plugins\\navigation_graph.json",
@@ -13796,60 +13796,57 @@
       "FromNodeId": "zone:hallway_arma|scene:hallway_arma",
       "ToNodeId": "zone:hallway|scene:hallway4",
       "FromWaypoint": {
-        "x": 5.837467,
-        "y": 9.952,
-        "z": -3.641587
+        "x": 12.063061,
+        "y": 4.352,
+        "z": -0.439635
       },
       "ToWaypoint": {
+        "x": 5.837467,
+        "y": 9.952,
+        "z": -3.641587
+      },
+      "FromCrossingAnchor": null,
+      "ToCrossingAnchor": null,
+      "SourceApproachPoint": {
         "x": 12.063061,
         "y": 4.352,
         "z": -0.439635
-      },
-      "FromCrossingAnchor": {
-        "x": 5.837467,
-        "y": 9.952,
-        "z": -3.641587
-      },
-      "ToCrossingAnchor": {
-        "x": 9.563061,
-        "y": 4.352,
-        "z": -3.641587
-      },
-      "SourceApproachPoint": {
-        "x": 5.837467,
-        "y": 9.952,
-        "z": -3.641587
       },
       "SourceClearPoint": {
+        "x": 9.572823,
+        "y": 6.592,
+        "z": -1.720416
+      },
+      "DestinationClearPoint": {
+        "x": 8.327705,
+        "y": 7.712,
+        "z": -2.360806
+      },
+      "DestinationApproachPoint": {
         "x": 5.837467,
         "y": 9.952,
         "z": -3.641587
       },
-      "DestinationClearPoint": {
-        "x": 9.563061,
-        "y": 4.352,
-        "z": -3.641587
-      },
-      "DestinationApproachPoint": {
-        "x": 12.063061,
-        "y": 4.352,
-        "z": -0.439635
-      },
       "NavigationPoints": [
-        {
-          "x": 5.837467,
-          "y": 9.952,
-          "z": -3.641587
-        },
-        {
-          "x": 9.563061,
-          "y": 4.352,
-          "z": -3.641587
-        },
         {
           "x": 12.063061,
           "y": 4.352,
           "z": -0.439635
+        },
+        {
+          "x": 9.572823,
+          "y": 6.592,
+          "z": -1.720416
+        },
+        {
+          "x": 8.327705,
+          "y": 7.712,
+          "z": -2.360806
+        },
+        {
+          "x": 5.837467,
+          "y": 9.952,
+          "z": -3.641587
         }
       ],
       "ConnectorObjectPosition": {
@@ -13858,7 +13855,7 @@
         "z": -2.040611
       },
       "Cost": 8.965,
-      "StepKind": "OpenPassage",
+      "StepKind": "Stairs",
       "ConnectorName": null,
       "RequiresInteraction": false,
       "TransitionWaitSeconds": 0.0,
@@ -13870,47 +13867,52 @@
           "z": -2.040611
         },
         "SourceApproachPoint": {
-          "x": 5.837467,
-          "y": 9.952,
-          "z": -3.641587
-        },
-        "SourceClearPoint": {
-          "x": 5.837467,
-          "y": 9.952,
-          "z": -3.641587
-        },
-        "DestinationClearPoint": {
-          "x": 9.563061,
-          "y": 4.352,
-          "z": -3.641587
-        },
-        "DestinationApproachPoint": {
           "x": 12.063061,
           "y": 4.352,
           "z": -0.439635
         },
+        "SourceClearPoint": {
+          "x": 9.572823,
+          "y": 6.592,
+          "z": -1.720416
+        },
+        "DestinationClearPoint": {
+          "x": 8.327705,
+          "y": 7.712,
+          "z": -2.360806
+        },
+        "DestinationApproachPoint": {
+          "x": 5.837467,
+          "y": 9.952,
+          "z": -3.641587
+        },
         "NavigationPoints": [
-          {
-            "x": 5.837467,
-            "y": 9.952,
-            "z": -3.641587
-          },
-          {
-            "x": 9.563061,
-            "y": 4.352,
-            "z": -3.641587
-          },
           {
             "x": 12.063061,
             "y": 4.352,
             "z": -0.439635
+          },
+          {
+            "x": 9.572823,
+            "y": 6.592,
+            "z": -1.720416
+          },
+          {
+            "x": 8.327705,
+            "y": 7.712,
+            "z": -2.360806
+          },
+          {
+            "x": 5.837467,
+            "y": 9.952,
+            "z": -3.641587
           }
         ],
-        "AssetDerivationSource": "CameraSpaceBoundaryGeometry"
+        "AssetDerivationSource": "StairCameraWaypoints"
       },
       "SourceSceneZoneName": "hallway_arma",
       "DestinationSceneZoneName": "hallway4",
-      "AssetDerivationSource": "CameraSpaceBoundaryGeometry",
+      "AssetDerivationSource": "StairCameraWaypoints",
       "Validation": {
         "AcceptedSourceZones": [
           "hallway_arma"
@@ -13924,13 +13926,12 @@
           "hallway6",
           "hallway7"
         ],
-        "StepTimeoutSeconds": 5.0,
-        "StaticSuspicionScore": 4,
+        "StepTimeoutSeconds": 7.0,
+        "StaticSuspicionScore": 2,
         "StaticIssues": [
-          "LargeHeightDelta",
-          "WideCrossingGap"
+          "LargeHeightDelta"
         ],
-        "AssetDerivationSource": "CameraSpaceBoundaryGeometry",
+        "AssetDerivationSource": "StairCameraWaypoints",
         "SourceSceneZoneName": "hallway_arma",
         "DestinationSceneZoneName": "hallway4"
       }
@@ -13942,55 +13943,47 @@
       "FromNodeId": "zone:hallway|scene:hallway4",
       "ToNodeId": "zone:hallway_arma|scene:hallway_arma",
       "FromWaypoint": {
-        "x": 12.063061,
-        "y": 4.352,
-        "z": -0.439635
+        "x": 5.837467,
+        "y": 9.952,
+        "z": -3.641587
       },
       "ToWaypoint": {
-        "x": 5.837467,
-        "y": 9.952,
-        "z": -3.641587
-      },
-      "FromCrossingAnchor": {
-        "x": 9.563061,
-        "y": 4.352,
-        "z": -3.641587
-      },
-      "ToCrossingAnchor": {
-        "x": 5.837467,
-        "y": 9.952,
-        "z": -3.641587
-      },
-      "SourceApproachPoint": {
         "x": 12.063061,
         "y": 4.352,
         "z": -0.439635
       },
-      "SourceClearPoint": {
-        "x": 9.563061,
-        "y": 4.352,
+      "FromCrossingAnchor": null,
+      "ToCrossingAnchor": null,
+      "SourceApproachPoint": {
+        "x": 5.837467,
+        "y": 9.952,
         "z": -3.641587
+      },
+      "SourceClearPoint": {
+        "x": 8.327705,
+        "y": 7.712,
+        "z": -2.360806
       },
       "DestinationClearPoint": {
-        "x": 5.837467,
-        "y": 9.952,
-        "z": -3.641587
+        "x": 9.572823,
+        "y": 6.592,
+        "z": -1.720416
       },
       "DestinationApproachPoint": {
-        "x": 5.837467,
-        "y": 9.952,
-        "z": -3.641587
+        "x": 12.063061,
+        "y": 4.352,
+        "z": -0.439635
       },
       "NavigationPoints": [
-        {
-          "x": 12.063061,
-          "y": 4.352,
-          "z": -0.439635
-        },
         {
           "x": 5.837467,
           "y": 9.952,
           "z": -3.641587
+        },
+        {
+          "x": 12.063061,
+          "y": 4.352,
+          "z": -0.439635
         }
       ],
       "ConnectorObjectPosition": {
@@ -13999,7 +13992,7 @@
         "z": -2.040611
       },
       "Cost": 8.965,
-      "StepKind": "OpenPassage",
+      "StepKind": "Stairs",
       "ConnectorName": null,
       "RequiresInteraction": false,
       "TransitionWaitSeconds": 0.0,
@@ -14011,42 +14004,42 @@
           "z": -2.040611
         },
         "SourceApproachPoint": {
+          "x": 5.837467,
+          "y": 9.952,
+          "z": -3.641587
+        },
+        "SourceClearPoint": {
+          "x": 8.327705,
+          "y": 7.712,
+          "z": -2.360806
+        },
+        "DestinationClearPoint": {
+          "x": 9.572823,
+          "y": 6.592,
+          "z": -1.720416
+        },
+        "DestinationApproachPoint": {
           "x": 12.063061,
           "y": 4.352,
           "z": -0.439635
         },
-        "SourceClearPoint": {
-          "x": 9.563061,
-          "y": 4.352,
-          "z": -3.641587
-        },
-        "DestinationClearPoint": {
-          "x": 5.837467,
-          "y": 9.952,
-          "z": -3.641587
-        },
-        "DestinationApproachPoint": {
-          "x": 5.837467,
-          "y": 9.952,
-          "z": -3.641587
-        },
         "NavigationPoints": [
-          {
-            "x": 12.063061,
-            "y": 4.352,
-            "z": -0.439635
-          },
           {
             "x": 5.837467,
             "y": 9.952,
             "z": -3.641587
+          },
+          {
+            "x": 12.063061,
+            "y": 4.352,
+            "z": -0.439635
           }
         ],
-        "AssetDerivationSource": "CameraSpaceBoundaryGeometry"
+        "AssetDerivationSource": "StairCameraWaypoints"
       },
       "SourceSceneZoneName": "hallway4",
       "DestinationSceneZoneName": "hallway_arma",
-      "AssetDerivationSource": "CameraSpaceBoundaryGeometry",
+      "AssetDerivationSource": "StairCameraWaypoints",
       "Validation": {
         "AcceptedSourceZones": [
           "hallway4",
@@ -14060,13 +14053,12 @@
         "AcceptedDestinationZones": [
           "hallway_arma"
         ],
-        "StepTimeoutSeconds": 5.0,
-        "StaticSuspicionScore": 4,
+        "StepTimeoutSeconds": 7.0,
+        "StaticSuspicionScore": 2,
         "StaticIssues": [
-          "LargeHeightDelta",
-          "WideCrossingGap"
+          "LargeHeightDelta"
         ],
-        "AssetDerivationSource": "CameraSpaceBoundaryGeometry",
+        "AssetDerivationSource": "StairCameraWaypoints",
         "SourceSceneZoneName": "hallway4",
         "DestinationSceneZoneName": "hallway_arma"
       }

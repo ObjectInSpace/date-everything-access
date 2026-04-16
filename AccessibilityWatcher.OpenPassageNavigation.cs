@@ -211,8 +211,7 @@ namespace DateEverythingAccess
             if (step == null || step.Kind != NavigationGraph.StepKind.OpenPassage)
                 return false;
 
-            bool isInSourceZone = !string.IsNullOrEmpty(step.FromZone) &&
-                IsZoneEquivalentToNavigationZone(currentZone, step.FromZone);
+            bool isInSourceZone = IsOpenPassageSourceZone(step, currentZone);
             bool isInDestinationZone = !string.IsNullOrEmpty(step.ToZone) &&
                 IsZoneEquivalentToNavigationZone(currentZone, step.ToZone);
             bool hasOverridePlanningGoal = TryGetOpenPassageOverridePlanningGoal(
@@ -278,6 +277,13 @@ namespace DateEverythingAccess
             }
 
             return false;
+        }
+
+        private static bool IsOpenPassageSourceZone(NavigationGraph.PathStep step, string currentZone)
+        {
+            return !string.IsNullOrEmpty(step?.FromZone) &&
+                (IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                 IsAcceptedOverrideSourceZone(step, currentZone));
         }
 
         private bool TryGetOpenPassageOverridePlanningGoal(

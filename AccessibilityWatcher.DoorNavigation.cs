@@ -83,8 +83,12 @@ namespace DateEverythingAccess
                 if (sourceTarget != Vector3.zero &&
                     handoffTarget != Vector3.zero &&
                     handoffDistance > GetLocalNavigationGoalReachedDistance("door-threshold-handoff") &&
-                    (shouldKeepDoorThresholdAdvance ||
-                     sourceThresholdDistance <= DoorPushThroughArrivalDistance ||
+                    !shouldKeepDoorThresholdAdvance &&
+                    HasMeaningfulDoorThresholdClearance(
+                        sourceTarget,
+                        _transitionSweepSession.DoorPushThroughPosition,
+                        handoffTarget) &&
+                    (sourceThresholdDistance <= DoorPushThroughArrivalDistance ||
                      pushThroughDistance <= DoorPushThroughArrivalDistance))
                 {
                     position = handoffTarget;
@@ -186,8 +190,12 @@ namespace DateEverythingAccess
                 if (sourceTarget != Vector3.zero &&
                     handoffTarget != Vector3.zero &&
                     handoffDistance > GetLocalNavigationGoalReachedDistance("door-threshold-handoff") &&
-                    (shouldKeepDoorThresholdAdvance ||
-                     sourceThresholdDistance <= DoorPushThroughArrivalDistance ||
+                    !shouldKeepDoorThresholdAdvance &&
+                    HasMeaningfulDoorThresholdClearance(
+                        sourceTarget,
+                        _doorTraversalPushThroughPosition,
+                        handoffTarget) &&
+                    (sourceThresholdDistance <= DoorPushThroughArrivalDistance ||
                      pushThroughDistance <= DoorPushThroughArrivalDistance))
                 {
                     position = handoffTarget;
@@ -368,6 +376,19 @@ namespace DateEverythingAccess
                 snappedPlanningGoal != Vector3.zero)
             {
                 planningGoal = snappedPlanningGoal;
+            }
+
+            if ((string.Equals(planningContext, "door-threshold-handoff-local", StringComparison.Ordinal) ||
+                 string.Equals(planningContext, "door-push-through-local", StringComparison.Ordinal)) &&
+                TryGetDoorPushThroughSourceTarget(step, out Vector3 sourceTarget) &&
+                TryGetActiveDoorPushThroughPosition(step, currentZone, out Vector3 pushThroughPosition) &&
+                !HasMeaningfulDoorThresholdClearance(sourceTarget, pushThroughPosition, planningGoal))
+            {
+                LogNavigationTrackerDebug(
+                    "Discarded door source local planning goal position=" + FormatVector3(planningGoal) +
+                    " context=" + planningContext +
+                    " step=" + DescribeNavigationStep(step));
+                planningGoal = Vector3.zero;
             }
 
             return planningGoal != Vector3.zero;
