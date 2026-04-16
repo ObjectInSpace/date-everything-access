@@ -19,7 +19,6 @@ namespace DateEverythingAccess
             out bool usesRawApproachFallback)
         {
             targetPosition = interactable != null ? interactable.transform.position : Vector3.zero;
-            targetPosition.y = evaluationStartPosition.y;
             approachMode = "raw-object";
             referenceSource = null;
             detail = "mode=raw-object";
@@ -63,32 +62,32 @@ namespace DateEverythingAccess
             bool hasMultipleNavigationComponents =
                 navigationComponents != null && navigationComponents.Count > 1;
 
+            bool hasObjectComponent = LocalNavigationMaps.TryGetWalkableComponentId(
+                navigationZone,
+                referencePosition,
+                out int objectComponentId,
+                out Vector3 snappedReferencePosition,
+                out string objectComponentDetail);
             int preferredComponentId = -1;
             string preferredComponentSource = null;
             string preferredComponentDetail = null;
             string preferredResolutionFailureDetail = null;
             Vector3 preferredComponentEvaluationStart = candidateEvaluationStart;
-            if (isSameNavigationZone && startComponent != null)
+            if (hasObjectComponent)
+            {
+                preferredComponentId = objectComponentId;
+                preferredComponentSource = isSameNavigationZone
+                    ? "object-component-exact-zone"
+                    : "object-component";
+                preferredComponentDetail = objectComponentDetail + " snappedReference=" + FormatVector3(snappedReferencePosition);
+                preferredComponentEvaluationStart = isSameNavigationZone
+                    ? candidateEvaluationStart
+                    : snappedReferencePosition;
+            }
+            else if (isSameNavigationZone && startComponent != null)
             {
                 preferredComponentId = startComponent.ComponentId;
                 preferredComponentSource = "start-component";
-            }
-            else if (LocalNavigationMaps.TryGetWalkableComponentId(
-                         navigationZone,
-                         referencePosition,
-                         out int objectComponentId,
-                         out Vector3 snappedReferencePosition,
-                         out string componentDetail))
-            {
-                bool shouldPreferObjectComponent =
-                    !hasMultipleNavigationComponents;
-                if (shouldPreferObjectComponent)
-                {
-                    preferredComponentId = objectComponentId;
-                    preferredComponentSource = "object-component";
-                    preferredComponentDetail = componentDetail + " snappedReference=" + FormatVector3(snappedReferencePosition);
-                    preferredComponentEvaluationStart = snappedReferencePosition;
-                }
             }
 
             if (preferredComponentId >= 0)
@@ -131,7 +130,8 @@ namespace DateEverythingAccess
             Vector3 autoSelectionEvaluationStart = evaluationStartPosition;
             string autoSelectionEvaluationSource = "evaluation-start";
 
-            if (hasMultipleNavigationComponents &&
+            if (preferredComponentId < 0 &&
+                hasMultipleNavigationComponents &&
                 LocalNavigationMaps.TryResolveApproachTargetForComponent(
                     navigationZone,
                     autoSelectionEvaluationStart,
