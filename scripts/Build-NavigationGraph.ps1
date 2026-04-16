@@ -843,6 +843,10 @@ $directedOverrides = @{
         FromWaypoint = Get-CameraWaypoint "Camera_StairsDown"
         ToWaypoint = Get-CameraWaypoint "Camera_StairsUp"
     }
+    "hallway_arma|hallway" = [ordered]@{
+        FromWaypoint = Get-ZoneWaypoint "hallway4"
+        ToWaypoint = Get-ZoneWaypoint "hallway_arma"
+    }
     "laundry_room|laundry_room_closet" = [ordered]@{
         FromWaypoint = Get-CameraWaypoint "Camera_DorianLaundryCloset1"
         ToWaypoint = Get-CameraWaypoint "Camera_Laundry Room_Closet"
@@ -914,6 +918,9 @@ $stepMetadata = @{
         ConnectorName = "Doors_Bathroom1"
     }
     "upper_hallway|hallway" = [ordered]@{
+        StepKind = "Stairs"
+    }
+    "hallway_arma|hallway" = [ordered]@{
         StepKind = "Stairs"
     }
     "laundry_room|laundry_room_closet" = [ordered]@{

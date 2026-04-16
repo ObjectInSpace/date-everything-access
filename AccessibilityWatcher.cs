@@ -2291,6 +2291,28 @@ namespace DateEverythingAccess
             return lateralOffset.magnitude > allowedLateralOffset;
         }
 
+        private static bool HasMeaningfulDoorThresholdClearance(
+            Vector3 sourceTarget,
+            Vector3 pushThroughPosition,
+            Vector3 candidateTarget)
+        {
+            if (sourceTarget == Vector3.zero ||
+                pushThroughPosition == Vector3.zero ||
+                candidateTarget == Vector3.zero)
+            {
+                return false;
+            }
+
+            float forwardProgress = GetDoorThresholdForwardProgress(
+                sourceTarget,
+                pushThroughPosition,
+                candidateTarget);
+            if (forwardProgress <= DoorTransitionSweepDoorClearanceDistance * 0.5f)
+                return false;
+
+            return GetFlatDistance(sourceTarget, candidateTarget) > DoorTransitionSweepDoorClearanceDistance;
+        }
+
         private static Vector3 BuildDoorThresholdHandoffPosition(
             Vector3 sourceTarget,
             Vector3 pushThroughPosition)
@@ -2358,7 +2380,8 @@ namespace DateEverythingAccess
                 sourceTarget,
                 pushThroughPosition,
                 handoffTarget);
-            if (forwardProgress <= 0.05f || GetFlatDistance(sourceTarget, handoffTarget) <= 0.05f)
+            if (forwardProgress <= 0.05f ||
+                !HasMeaningfulDoorThresholdClearance(sourceTarget, pushThroughPosition, handoffTarget))
             {
                 LogNavigationTrackerDebug(
                     "Discarded door threshold handoff target position=" + FormatVector3(handoffTarget) +
@@ -2532,16 +2555,16 @@ namespace DateEverythingAccess
             Loc.RefreshLanguage();
 
             string currentZone = GetCurrentZoneNameForNavigation();
-            if (!TryGetRoomObjectTargets(currentZone, out List<RoomObjectTarget> targets) || targets.Count == 0)
+            if (!TryGetRoomNavigationTargets(currentZone, out List<RoomObjectTarget> targets) || targets.Count == 0)
             {
-                ScreenReader.Say(Loc.Get("navigation_no_room_objects"));
+                ScreenReader.Say(Loc.Get("navigation_no_rooms"));
                 return;
             }
 
             if (!string.Equals(_lastRoomObjectListZone, currentZone, StringComparison.OrdinalIgnoreCase))
                 _navigationSelectionIndex = -1;
 
-            int currentIndex = FindTrackedObjectIndex(targets);
+            int currentIndex = FindCurrentRoomTargetIndex(targets, currentZone);
 
             _navigationSelectionIndex = currentIndex >= 0
                 ? Mathf.Clamp(currentIndex, 0, targets.Count - 1)
@@ -2626,7 +2649,7 @@ namespace DateEverythingAccess
         {
             if (_roomObjectTargets == null || _roomObjectTargets.Count == 0)
             {
-                ScreenReader.Say(Loc.Get("navigation_no_room_objects"));
+                ScreenReader.Say(Loc.Get("navigation_no_rooms"));
                 return;
             }
 
@@ -2645,7 +2668,7 @@ namespace DateEverythingAccess
             ReleaseRoomObjectPickerInputBlock();
             SyncRoomObjectPickerKeyStates();
             if (announceClosed)
-                ScreenReader.Say(Loc.Get("navigation_room_object_picker_closed"));
+                ScreenReader.Say(Loc.Get("navigation_room_picker_closed"));
         }
 
         private void UpdateRoomObjectPicker()
@@ -2697,8 +2720,10 @@ namespace DateEverythingAccess
 
             _navigationSelectionIndex = Mathf.Clamp(_navigationSelectionIndex, 0, _roomObjectTargets.Count - 1);
             RoomObjectTarget target = _roomObjectTargets[_navigationSelectionIndex];
-            string announcement = Loc.Get("navigation_room_object_option", _navigationSelectionIndex + 1, _roomObjectTargets.Count, target.Label);
-            ScreenReader.Say(Loc.Get("navigation_room_object_list_title", GetCurrentRoomName()) + ". " + announcement);
+            string currentZone = GetCurrentZoneNameForNavigation();
+            string targetLabel = BuildRoomNavigationSelectionLabel(target.ZoneName, target.Label, currentZone);
+            string announcement = Loc.Get("navigation_room_option", _navigationSelectionIndex + 1, _roomObjectTargets.Count, targetLabel);
+            ScreenReader.Say(Loc.Get("navigation_room_list_title") + ". " + announcement);
         }
 
         private void SelectCurrentRoomObjectPickerItem()
@@ -2711,9 +2736,86 @@ namespace DateEverythingAccess
 
             _navigationSelectionIndex = Mathf.Clamp(_navigationSelectionIndex, 0, _roomObjectTargets.Count - 1);
             RoomObjectTarget target = _roomObjectTargets[_navigationSelectionIndex];
-            SetTrackedInteractable(target.Interactable, target.ZoneName, target.Label);
+            SetTrackedInteractable(null, target.ZoneName, target.Label);
             CloseRoomObjectPicker(announceClosed: false);
             BeginNavigation(target.ZoneName, target.Label);
+        }
+
+        private bool TryGetRoomNavigationTargets(string currentZone, out List<RoomObjectTarget> targets)
+        {
+            targets = new List<RoomObjectTarget>();
+            List<string> zones = NavigationGraph.GetAllZones();
+            if (zones == null || zones.Count == 0)
+                return false;
+
+            for (int i = 0; i < zones.Count; i++)
+            {
+                string zoneName = zones[i];
+                if (string.IsNullOrWhiteSpace(zoneName))
+                    continue;
+
+                string label = NormalizeIdentifierName(zoneName);
+                if (string.IsNullOrWhiteSpace(label))
+                    label = zoneName;
+
+                targets.Add(new RoomObjectTarget
+                {
+                    Interactable = null,
+                    Label = label,
+                    ZoneName = zoneName
+                });
+            }
+
+            if (targets.Count == 0)
+                return false;
+
+            targets.Sort((left, right) =>
+            {
+                bool leftIsCurrent = !string.IsNullOrWhiteSpace(currentZone) && AreZonesEquivalent(left.ZoneName, currentZone);
+                bool rightIsCurrent = !string.IsNullOrWhiteSpace(currentZone) && AreZonesEquivalent(right.ZoneName, currentZone);
+                if (leftIsCurrent != rightIsCurrent)
+                    return leftIsCurrent ? -1 : 1;
+
+                return string.Compare(left.Label, right.Label, StringComparison.CurrentCultureIgnoreCase);
+            });
+
+            return true;
+        }
+
+        private static int FindCurrentRoomTargetIndex(List<RoomObjectTarget> targets, string currentZone)
+        {
+            if (targets == null || targets.Count == 0 || string.IsNullOrWhiteSpace(currentZone))
+                return -1;
+
+            for (int i = 0; i < targets.Count; i++)
+            {
+                RoomObjectTarget target = targets[i];
+                if (target == null || string.IsNullOrWhiteSpace(target.ZoneName))
+                    continue;
+
+                if (AreZonesEquivalent(target.ZoneName, currentZone))
+                    return i;
+            }
+
+            return -1;
+        }
+
+        private static string BuildRoomNavigationSelectionLabel(string targetZone, string targetLabel, string currentZone)
+        {
+            string normalizedLabel = !string.IsNullOrWhiteSpace(targetLabel)
+                ? targetLabel
+                : NormalizeIdentifierName(targetZone);
+            if (string.IsNullOrWhiteSpace(normalizedLabel))
+                normalizedLabel = targetZone;
+
+            if (!string.IsNullOrWhiteSpace(currentZone) &&
+                !string.IsNullOrWhiteSpace(targetZone) &&
+                AreZonesEquivalent(targetZone, currentZone))
+            {
+                return Loc.Get("navigation_target_in_current_room") + ". " + normalizedLabel;
+            }
+
+            return normalizedLabel;
         }
 
         private void AcquireRoomObjectPickerInputBlock()
@@ -3752,6 +3854,9 @@ namespace DateEverythingAccess
                     " targetLabel=" + (_navigationTargetLabel ?? "<null>"));
                 if (!TryRefreshNavigationPath(forceAnnounce: false))
                 {
+                    if (IsZoneNavigationTargetReached(GetCurrentZoneNameInternal()))
+                        return;
+
                     if (_isAutoWalking)
                         StopNavigationBlocked("path refresh failed after refresh request reason=" + refreshReason);
                     else
@@ -3873,6 +3978,9 @@ namespace DateEverythingAccess
                 }
                 else if (!TryRefreshNavigationPath(forceAnnounce: true))
                 {
+                    if (IsZoneNavigationTargetReached(GetCurrentZoneNameInternal()))
+                        return;
+
                     StopNavigationBlocked("auto-walk path refresh failed after reaching current target step=" + DescribeNavigationStep(currentStep));
                     return;
                 }
@@ -3982,11 +4090,8 @@ namespace DateEverythingAccess
             if (!TryRefreshNavigationPath(forceAnnounce: true))
             {
                 string currentZone = GetCurrentZoneNameInternal();
-                if (IsExactZoneMatch(currentZone, _navigationTargetZone))
+                if (IsZoneNavigationTargetReached(currentZone))
                 {
-                    StopNavigationRuntime();
-                    if (announceFailure)
-                        ScreenReader.Say(Loc.Get("navigation_arrived"));
                     return false;
                 }
 
@@ -4138,6 +4243,13 @@ namespace DateEverythingAccess
                     " currentNavigationZone=" + (currentNavigationZone ?? "<null>") +
                     " targetZone=" + (_navigationTargetZone ?? "<null>") +
                     " targetNavigationZone=" + (targetNavigationZone ?? "<null>"));
+                return false;
+            }
+
+            if (!TryGetTrackedInteractable(out _) &&
+                string.Equals(currentNavigationZone, targetNavigationZone, StringComparison.OrdinalIgnoreCase))
+            {
+                StopNavigationWithAnnouncement("navigation_arrived");
                 return false;
             }
 
@@ -5140,6 +5252,24 @@ namespace DateEverythingAccess
                 out targetKind);
         }
 
+        private bool IsZoneNavigationTargetReached(string currentZone)
+        {
+            if (string.IsNullOrWhiteSpace(currentZone) || string.IsNullOrWhiteSpace(_navigationTargetZone))
+                return false;
+
+            if (IsExactZoneMatch(currentZone, _navigationTargetZone))
+                return true;
+
+            if (TryGetTrackedInteractable(out _))
+                return false;
+
+            string currentNavigationZone = GetNavigationZoneName(currentZone);
+            string targetNavigationZone = GetNavigationZoneName(_navigationTargetZone);
+            return !string.IsNullOrWhiteSpace(currentNavigationZone) &&
+                !string.IsNullOrWhiteSpace(targetNavigationZone) &&
+                string.Equals(currentNavigationZone, targetNavigationZone, StringComparison.OrdinalIgnoreCase);
+        }
+
         private bool NeedsNavigationPathRefresh(out string reason)
         {
             reason = null;
@@ -5156,7 +5286,7 @@ namespace DateEverythingAccess
                 return true;
             }
 
-            if (IsExactZoneMatch(currentZone, _navigationTargetZone))
+            if (IsZoneNavigationTargetReached(currentZone))
             {
                 reason = "player entered target zone";
                 return true;
@@ -5192,7 +5322,7 @@ namespace DateEverythingAccess
 
             if (ShouldPreserveForcedTransitionSweepStep(currentStep))
             {
-                if (IsExactZoneMatch(currentZone, _navigationTargetZone))
+                if (IsZoneNavigationTargetReached(currentZone))
                 {
                     reason = "player entered target zone";
                     return true;
