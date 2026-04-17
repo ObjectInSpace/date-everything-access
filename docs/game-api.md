@@ -440,6 +440,8 @@ This is the cleanest room identifier found for house navigation speech.
   - the current game-directory copy now uses schema version `2` with top-level `Zones`, `Nodes`, and directed `Transitions`
   - each transition now carries explicit `SourceApproachPoint`, `SourceClearPoint`, `DestinationClearPoint`, `DestinationApproachPoint`, ordered `NavigationPoints`, and nested runtime `Validation` metadata in addition to the older coarse waypoint and crossing-anchor fields
   - the current file was generated from ripped scene data plus explicit connector overrides through `.\scripts\Build-NavigationGraph.ps1`
+  - closet-style transitions can now also carry `ConnectorNames` arrays so one physical door can match multiple runtime interactable names such as `Inner` and `Outer`
+  - as of the deployed live audit generated at `2026-04-17T02:28:46Z`, all `11` current door pairs in the game-side graph align cleanly to exported scene door objects, including the previously bad `bedroom <-> bedroom_closet` and `gym <-> gym_closet` pairs
 - AssetRipper export of `ThirdPersonGreybox.unity`
   - the scene's `CameraSetup` object serializes the full `CameraSpaces.zones` list directly into the asset
   - every zone currently used by `navigation_graph.json` exists in that `zones` list
@@ -628,7 +630,15 @@ This is the cleanest room identifier found for house navigation speech.
 - Latest local follow-up on 2026-04-16 from the `dorian_trapdoor1 -> office` live failure: `Transition sweep accepting sibling source zone currentZone=office_closet expectedZone=dorian_trapdoor1` was already proving that the sweep harness can legitimately start this step from the closet-side sibling zone, but `TryResolveOpenPassageLocalNavigationGoal(...)` still only treated strict source zones as valid for open-passage local steering. The open-passage planner now accepts override-declared sibling source zones there as well, and the deployed `navigation_transition_overrides.json` explicitly marks `office_closet` as an accepted source zone for `dorian_trapdoor1 -> office`.
 - Latest local follow-up on 2026-04-16 from the remaining office-door and hallway-connector blockers: office door handoff or push-through proxies now have to show meaningful threshold clearance, not merely a tiny nonzero forward vector, before either raw traversal or source-side local steering will keep them alive. Separately, `scripts\Build-NavigationGraph.ps1` now classifies the `hallway <-> hallway_arma` pair as `Stairs` instead of `OpenPassage`, and the regenerated graph plus static validation now treat that pair as a vertical handoff with `LargeHeightDelta` only, not as another flat `WideCrossingGap` doorway.
 - `.\scripts\Inspect-NavigationTransitions.ps1` writes `artifacts\navigation\transition_validation.static.json`, which scores every generated transition with static geometry heuristics so suspicious links can be prioritized before runtime testing
-  - `ObjectTracker` beeps now follow the tracked object or current waypoint chosen by the watcher, use stereo panning for left or right guidance, map pitch to the target's vertical position in the camera frame with a stable center pitch near mid-screen, map beep rate to target proximity, and raise volume as the player gets closer
+- `.\scripts\Inspect-DoorTransitionMetadata.ps1` writes `artifacts\navigation\door_transition_audit.json` plus `artifacts\navigation\door_transition_audit.summary.txt`, comparing door-transition connector points against exported scene `Doors_*` / `AtticDoors` objects
+  - latest deployed live audit generated at `2026-04-17T02:28:46Z` against `D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json`: `11` door pairs total, `0` suspicious
+  - the former closet blockers now use explicit door-object positions plus `ConnectorNames` arrays:
+    - `bedroom <-> bedroom_closet` now targets `Doors_Bedroom_ClosetRight_Outer` with `Doors_Bedroom_ClosetRight_Inner` as an accepted runtime variant
+    - `gym <-> gym_closet` now targets `Doors_Gym_ClosetOuter` with `Doors_Gym_ClosetInner` as an accepted runtime variant
+  - practical consequence:
+    - closet-door metadata is no longer the known graph blocker
+    - the next question is runtime verification, not whether the generated connector points still fall back to camera midpoints
+- `ObjectTracker` beeps now follow the tracked object or current waypoint chosen by the watcher, use stereo panning for left or right guidance, map pitch to the target's vertical position in the camera frame with a stable center pitch near mid-screen, map beep rate to target proximity, and raise volume as the player gets closer
   - practical consequence:
     - the navigation graph currently uses coarse authored zones such as `office`
     - live `CameraSpaces.PlayerZone()` can return finer runtime subzones such as `office2`, `office5`, and `office6`

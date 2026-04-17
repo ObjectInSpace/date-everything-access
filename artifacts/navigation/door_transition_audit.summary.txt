@@ -1,0 +1,21 @@
+﻿Door Transition Metadata Audit
+GeneratedAtUtc: 2026-04-17T02:28:46.8008094Z
+GraphPath: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json
+SceneDataPath: C:\Users\amock\mod template\artifacts\navigation\thirdpersongreybox-navigation-data.json
+TotalDoorPairs: 11
+SuspiciousDoorPairs: 0
+MissingConnectorNamePairs: 0
+CameraWaypointFallbackPairs: 0
+LargeMismatchPairs: 0
+
+Top suspicious pairs:
+attic<->upper_hallway score=0 issues= connector=AtticDoors reference=AtticDoors planar=0 height=0 families=AtticDoors,Doors_Attic,Doors_UpperHall_Electric
+bathroom1<->hallway score=0 issues= connector=Doors_Bathroom1 reference=Doors_Bathroom1 planar=0 height=0 families=Doors_Bathroom1,Doors_Gym_Bathroom,Doors_Bedroom_Bathroom,Doors_UpperHall_Electric,Doors_Attic
+bathroom2<->bedroom score=0 issues= connector=Doors_Bedroom_Bathroom reference=Doors_Bedroom_Bathroom planar=0 height=0 families=Doors_Bedroom_Bathroom,Doors_Bedroom,Doors_Gym_Bathroom,Doors_Bedroom_ClosetLeft
+bathroom2<->dorian_bathroom2_2 score=0 issues= connector=Doors_Bedroom_Bathroom reference=Doors_Bedroom_Bathroom planar=0 height=0 families=Doors_Bedroom_Bathroom,Doors_Gym_Bathroom,Doors_Bathroom1,Doors_Bedroom,Doors_Bedroom_ClosetLeft
+bedroom<->bedroom_closet score=0 issues= connector=Doors_Bedroom_ClosetRight_Outer,Doors_Bedroom_ClosetRight_Inner reference=Doors_Bedroom_ClosetRight_Outer planar=0 height=0 families=Doors_Bedroom_ClosetRight,Doors_Bedroom_ClosetLeft,Doors_Bedroom
+bedroom<->upper_hallway score=0 issues= connector=Doors_Bedroom reference=Doors_Bedroom planar=0 height=0 families=Doors_Bedroom,Doors_Bedroom_ClosetLeft,Doors_Bedroom_Bathroom,Doors_Bedroom_ClosetRight
+gym<->gym_closet score=0 issues= connector=Doors_Gym_ClosetOuter,Doors_Gym_ClosetInner reference=Doors_Gym_ClosetOuter planar=0 height=0 families=Doors_Gym_Closet,Doors_Office_Closet,Doors_Laundry_Closet
+gym<->upper_hallway score=0 issues= connector=Doors_Gym_Hall reference=Doors_Gym_Hall planar=0 height=0 families=Doors_Gym_Hall,Doors_UpperHall_Electric,Doors_Gym_Closet,Doors_Gym_Bathroom
+hallway<->office score=0 issues= connector=Doors_Office reference=Doors_Office planar=0 height=0 families=Doors_Office,Doors_Office_Closet,Doors_Attic
+laundry_room<->laundry_room_closet score=0 issues= connector=Doors_Laundry_Closet reference=Doors_Laundry_Closet planar=0 height=0 families=Doors_Laundry_Closet,Doors_Laundry,Doors_Gym_Closet,Doors_Office_Closet

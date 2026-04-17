@@ -48,6 +48,7 @@ namespace DateEverythingAccess
                 float cost,
                 StepKind kind,
                 string connectorName,
+                string[] connectorNames,
                 Vector3 connectorObjectPosition,
                 bool requiresInteraction,
                 float transitionWaitSeconds,
@@ -77,6 +78,11 @@ namespace DateEverythingAccess
                 Cost = cost;
                 Kind = kind;
                 ConnectorName = connectorName;
+                ConnectorNames = connectorNames != null && connectorNames.Length > 0
+                    ? connectorNames
+                    : !string.IsNullOrWhiteSpace(connectorName)
+                        ? new[] { connectorName }
+                        : Array.Empty<string>();
                 ConnectorObjectPosition = connectorObjectPosition;
                 RequiresInteraction = requiresInteraction;
                 TransitionWaitSeconds = transitionWaitSeconds;
@@ -174,6 +180,11 @@ namespace DateEverythingAccess
             /// Gets the authored connector name when available.
             /// </summary>
             public string ConnectorName { get; }
+
+            /// <summary>
+            /// Gets the authored connector names accepted for this transition.
+            /// </summary>
+            public string[] ConnectorNames { get; }
 
             /// <summary>
             /// Gets the authored connector object position when available.
@@ -286,6 +297,7 @@ namespace DateEverythingAccess
             public float Cost;
             public string StepKind;
             public string ConnectorName;
+            public string[] ConnectorNames;
             public bool RequiresInteraction;
             public float TransitionWaitSeconds;
             public ConnectorRecord Connector;
@@ -299,6 +311,7 @@ namespace DateEverythingAccess
         private sealed class ConnectorRecord
         {
             public string Name;
+            public string[] Names;
             public Vector3 ObjectPosition;
             public Vector3 SourceApproachPoint;
             public Vector3 SourceClearPoint;
@@ -406,6 +419,9 @@ namespace DateEverythingAccess
             [DataMember(Name = "ConnectorName")]
             public string ConnectorName { get; set; }
 
+            [DataMember(Name = "ConnectorNames")]
+            public string[] ConnectorNames { get; set; }
+
             [DataMember(Name = "RequiresInteraction")]
             public bool RequiresInteraction { get; set; }
 
@@ -433,6 +449,9 @@ namespace DateEverythingAccess
         {
             [DataMember(Name = "Name")]
             public string Name { get; set; }
+
+            [DataMember(Name = "Names")]
+            public string[] Names { get; set; }
 
             [DataMember(Name = "ObjectPosition")]
             public SerializedVector3 ObjectPosition { get; set; }
@@ -523,6 +542,7 @@ namespace DateEverythingAccess
             public float Cost;
             public StepKind Kind;
             public string ConnectorName;
+            public string[] ConnectorNames;
             public Vector3 ConnectorObjectPosition;
             public bool RequiresInteraction;
             public float TransitionWaitSeconds;
@@ -743,6 +763,7 @@ namespace DateEverythingAccess
                 Cost = record.Cost,
                 StepKind = record.StepKind,
                 ConnectorName = record.ConnectorName,
+                ConnectorNames = record.ConnectorNames,
                 RequiresInteraction = record.RequiresInteraction,
                 TransitionWaitSeconds = record.TransitionWaitSeconds,
                 Connector = ConvertConnector(record.Connector),
@@ -761,6 +782,7 @@ namespace DateEverythingAccess
             return new ConnectorRecord
             {
                 Name = record.Name,
+                Names = record.Names,
                 ObjectPosition = ToVector3(record.ObjectPosition),
                 SourceApproachPoint = ToVector3(record.SourceApproachPoint),
                 SourceClearPoint = ToVector3(record.SourceClearPoint),
@@ -980,6 +1002,10 @@ namespace DateEverythingAccess
             string connectorName = !string.IsNullOrWhiteSpace(record.ConnectorName)
                 ? record.ConnectorName
                 : connector != null ? connector.Name : null;
+            string[] connectorNames = MergeUniqueStringArrays(
+                connectorName,
+                record.ConnectorNames,
+                connector != null ? connector.Names : null);
             string assetDerivationSource = !string.IsNullOrWhiteSpace(record.AssetDerivationSource)
                 ? record.AssetDerivationSource
                 : connector != null ? connector.AssetDerivationSource : null;
@@ -1013,6 +1039,7 @@ namespace DateEverythingAccess
                 Cost = record.Cost > 0f ? record.Cost : 1f,
                 Kind = ParseStepKind(record.StepKind),
                 ConnectorName = connectorName,
+                ConnectorNames = connectorNames,
                 ConnectorObjectPosition = connectorObjectPosition,
                 RequiresInteraction = record.RequiresInteraction,
                 TransitionWaitSeconds = record.TransitionWaitSeconds < 0f ? 0f : record.TransitionWaitSeconds,
@@ -1029,6 +1056,36 @@ namespace DateEverythingAccess
                     : validation != null ? validation.DestinationSceneZoneName : null,
                 AssetDerivationSource = assetDerivationSource
             };
+        }
+
+        private static string[] MergeUniqueStringArrays(string primaryValue, params string[][] groups)
+        {
+            var unique = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (!string.IsNullOrWhiteSpace(primaryValue) && seen.Add(primaryValue))
+                unique.Add(primaryValue);
+
+            if (groups != null)
+            {
+                for (int groupIndex = 0; groupIndex < groups.Length; groupIndex++)
+                {
+                    string[] group = groups[groupIndex];
+                    if (group == null || group.Length == 0)
+                        continue;
+
+                    for (int valueIndex = 0; valueIndex < group.Length; valueIndex++)
+                    {
+                        string value = group[valueIndex];
+                        if (string.IsNullOrWhiteSpace(value) || !seen.Add(value))
+                            continue;
+
+                        unique.Add(value);
+                    }
+                }
+            }
+
+            return unique.Count > 0 ? unique.ToArray() : Array.Empty<string>();
         }
 
         private static string[] SanitizeStringArray(string[] values)
@@ -1101,6 +1158,7 @@ namespace DateEverythingAccess
                 link.Cost,
                 link.Kind,
                 link.ConnectorName,
+                link.ConnectorNames,
                 link.ConnectorObjectPosition,
                 link.RequiresInteraction,
                 link.TransitionWaitSeconds,
