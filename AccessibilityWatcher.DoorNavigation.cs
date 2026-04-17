@@ -153,10 +153,13 @@ namespace DateEverythingAccess
 
             if (!_transitionSweepSession.DoorInteractionTriggered)
             {
-                position = step.FromWaypoint != Vector3.zero ? step.FromWaypoint : playerPosition;
+                if (!TryGetDoorInteractionRetryTarget(step, currentZone, playerPosition, out position, out string retryTargetSource))
+                    return false;
+
                 targetKind = NavigationTargetKind.TransitionInteractable;
                 LogNavigationTrackerDebug(
                     "Next navigation target kind=TransitionInteractable position=" + FormatVector3(position) +
+                    " retryTargetSource=" + retryTargetSource +
                     " stage=DoorInteractionRetry" +
                     " step=" + DescribeNavigationStep(step));
                 return true;
@@ -294,16 +297,65 @@ namespace DateEverythingAccess
 
             if (!_doorTraversalInteractionTriggered)
             {
-                position = step.FromWaypoint != Vector3.zero ? step.FromWaypoint : playerPosition;
+                if (!TryGetDoorInteractionRetryTarget(step, currentZone, playerPosition, out position, out string retryTargetSource))
+                    return false;
+
                 targetKind = NavigationTargetKind.TransitionInteractable;
                 LogNavigationTrackerDebug(
                     "Next navigation target kind=TransitionInteractable position=" + FormatVector3(position) +
+                    " retryTargetSource=" + retryTargetSource +
                     " stage=DoorInteractionRetry" +
                     " step=" + DescribeNavigationStep(step));
                 return true;
             }
 
             return false;
+        }
+
+        private bool TryGetDoorInteractionRetryTarget(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 playerPosition,
+            out Vector3 position,
+            out string targetSource)
+        {
+            position = Vector3.zero;
+            targetSource = null;
+            if (step == null)
+                return false;
+
+            if (TryGetDoorThresholdAdvanceTarget(step, currentZone, out Vector3 sourceTarget) &&
+                sourceTarget != Vector3.zero)
+            {
+                position = sourceTarget;
+                targetSource = "threshold";
+                return true;
+            }
+
+            if (step.ConnectorObjectPosition != Vector3.zero)
+            {
+                position = step.ConnectorObjectPosition;
+                TrySnapDoorSourceNavigationTarget(
+                    step,
+                    currentZone,
+                    position,
+                    DoorTransitionSweepDoorClearanceDistance + DoorPushThroughArrivalDistance,
+                    "door-interaction-retry",
+                    out position);
+                targetSource = "connector";
+                return true;
+            }
+
+            if (step.FromWaypoint != Vector3.zero)
+            {
+                position = step.FromWaypoint;
+                targetSource = "from_waypoint";
+                return true;
+            }
+
+            position = playerPosition;
+            targetSource = "player";
+            return true;
         }
 
         private bool TryResolveDoorLocalNavigationGoal(
