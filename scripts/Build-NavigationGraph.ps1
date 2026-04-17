@@ -222,6 +222,22 @@ function Get-MetadataValue {
     return $DefaultValue
 }
 
+function Get-MetadataStringArray {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Specialized.OrderedDictionary]$Metadata,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Key
+    )
+
+    if (-not $Metadata.Contains($Key)) {
+        return @()
+    }
+
+    return @(Get-UniqueStringArray -Values @(Get-MetadataValue -Metadata $Metadata -Key $Key))
+}
+
 function Get-BaseFamilyZones {
     param(
         [Parameter(Mandatory = $true)]
@@ -559,6 +575,10 @@ function Get-ConnectorObjectPosition {
         [AllowNull()]
         [string]$ConnectorName,
 
+        [Parameter()]
+        [AllowNull()]
+        [string[]]$ConnectorNames,
+
         [Parameter(Mandatory = $true)]
         [object]$FromWaypoint,
 
@@ -566,13 +586,14 @@ function Get-ConnectorObjectPosition {
         [object]$ToWaypoint
     )
 
-    if (-not [string]::IsNullOrWhiteSpace($ConnectorName)) {
-        if ($doorByName.ContainsKey($ConnectorName) -and $null -ne $doorByName[$ConnectorName].Position) {
-            return Copy-Vec3 $doorByName[$ConnectorName].Position
+    $candidateConnectorNames = @(Get-UniqueStringArray -Values (@($ConnectorName) + @($ConnectorNames)))
+    foreach ($candidateConnectorName in $candidateConnectorNames) {
+        if ($doorByName.ContainsKey($candidateConnectorName) -and $null -ne $doorByName[$candidateConnectorName].Position) {
+            return Copy-Vec3 $doorByName[$candidateConnectorName].Position
         }
 
-        if ($teleporterByName.ContainsKey($ConnectorName) -and $null -ne $teleporterByName[$ConnectorName].Position) {
-            return Copy-Vec3 $teleporterByName[$ConnectorName].Position
+        if ($teleporterByName.ContainsKey($candidateConnectorName) -and $null -ne $teleporterByName[$candidateConnectorName].Position) {
+            return Copy-Vec3 $teleporterByName[$candidateConnectorName].Position
         }
     }
 
@@ -676,7 +697,8 @@ function Get-ConnectorGeometry {
     $fromCrossingAnchor = Get-MetadataValue -Metadata $WaypointPair -Key "FromCrossingAnchor"
     $toCrossingAnchor = Get-MetadataValue -Metadata $WaypointPair -Key "ToCrossingAnchor"
     $connectorName = Get-MetadataValue -Metadata $Metadata -Key "ConnectorName"
-    $connectorPosition = Get-ConnectorObjectPosition -StepKind $StepKind -ConnectorName $connectorName -FromWaypoint $fromWaypoint -ToWaypoint $toWaypoint
+    $connectorNames = @(Get-MetadataStringArray -Metadata $Metadata -Key "ConnectorNames")
+    $connectorPosition = Get-ConnectorObjectPosition -StepKind $StepKind -ConnectorName $connectorName -ConnectorNames $connectorNames -FromWaypoint $fromWaypoint -ToWaypoint $toWaypoint
     $direction = Get-NormalizedFlatDirection -FromPoint $fromWaypoint -ToPoint $toWaypoint
     $clearDistance = if ($StepKind -eq "Door") { 0.8 } elseif ($StepKind -eq "Stairs") { 1.1 } else { 0.65 }
     $sourceApproachPoint = $fromWaypoint
@@ -701,7 +723,7 @@ function Get-ConnectorGeometry {
         "Door" {
             $sourceClearPoint = Get-OffsetPoint -Origin $connectorPosition -Direction $direction -Distance (-1.0 * $clearDistance)
             $destinationClearPoint = Get-OffsetPoint -Origin $connectorPosition -Direction $direction -Distance $clearDistance
-            $assetDerivationSource = if (-not [string]::IsNullOrWhiteSpace($connectorName)) { "DoorObjectAndCameraWaypoints" } else { "DoorCameraWaypoints" }
+            $assetDerivationSource = if (-not [string]::IsNullOrWhiteSpace($connectorName) -or $connectorNames.Count -gt 0) { "DoorObjectAndCameraWaypoints" } else { "DoorCameraWaypoints" }
             break
         }
         "Stairs" {
@@ -904,6 +926,10 @@ $stepMetadata = @{
     }
     "bedroom|bedroom_closet" = [ordered]@{
         StepKind = "Door"
+        ConnectorName = "Doors_Bedroom_ClosetRight_Outer"
+        ConnectorNames = @(
+            "Doors_Bedroom_ClosetRight_Outer",
+            "Doors_Bedroom_ClosetRight_Inner")
     }
     "bedroom|bathroom2" = [ordered]@{
         StepKind = "Door"
@@ -933,6 +959,10 @@ $stepMetadata = @{
     }
     "gym|gym_closet" = [ordered]@{
         StepKind = "Door"
+        ConnectorName = "Doors_Gym_ClosetOuter"
+        ConnectorNames = @(
+            "Doors_Gym_ClosetOuter",
+            "Doors_Gym_ClosetInner")
     }
     "upper_hallway|attic" = [ordered]@{
         StepKind = "Door"
@@ -1034,6 +1064,7 @@ foreach ($link in $inputLinks) {
     }
 
     $connectorGeometry = Get-ConnectorGeometry -StepKind $stepKind -WaypointPair $waypointPair -Metadata $metadata
+    $connectorNames = @(Get-MetadataStringArray -Metadata $metadata -Key "ConnectorNames")
     $fromNodeId = Resolve-NearestSceneZoneNodeId -GraphZoneName $link.FromZone -ReferencePoint $connectorGeometry.SourceApproachPoint -SceneZoneNodeIdByName $sceneZoneNodeIdByName
     $toNodeId = Resolve-NearestSceneZoneNodeId -GraphZoneName $link.ToZone -ReferencePoint $connectorGeometry.DestinationApproachPoint -SceneZoneNodeIdByName $sceneZoneNodeIdByName
     $sourceSceneZoneName = if ($null -ne $fromNodeId -and $nodeById.ContainsKey($fromNodeId)) { $nodeById[$fromNodeId].SceneZoneName } else { $null }
@@ -1058,10 +1089,12 @@ foreach ($link in $inputLinks) {
         Cost = $cost
         StepKind = $stepKind
         ConnectorName = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
+        ConnectorNames = $connectorNames
         RequiresInteraction = $requiresInteraction
         TransitionWaitSeconds = [double](Get-MetadataValue -Metadata $metadata -Key "TransitionWaitSeconds" -DefaultValue 0.0)
         Connector = [ordered]@{
             Name = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
+            Names = $connectorNames
             ObjectPosition = $connectorGeometry.ConnectorObjectPosition
             SourceApproachPoint = $connectorGeometry.SourceApproachPoint
             SourceClearPoint = $connectorGeometry.SourceClearPoint
@@ -1097,10 +1130,12 @@ foreach ($link in $inputLinks) {
         Cost = $cost
         StepKind = $stepKind
         ConnectorName = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
+        ConnectorNames = $connectorNames
         RequiresInteraction = $requiresInteraction
         TransitionWaitSeconds = [double](Get-MetadataValue -Metadata $metadata -Key "TransitionWaitSeconds" -DefaultValue 0.0)
         Connector = [ordered]@{
             Name = Get-MetadataValue -Metadata $metadata -Key "ConnectorName"
+            Names = $connectorNames
             ObjectPosition = $connectorGeometry.ConnectorObjectPosition
             SourceApproachPoint = $connectorGeometry.DestinationApproachPoint
             SourceClearPoint = $connectorGeometry.DestinationClearPoint
@@ -1158,10 +1193,12 @@ foreach ($transition in [object[]]$generatedTransitions.ToArray()) {
         Cost = $transition.Cost
         StepKind = $transition.StepKind
         ConnectorName = $transition.ConnectorName
+        ConnectorNames = @(Get-UniqueStringArray -Values (@($transition.ConnectorName) + @($transition.ConnectorNames)))
         RequiresInteraction = [bool]$transition.RequiresInteraction
         TransitionWaitSeconds = [double]$transition.TransitionWaitSeconds
         Connector = [ordered]@{
             Name = $transition.ConnectorName
+            Names = @(Get-UniqueStringArray -Values (@($transition.ConnectorName) + @($transition.ConnectorNames)))
             ObjectPosition = Copy-Vec3 $transition.ConnectorObjectPosition
             SourceApproachPoint = Copy-Vec3 $transition.DestinationApproachPoint
             SourceClearPoint = Copy-Vec3 $transition.DestinationClearPoint

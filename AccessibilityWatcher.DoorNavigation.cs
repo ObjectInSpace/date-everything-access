@@ -62,8 +62,17 @@ namespace DateEverythingAccess
                 pushThroughDistance = GetPlanarDistanceToTarget(playerPosition, _transitionSweepSession.DoorPushThroughPosition);
                 bool shouldKeepDoorThresholdAdvance = sourceTarget != Vector3.zero &&
                     ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, _transitionSweepSession.DoorPushThroughPosition);
+                bool shouldCommitPostThreshold = _transitionSweepSession.DoorPostThresholdCommitted ||
+                    pushThroughDistance <= DoorPushThroughArrivalDistance ||
+                    (sourceTarget != Vector3.zero &&
+                     sourceThresholdDistance <= DoorPushThroughArrivalDistance &&
+                     !shouldKeepDoorThresholdAdvance);
+                if (shouldCommitPostThreshold)
+                    _transitionSweepSession.DoorPostThresholdCommitted = true;
                 bool shouldContinueDoorThresholdAdvance =
+                    !shouldCommitPostThreshold &&
                     sourceTarget != Vector3.zero &&
+                    pushThroughDistance > DoorPushThroughArrivalDistance &&
                     sourceThresholdDistance > DoorPushThroughSourceAdvanceDistance &&
                     sourceThresholdDistance > DoorPushThroughArrivalDistance;
 
@@ -80,7 +89,8 @@ namespace DateEverythingAccess
                     return true;
                 }
 
-                if (sourceTarget != Vector3.zero &&
+                if (!shouldCommitPostThreshold &&
+                    sourceTarget != Vector3.zero &&
                     handoffTarget != Vector3.zero &&
                     handoffDistance > GetLocalNavigationGoalReachedDistance("door-threshold-handoff") &&
                     !shouldKeepDoorThresholdAdvance &&
@@ -111,6 +121,31 @@ namespace DateEverythingAccess
                         "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
                         " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                         " stage=DoorPushThrough" +
+                        " step=" + DescribeNavigationStep(step));
+                    return true;
+                }
+
+                Vector3 destinationTarget = GetDoorTransitionSweepDestinationTarget(step);
+                if (destinationTarget != Vector3.zero)
+                {
+                    position = destinationTarget;
+                    targetKind = step.ToWaypoint != Vector3.zero && destinationTarget == step.ToWaypoint
+                        ? NavigationTargetKind.EntryWaypoint
+                        : NavigationTargetKind.ZoneFallback;
+                    LogNavigationTrackerDebug(
+                        "Next navigation target kind=" + targetKind +
+                        " position=" + FormatVector3(position) +
+                        " stage=DoorEntryAdvance" +
+                        " step=" + DescribeNavigationStep(step));
+                    return true;
+                }
+
+                if (TryGetZonePosition(step.ToZone, out position))
+                {
+                    targetKind = NavigationTargetKind.ZoneFallback;
+                    LogNavigationTrackerDebug(
+                        "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
+                        " stage=DoorEntryAdvance" +
                         " step=" + DescribeNavigationStep(step));
                     return true;
                 }
@@ -169,8 +204,17 @@ namespace DateEverythingAccess
                 pushThroughDistance = GetPlanarDistanceToTarget(playerPosition, _doorTraversalPushThroughPosition);
                 bool shouldKeepDoorThresholdAdvance = sourceTarget != Vector3.zero &&
                     ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, _doorTraversalPushThroughPosition);
+                bool shouldCommitPostThreshold = _doorTraversalPostThresholdCommitted ||
+                    pushThroughDistance <= DoorPushThroughArrivalDistance ||
+                    (sourceTarget != Vector3.zero &&
+                     sourceThresholdDistance <= DoorPushThroughArrivalDistance &&
+                     !shouldKeepDoorThresholdAdvance);
+                if (shouldCommitPostThreshold)
+                    _doorTraversalPostThresholdCommitted = true;
                 bool shouldContinueDoorThresholdAdvance =
+                    !shouldCommitPostThreshold &&
                     sourceTarget != Vector3.zero &&
+                    pushThroughDistance > DoorPushThroughArrivalDistance &&
                     sourceThresholdDistance > DoorPushThroughSourceAdvanceDistance &&
                     sourceThresholdDistance > DoorPushThroughArrivalDistance;
 
@@ -187,7 +231,8 @@ namespace DateEverythingAccess
                     return true;
                 }
 
-                if (sourceTarget != Vector3.zero &&
+                if (!shouldCommitPostThreshold &&
+                    sourceTarget != Vector3.zero &&
                     handoffTarget != Vector3.zero &&
                     handoffDistance > GetLocalNavigationGoalReachedDistance("door-threshold-handoff") &&
                     !shouldKeepDoorThresholdAdvance &&
@@ -210,7 +255,8 @@ namespace DateEverythingAccess
                     return true;
                 }
 
-                if (pushThroughDistance > DoorPushThroughArrivalDistance)
+                if (!shouldCommitPostThreshold &&
+                    pushThroughDistance > DoorPushThroughArrivalDistance)
                 {
                     position = _doorTraversalPushThroughPosition;
                     targetKind = NavigationTargetKind.ZoneFallback;
@@ -224,6 +270,7 @@ namespace DateEverythingAccess
 
                 if (step.ToWaypoint != Vector3.zero)
                 {
+                    _doorTraversalPostThresholdCommitted = true;
                     position = step.ToWaypoint;
                     targetKind = NavigationTargetKind.EntryWaypoint;
                     LogNavigationTrackerDebug(
@@ -235,6 +282,7 @@ namespace DateEverythingAccess
 
                 if (TryGetZonePosition(step.ToZone, out position))
                 {
+                    _doorTraversalPostThresholdCommitted = true;
                     targetKind = NavigationTargetKind.ZoneFallback;
                     LogNavigationTrackerDebug(
                         "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +

@@ -184,6 +184,7 @@ namespace DateEverythingAccess
             public bool UsedZoneFallbackSpawn;
             public bool DoorInteractionTriggered;
             public Vector3 DoorPushThroughPosition;
+            public bool DoorPostThresholdCommitted;
             public bool DoorTimeoutRecoveryUsed;
             public bool DoorTimeoutFinalGraceUsed;
         }
@@ -417,6 +418,7 @@ namespace DateEverythingAccess
         private string _doorTraversalStepKey;
         private bool _doorTraversalInteractionTriggered;
         private Vector3 _doorTraversalPushThroughPosition;
+        private bool _doorTraversalPostThresholdCommitted;
         private TransitionSweepSession _transitionSweepSession;
         private bool _isRoomObjectPickerOpen;
         private bool _isNavigationActive;
@@ -1710,6 +1712,7 @@ namespace DateEverythingAccess
             _transitionSweepSession.UsedZoneFallbackSpawn = false;
             _transitionSweepSession.DoorInteractionTriggered = false;
             _transitionSweepSession.DoorPushThroughPosition = Vector3.zero;
+            _transitionSweepSession.DoorPostThresholdCommitted = false;
             _transitionSweepSession.DoorTimeoutRecoveryUsed = false;
             _transitionSweepSession.DoorTimeoutFinalGraceUsed = false;
             _transitionSweepSession.Phase = TransitionSweepPhase.AwaitingTeleportSettle;
@@ -3649,8 +3652,7 @@ namespace DateEverythingAccess
                     score += DistanceToSegment(candidate.transform.position, routeStart, routeEnd) * 4f;
                 }
 
-                if (!string.IsNullOrEmpty(step.ConnectorName) &&
-                    string.Equals(candidate.name, step.ConnectorName, StringComparison.OrdinalIgnoreCase))
+                if (IsMatchingNamedTransitionInteractable(step, candidate))
                 {
                     score -= 100f;
                 }
@@ -4271,6 +4273,7 @@ namespace DateEverythingAccess
             string previousDoorTraversalStepKey = _doorTraversalStepKey;
             bool previousDoorTraversalInteractionTriggered = _doorTraversalInteractionTriggered;
             Vector3 previousDoorTraversalPushThroughPosition = _doorTraversalPushThroughPosition;
+            bool previousDoorTraversalPostThresholdCommitted = _doorTraversalPostThresholdCommitted;
             _navigationPath = path;
             NavigationGraph.PathStep refreshedFirstStep = path[0];
             if (refreshedFirstStep != null &&
@@ -4299,12 +4302,14 @@ namespace DateEverythingAccess
                     _doorTraversalStepKey = previousDoorTraversalStepKey;
                     _doorTraversalInteractionTriggered = previousDoorTraversalInteractionTriggered;
                     _doorTraversalPushThroughPosition = previousDoorTraversalPushThroughPosition;
+                    _doorTraversalPostThresholdCommitted = previousDoorTraversalPostThresholdCommitted;
                 }
                 else
                 {
                     _doorTraversalStepKey = refreshedFirstStepKey;
                     _doorTraversalInteractionTriggered = false;
                     _doorTraversalPushThroughPosition = Vector3.zero;
+                    _doorTraversalPostThresholdCommitted = false;
                 }
             }
             else
@@ -6037,6 +6042,7 @@ namespace DateEverythingAccess
             _doorTraversalStepKey = null;
             _doorTraversalInteractionTriggered = false;
             _doorTraversalPushThroughPosition = Vector3.zero;
+            _doorTraversalPostThresholdCommitted = false;
         }
 
         private void SyncDoorTraversalState(NavigationGraph.PathStep step)
@@ -6053,6 +6059,7 @@ namespace DateEverythingAccess
                 _doorTraversalStepKey = stepKey;
                 _doorTraversalInteractionTriggered = false;
                 _doorTraversalPushThroughPosition = Vector3.zero;
+                _doorTraversalPostThresholdCommitted = false;
             }
         }
 
@@ -6533,6 +6540,7 @@ namespace DateEverythingAccess
                     {
                         _doorTraversalStepKey = BuildNavigationStepKey(step);
                         _doorTraversalInteractionTriggered = true;
+                        _doorTraversalPostThresholdCommitted = false;
                         if (pushThroughPosition != Vector3.zero)
                             _doorTraversalPushThroughPosition = pushThroughPosition;
                     }
@@ -6544,6 +6552,7 @@ namespace DateEverythingAccess
                             StringComparison.Ordinal))
                     {
                         _transitionSweepSession.DoorInteractionTriggered = true;
+                        _transitionSweepSession.DoorPostThresholdCommitted = false;
                         if (pushThroughPosition != Vector3.zero)
                             _transitionSweepSession.DoorPushThroughPosition = pushThroughPosition;
                     }
@@ -6587,6 +6596,7 @@ namespace DateEverythingAccess
             {
                 _doorTraversalStepKey = BuildNavigationStepKey(step);
                 _doorTraversalInteractionTriggered = true;
+                _doorTraversalPostThresholdCommitted = false;
                 Vector3 pushThroughPosition = BuildDoorTransitionSweepPushThroughPosition(step, interactable);
                 if (pushThroughPosition != Vector3.zero)
                     _doorTraversalPushThroughPosition = pushThroughPosition;
@@ -6636,7 +6646,21 @@ namespace DateEverythingAccess
 
             Transform playerTransform = BetterPlayerControl.Instance.transform;
             InteractableObj activeObject = Singleton<InteractableManager>.Instance.activeObject;
-            if (IsMatchingTransitionInteractable(step, activeObject) && IsInteractableWithinRange(activeObject, playerTransform.position))
+            bool prefersNamedConnector = HasNamedTransitionConnectors(step);
+            if (prefersNamedConnector &&
+                IsMatchingNamedTransitionInteractable(step, activeObject) &&
+                IsInteractableWithinRange(activeObject, playerTransform.position))
+            {
+                interactable = activeObject;
+                _instance?.LogNavigationTransitionDebug(
+                    "Transition interactable resolved from active named connector interactable=" + DescribeInteractable(interactable) +
+                    " step=" + DescribeNavigationStep(step));
+                return true;
+            }
+
+            if (!prefersNamedConnector &&
+                IsMatchingTransitionInteractable(step, activeObject) &&
+                IsInteractableWithinRange(activeObject, playerTransform.position))
             {
                 interactable = activeObject;
                 _instance?.LogNavigationTransitionDebug(
@@ -6647,31 +6671,51 @@ namespace DateEverythingAccess
 
             InteractableObj[] candidates = FindObjectsOfType<InteractableObj>();
             float bestScore = float.MaxValue;
+            bool foundNamedConnectorCandidate = false;
             for (int i = 0; i < candidates.Length; i++)
             {
                 InteractableObj candidate = candidates[i];
+                bool matchesNamedConnector = IsMatchingNamedTransitionInteractable(step, candidate);
+                if (prefersNamedConnector && !matchesNamedConnector)
+                    continue;
+
                 if (!IsMatchingTransitionInteractable(step, candidate) || !IsInteractableWithinRange(candidate, playerTransform.position))
                     continue;
 
                 float score = Vector3.Distance(candidate.transform.position, step.FromWaypoint) +
                     Vector3.Distance(candidate.transform.position, playerTransform.position);
-                if (!string.IsNullOrEmpty(step.ConnectorName) &&
-                    string.Equals(candidate.name, step.ConnectorName, StringComparison.OrdinalIgnoreCase))
-                {
-                    score -= 100f;
-                }
-
                 if (score >= bestScore)
                     continue;
 
                 bestScore = score;
                 interactable = candidate;
+                foundNamedConnectorCandidate = matchesNamedConnector;
+            }
+
+            if (interactable == null && prefersNamedConnector)
+            {
+                for (int i = 0; i < candidates.Length; i++)
+                {
+                    InteractableObj candidate = candidates[i];
+                    if (!IsMatchingTransitionInteractable(step, candidate) || !IsInteractableWithinRange(candidate, playerTransform.position))
+                        continue;
+
+                    float score = Vector3.Distance(candidate.transform.position, step.FromWaypoint) +
+                        Vector3.Distance(candidate.transform.position, playerTransform.position);
+                    if (score >= bestScore)
+                        continue;
+
+                    bestScore = score;
+                    interactable = candidate;
+                }
             }
 
             if (interactable != null)
             {
                 _instance?.LogNavigationTransitionDebug(
                     "Transition interactable resolved from search interactable=" + DescribeInteractable(interactable) +
+                    " namedConnectorPreferred=" + prefersNamedConnector +
+                    " namedConnectorMatched=" + foundNamedConnectorCandidate +
                     " score=" + bestScore.ToString("0.00", CultureInfo.InvariantCulture) +
                     " step=" + DescribeNavigationStep(step));
             }
@@ -6684,6 +6728,34 @@ namespace DateEverythingAccess
             }
 
             return interactable != null;
+        }
+
+        private static bool IsMatchingNamedTransitionInteractable(NavigationGraph.PathStep step, InteractableObj interactable)
+        {
+            return step != null &&
+                interactable != null &&
+                IsMatchingNamedTransitionConnectorName(step, interactable.name);
+        }
+
+        private static bool HasNamedTransitionConnectors(NavigationGraph.PathStep step)
+        {
+            return step != null &&
+                step.ConnectorNames != null &&
+                step.ConnectorNames.Length > 0;
+        }
+
+        private static bool IsMatchingNamedTransitionConnectorName(NavigationGraph.PathStep step, string connectorName)
+        {
+            if (step == null || string.IsNullOrEmpty(connectorName) || step.ConnectorNames == null)
+                return false;
+
+            for (int i = 0; i < step.ConnectorNames.Length; i++)
+            {
+                if (string.Equals(connectorName, step.ConnectorNames[i], StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
 
         private bool TryFindOptionalOpenPassageDoorInteractable(NavigationGraph.PathStep step, out InteractableObj interactable)
@@ -6814,8 +6886,7 @@ namespace DateEverythingAccess
             if (step == null || interactable == null || !interactable.gameObject.activeInHierarchy)
                 return false;
 
-            if (!string.IsNullOrEmpty(step.ConnectorName) &&
-                string.Equals(interactable.name, step.ConnectorName, StringComparison.OrdinalIgnoreCase))
+            if (IsMatchingNamedTransitionInteractable(step, interactable))
             {
                 return true;
             }
