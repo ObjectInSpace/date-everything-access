@@ -40,6 +40,7 @@ namespace DateEverythingAccess
         private const int ExportNavMeshHotkeyId = 9;
         private const int TransitionSweepHotkeyId = 10;
         private const int DoorTransitionSweepHotkeyId = 11;
+        private const int LiveRouteAuditHotkeyId = 12;
 
         private Thread _hotkeyThread;
         private volatile bool _hotkeyThreadRunning;
@@ -244,6 +245,7 @@ namespace DateEverythingAccess
                 RegisterHotkeyOrThrow(ExportNavMeshHotkeyId, ModControl | ModShift | ModNoRepeat, VkF9, "Ctrl+Shift+F9");
                 RegisterHotkeyOrThrow(TransitionSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF9, "Ctrl+Alt+Shift+F9");
                 RegisterHotkeyOrThrow(DoorTransitionSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+Shift+F6");
+                RegisterHotkeyOrThrow(LiveRouteAuditHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF1, "Ctrl+Alt+Shift+F1");
                 Logger.LogInfo("Background hotkey message loop active");
 
                 NativeMessage message;
@@ -276,6 +278,7 @@ namespace DateEverythingAccess
                 UnregisterHotKey(IntPtr.Zero, ExportNavMeshHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, TransitionSweepHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, DoorTransitionSweepHotkeyId);
+                UnregisterHotKey(IntPtr.Zero, LiveRouteAuditHotkeyId);
                 Logger.LogInfo("Background hotkey thread exiting");
             }
         }
@@ -301,6 +304,9 @@ namespace DateEverythingAccess
         {
             if (hotkeyId == HelpHotkeyId)
             {
+                if (IsModifierKeyDown(0x10) || IsModifierKeyDown(0x11) || IsModifierKeyDown(0x12))
+                    return;
+
                 Logger.LogInfo("Help hotkey detected");
                 AnnounceHelp();
                 return;
@@ -326,6 +332,9 @@ namespace DateEverythingAccess
 
             if (hotkeyId == RepeatSpeechHotkeyId)
             {
+                if (!IsModifierKeyDown(0x11) || IsModifierKeyDown(0x10) || IsModifierKeyDown(0x12))
+                    return;
+
                 RepeatLastSpeech();
                 return;
             }
@@ -397,6 +406,16 @@ namespace DateEverythingAccess
 
                 Logger.LogInfo("Transition sweep hotkey detected");
                 AccessibilityWatcher.RequestToggleTransitionSweep();
+                return;
+            }
+
+            if (hotkeyId == LiveRouteAuditHotkeyId)
+            {
+                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || !IsModifierKeyDown(0x12))
+                    return;
+
+                Logger.LogInfo("Live route audit hotkey detected");
+                AccessibilityWatcher.RequestToggleLiveRouteAudit();
             }
         }
 

@@ -239,7 +239,7 @@ namespace DateEverythingAccess
                         sourceGoal,
                         GetLocalNavigationGoalReachedDistance(sourcePlanningContext)))
                 {
-                    planningZone = step.FromZone;
+                    planningZone = ResolveLocalPlanningZone(currentZone, step.FromZone, playerPosition, sourceGoal);
                     planningGoal = sourceGoal;
                     planningContext = sourcePlanningContext;
                     return true;
@@ -267,7 +267,7 @@ namespace DateEverythingAccess
                         destinationGoal,
                         GetLocalNavigationGoalReachedDistance(destinationPlanningContext)))
                 {
-                    planningZone = step.ToZone;
+                    planningZone = ResolveLocalPlanningZone(currentZone, step.ToZone, playerPosition, destinationGoal);
                     planningGoal = destinationGoal;
                     planningContext = destinationPlanningContext;
                     return true;
