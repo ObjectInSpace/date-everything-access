@@ -62,6 +62,7 @@ AccessibilityWatcher.SelectedObjectCoverageApproach.cs
 DateADexPatches.cs
 DebugLogger.cs
 InputMappingReporter.cs
+LiveRouteAuditReporter.cs
 Loc.cs
 LocalNavigationMaps.cs
 Main.cs
