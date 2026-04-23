@@ -213,7 +213,8 @@ namespace DateEverythingAccess
 
             bool isInSourceZone = IsOpenPassageSourceZone(step, currentZone);
             bool isInDestinationZone = !string.IsNullOrEmpty(step.ToZone) &&
-                IsZoneEquivalentToNavigationZone(currentZone, step.ToZone);
+                (IsZoneEquivalentToNavigationZone(currentZone, step.ToZone) ||
+                 IsAcceptedOverrideDestinationZone(step, currentZone));
             bool hasOverridePlanningGoal = TryGetOpenPassageOverridePlanningGoal(
                 step,
                 playerPosition,

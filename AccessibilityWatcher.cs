@@ -232,6 +232,10 @@ namespace DateEverythingAccess
             public float NextActionTime;
             public float RouteStartedAt;
             public float LastHeartbeatAt;
+            public float LastProgressAt;
+            public string LastProgressZone;
+            public string LastProgressStepKey;
+            public Vector3 LastProgressPosition;
         }
 
         private const float PopupSelectionSuppressionSeconds = 0.75f;
@@ -252,6 +256,10 @@ namespace DateEverythingAccess
         private const float AutoWalkProgressDistance = 0.35f;
         private const float AutoWalkBlockedTimeoutSeconds = 2f;
         private const float AutoWalkInteractionRetrySeconds = 0.75f;
+        private const int AutoWalkLoopSampleWindowSize = 24;
+        private const float AutoWalkLoopSampleWindowSeconds = 5f;
+        private const float AutoWalkLoopMovementAllowance = 0.6f;
+        private const float AutoWalkLoopTargetSignatureResolution = 0.25f;
         private const float AutoWalkZoneBoundaryFallbackDistance = 5f;
         private const float AutoWalkOpenPassageCommitDistance = 2.5f;
         private const float AutoWalkOpenPassageHandoffDistance = 2.5f;
@@ -260,9 +268,14 @@ namespace DateEverythingAccess
         private const float LocalNavigationPathAdvanceDistance = 0.75f;
         private const float LocalNavigationLookaheadDistance = 3f;
         private const float LocalNavigationGoalReachedDistance = 2f;
+        private const float LocalNavigationStallBypassSeconds = 2.5f;
+        private const float LocalNavigationStallMovementThreshold = 0.45f;
+        private const float LocalNavigationStallTargetTolerance = 0.2f;
+        private const float LocalNavigationStallBypassDurationSeconds = 1f;
         private const float OpenPassageOverrideLocalNavigationGoalReachedDistance = 0.75f;
         private const float DoorThresholdHandoffLocalNavigationGoalReachedDistance = 0.35f;
         private const float DoorPushThroughLocalNavigationGoalReachedDistance = 0.35f;
+        private const float DoorEntryAdvanceLocalNavigationGoalReachedDistance = 0.35f;
         private const float LocalNavigationGoalRetargetDistance = 0.5f;
         private const float TrackedInteractableApproachClearanceDistance = 0.9f;
         private const float TrackedInteractableApproachRetargetDistance = 0.75f;
@@ -283,13 +296,22 @@ namespace DateEverythingAccess
         private const float DoorTransitionSweepPostRecoveryGraceSeconds = 1.5f;
         private const float DoorPushThroughSourceAdvanceDistance = 1f;
         private const float DoorPushThroughArrivalDistance = 2.15f;
+        private const float DoorPushThroughNoHandoffCommitTolerance = 0.1f;
+        private const float DoorPushThroughRecoveryNoHandoffCommitExtraTolerance = 0.2f;
         private const float DoorPushThroughBlockedTimeoutSeconds = 3f;
+        private const float DoorThresholdAdvanceBypassDistance = 1f;
         private const float LiveRouteAuditTeleportSettleSeconds = 0.25f;
         private const float LiveRouteAuditStepSpacingSeconds = 0.1f;
         private const float LiveRouteAuditHeartbeatSeconds = 1f;
+        private const float LiveRouteAuditNoProgressTimeoutSeconds = 7f;
         private const float LiveRouteAuditMinimumTimeoutSeconds = 10f;
         private const float LiveRouteAuditRouteOverheadSeconds = 2f;
         private const int AutoWalkMaxRecoveryAttempts = 2;
+        private const int DoorCommittedSourceRecoveryStageNone = 0;
+        private const int DoorCommittedSourceRecoveryStageSourceThreshold = 1;
+        private const int DoorCommittedSourceRecoveryStagePushThrough = 2;
+        private const int DoorCommittedSourceWatchdogLoopTripsBeforeRetry = 2;
+        private const int DoorCommittedSourceWatchdogMaxInteractionRetries = 1;
         private const int VkUp = 0x26;
         private const int VkDown = 0x28;
         private const int VkLeft = 0x25;
@@ -447,19 +469,30 @@ namespace DateEverythingAccess
         private string _localNavigationPathContext;
         private string _localNavigationPathStepKey;
         private string _rawNavigationTargetContext;
+        private string _localNavigationStallSignature;
+        private string _localNavigationBypassSignature;
         private string _lastTrackerTargetKind;
         private string _lastTrackerTargetStepKey;
         private Vector3 _lastAutoWalkPosition;
+        private Vector3 _autoWalkLoopWindowStartPosition;
+        private Vector3 _localNavigationStallTarget;
+        private Vector3 _localNavigationStallStartPosition;
         private Vector3 _lastTrackerTargetPosition;
         private Vector3 _trackedInteractableApproachReferencePosition;
         private Vector3 _trackedInteractableApproachTarget;
         private Vector3 _localNavigationPathGoal;
+        private readonly string[] _autoWalkLoopSignatureWindow = new string[AutoWalkLoopSampleWindowSize];
         private List<NavigationGraph.PathStep> _navigationPath;
         private List<Vector3> _localNavigationPathPoints;
         private List<RoomObjectTarget> _roomObjectTargets;
         private int _autoWalkRecoveryAttempts;
+        private int _autoWalkLoopSignatureCount;
+        private int _autoWalkLoopSignatureIndex;
         private int _localNavigationPathIndex;
         private int _openPassageOverrideWaypointIndex;
+        private float _autoWalkLoopWindowStartedAt;
+        private float _localNavigationStallStartedAt;
+        private float _localNavigationBypassUntil;
         private bool _hasLastTrackerTarget;
         private int _openPassageSourceHandoffRecoveryFloor;
         private int _openPassageDestinationHandoffRecoveryFloor;
@@ -470,6 +503,11 @@ namespace DateEverythingAccess
         private bool _doorTraversalInteractionTriggered;
         private Vector3 _doorTraversalPushThroughPosition;
         private bool _doorTraversalPostThresholdCommitted;
+        private string _doorCommittedSourceRecoveryStepKey;
+        private int _doorCommittedSourceRecoveryStage;
+        private string _doorCommittedSourceWatchdogStepKey;
+        private int _doorCommittedSourceWatchdogLoopTripCount;
+        private int _doorCommittedSourceWatchdogInteractionRetryCount;
         private TransitionSweepSession _transitionSweepSession;
         private LiveRouteAuditSession _liveRouteAuditSession;
         private bool _isRoomObjectPickerOpen;
@@ -1937,6 +1975,9 @@ namespace DateEverythingAccess
                 return;
             }
 
+            if (TrySkipLiveRouteAuditForUnavailableFirstTransition(route, currentZone))
+                return;
+
             SetTrackedInteractable(null, route.TargetZone, route.TargetLabel);
             if (!BeginNavigation(route.TargetZone, route.TargetLabel, announceFailure: false))
             {
@@ -1959,12 +2000,56 @@ namespace DateEverythingAccess
             _lastAutoWalkProgressTime = Time.unscaledTime;
             _liveRouteAuditSession.RouteStartedAt = Time.unscaledTime;
             _liveRouteAuditSession.LastHeartbeatAt = 0f;
+            CaptureLiveRouteAuditProgressSnapshot(Time.unscaledTime);
             _liveRouteAuditSession.Phase = LiveRouteAuditPhase.Running;
             _liveRouteAuditSession.NextActionTime = Time.unscaledTime + 0.1f;
             Main.Log.LogInfo(
                 "Live route audit route running key=" + (route.Key ?? "<null>") +
                 " signature=" + (route.RouteSignature ?? "<null>") +
                 " timeoutSeconds=" + route.TimeoutSeconds.ToString("0.00", CultureInfo.InvariantCulture));
+        }
+
+        private bool TrySkipLiveRouteAuditForUnavailableFirstTransition(
+            LiveRouteAuditRoute route,
+            string currentZone)
+        {
+            if (route == null ||
+                route.PathSteps == null ||
+                route.PathSteps.Count < 1)
+            {
+                return false;
+            }
+
+            NavigationGraph.PathStep firstStep = route.PathSteps[0];
+            if (firstStep == null ||
+                !firstStep.RequiresInteraction ||
+                string.IsNullOrWhiteSpace(firstStep.FromZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, firstStep.FromZone))
+            {
+                return false;
+            }
+
+            if (!TryFindTransitionInteractableCandidate(firstStep, out InteractableObj interactable) ||
+                interactable == null)
+            {
+                return false;
+            }
+
+            if (CanAutoInteractWithStep(firstStep, interactable, out string interactionReason) ||
+                !IsLockedInteractionReason(interactionReason))
+            {
+                return false;
+            }
+
+            RecordLiveRouteAuditResult(
+                "skipped",
+                "save-state gate currentZone=" + (currentZone ?? "<null>") +
+                " interactionReason=" + (interactionReason ?? "<null>") +
+                " interactable=" + DescribeInteractable(interactable) +
+                " step=" + DescribeNavigationStep(firstStep) +
+                " routeKey=" + (route.Key ?? "<null>"),
+                "Skipped because the first required transition is locked in the current save state.");
+            return true;
         }
 
         private void MonitorRunningLiveRouteAudit()
@@ -1982,14 +2067,42 @@ namespace DateEverythingAccess
                 return;
             }
 
+            if (IsLiveRouteAuditTransitionWaitActive(now))
+            {
+                CaptureLiveRouteAuditProgressSnapshot(now);
+            }
+            else
+            {
+                RefreshLiveRouteAuditProgressSnapshot(now);
+                if (_liveRouteAuditSession.LastProgressAt > 0f &&
+                    now - _liveRouteAuditSession.LastProgressAt >= LiveRouteAuditNoProgressTimeoutSeconds)
+                {
+                    string currentZone = GetCurrentZoneNameInternal() ?? "<null>";
+                    string currentStep = DescribeNavigationStep(GetCurrentNavigationStep());
+                    string blockedDetail = _lastNavigationBlockedDetail ?? "<null>";
+                    RecordLiveRouteAuditFailure(
+                        "route stalled elapsed=" + (now - _liveRouteAuditSession.RouteStartedAt).ToString("0.00", CultureInfo.InvariantCulture) +
+                        " noProgressElapsed=" + (now - _liveRouteAuditSession.LastProgressAt).ToString("0.00", CultureInfo.InvariantCulture) +
+                        " currentZone=" + currentZone +
+                        " currentStep=" + currentStep +
+                        " detail=" + blockedDetail);
+                    StopNavigationRuntime();
+                    return;
+                }
+            }
+
             if (_liveRouteAuditSession.RouteStartedAt > 0f &&
                 now - _liveRouteAuditSession.RouteStartedAt >= route.TimeoutSeconds)
             {
-                StopNavigationRuntime();
+                string currentZone = GetCurrentZoneNameInternal() ?? "<null>";
+                string currentStep = DescribeNavigationStep(GetCurrentNavigationStep());
+                string blockedDetail = _lastNavigationBlockedDetail ?? "<null>";
                 RecordLiveRouteAuditFailure(
                     "route timeout elapsed=" + (now - _liveRouteAuditSession.RouteStartedAt).ToString("0.00", CultureInfo.InvariantCulture) +
-                    " currentZone=" + (GetCurrentZoneNameInternal() ?? "<null>") +
-                    " detail=" + (_lastNavigationBlockedDetail ?? "<null>"));
+                    " currentZone=" + currentZone +
+                    " currentStep=" + currentStep +
+                    " detail=" + blockedDetail);
+                StopNavigationRuntime();
                 return;
             }
 
@@ -2002,6 +2115,10 @@ namespace DateEverythingAccess
                     (_liveRouteAuditSession.RouteStartedAt > 0f
                         ? (now - _liveRouteAuditSession.RouteStartedAt).ToString("0.00", CultureInfo.InvariantCulture)
                         : "0.00") +
+                    " noProgressElapsed=" +
+                    (_liveRouteAuditSession.LastProgressAt > 0f
+                        ? (now - _liveRouteAuditSession.LastProgressAt).ToString("0.00", CultureInfo.InvariantCulture)
+                        : "0.00") +
                     " key=" + (route.Key ?? "<null>") +
                     " currentZone=" + (GetCurrentZoneNameInternal() ?? "<null>") +
                     " targetZone=" + (_navigationTargetZone ?? "<null>"));
@@ -2009,6 +2126,59 @@ namespace DateEverythingAccess
             }
 
             _liveRouteAuditSession.NextActionTime = now + 0.1f;
+        }
+
+        private bool IsLiveRouteAuditTransitionWaitActive(float now)
+        {
+            return _liveRouteAuditSession != null &&
+                _liveRouteAuditSession.Phase == LiveRouteAuditPhase.Running &&
+                _autoWalkTransitionUntil > now;
+        }
+
+        private void RefreshLiveRouteAuditProgressSnapshot(float now)
+        {
+            if (_liveRouteAuditSession == null || _liveRouteAuditSession.Phase != LiveRouteAuditPhase.Running)
+                return;
+
+            string currentZone = GetCurrentZoneNameInternal();
+            string currentStepKey = BuildNavigationStepKey(GetCurrentNavigationStep());
+            Vector3 currentPosition = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform.position
+                : Vector3.zero;
+            bool hasMoved = BetterPlayerControl.Instance != null &&
+                Vector3.Distance(currentPosition, _liveRouteAuditSession.LastProgressPosition) >= AutoWalkProgressDistance;
+            if (_liveRouteAuditSession.LastProgressAt <= 0f ||
+                !string.Equals(currentZone, _liveRouteAuditSession.LastProgressZone, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(currentStepKey, _liveRouteAuditSession.LastProgressStepKey, StringComparison.Ordinal) ||
+                hasMoved)
+            {
+                CaptureLiveRouteAuditProgressSnapshot(now, currentZone, currentStepKey, currentPosition);
+            }
+        }
+
+        private void CaptureLiveRouteAuditProgressSnapshot(float now)
+        {
+            string currentZone = GetCurrentZoneNameInternal();
+            string currentStepKey = BuildNavigationStepKey(GetCurrentNavigationStep());
+            Vector3 currentPosition = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform.position
+                : Vector3.zero;
+            CaptureLiveRouteAuditProgressSnapshot(now, currentZone, currentStepKey, currentPosition);
+        }
+
+        private void CaptureLiveRouteAuditProgressSnapshot(
+            float now,
+            string currentZone,
+            string currentStepKey,
+            Vector3 currentPosition)
+        {
+            if (_liveRouteAuditSession == null)
+                return;
+
+            _liveRouteAuditSession.LastProgressAt = now;
+            _liveRouteAuditSession.LastProgressZone = currentZone;
+            _liveRouteAuditSession.LastProgressStepKey = currentStepKey;
+            _liveRouteAuditSession.LastProgressPosition = currentPosition;
         }
 
         private void FinishLiveRouteAudit()
@@ -2191,6 +2361,12 @@ namespace DateEverythingAccess
         {
             if (step == null)
                 return Vector3.zero;
+
+            if (step.SourceApproachPoint != Vector3.zero)
+                return step.SourceApproachPoint;
+
+            if (step.SourceClearPoint != Vector3.zero)
+                return step.SourceClearPoint;
 
             if (step.FromWaypoint != Vector3.zero)
                 return step.FromWaypoint;
@@ -2864,9 +3040,14 @@ namespace DateEverythingAccess
 
         private float GetLocalNavigationGoalReachedDistance(string planningContext)
         {
-            return string.Equals(planningContext, "door-push-through-local", StringComparison.Ordinal) ||
-                string.Equals(planningContext, "door-threshold-handoff-local", StringComparison.Ordinal)
+            return string.Equals(planningContext, "door-threshold-handoff-local", StringComparison.Ordinal)
                 ? DoorTraversalClearanceDistance
+                : string.Equals(planningContext, "door-push-through-local", StringComparison.Ordinal)
+                ? DoorPushThroughLocalNavigationGoalReachedDistance
+                : string.Equals(planningContext, "door-entry-advance-local", StringComparison.Ordinal)
+                ? DoorEntryAdvanceLocalNavigationGoalReachedDistance
+                : string.Equals(planningContext, "door-threshold-advance-local", StringComparison.Ordinal)
+                ? DoorThresholdHandoffLocalNavigationGoalReachedDistance
                 : string.Equals(planningContext, "door-push-through", StringComparison.Ordinal) ||
                 string.Equals(planningContext, "door-threshold-handoff", StringComparison.Ordinal) ||
                 string.Equals(planningContext, "open-passage-handoff", StringComparison.Ordinal) ||
@@ -2882,7 +3063,15 @@ namespace DateEverythingAccess
 
         private float GetRawNavigationGoalReachedDistance(string targetContext)
         {
-            return string.Equals(targetContext, "open-passage-guided", StringComparison.Ordinal)
+            return string.Equals(targetContext, "door-threshold-advance", StringComparison.Ordinal)
+                ? DoorThresholdHandoffLocalNavigationGoalReachedDistance
+                : string.Equals(targetContext, "door-push-through", StringComparison.Ordinal)
+                ? DoorPushThroughLocalNavigationGoalReachedDistance
+                : string.Equals(targetContext, "door-threshold-handoff", StringComparison.Ordinal)
+                    ? DoorThresholdHandoffLocalNavigationGoalReachedDistance
+                : string.Equals(targetContext, "door-entry-advance", StringComparison.Ordinal)
+                    ? DoorEntryAdvanceLocalNavigationGoalReachedDistance
+                : string.Equals(targetContext, "open-passage-guided", StringComparison.Ordinal)
                 ? GetOpenPassageGuidedWaypointAdvanceDistance()
                 : AutoWalkArrivalDistance;
         }
@@ -4029,11 +4218,19 @@ namespace DateEverythingAccess
                 referencePosition = step.FromWaypoint;
 
             float bestScore = float.MaxValue;
-            Vector3 routeStart = step.FromWaypoint;
+            Vector3 routeStart = referencePosition != Vector3.zero
+                ? referencePosition
+                : step.FromWaypoint;
             Vector3 routeEnd = step.ToWaypoint;
+            bool requiresNamedConnector = step.Kind == NavigationGraph.StepKind.Door &&
+                HasNamedTransitionConnectors(step);
             for (int i = 0; i < candidates.Length; i++)
             {
                 InteractableObj candidate = candidates[i];
+                bool matchesNamedConnector = IsMatchingNamedTransitionInteractable(step, candidate);
+                if (requiresNamedConnector && !matchesNamedConnector)
+                    continue;
+
                 if (!IsMatchingTransitionInteractable(step, candidate))
                     continue;
 
@@ -4044,8 +4241,12 @@ namespace DateEverythingAccess
                 {
                     score += DistanceToSegment(candidate.transform.position, routeStart, routeEnd) * 4f;
                 }
+                if (step.ConnectorObjectPosition != Vector3.zero)
+                {
+                    score += Vector3.Distance(candidate.transform.position, step.ConnectorObjectPosition) * 0.5f;
+                }
 
-                if (IsMatchingNamedTransitionInteractable(step, candidate))
+                if (matchesNamedConnector)
                 {
                     score -= 100f;
                 }
@@ -4219,11 +4420,7 @@ namespace DateEverythingAccess
                 if (string.IsNullOrWhiteSpace(startZone))
                     continue;
 
-                bool hasSpawnPosition = TryResolveLiveRouteAuditSpawnPosition(
-                    startZone,
-                    out Vector3 spawnPosition,
-                    out string spawnSource,
-                    out string spawnFailureReason);
+                bool shouldSkipStartZone = ShouldSkipLiveRouteAuditStartZone(startZone);
                 for (int targetIndex = 0; targetIndex < zones.Count; targetIndex++)
                 {
                     string targetZone = zones[targetIndex];
@@ -4236,6 +4433,49 @@ namespace DateEverythingAccess
                     orderedPairCount++;
                     string entryKey = BuildLiveRouteAuditEntryKey(startZone, targetZone);
                     string aliasPair = BuildLiveRouteAuditPairLabel(startZone, targetZone);
+                    if (shouldSkipStartZone)
+                    {
+                        entries.Add(CreateImmediateLiveRouteAuditSkippedEntry(
+                            entries.Count,
+                            entryKey,
+                            startZone,
+                            targetZone,
+                            aliasPair,
+                            "Skipped because this source zone is temporarily excluded from the live route audit."));
+                        continue;
+                    }
+
+                    List<NavigationGraph.PathStep> preliminaryPathSteps = NavigationGraph.FindPathSteps(
+                        startZone,
+                        targetZone,
+                        null,
+                        null);
+                    if (preliminaryPathSteps == null)
+                    {
+                        entries.Add(CreateImmediateLiveRouteAuditFailureEntry(
+                            entries.Count,
+                            entryKey,
+                            startZone,
+                            targetZone,
+                            aliasPair,
+                            "No graph route connected the start zone to the target zone."));
+                        continue;
+                    }
+
+                    bool hasSpawnPosition = TryResolveLiveRouteAuditDoorFirstSpawnPosition(
+                        preliminaryPathSteps,
+                        out Vector3 spawnPosition,
+                        out string spawnSource,
+                        out string spawnFailureReason);
+                    if (!hasSpawnPosition)
+                    {
+                        hasSpawnPosition = TryResolveLiveRouteAuditSpawnPosition(
+                            startZone,
+                            GetLiveRouteAuditRouteSourceAnchor(preliminaryPathSteps),
+                            out spawnPosition,
+                            out spawnSource,
+                            out spawnFailureReason);
+                    }
                     if (!hasSpawnPosition)
                     {
                         entries.Add(CreateImmediateLiveRouteAuditFailureEntry(
@@ -4279,7 +4519,8 @@ namespace DateEverythingAccess
                         continue;
                     }
 
-                    if (!groupedRoutes.TryGetValue(routeSignature, out LiveRouteAuditRoute route))
+                    string groupedRouteKey = BuildLiveRouteAuditGroupKey(routeSignature, spawnPosition, spawnSource);
+                    if (!groupedRoutes.TryGetValue(groupedRouteKey, out LiveRouteAuditRoute route))
                     {
                         route = new LiveRouteAuditRoute
                         {
@@ -4295,7 +4536,7 @@ namespace DateEverythingAccess
                             TimeoutSeconds = BuildLiveRouteAuditTimeoutSeconds(pathSteps),
                             EntryIndex = -1
                         };
-                        groupedRoutes[routeSignature] = route;
+                        groupedRoutes[groupedRouteKey] = route;
                         uniqueRouteCount++;
                     }
 
@@ -4370,6 +4611,68 @@ namespace DateEverythingAccess
             return entries;
         }
 
+        private bool TryResolveLiveRouteAuditDoorFirstSpawnPosition(
+            List<NavigationGraph.PathStep> pathSteps,
+            out Vector3 spawnPosition,
+            out string spawnSource,
+            out string failureReason)
+        {
+            spawnPosition = Vector3.zero;
+            spawnSource = null;
+            failureReason = null;
+            if (pathSteps == null || pathSteps.Count < 1)
+                return false;
+
+            NavigationGraph.PathStep firstStep = pathSteps[0];
+            if (firstStep == null || firstStep.Kind != NavigationGraph.StepKind.Door)
+                return false;
+
+            if (!TryGetDoorTransitionSweepSpawnPosition(firstStep, useZoneFallback: false, out spawnPosition, out string doorSpawnSource) ||
+                spawnPosition == Vector3.zero)
+            {
+                failureReason = "Door-first route spawn fallback required: door-clearance start was unavailable.";
+                return false;
+            }
+
+            spawnSource = string.IsNullOrWhiteSpace(doorSpawnSource)
+                ? "door_clearance"
+                : "door_" + doorSpawnSource;
+            return true;
+        }
+
+        private static LiveRouteAuditReporter.MutableEntry CreateImmediateLiveRouteAuditSkippedEntry(
+            int index,
+            string key,
+            string startZone,
+            string targetZone,
+            string aliasPair,
+            string statusDetail)
+        {
+            return new LiveRouteAuditReporter.MutableEntry
+            {
+                Index = index,
+                Key = key,
+                RouteSignature = null,
+                StartZone = startZone,
+                TargetZone = targetZone,
+                AliasPairs = new[] { aliasPair },
+                StepIds = Array.Empty<string>(),
+                StepCount = 0,
+                Status = "skipped",
+                StatusDetail = statusDetail,
+                FailureReason = statusDetail,
+                DurationSeconds = 0f,
+                SpawnSource = null,
+                SpawnPosition = Vector3.zero,
+                ExpectedTimeoutSeconds = 0f,
+                CurrentZoneAtResult = null,
+                PlayerPositionAtResult = Vector3.zero,
+                LastTargetKind = null,
+                LastTargetPosition = Vector3.zero,
+                LastLocalNavigationContext = null
+            };
+        }
+
         private static LiveRouteAuditReporter.MutableEntry CreateImmediateLiveRouteAuditFailureEntry(
             int index,
             string key,
@@ -4406,6 +4709,12 @@ namespace DateEverythingAccess
         private static string BuildLiveRouteAuditEntryKey(string startZone, string targetZone)
         {
             return "route:" + (startZone ?? "<null>") + "->" + (targetZone ?? "<null>");
+        }
+
+        private static bool ShouldSkipLiveRouteAuditStartZone(string startZone)
+        {
+            return IsAtticSweepZone(startZone) ||
+                string.Equals(startZone, "crawlspace", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string BuildLiveRouteAuditPairLabel(string startZone, string targetZone)
@@ -4451,8 +4760,64 @@ namespace DateEverythingAccess
             return stepIds;
         }
 
+        private static string BuildLiveRouteAuditGroupKey(string routeSignature, Vector3 spawnPosition, string spawnSource)
+        {
+            return (routeSignature ?? "<null>") +
+                "|spawnSource=" + (spawnSource ?? "<null>") +
+                "|spawn=" + spawnPosition.x.ToString("0.00", CultureInfo.InvariantCulture) +
+                "," + spawnPosition.y.ToString("0.00", CultureInfo.InvariantCulture) +
+                "," + spawnPosition.z.ToString("0.00", CultureInfo.InvariantCulture);
+        }
+
+        private Vector3 GetLiveRouteAuditRouteSourceAnchor(List<NavigationGraph.PathStep> pathSteps)
+        {
+            if (pathSteps == null || pathSteps.Count == 0)
+                return Vector3.zero;
+
+            NavigationGraph.PathStep firstStep = pathSteps[0];
+            if (firstStep == null)
+                return Vector3.zero;
+
+            if (firstStep.Kind == NavigationGraph.StepKind.Door &&
+                TryFindTransitionInteractableCandidate(firstStep, out InteractableObj interactable))
+            {
+                Vector3 standClearPosition = BuildDoorTransitionSweepStandClearPosition(firstStep, interactable);
+                if (standClearPosition != Vector3.zero)
+                    return standClearPosition;
+            }
+
+            if (firstStep.SourceApproachPoint != Vector3.zero)
+                return firstStep.SourceApproachPoint;
+
+            if (firstStep.SourceClearPoint != Vector3.zero)
+                return firstStep.SourceClearPoint;
+
+            if (firstStep.FromCrossingAnchor != Vector3.zero)
+                return firstStep.FromCrossingAnchor;
+
+            if (firstStep.FromWaypoint != Vector3.zero)
+                return firstStep.FromWaypoint;
+
+            return firstStep.ConnectorObjectPosition;
+        }
+
         private bool TryResolveLiveRouteAuditSpawnPosition(
             string zoneName,
+            out Vector3 spawnPosition,
+            out string spawnSource,
+            out string failureReason)
+        {
+            return TryResolveLiveRouteAuditSpawnPosition(
+                zoneName,
+                Vector3.zero,
+                out spawnPosition,
+                out spawnSource,
+                out failureReason);
+        }
+
+        private bool TryResolveLiveRouteAuditSpawnPosition(
+            string zoneName,
+            Vector3 preferredAnchor,
             out Vector3 spawnPosition,
             out string spawnSource,
             out string failureReason)
@@ -4464,6 +4829,29 @@ namespace DateEverythingAccess
             {
                 failureReason = "Source zone missing.";
                 return false;
+            }
+
+            if (preferredAnchor != Vector3.zero)
+            {
+                if (!LocalNavigationMaps.IsAvailable)
+                {
+                    spawnPosition = preferredAnchor;
+                    spawnSource = "route-source-anchor";
+                    return true;
+                }
+
+                if (LocalNavigationMaps.TrySnapPositionToNearestWalkableCell(
+                    zoneName,
+                    preferredAnchor,
+                    out Vector3 snappedAnchorPosition,
+                    out _))
+                {
+                    spawnPosition = snappedAnchorPosition;
+                    spawnSource = GetFlatDistance(preferredAnchor, snappedAnchorPosition) <= 0.05f
+                        ? "route-source-anchor"
+                        : "snapped-route-source-anchor";
+                    return true;
+                }
             }
 
             Vector3 zonePosition = Vector3.zero;
@@ -4688,6 +5076,12 @@ namespace DateEverythingAccess
             return count;
         }
 
+        private static bool IsLockedInteractionReason(string interactionReason)
+        {
+            return !string.IsNullOrWhiteSpace(interactionReason) &&
+                interactionReason.IndexOf("locked", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private bool ShouldPreserveForcedTransitionSweepStep(NavigationGraph.PathStep step)
         {
             if (_transitionSweepSession == null ||
@@ -4792,6 +5186,29 @@ namespace DateEverythingAccess
             Transform playerTransform = BetterPlayerControl.Instance.transform;
             Vector3 toTarget = nextPosition - playerTransform.position;
             toTarget.y = 0f;
+            string currentZone = GetCurrentZoneNameForNavigation();
+
+            if (TryDetectAutoWalkLoop(
+                    currentStep,
+                    currentZone,
+                    targetKind,
+                    nextPosition,
+                    playerTransform.position,
+                    out string loopDetail))
+            {
+                LogNavigationAutoWalkDebug(
+                    "Auto-walk loop detector triggered targetKind=" + targetKind +
+                    " detail=" + loopDetail +
+                    " step=" + DescribeNavigationStep(currentStep));
+                ActivateDoorCommittedSourceRecoveryFromLoop(
+                    currentStep,
+                    currentZone,
+                    targetKind,
+                    nextPosition);
+                if (!TryRecoverAutoWalk(currentStep, targetKind))
+                    StopNavigationBlocked(loopDetail);
+                return;
+            }
 
             float autoWalkArrivalDistance = GetAutoWalkArrivalDistance(targetKind);
             if (toTarget.sqrMagnitude <= autoWalkArrivalDistance * autoWalkArrivalDistance)
@@ -4910,7 +5327,6 @@ namespace DateEverythingAccess
             localDirection.y = 0f;
 
             float turnDegrees = Vector3.SignedAngle(playerTransform.forward, direction, Vector3.up);
-            string currentZone = GetCurrentZoneNameForNavigation();
             Vector3 moveInput = new Vector3(
                 Mathf.Clamp(localDirection.x, -1f, 1f),
                 0f,
@@ -4936,6 +5352,7 @@ namespace DateEverythingAccess
                 _lastAutoWalkPosition = playerTransform.position;
                 _lastAutoWalkProgressTime = Time.unscaledTime;
                 _autoWalkRecoveryAttempts = 0;
+                ResetAutoWalkLoopDetection();
                 ClearNavigationBlockedDetail();
             }
             else if (Time.unscaledTime - _lastAutoWalkProgressTime >=
@@ -5168,6 +5585,7 @@ namespace DateEverythingAccess
                 }
                 else
                 {
+                    ResetOpenPassageTraversalState();
                     _openPassageTraversalStepKey = refreshedFirstStepKey;
                     _openPassageTraversalStage = OpenPassageTraversalStage.SourceWaypoint;
                 }
@@ -5347,6 +5765,8 @@ namespace DateEverythingAccess
             _lastNavigationAutoWalkDebugSnapshot = null;
             _lastNavigationTransitionDebugSnapshot = null;
             _lastNavigationBlockedDetail = null;
+            ResetAutoWalkLoopDetection();
+            ResetLocalNavigationStallTracking();
             ClearTrackerTargetDiagnostics();
             ObjectTracker.StopTracking();
             ApplyNavigationInput(Vector3.zero, Vector3.zero);
@@ -6593,6 +7013,7 @@ namespace DateEverythingAccess
             if (!LocalNavigationMaps.IsAvailable || position == Vector3.zero)
             {
                 ClearLocalNavigationPathState();
+                ResetLocalNavigationStallTracking();
                 return false;
             }
 
@@ -6612,6 +7033,7 @@ namespace DateEverythingAccess
                     " rawTargetPosition=" + FormatVector3(position) +
                     " step=" + DescribeNavigationStep(step));
                 ClearLocalNavigationPathState();
+                ResetLocalNavigationStallTracking();
                 return false;
             }
 
@@ -6624,6 +7046,26 @@ namespace DateEverythingAccess
                     out Vector3 adjustedPosition,
                     out string debugDetail))
             {
+                ResetLocalNavigationStallTracking();
+                return false;
+            }
+
+            string stepKey = BuildNavigationStepKey(step);
+            if (ShouldBypassStalledLocalNavigationGoal(
+                    stepKey,
+                    planningContext,
+                    adjustedPosition,
+                    playerPosition))
+            {
+                LogNavigationTrackerDebug(
+                    "Local navigation bypassed due to detected stall" +
+                    " stepKey=" + (stepKey ?? "<null>") +
+                    " context=" + (planningContext ?? "<null>") +
+                    " adjustedPosition=" + FormatVector3(adjustedPosition) +
+                    " rawTargetKind=" + targetKind +
+                    " rawTargetPosition=" + FormatVector3(position) +
+                    " detail=" + (debugDetail ?? "<null>"));
+                ClearLocalNavigationPathState();
                 return false;
             }
 
@@ -6635,6 +7077,76 @@ namespace DateEverythingAccess
                 " detail=" + debugDetail +
                 " step=" + DescribeNavigationStep(step));
             return true;
+        }
+
+        private bool ShouldBypassStalledLocalNavigationGoal(
+            string stepKey,
+            string planningContext,
+            Vector3 adjustedPosition,
+            Vector3 playerPosition)
+        {
+            if (adjustedPosition == Vector3.zero || string.IsNullOrWhiteSpace(planningContext))
+            {
+                ResetLocalNavigationStallTracking();
+                return false;
+            }
+
+            string signature =
+                (stepKey ?? "<null>") +
+                "|context=" + planningContext +
+                "|raw=" + (_rawNavigationTargetContext ?? "<null>");
+            float now = Time.unscaledTime;
+            if (!string.IsNullOrWhiteSpace(_localNavigationBypassSignature) &&
+                string.Equals(_localNavigationBypassSignature, signature, StringComparison.Ordinal) &&
+                now < _localNavigationBypassUntil)
+            {
+                return true;
+            }
+
+            Vector3 roundedAdjustedPosition = RoundVector3(
+                adjustedPosition,
+                LocalNavigationStallTargetTolerance);
+            if (!string.Equals(_localNavigationStallSignature, signature, StringComparison.Ordinal) ||
+                GetFlatDistance(_localNavigationStallTarget, roundedAdjustedPosition) > LocalNavigationStallTargetTolerance)
+            {
+                _localNavigationStallSignature = signature;
+                _localNavigationStallTarget = roundedAdjustedPosition;
+                _localNavigationStallStartPosition = playerPosition;
+                _localNavigationStallStartedAt = now;
+                return false;
+            }
+
+            if (GetFlatDistance(playerPosition, _localNavigationStallStartPosition) >=
+                LocalNavigationStallMovementThreshold)
+            {
+                _localNavigationStallStartPosition = playerPosition;
+                _localNavigationStallStartedAt = now;
+                return false;
+            }
+
+            if (now - _localNavigationStallStartedAt < LocalNavigationStallBypassSeconds)
+                return false;
+
+            _localNavigationBypassSignature = signature;
+            _localNavigationBypassUntil = now + LocalNavigationStallBypassDurationSeconds;
+            SetNavigationBlockedDetail(
+                "local navigation stall bypass signature=" + signature +
+                " target=" + FormatVector3(roundedAdjustedPosition) +
+                " elapsed=" + (now - _localNavigationStallStartedAt).ToString("0.00", CultureInfo.InvariantCulture) +
+                " movement=" + GetFlatDistance(playerPosition, _localNavigationStallStartPosition).ToString("0.00", CultureInfo.InvariantCulture));
+            return true;
+        }
+
+        private void ResetLocalNavigationStallTracking()
+        {
+            _localNavigationStallSignature = null;
+            _localNavigationBypassSignature = null;
+            _localNavigationStallTarget = Vector3.zero;
+            _localNavigationStallStartPosition = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform.position
+                : Vector3.zero;
+            _localNavigationStallStartedAt = 0f;
+            _localNavigationBypassUntil = 0f;
         }
 
         private bool TryResolveLocalNavigationGoal(
@@ -6655,15 +7167,25 @@ namespace DateEverythingAccess
                 return false;
 
             string currentNavigationZone = GetNavigationZoneName(currentZone);
-            if (targetKind == NavigationTargetKind.DirectObject && !string.IsNullOrEmpty(currentNavigationZone))
+            string preferredCurrentPlanningZone = ResolveUsableCurrentLocalPlanningZone(
+                currentZone,
+                playerPosition,
+                desiredPosition,
+                currentNavigationZone) ??
+                currentNavigationZone ??
+                currentZone;
+            if (targetKind == NavigationTargetKind.DirectObject)
             {
-                planningZone = currentNavigationZone;
-                planningGoal = desiredPosition;
-                planningContext = "direct-object";
-                return ShouldUseLocalNavigationGoal(
-                    playerPosition,
-                    planningGoal,
-                    GetLocalNavigationGoalReachedDistance(planningContext));
+                if (!string.IsNullOrWhiteSpace(preferredCurrentPlanningZone))
+                {
+                    planningZone = preferredCurrentPlanningZone;
+                    planningGoal = desiredPosition;
+                    planningContext = "direct-object";
+                    return ShouldUseLocalNavigationGoal(
+                        playerPosition,
+                        planningGoal,
+                        GetLocalNavigationGoalReachedDistance(planningContext));
+                }
             }
 
             if (TryResolveOpenPassageLocalNavigationGoal(
@@ -6680,6 +7202,17 @@ namespace DateEverythingAccess
 
             if (step != null)
             {
+                if (targetKind == NavigationTargetKind.TransitionInteractable &&
+                    step.Kind == NavigationGraph.StepKind.Door &&
+                    TryFindTransitionInteractable(step, out InteractableObj interactionCandidate))
+                {
+                    LogNavigationTrackerDebug(
+                        "Skipped local navigation for in-range door interaction target interactable=" + DescribeInteractable(interactionCandidate) +
+                        " desiredPosition=" + FormatVector3(desiredPosition) +
+                        " step=" + DescribeNavigationStep(step));
+                    return false;
+                }
+
                 if (TryResolveDoorLocalNavigationGoal(
                         currentZone,
                         step,
@@ -6690,6 +7223,15 @@ namespace DateEverythingAccess
                         out planningContext))
                 {
                     return true;
+                }
+
+                if (ShouldSuppressGenericDoorPostInteractionLocalFallback(
+                        currentZone,
+                        step,
+                        desiredPosition,
+                        targetKind))
+                {
+                    return false;
                 }
 
                 if (!string.IsNullOrEmpty(step.FromZone) &&
@@ -6719,13 +7261,13 @@ namespace DateEverythingAccess
                 }
             }
 
-            if (!string.IsNullOrEmpty(currentNavigationZone) &&
+            if (!string.IsNullOrWhiteSpace(preferredCurrentPlanningZone) &&
                 ShouldUseLocalNavigationGoal(
                     playerPosition,
                     desiredPosition,
                     LocalNavigationGoalReachedDistance))
             {
-                planningZone = currentNavigationZone;
+                planningZone = preferredCurrentPlanningZone;
                 planningGoal = desiredPosition;
                 planningContext = "current-zone";
                 return true;
@@ -6744,20 +7286,49 @@ namespace DateEverythingAccess
                 return null;
 
             string currentNavigationZone = GetNavigationZoneName(currentZone);
-            if (!string.IsNullOrWhiteSpace(currentNavigationZone) &&
-                IsZoneEquivalentToNavigationZone(currentNavigationZone, canonicalZone) &&
-                CanUseLocalPlanningZone(currentNavigationZone, startPosition, goalPosition))
+            string usableCurrentPlanningZone = ResolveUsableCurrentLocalPlanningZone(
+                currentZone,
+                startPosition,
+                goalPosition,
+                currentNavigationZone);
+            if (!string.IsNullOrWhiteSpace(usableCurrentPlanningZone) &&
+                IsZoneEquivalentToNavigationZone(usableCurrentPlanningZone, canonicalZone))
             {
-                return currentNavigationZone;
+                return usableCurrentPlanningZone;
             }
 
             if (CanUseLocalPlanningZone(canonicalZone, startPosition, goalPosition))
                 return canonicalZone;
 
             return !string.IsNullOrWhiteSpace(currentNavigationZone) &&
-                IsZoneEquivalentToNavigationZone(currentNavigationZone, canonicalZone)
+                IsZoneEquivalentToNavigationZone(currentNavigationZone, canonicalZone) &&
+                CanUseLocalPlanningZone(currentNavigationZone, startPosition, goalPosition)
                 ? currentNavigationZone
-                : canonicalZone;
+                : null;
+        }
+
+        private static string ResolveUsableCurrentLocalPlanningZone(
+            string currentZone,
+            Vector3 startPosition,
+            Vector3 goalPosition,
+            string currentNavigationZone = null)
+        {
+            if (!string.IsNullOrWhiteSpace(currentZone) &&
+                CanUseLocalPlanningZone(currentZone, startPosition, goalPosition))
+            {
+                return currentZone;
+            }
+
+            currentNavigationZone = string.IsNullOrWhiteSpace(currentNavigationZone)
+                ? GetNavigationZoneName(currentZone)
+                : currentNavigationZone;
+            if (!string.IsNullOrWhiteSpace(currentNavigationZone) &&
+                CanUseLocalPlanningZone(currentNavigationZone, startPosition, goalPosition))
+            {
+                return currentNavigationZone;
+            }
+
+            return null;
         }
 
         private static bool CanUseLocalPlanningZone(
@@ -6854,12 +7425,20 @@ namespace DateEverythingAccess
             float remainingDistance = ComputeLocalNavigationRemainingDistance(playerPosition);
             if (remainingDistance <= GetLocalNavigationGoalReachedDistance(planningContext))
             {
+                bool committedDoorPostThreshold =
+                    TryCommitDoorPostThresholdAfterLocalPushThroughGoalReached(
+                        stepKey,
+                        planningContext,
+                        playerPosition,
+                        planningGoal,
+                        remainingDistance);
                 LogNavigationTrackerDebug(
                     "Local navigation goal reached stepKey=" + (_localNavigationPathStepKey ?? "<null>") +
                     " zone=" + planningZone +
                     " context=" + planningContext +
                     " goal=" + FormatVector3(planningGoal) +
-                    " remainingDistance=" + remainingDistance.ToString("0.00", CultureInfo.InvariantCulture));
+                    " remainingDistance=" + remainingDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " committedDoorPostThreshold=" + committedDoorPostThreshold);
                 ClearLocalNavigationPathState();
                 return false;
             }
@@ -6880,6 +7459,15 @@ namespace DateEverythingAccess
                 return false;
             }
 
+            if (string.Equals(planningContext, "door-threshold-advance-local", StringComparison.Ordinal) &&
+                _localNavigationPathIndex >= 0 &&
+                _localNavigationPathIndex < _localNavigationPathPoints.Count &&
+                lookaheadIndex == _localNavigationPathPoints.Count - 1 &&
+                _localNavigationPathIndex < lookaheadIndex)
+            {
+                lookaheadIndex = _localNavigationPathIndex;
+            }
+
             adjustedPosition = _localNavigationPathPoints[lookaheadIndex];
             debugDetail =
                 "zone=" + planningZone +
@@ -6890,6 +7478,58 @@ namespace DateEverythingAccess
                 " remainingDistance=" + remainingDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                 " goal=" + FormatVector3(planningGoal);
             return true;
+        }
+
+        private bool TryCommitDoorPostThresholdAfterLocalPushThroughGoalReached(
+            string stepKey,
+            string planningContext,
+            Vector3 playerPosition,
+            Vector3 planningGoal,
+            float remainingDistance)
+        {
+            if (!string.Equals(planningContext, "door-push-through-local", StringComparison.Ordinal) ||
+                string.IsNullOrWhiteSpace(stepKey))
+            {
+                return false;
+            }
+
+            bool committed = false;
+
+            if (_transitionSweepSession != null &&
+                _transitionSweepSession.Kind == TransitionSweepKind.Door &&
+                _transitionSweepSession.Phase == TransitionSweepPhase.Running &&
+                _transitionSweepSession.DoorInteractionTriggered &&
+                !_transitionSweepSession.DoorPostThresholdCommitted &&
+                string.Equals(stepKey, BuildNavigationStepKey(_transitionSweepSession.CurrentStep), StringComparison.Ordinal) &&
+                _transitionSweepSession.DoorPushThroughPosition != Vector3.zero &&
+                GetPlanarDistanceToTarget(playerPosition, _transitionSweepSession.DoorPushThroughPosition) <=
+                DoorPushThroughArrivalDistance + DoorPushThroughNoHandoffCommitTolerance)
+            {
+                _transitionSweepSession.DoorPostThresholdCommitted = true;
+                committed = true;
+            }
+
+            if (_doorTraversalInteractionTriggered &&
+                !_doorTraversalPostThresholdCommitted &&
+                _doorTraversalPushThroughPosition != Vector3.zero &&
+                string.Equals(stepKey, _doorTraversalStepKey, StringComparison.Ordinal) &&
+                GetPlanarDistanceToTarget(playerPosition, _doorTraversalPushThroughPosition) <=
+                DoorPushThroughArrivalDistance + DoorPushThroughNoHandoffCommitTolerance)
+            {
+                _doorTraversalPostThresholdCommitted = true;
+                committed = true;
+            }
+
+            if (committed)
+            {
+                LogNavigationTrackerDebug(
+                    "Committed door post-threshold state after local push-through goal reached" +
+                    " stepKey=" + stepKey +
+                    " goal=" + FormatVector3(planningGoal) +
+                    " remainingDistance=" + remainingDistance.ToString("0.00", CultureInfo.InvariantCulture));
+            }
+
+            return committed;
         }
 
         private void AdvanceLocalNavigationPathIndex(Vector3 playerPosition)
@@ -6974,7 +7614,129 @@ namespace DateEverythingAccess
                 ? BetterPlayerControl.Instance.transform.position
                 : Vector3.zero;
             _lastAutoWalkProgressTime = Time.unscaledTime;
+            ResetAutoWalkLoopDetection();
+            ResetLocalNavigationStallTracking();
             ClearNavigationBlockedDetail();
+        }
+
+        private bool TryDetectAutoWalkLoop(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            NavigationTargetKind targetKind,
+            Vector3 nextPosition,
+            Vector3 playerPosition,
+            out string detail)
+        {
+            detail = null;
+            if (step == null ||
+                targetKind == NavigationTargetKind.TransitionInteractable ||
+                nextPosition == Vector3.zero ||
+                _autoWalkTransitionUntil > Time.unscaledTime)
+            {
+                ResetAutoWalkLoopDetection();
+                return false;
+            }
+
+            string signature = BuildAutoWalkLoopSignature(step, currentZone, targetKind, nextPosition);
+            if (string.IsNullOrWhiteSpace(signature))
+            {
+                ResetAutoWalkLoopDetection();
+                return false;
+            }
+
+            float now = Time.unscaledTime;
+            RecordAutoWalkLoopSample(signature, playerPosition, now);
+            if (_autoWalkLoopSignatureCount < AutoWalkLoopSampleWindowSize)
+                return false;
+
+            float elapsed = now - _autoWalkLoopWindowStartedAt;
+            if (elapsed < AutoWalkLoopSampleWindowSeconds)
+                return false;
+
+            float movement = GetFlatDistance(playerPosition, _autoWalkLoopWindowStartPosition);
+            if (movement > AutoWalkLoopMovementAllowance)
+                return false;
+
+            var uniqueSignatures = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < _autoWalkLoopSignatureCount; i++)
+            {
+                string sample = _autoWalkLoopSignatureWindow[i];
+                if (!string.IsNullOrWhiteSpace(sample))
+                    uniqueSignatures.Add(sample);
+            }
+
+            if (uniqueSignatures.Count > 2)
+                return false;
+
+            detail =
+                "auto-walk loop detected samples=" + _autoWalkLoopSignatureCount +
+                " uniqueSignatures=" + uniqueSignatures.Count +
+                " elapsed=" + elapsed.ToString("0.00", CultureInfo.InvariantCulture) +
+                " movement=" + movement.ToString("0.00", CultureInfo.InvariantCulture) +
+                " zone=" + (currentZone ?? "<null>") +
+                " targetKind=" + targetKind +
+                " targetPosition=" + FormatVector3(nextPosition) +
+                " rawContext=" + (_rawNavigationTargetContext ?? "<null>") +
+                " localContext=" + (_localNavigationPathContext ?? "<null>") +
+                " step=" + DescribeNavigationStep(step);
+            Main.Log.LogWarning("Auto-walk loop detector: " + detail);
+            SetNavigationBlockedDetail(detail);
+            ResetAutoWalkLoopDetection();
+            return true;
+        }
+
+        private void RecordAutoWalkLoopSample(string signature, Vector3 playerPosition, float now)
+        {
+            if (_autoWalkLoopSignatureCount == 0)
+            {
+                _autoWalkLoopWindowStartedAt = now;
+                _autoWalkLoopWindowStartPosition = playerPosition;
+            }
+
+            _autoWalkLoopSignatureWindow[_autoWalkLoopSignatureIndex] = signature;
+            _autoWalkLoopSignatureIndex = (_autoWalkLoopSignatureIndex + 1) % AutoWalkLoopSampleWindowSize;
+            if (_autoWalkLoopSignatureCount < AutoWalkLoopSampleWindowSize)
+                _autoWalkLoopSignatureCount++;
+            else
+                _autoWalkLoopWindowStartedAt = now - AutoWalkLoopSampleWindowSeconds;
+        }
+
+        private void ResetAutoWalkLoopDetection()
+        {
+            Array.Clear(_autoWalkLoopSignatureWindow, 0, _autoWalkLoopSignatureWindow.Length);
+            _autoWalkLoopSignatureCount = 0;
+            _autoWalkLoopSignatureIndex = 0;
+            _autoWalkLoopWindowStartedAt = 0f;
+            _autoWalkLoopWindowStartPosition = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform.position
+                : Vector3.zero;
+        }
+
+        private string BuildAutoWalkLoopSignature(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            NavigationTargetKind targetKind,
+            Vector3 nextPosition)
+        {
+            string stepKey = BuildNavigationStepKey(step) ?? "<null>";
+            Vector3 roundedTarget = RoundVector3(nextPosition, AutoWalkLoopTargetSignatureResolution);
+            return stepKey +
+                "|zone=" + (currentZone ?? "<null>") +
+                "|kind=" + targetKind +
+                "|raw=" + (_rawNavigationTargetContext ?? "<null>") +
+                "|local=" + (_localNavigationPathContext ?? "<null>") +
+                "|target=" + FormatVector3(roundedTarget);
+        }
+
+        private static Vector3 RoundVector3(Vector3 value, float resolution)
+        {
+            if (resolution <= 0f)
+                return value;
+
+            value.x = Mathf.Round(value.x / resolution) * resolution;
+            value.y = Mathf.Round(value.y / resolution) * resolution;
+            value.z = Mathf.Round(value.z / resolution) * resolution;
+            return value;
         }
 
         private void ActivatePathlessTrackedNavigationState()
@@ -7019,6 +7781,8 @@ namespace DateEverythingAccess
             _doorTraversalInteractionTriggered = false;
             _doorTraversalPushThroughPosition = Vector3.zero;
             _doorTraversalPostThresholdCommitted = false;
+            ResetDoorCommittedSourceRecoveryState();
+            ResetDoorCommittedSourceWatchdogState();
         }
 
         private void SyncDoorTraversalState(NavigationGraph.PathStep step)
@@ -7036,7 +7800,155 @@ namespace DateEverythingAccess
                 _doorTraversalInteractionTriggered = false;
                 _doorTraversalPushThroughPosition = Vector3.zero;
                 _doorTraversalPostThresholdCommitted = false;
+                ResetDoorCommittedSourceRecoveryState();
+                ResetDoorCommittedSourceWatchdogState();
             }
+        }
+
+        private void ResetDoorCommittedSourceRecoveryState()
+        {
+            _doorCommittedSourceRecoveryStepKey = null;
+            _doorCommittedSourceRecoveryStage = DoorCommittedSourceRecoveryStageNone;
+        }
+
+        private void ResetDoorCommittedSourceWatchdogState()
+        {
+            _doorCommittedSourceWatchdogStepKey = null;
+            _doorCommittedSourceWatchdogLoopTripCount = 0;
+            _doorCommittedSourceWatchdogInteractionRetryCount = 0;
+        }
+
+        private void ActivateDoorCommittedSourceRecoveryFromLoop(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            NavigationTargetKind targetKind,
+            Vector3 targetPosition)
+        {
+            if (step == null ||
+                step.Kind != NavigationGraph.StepKind.Door ||
+                targetKind == NavigationTargetKind.TransitionInteractable ||
+                targetPosition == Vector3.zero ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                string.IsNullOrWhiteSpace(step.FromZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                !IsDoorTraversalPostThresholdCommitted(step))
+            {
+                return;
+            }
+
+            string stepKey = BuildNavigationStepKey(step);
+            if (string.IsNullOrWhiteSpace(stepKey))
+                return;
+
+            if (TryForceDoorInteractionRetryFromCommittedSourceLoop(
+                    step,
+                    stepKey,
+                    targetKind,
+                    targetPosition))
+            {
+                return;
+            }
+
+            if (string.Equals(_doorCommittedSourceRecoveryStepKey, stepKey, StringComparison.Ordinal) &&
+                _doorCommittedSourceRecoveryStage != DoorCommittedSourceRecoveryStageNone)
+            {
+                if (_doorCommittedSourceRecoveryStage == DoorCommittedSourceRecoveryStageSourceThreshold)
+                {
+                    _doorCommittedSourceRecoveryStage = DoorCommittedSourceRecoveryStagePushThrough;
+                    LogNavigationAutoWalkDebug(
+                        "Escalated door committed-source recovery stage=PushThrough due to repeated loop detection" +
+                        " targetKind=" + targetKind +
+                        " targetPosition=" + FormatVector3(targetPosition) +
+                        " step=" + DescribeNavigationStep(step));
+                }
+
+                return;
+            }
+
+            _doorCommittedSourceRecoveryStepKey = stepKey;
+            _doorCommittedSourceRecoveryStage = DoorCommittedSourceRecoveryStageSourceThreshold;
+            LogNavigationAutoWalkDebug(
+                "Activated door committed-source recovery stage=SourceThreshold" +
+                " targetKind=" + targetKind +
+                " targetPosition=" + FormatVector3(targetPosition) +
+                " step=" + DescribeNavigationStep(step));
+        }
+
+        private bool TryForceDoorInteractionRetryFromCommittedSourceLoop(
+            NavigationGraph.PathStep step,
+            string stepKey,
+            NavigationTargetKind targetKind,
+            Vector3 targetPosition)
+        {
+            if (step == null || string.IsNullOrWhiteSpace(stepKey))
+                return false;
+
+            if (!string.Equals(_doorCommittedSourceWatchdogStepKey, stepKey, StringComparison.Ordinal))
+            {
+                _doorCommittedSourceWatchdogStepKey = stepKey;
+                _doorCommittedSourceWatchdogLoopTripCount = 0;
+                _doorCommittedSourceWatchdogInteractionRetryCount = 0;
+            }
+
+            _doorCommittedSourceWatchdogLoopTripCount++;
+            LogNavigationAutoWalkDebug(
+                "Door committed-source watchdog loop trip" +
+                " count=" + _doorCommittedSourceWatchdogLoopTripCount +
+                " retryCount=" + _doorCommittedSourceWatchdogInteractionRetryCount +
+                " targetKind=" + targetKind +
+                " targetPosition=" + FormatVector3(targetPosition) +
+                " step=" + DescribeNavigationStep(step));
+
+            if (_doorCommittedSourceWatchdogLoopTripCount <
+                DoorCommittedSourceWatchdogLoopTripsBeforeRetry)
+            {
+                return false;
+            }
+
+            _doorCommittedSourceWatchdogLoopTripCount = 0;
+            if (_doorCommittedSourceWatchdogInteractionRetryCount >=
+                DoorCommittedSourceWatchdogMaxInteractionRetries)
+            {
+                LogNavigationAutoWalkDebug(
+                    "Door committed-source watchdog retries exhausted" +
+                    " maxRetries=" + DoorCommittedSourceWatchdogMaxInteractionRetries +
+                    " targetKind=" + targetKind +
+                    " targetPosition=" + FormatVector3(targetPosition) +
+                    " step=" + DescribeNavigationStep(step));
+                return false;
+            }
+
+            if (!_doorTraversalInteractionTriggered ||
+                !string.Equals(_doorTraversalStepKey, stepKey, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            _doorCommittedSourceWatchdogInteractionRetryCount++;
+            _doorTraversalInteractionTriggered = false;
+            _doorTraversalPushThroughPosition = Vector3.zero;
+            _doorTraversalPostThresholdCommitted = false;
+            if (_transitionSweepSession != null &&
+                _transitionSweepSession.Kind == TransitionSweepKind.Door &&
+                _transitionSweepSession.CurrentStep != null &&
+                string.Equals(stepKey, BuildNavigationStepKey(_transitionSweepSession.CurrentStep), StringComparison.Ordinal))
+            {
+                _transitionSweepSession.DoorInteractionTriggered = false;
+                _transitionSweepSession.DoorPushThroughPosition = Vector3.zero;
+                _transitionSweepSession.DoorPostThresholdCommitted = false;
+            }
+
+            ResetDoorCommittedSourceRecoveryState();
+            _autoWalkRecoveryAttempts = 0;
+            ClearLocalNavigationPathState();
+            LogNavigationAutoWalkDebug(
+                "Door committed-source watchdog forcing interaction retry" +
+                " retryAttempt=" + _doorCommittedSourceWatchdogInteractionRetryCount +
+                " maxRetries=" + DoorCommittedSourceWatchdogMaxInteractionRetries +
+                " targetKind=" + targetKind +
+                " targetPosition=" + FormatVector3(targetPosition) +
+                " step=" + DescribeNavigationStep(step));
+            return true;
         }
 
         private void ClearNavigationZoneOverride()
@@ -7232,8 +8144,9 @@ namespace DateEverythingAccess
             if (step == null || step.Kind != NavigationGraph.StepKind.OpenPassage)
                 return OpenPassageTraversalStage.None;
 
-            if (!string.IsNullOrEmpty(step.ToZone) &&
-                IsZoneEquivalentToNavigationZone(currentZone, step.ToZone))
+            if ((!string.IsNullOrEmpty(step.ToZone) &&
+                 IsZoneEquivalentToNavigationZone(currentZone, step.ToZone)) ||
+                IsAcceptedOverrideDestinationZone(step, currentZone))
             {
                 if (_openPassageTraversalStage != OpenPassageTraversalStage.DestinationHandoff)
                     _openPassageDestinationHandoffProgressFloor = 0f;
@@ -7507,6 +8420,7 @@ namespace DateEverythingAccess
                 return false;
             }
 
+            string stepKey = BuildNavigationStepKey(step);
             if (!CanAutoInteractWithStep(step, interactable, out string interactionReason))
             {
                 if (IsAlreadyOpenInteractionReason(interactionReason))
@@ -7514,21 +8428,28 @@ namespace DateEverythingAccess
                     Vector3 pushThroughPosition = BuildDoorTraversalPushThroughPosition(step, interactable);
                     if (step.Kind == NavigationGraph.StepKind.Door)
                     {
-                        _doorTraversalStepKey = BuildNavigationStepKey(step);
+                        bool preserveDoorPostThresholdCommit =
+                            _doorTraversalInteractionTriggered &&
+                            _doorTraversalPostThresholdCommitted &&
+                            string.Equals(_doorTraversalStepKey, stepKey, StringComparison.Ordinal);
+                        _doorTraversalStepKey = stepKey;
                         _doorTraversalInteractionTriggered = true;
-                        _doorTraversalPostThresholdCommitted = false;
+                        _doorTraversalPostThresholdCommitted = preserveDoorPostThresholdCommit;
                         if (pushThroughPosition != Vector3.zero)
                             _doorTraversalPushThroughPosition = pushThroughPosition;
                     }
                     if (_transitionSweepSession != null &&
                         _transitionSweepSession.Kind == TransitionSweepKind.Door &&
                         string.Equals(
-                            BuildNavigationStepKey(step),
+                            stepKey,
                             BuildNavigationStepKey(_transitionSweepSession.CurrentStep),
                             StringComparison.Ordinal))
                     {
+                        bool preserveSweepPostThresholdCommit =
+                            _transitionSweepSession.DoorInteractionTriggered &&
+                            _transitionSweepSession.DoorPostThresholdCommitted;
                         _transitionSweepSession.DoorInteractionTriggered = true;
-                        _transitionSweepSession.DoorPostThresholdCommitted = false;
+                        _transitionSweepSession.DoorPostThresholdCommitted = preserveSweepPostThresholdCommit;
                         if (pushThroughPosition != Vector3.zero)
                             _transitionSweepSession.DoorPushThroughPosition = pushThroughPosition;
                     }
@@ -7570,12 +8491,32 @@ namespace DateEverythingAccess
             ResetAutoWalkProgress();
             if (step.Kind == NavigationGraph.StepKind.Door)
             {
-                _doorTraversalStepKey = BuildNavigationStepKey(step);
+                bool preserveDoorPostThresholdCommit =
+                    _doorTraversalInteractionTriggered &&
+                    _doorTraversalPostThresholdCommitted &&
+                    string.Equals(_doorTraversalStepKey, stepKey, StringComparison.Ordinal);
+                _doorTraversalStepKey = stepKey;
                 _doorTraversalInteractionTriggered = true;
-                _doorTraversalPostThresholdCommitted = false;
+                _doorTraversalPostThresholdCommitted = preserveDoorPostThresholdCommit;
                 Vector3 pushThroughPosition = BuildDoorTraversalPushThroughPosition(step, interactable);
                 if (pushThroughPosition != Vector3.zero)
                     _doorTraversalPushThroughPosition = pushThroughPosition;
+
+                if (_transitionSweepSession != null &&
+                    _transitionSweepSession.Kind == TransitionSweepKind.Door &&
+                    string.Equals(
+                        stepKey,
+                        BuildNavigationStepKey(_transitionSweepSession.CurrentStep),
+                        StringComparison.Ordinal))
+                {
+                    bool preserveSweepPostThresholdCommit =
+                        _transitionSweepSession.DoorInteractionTriggered &&
+                        _transitionSweepSession.DoorPostThresholdCommitted;
+                    _transitionSweepSession.DoorInteractionTriggered = true;
+                    _transitionSweepSession.DoorPostThresholdCommitted = preserveSweepPostThresholdCommit;
+                    if (pushThroughPosition != Vector3.zero)
+                        _transitionSweepSession.DoorPushThroughPosition = pushThroughPosition;
+                }
             }
             LogNavigationTransitionDebug(
                 "Transition interaction fired interactable=" + DescribeInteractable(interactable) +
@@ -7622,8 +8563,9 @@ namespace DateEverythingAccess
 
             Transform playerTransform = BetterPlayerControl.Instance.transform;
             InteractableObj activeObject = Singleton<InteractableManager>.Instance.activeObject;
-            bool prefersNamedConnector = HasNamedTransitionConnectors(step);
-            if (prefersNamedConnector &&
+            bool requiresNamedConnector = step.Kind == NavigationGraph.StepKind.Door &&
+                HasNamedTransitionConnectors(step);
+            if (requiresNamedConnector &&
                 IsMatchingNamedTransitionInteractable(step, activeObject) &&
                 IsInteractableWithinRange(activeObject, playerTransform.position))
             {
@@ -7634,7 +8576,7 @@ namespace DateEverythingAccess
                 return true;
             }
 
-            if (!prefersNamedConnector &&
+            if (!requiresNamedConnector &&
                 IsMatchingTransitionInteractable(step, activeObject) &&
                 IsInteractableWithinRange(activeObject, playerTransform.position))
             {
@@ -7648,18 +8590,32 @@ namespace DateEverythingAccess
             InteractableObj[] candidates = FindObjectsOfType<InteractableObj>();
             float bestScore = float.MaxValue;
             bool foundNamedConnectorCandidate = false;
+            Vector3 sourceReference = step != null && step.Kind == NavigationGraph.StepKind.Door
+                ? GetDoorTraversalSourceReferencePosition(step)
+                : step != null && step.FromWaypoint != Vector3.zero
+                    ? step.FromWaypoint
+                    : Vector3.zero;
+            if (sourceReference == Vector3.zero && step != null && step.FromCrossingAnchor != Vector3.zero)
+                sourceReference = step.FromCrossingAnchor;
+            if (sourceReference == Vector3.zero)
+                sourceReference = playerTransform.position;
             for (int i = 0; i < candidates.Length; i++)
             {
                 InteractableObj candidate = candidates[i];
                 bool matchesNamedConnector = IsMatchingNamedTransitionInteractable(step, candidate);
-                if (prefersNamedConnector && !matchesNamedConnector)
+                if (requiresNamedConnector && !matchesNamedConnector)
                     continue;
 
                 if (!IsMatchingTransitionInteractable(step, candidate) || !IsInteractableWithinRange(candidate, playerTransform.position))
                     continue;
 
-                float score = Vector3.Distance(candidate.transform.position, step.FromWaypoint) +
+                float score = Vector3.Distance(candidate.transform.position, sourceReference) +
                     Vector3.Distance(candidate.transform.position, playerTransform.position);
+                if (step != null && step.ConnectorObjectPosition != Vector3.zero)
+                {
+                    score += Vector3.Distance(candidate.transform.position, step.ConnectorObjectPosition) * 0.5f;
+                }
+
                 if (score >= bestScore)
                     continue;
 
@@ -7668,31 +8624,20 @@ namespace DateEverythingAccess
                 foundNamedConnectorCandidate = matchesNamedConnector;
             }
 
-            if (interactable == null && prefersNamedConnector)
-            {
-                for (int i = 0; i < candidates.Length; i++)
-                {
-                    InteractableObj candidate = candidates[i];
-                    if (!IsMatchingTransitionInteractable(step, candidate) || !IsInteractableWithinRange(candidate, playerTransform.position))
-                        continue;
-
-                    float score = Vector3.Distance(candidate.transform.position, step.FromWaypoint) +
-                        Vector3.Distance(candidate.transform.position, playerTransform.position);
-                    if (score >= bestScore)
-                        continue;
-
-                    bestScore = score;
-                    interactable = candidate;
-                }
-            }
-
             if (interactable != null)
             {
                 _instance?.LogNavigationTransitionDebug(
                     "Transition interactable resolved from search interactable=" + DescribeInteractable(interactable) +
-                    " namedConnectorPreferred=" + prefersNamedConnector +
+                    " namedConnectorRequired=" + requiresNamedConnector +
                     " namedConnectorMatched=" + foundNamedConnectorCandidate +
                     " score=" + bestScore.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " step=" + DescribeNavigationStep(step));
+            }
+            else if (requiresNamedConnector)
+            {
+                _instance?.LogNavigationTransitionDebug(
+                    "Transition interactable search found no named connector match player=" + FormatVector3(playerTransform.position) +
+                    " activeObject=" + DescribeInteractable(activeObject) +
                     " step=" + DescribeNavigationStep(step));
             }
             else
@@ -7864,7 +8809,15 @@ namespace DateEverythingAccess
 
             if (IsMatchingNamedTransitionInteractable(step, interactable))
             {
-                return true;
+                switch (step.Kind)
+                {
+                    case NavigationGraph.StepKind.Teleporter:
+                        return interactable.GetComponent<Teleporter>() != null;
+                    case NavigationGraph.StepKind.Door:
+                        return interactable.GetComponent<Door>() != null || interactable.GetComponent<SlidingDoor>() != null;
+                    default:
+                        return step.RequiresInteraction;
+                }
             }
 
             switch (step.Kind)
@@ -7940,6 +8893,12 @@ namespace DateEverythingAccess
 
                 reason = "sliding door closed";
                 return true;
+            }
+
+            if (step.Kind == NavigationGraph.StepKind.Door)
+            {
+                reason = "door component missing";
+                return false;
             }
 
             reason = step.RequiresInteraction ? "generic required interaction" : "no supported interaction component";
@@ -10114,7 +11073,9 @@ namespace DateEverythingAccess
         {
             return !string.IsNullOrEmpty(snapshot) &&
                 (snapshot.IndexOf("dining_room->piano_room", StringComparison.Ordinal) >= 0 ||
-                 snapshot.IndexOf("office->office_closet", StringComparison.Ordinal) >= 0);
+                 snapshot.IndexOf("office->office_closet", StringComparison.Ordinal) >= 0 ||
+                 snapshot.IndexOf("auto-walk loop detected", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 snapshot.IndexOf("Auto-walk loop detector triggered", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         private static string FormatVector3(Vector3 value)
@@ -14110,6 +15071,14 @@ namespace DateEverythingAccess
             if (IsExactZoneMatch(firstZone, secondZone))
                 return true;
 
+            string firstNavigationZone = GetNavigationZoneName(firstZone);
+            string secondNavigationZone = GetNavigationZoneName(secondZone);
+            if (!string.IsNullOrWhiteSpace(firstNavigationZone) &&
+                !string.IsNullOrWhiteSpace(secondNavigationZone))
+            {
+                return string.Equals(firstNavigationZone, secondNavigationZone, StringComparison.OrdinalIgnoreCase);
+            }
+
             return string.Equals(GetZoneFamilyKey(firstZone), GetZoneFamilyKey(secondZone), StringComparison.OrdinalIgnoreCase);
         }
 
@@ -14134,11 +15103,8 @@ namespace DateEverythingAccess
                 return false;
 
             string normalizedRuntimeZone = GetNavigationZoneName(runtimeZone);
-            if (!string.IsNullOrEmpty(normalizedRuntimeZone) &&
-                string.Equals(normalizedRuntimeZone, navigationZone, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
+            if (!string.IsNullOrEmpty(normalizedRuntimeZone))
+                return string.Equals(normalizedRuntimeZone, navigationZone, StringComparison.OrdinalIgnoreCase);
 
             return AreZonesEquivalent(runtimeZone, navigationZone);
         }
