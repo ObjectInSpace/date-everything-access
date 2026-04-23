@@ -148,6 +148,7 @@ namespace DateEverythingAccess
 
             int passedCount = 0;
             int failedCount = 0;
+            int skippedCount = 0;
             int pendingCount = 0;
             if (entries != null)
             {
@@ -162,6 +163,10 @@ namespace DateEverythingAccess
                     else if (string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase))
                     {
                         failedCount++;
+                    }
+                    else if (string.Equals(status, "skipped", StringComparison.OrdinalIgnoreCase))
+                    {
+                        skippedCount++;
                     }
                     else
                     {
@@ -191,6 +196,7 @@ namespace DateEverythingAccess
                     entries,
                     passedCount,
                     failedCount,
+                    skippedCount,
                     pendingCount,
                     Main.GetPluginVersion(),
                     Main.GetRuntimeBuildStamp(),
@@ -327,6 +333,7 @@ namespace DateEverythingAccess
             List<MutableEntry> entries,
             int passedCount,
             int failedCount,
+            int skippedCount,
             int pendingCount,
             string pluginVersion,
             string runtimeBuildStamp,
@@ -362,6 +369,7 @@ namespace DateEverythingAccess
             AppendProperty(builder, "TotalCount", entries != null ? entries.Count : 0, 1, trailingComma: true);
             AppendProperty(builder, "PassedCount", passedCount, 1, trailingComma: true);
             AppendProperty(builder, "FailedCount", failedCount, 1, trailingComma: true);
+            AppendProperty(builder, "SkippedCount", skippedCount, 1, trailingComma: true);
             AppendProperty(builder, "PendingCount", pendingCount, 1, trailingComma: true);
 
             builder.Append(new string(' ', 4));

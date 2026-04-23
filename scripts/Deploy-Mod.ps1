@@ -1,7 +1,9 @@
 param(
     [string]$Configuration = "Debug",
     [string]$ProjectPath = (Join-Path $PSScriptRoot "..\DateEverythingAccess.csproj"),
-    [string]$GamePath = "D:\SteamLibrary\steamapps\Common\Date Everything"
+    [string]$GamePath = "D:\SteamLibrary\steamapps\Common\Date Everything",
+    [switch]$SkipNavigationLoopInspection,
+    [switch]$RestorePackages
 )
 
 $resolvedProject = (Resolve-Path $ProjectPath).Path
@@ -13,7 +15,11 @@ if (-not (Test-Path -LiteralPath $targetDir)) {
     exit 1
 }
 
-& (Join-Path $PSScriptRoot "Build-Mod.ps1") -Configuration $Configuration -ProjectPath $resolvedProject
+& (Join-Path $PSScriptRoot "Build-Mod.ps1") `
+    -Configuration $Configuration `
+    -ProjectPath $resolvedProject `
+    -SkipNavigationLoopInspection:$SkipNavigationLoopInspection `
+    -RestorePackages:$RestorePackages
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
