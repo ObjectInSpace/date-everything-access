@@ -159,6 +159,20 @@
       ]
     },
     {
+      "FromZone": "dorian_bathroom2",
+      "ToZone": "bathroom2",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -4.13,
+          "y": -0.6,
+          "z": 1.15
+        }
+      ]
+    },
+    {
       "FromZone": "dorian_bathroom2_2",
       "ToZone": "bathroom2",
       "DestinationApproachBias": 1.0,
@@ -269,7 +283,7 @@
         {
           "x": 3.2,
           "y": -0.6,
-          "z": 23.58
+          "z": 25.15
         }
       ]
     },

@@ -1,23 +1,23 @@
 {
-  "GeneratedAtUtc": "2026-04-24T01:44:26.9411996Z",
-  "ImportedAtUtc": "2026-04-24T02:14:51.0438348Z",
+  "GeneratedAtUtc": "2026-04-24T15:17:30.1424347Z",
+  "ImportedAtUtc": "2026-04-24T19:30:46.2408696Z",
   "ActiveScene": "ThirdPersonGreybox",
   "SweepKind": "Door",
   "PluginVersion": "0.1.1",
-  "RuntimeBuildStamp": "0.1.1|utc=2026-04-23T21:36:44.0000000Z|sha256=F1F6BCC014CB0D13FE63B38DC031142822EDA6ECB29E7D8CCEEB2B6B1D48DBB9",
+  "RuntimeBuildStamp": "0.1.1|utc=2026-04-24T15:01:30.0000000Z|sha256=C974570DA5E103C6E5483A5B429D40F59E2161892BD6BB7E1C67F2DE740CEF50",
   "RuntimeAssemblyPath": "D:\\SteamLibrary\\steamapps\\common\\Date Everything\\BepInEx\\plugins\\DateEverythingAccess.dll",
-  "RuntimeAssemblySha256": "F1F6BCC014CB0D13FE63B38DC031142822EDA6ECB29E7D8CCEEB2B6B1D48DBB9",
+  "RuntimeAssemblySha256": "C974570DA5E103C6E5483A5B429D40F59E2161892BD6BB7E1C67F2DE740CEF50",
   "OpenPassageOverrideStatus": "loaded",
   "OpenPassageOverrideDetail": "Entries=36 normalizedScalarArrays=False",
   "OpenPassageOverrideEntryCount": 36,
   "OpenPassageOverrideNormalizedScalarArrays": false,
   "OpenPassageOverridePath": "D:\\SteamLibrary\\steamapps\\common\\Date Everything\\BepInEx\\plugins\\navigation_transition_overrides.json",
-  "OpenPassageOverrideFileSha256": "8CF547D59FF8E541550EC4F34CEEE6D59C36C15EC18E7AF7F9037DB02076ED58",
-  "OpenPassageOverrideFileLastWriteUtc": "2026-04-16T18:35:16Z",
+  "OpenPassageOverrideFileSha256": "A08761721B6A387A94F3D7D9BD2A0F8E831F3DF8F111A5FACFE1B44FDCAA9FE6",
+  "OpenPassageOverrideFileLastWriteUtc": "2026-04-24T02:14:52Z",
   "IsComplete": true,
-  "TotalCount": 8,
-  "PassedCount": 4,
-  "FailedCount": 4,
+  "TotalCount": 22,
+  "PassedCount": 15,
+  "FailedCount": 7,
   "PendingCount": 0,
   "Entries": [
     {
@@ -31,14 +31,14 @@
       "ConnectorName": "AtticDoors",
       "RequiresInteraction": true,
       "Status": "failed",
-      "StatusDetail": "navigation blocked currentZone=attic detail=transition interaction failed at target step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=TransitionInteractable lastTarget=(5.03, 12.82, 2.13)",
-      "FailureReason": "navigation blocked currentZone=attic detail=transition interaction failed at target step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00)",
-      "DurationSeconds": 0.884,
-      "SpawnSource": "from_waypoint",
+      "StatusDetail": "navigation blocked currentZone=attic detail=transition interaction timed out step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=TransitionInteractable lastTarget=(5.03, 12.82, 2.13)",
+      "FailureReason": "navigation blocked currentZone=attic detail=transition interaction timed out step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00)",
+      "DurationSeconds": 3.133,
+      "SpawnSource": "zone",
       "SpawnPosition": {
-        "x": 12.112,
-        "y": 18.262,
-        "z": 3.885
+        "x": 14.364,
+        "y": 18.099,
+        "z": 3.74
       },
       "FromWaypoint": {
         "x": 12.112,
@@ -84,9 +84,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "attic",
       "PlayerPositionAtResult": {
-        "x": 5.621,
-        "y": 12.804,
-        "z": 2.298
+        "x": 5.587,
+        "y": 12.802,
+        "z": 2.22
       },
       "LastTargetKind": "TransitionInteractable",
       "LastTargetPosition": {
@@ -106,15 +106,15 @@
       "TransitionKind": "Door",
       "ConnectorName": "Doors_Bathroom1",
       "RequiresInteraction": true,
-      "Status": "passed",
-      "StatusDetail": "passed",
-      "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "Status": "failed",
+      "StatusDetail": "step timeout currentZone=bathroom1 player=(2.22, -0.60, 7.94) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(2.15, -0.62, 5.62)",
+      "FailureReason": "step timeout currentZone=bathroom1 player=(2.22, -0.60, 7.94)",
+      "DurationSeconds": 8.067,
       "SpawnSource": "door_clearance",
       "SpawnPosition": {
-        "x": 0.984,
+        "x": 0.966,
         "y": 4.17,
-        "z": 7.859
+        "z": 7.712
       },
       "FromWaypoint": {
         "x": -0.028,
@@ -160,17 +160,17 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "bathroom1",
       "PlayerPositionAtResult": {
-        "x": 1.536,
-        "y": -0.593,
-        "z": 7.615
+        "x": 2.219,
+        "y": -0.604,
+        "z": 7.937
       },
-      "LastTargetKind": "LocalWaypoint",
+      "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
-        "x": 2.225,
+        "x": 2.151,
         "y": -0.617,
-        "z": 7.094
+        "z": 5.623
       },
-      "LastLocalNavigationContext": "door-threshold-advance-local"
+      "LastLocalNavigationContext": null
     },
     {
       "Index": 2,
@@ -236,15 +236,15 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "bathroom2",
       "PlayerPositionAtResult": {
-        "x": -24.233,
-        "y": 12.824,
-        "z": -5.141
+        "x": -24.087,
+        "y": 12.823,
+        "z": -5.086
       },
-      "LastTargetKind": "ZoneFallback",
+      "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
-        "x": -23.666,
-        "y": 12.825,
-        "z": -7.124
+        "x": -25.462,
+        "y": 17.84,
+        "z": -12.636
       },
       "LastLocalNavigationContext": null
     },
@@ -261,12 +261,12 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.233,
       "SpawnSource": "door_clearance",
       "SpawnPosition": {
-        "x": -24.922,
+        "x": -24.898,
         "y": 18.23,
-        "z": -4.93
+        "z": -4.865
       },
       "FromWaypoint": {
         "x": -24.805,
@@ -312,21 +312,933 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "bathroom2",
       "PlayerPositionAtResult": {
-        "x": -24.362,
-        "y": 12.825,
-        "z": -5.08
+        "x": -24.064,
+        "y": 12.819,
+        "z": -5.101
       },
-      "LastTargetKind": "ZoneFallback",
+      "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
-        "x": -23.726,
-        "y": 12.825,
-        "z": -7.122
+        "x": -25.462,
+        "y": 17.84,
+        "z": -12.636
       },
       "LastLocalNavigationContext": null
     },
     {
       "Index": 4,
       "StepIndex": 4,
+      "Key": "transition:bedroom->bathroom2",
+      "FromZone": "bedroom",
+      "ToZone": "bathroom2",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Bedroom_Bathroom",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.567,
+      "SpawnSource": "door_clearance",
+      "SpawnPosition": {
+        "x": -23.496,
+        "y": 17.84,
+        "z": -7.908
+      },
+      "FromWaypoint": {
+        "x": -25.462,
+        "y": 17.84,
+        "z": -12.636
+      },
+      "ToWaypoint": {
+        "x": -25.407,
+        "y": 17.84,
+        "z": 0.034
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": -25.462,
+        "y": 17.84,
+        "z": -12.636
+      },
+      "SourceClearPoint": {
+        "x": -23.666,
+        "y": 12.825,
+        "z": -7.124
+      },
+      "DestinationClearPoint": {
+        "x": -23.66,
+        "y": 12.825,
+        "z": -5.524
+      },
+      "DestinationApproachPoint": {
+        "x": -25.407,
+        "y": 17.84,
+        "z": 0.034
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 0,
+      "CurrentZoneAtResult": "bedroom4",
+      "PlayerPositionAtResult": {
+        "x": -24.458,
+        "y": 12.815,
+        "z": -7.264
+      },
+      "LastTargetKind": "ZoneFallback",
+      "LastTargetPosition": {
+        "x": -23.66,
+        "y": 12.825,
+        "z": -5.524
+      },
+      "LastLocalNavigationContext": null
+    },
+    {
+      "Index": 5,
+      "StepIndex": 5,
+      "Key": "transition:bedroom->bedroom_closet",
+      "FromZone": "bedroom",
+      "ToZone": "bedroom_closet",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Bedroom_ClosetRight_Outer",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.0,
+      "SpawnSource": "zone",
+      "SpawnPosition": {
+        "x": -13.548,
+        "y": 16.73,
+        "z": -10.594
+      },
+      "FromWaypoint": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": -11.726
+      },
+      "ToWaypoint": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": -23.996
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": -11.726
+      },
+      "SourceClearPoint": {
+        "x": -4.526,
+        "y": 12.825,
+        "z": -19.804
+      },
+      "DestinationClearPoint": {
+        "x": -4.526,
+        "y": 12.825,
+        "z": -21.404
+      },
+      "DestinationApproachPoint": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": -23.996
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 2,
+      "CurrentZoneAtResult": "bedroom_closet",
+      "PlayerPositionAtResult": {
+        "x": -5.734,
+        "y": 12.83,
+        "z": -18.843
+      },
+      "LastTargetKind": "LocalWaypoint",
+      "LastTargetPosition": {
+        "x": -9.349,
+        "y": 18.02,
+        "z": -22.412
+      },
+      "LastLocalNavigationContext": "step-destination"
+    },
+    {
+      "Index": 6,
+      "StepIndex": 6,
+      "Key": "transition:bedroom->upper_hallway",
+      "FromZone": "bedroom",
+      "ToZone": "upper_hallway",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Bedroom",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.433,
+      "SpawnSource": "door_clearance",
+      "SpawnPosition": {
+        "x": -11.059,
+        "y": 17.84,
+        "z": -8.431
+      },
+      "FromWaypoint": {
+        "x": -11.997,
+        "y": 17.84,
+        "z": -12.636
+      },
+      "ToWaypoint": {
+        "x": -12.604,
+        "y": 17.84,
+        "z": 0.034
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": -11.997,
+        "y": 17.84,
+        "z": -12.636
+      },
+      "SourceClearPoint": {
+        "x": -10.686,
+        "y": 12.825,
+        "z": -7.261
+      },
+      "DestinationClearPoint": {
+        "x": -10.762,
+        "y": 12.825,
+        "z": -5.663
+      },
+      "DestinationApproachPoint": {
+        "x": -12.604,
+        "y": 17.84,
+        "z": 0.034
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 0,
+      "CurrentZoneAtResult": "bedroom",
+      "PlayerPositionAtResult": {
+        "x": -12.086,
+        "y": 12.818,
+        "z": -7.345
+      },
+      "LastTargetKind": "LocalWaypoint",
+      "LastTargetPosition": {
+        "x": -11.198,
+        "y": 12.825,
+        "z": -7.531
+      },
+      "LastLocalNavigationContext": "door-threshold-advance-local"
+    },
+    {
+      "Index": 7,
+      "StepIndex": 7,
+      "Key": "transition:bedroom_closet->bedroom",
+      "FromZone": "bedroom_closet",
+      "ToZone": "bedroom",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Bedroom_ClosetRight_Outer",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.1,
+      "SpawnSource": "door_clearance",
+      "SpawnPosition": {
+        "x": -5.745,
+        "y": 18.02,
+        "z": -21.892
+      },
+      "FromWaypoint": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": -23.996
+      },
+      "ToWaypoint": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": -11.726
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": -23.996
+      },
+      "SourceClearPoint": {
+        "x": -4.526,
+        "y": 12.825,
+        "z": -21.404
+      },
+      "DestinationClearPoint": {
+        "x": -4.526,
+        "y": 12.825,
+        "z": -19.804
+      },
+      "DestinationApproachPoint": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": -11.726
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 2,
+      "CurrentZoneAtResult": "bedroom_closet",
+      "PlayerPositionAtResult": {
+        "x": -5.094,
+        "y": 12.823,
+        "z": -21.753
+      },
+      "LastTargetKind": "LocalWaypoint",
+      "LastTargetPosition": {
+        "x": -4.349,
+        "y": 12.825,
+        "z": -21.412
+      },
+      "LastLocalNavigationContext": "door-threshold-advance-local"
+    },
+    {
+      "Index": 8,
+      "StepIndex": 8,
+      "Key": "transition:dorian_bathroom2_2->bathroom2",
+      "FromZone": "dorian_bathroom2_2",
+      "ToZone": "bathroom2",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Bedroom_Bathroom",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.233,
+      "SpawnSource": "zone",
+      "SpawnPosition": {
+        "x": -25.462,
+        "y": 17.84,
+        "z": -12.636
+      },
+      "FromWaypoint": {
+        "x": -25.462,
+        "y": 17.84,
+        "z": -12.636
+      },
+      "ToWaypoint": {
+        "x": -24.805,
+        "y": 18.23,
+        "z": -4.284
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": -25.462,
+        "y": 17.84,
+        "z": -12.636
+      },
+      "SourceClearPoint": {
+        "x": -23.726,
+        "y": 12.825,
+        "z": -7.122
+      },
+      "DestinationClearPoint": {
+        "x": -23.6,
+        "y": 12.825,
+        "z": -5.526
+      },
+      "DestinationApproachPoint": {
+        "x": -24.805,
+        "y": 18.23,
+        "z": -4.284
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 0,
+      "CurrentZoneAtResult": "bedroom4",
+      "PlayerPositionAtResult": {
+        "x": -24.453,
+        "y": 12.817,
+        "z": -7.337
+      },
+      "LastTargetKind": "ZoneFallback",
+      "LastTargetPosition": {
+        "x": -24.805,
+        "y": 18.23,
+        "z": -4.284
+      },
+      "LastLocalNavigationContext": null
+    },
+    {
+      "Index": 9,
+      "StepIndex": 9,
+      "Key": "transition:gym->gym_closet",
+      "FromZone": "gym",
+      "ToZone": "gym_closet",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Gym_ClosetOuter",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.1,
+      "SpawnSource": "door_clearance",
+      "SpawnPosition": {
+        "x": -5.788,
+        "y": 18.02,
+        "z": 22.66
+      },
+      "FromWaypoint": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": 20.664
+      },
+      "ToWaypoint": {
+        "x": 1.831,
+        "y": 18.02,
+        "z": 20.084
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": 20.664
+      },
+      "SourceClearPoint": {
+        "x": -5.325,
+        "y": 12.825,
+        "z": 23.97
+      },
+      "DestinationClearPoint": {
+        "x": -3.727,
+        "y": 12.825,
+        "z": 23.895
+      },
+      "DestinationApproachPoint": {
+        "x": 1.831,
+        "y": 18.02,
+        "z": 20.084
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 2,
+      "CurrentZoneAtResult": "gym4",
+      "PlayerPositionAtResult": {
+        "x": -5.337,
+        "y": 12.823,
+        "z": 22.836
+      },
+      "LastTargetKind": "EntryWaypoint",
+      "LastTargetPosition": {
+        "x": 1.831,
+        "y": 18.02,
+        "z": 20.084
+      },
+      "LastLocalNavigationContext": null
+    },
+    {
+      "Index": 10,
+      "StepIndex": 10,
+      "Key": "transition:gym->upper_hallway",
+      "FromZone": "gym",
+      "ToZone": "upper_hallway",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Gym_Hall",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.117,
+      "SpawnSource": "door_clearance",
+      "SpawnPosition": {
+        "x": -7.152,
+        "y": 17.84,
+        "z": 9.388
+      },
+      "FromWaypoint": {
+        "x": -7.748,
+        "y": 17.84,
+        "z": 13.564
+      },
+      "ToWaypoint": {
+        "x": -7.748,
+        "y": 17.84,
+        "z": 1.714
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": -7.748,
+        "y": 17.84,
+        "z": 13.564
+      },
+      "SourceClearPoint": {
+        "x": -6.166,
+        "y": 12.825,
+        "z": 8.842
+      },
+      "DestinationClearPoint": {
+        "x": -6.166,
+        "y": 12.825,
+        "z": 7.242
+      },
+      "DestinationApproachPoint": {
+        "x": -7.748,
+        "y": 17.84,
+        "z": 1.714
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 0,
+      "CurrentZoneAtResult": "gym8",
+      "PlayerPositionAtResult": {
+        "x": -6.712,
+        "y": 12.822,
+        "z": 9.278
+      },
+      "LastTargetKind": "EntryWaypoint",
+      "LastTargetPosition": {
+        "x": -7.748,
+        "y": 17.84,
+        "z": 1.714
+      },
+      "LastLocalNavigationContext": null
+    },
+    {
+      "Index": 11,
+      "StepIndex": 11,
+      "Key": "transition:gym_closet->gym",
+      "FromZone": "gym_closet",
+      "ToZone": "gym",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Gym_ClosetOuter",
+      "RequiresInteraction": true,
+      "Status": "failed",
+      "StatusDetail": "step timeout currentZone=gym_closet2 player=(-3.31, 12.91, 22.97) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-10.54, 18.02, 20.66)",
+      "FailureReason": "step timeout currentZone=gym_closet2 player=(-3.31, 12.91, 22.97)",
+      "DurationSeconds": 8.083,
+      "SpawnSource": "door_clearance",
+      "SpawnPosition": {
+        "x": -3.329,
+        "y": 18.02,
+        "z": 22.607
+      },
+      "FromWaypoint": {
+        "x": 1.831,
+        "y": 18.02,
+        "z": 20.084
+      },
+      "ToWaypoint": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": 20.664
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": 1.831,
+        "y": 18.02,
+        "z": 20.084
+      },
+      "SourceClearPoint": {
+        "x": -3.727,
+        "y": 12.825,
+        "z": 23.895
+      },
+      "DestinationClearPoint": {
+        "x": -5.325,
+        "y": 12.825,
+        "z": 23.97
+      },
+      "DestinationApproachPoint": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": 20.664
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 2,
+      "CurrentZoneAtResult": "gym_closet2",
+      "PlayerPositionAtResult": {
+        "x": -3.311,
+        "y": 12.907,
+        "z": 22.973
+      },
+      "LastTargetKind": "EntryWaypoint",
+      "LastTargetPosition": {
+        "x": -10.535,
+        "y": 18.02,
+        "z": 20.664
+      },
+      "LastLocalNavigationContext": null
+    },
+    {
+      "Index": 12,
+      "StepIndex": 12,
+      "Key": "transition:hallway->bathroom1",
+      "FromZone": "hallway",
+      "ToZone": "bathroom1",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Bathroom1",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 1.733,
+      "SpawnSource": "door_clearance",
+      "SpawnPosition": {
+        "x": 2.28,
+        "y": 4.17,
+        "z": 4.814
+      },
+      "FromWaypoint": {
+        "x": 0.523,
+        "y": 4.17,
+        "z": 0.664
+      },
+      "ToWaypoint": {
+        "x": -0.028,
+        "y": 4.17,
+        "z": 11.494
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": 0.523,
+        "y": 4.17,
+        "z": 0.664
+      },
+      "SourceClearPoint": {
+        "x": 2.151,
+        "y": -0.617,
+        "z": 5.623
+      },
+      "DestinationClearPoint": {
+        "x": 2.069,
+        "y": -0.617,
+        "z": 7.221
+      },
+      "DestinationApproachPoint": {
+        "x": -0.028,
+        "y": 4.17,
+        "z": 11.494
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 0,
+      "CurrentZoneAtResult": "hallway6",
+      "PlayerPositionAtResult": {
+        "x": 1.29,
+        "y": -0.601,
+        "z": 5.362
+      },
+      "LastTargetKind": "EntryWaypoint",
+      "LastTargetPosition": {
+        "x": -0.028,
+        "y": 4.17,
+        "z": 11.494
+      },
+      "LastLocalNavigationContext": null
+    },
+    {
+      "Index": 13,
+      "StepIndex": 13,
+      "Key": "transition:hallway->office",
+      "FromZone": "hallway",
+      "ToZone": "office",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Office",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.1,
+      "SpawnSource": "door_clearance",
+      "SpawnPosition": {
+        "x": 8.876,
+        "y": 4.17,
+        "z": 4.939
+      },
+      "FromWaypoint": {
+        "x": 8.31,
+        "y": 4.17,
+        "z": 0.664
+      },
+      "ToWaypoint": {
+        "x": 7.758,
+        "y": 4.17,
+        "z": 11.494
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": 8.31,
+        "y": 4.17,
+        "z": 0.664
+      },
+      "SourceClearPoint": {
+        "x": 9.886,
+        "y": -0.617,
+        "z": 5.491
+      },
+      "DestinationClearPoint": {
+        "x": 9.804,
+        "y": -0.617,
+        "z": 7.089
+      },
+      "DestinationApproachPoint": {
+        "x": 7.758,
+        "y": 4.17,
+        "z": 11.494
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 0,
+      "CurrentZoneAtResult": "hallway6",
+      "PlayerPositionAtResult": {
+        "x": 9.064,
+        "y": -0.592,
+        "z": 5.125
+      },
+      "LastTargetKind": "EntryWaypoint",
+      "LastTargetPosition": {
+        "x": 7.758,
+        "y": 4.17,
+        "z": 11.494
+      },
+      "LastLocalNavigationContext": null
+    },
+    {
+      "Index": 14,
+      "StepIndex": 14,
+      "Key": "transition:laundry_room->laundry_room_closet",
+      "FromZone": "laundry_room",
+      "ToZone": "laundry_room_closet",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Laundry_Closet",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.0,
+      "SpawnSource": "zone",
+      "SpawnPosition": {
+        "x": -18.383,
+        "y": 4.98,
+        "z": 33.885
+      },
+      "FromWaypoint": {
+        "x": -13.565,
+        "y": 3.92,
+        "z": 30.984
+      },
+      "ToWaypoint": {
+        "x": -13.189,
+        "y": 4.98,
+        "z": 29.026
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": -13.565,
+        "y": 3.92,
+        "z": 30.984
+      },
+      "SourceClearPoint": {
+        "x": -11.575,
+        "y": -0.617,
+        "z": 38.023
+      },
+      "DestinationClearPoint": {
+        "x": -11.273,
+        "y": -0.617,
+        "z": 36.451
+      },
+      "DestinationApproachPoint": {
+        "x": -13.189,
+        "y": 4.98,
+        "z": 29.026
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 2,
+      "CurrentZoneAtResult": "laundry_room_closet",
+      "PlayerPositionAtResult": {
+        "x": -12.426,
+        "y": -0.586,
+        "z": 35.612
+      },
+      "LastTargetKind": "LocalWaypoint",
+      "LastTargetPosition": {
+        "x": -12.397,
+        "y": 4.98,
+        "z": 31.791
+      },
+      "LastLocalNavigationContext": "step-destination"
+    },
+    {
+      "Index": 15,
+      "StepIndex": 15,
+      "Key": "transition:laundry_room_closet->laundry_room",
+      "FromZone": "laundry_room_closet",
+      "ToZone": "laundry_room",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Laundry_Closet",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.1,
+      "SpawnSource": "door_clearance",
+      "SpawnPosition": {
+        "x": -12.224,
+        "y": 4.98,
+        "z": 35.546
+      },
+      "FromWaypoint": {
+        "x": -13.189,
+        "y": 4.98,
+        "z": 29.026
+      },
+      "ToWaypoint": {
+        "x": -13.565,
+        "y": 3.92,
+        "z": 30.984
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": -13.189,
+        "y": 4.98,
+        "z": 29.026
+      },
+      "SourceClearPoint": {
+        "x": -11.273,
+        "y": -0.617,
+        "z": 36.451
+      },
+      "DestinationClearPoint": {
+        "x": -11.575,
+        "y": -0.617,
+        "z": 38.023
+      },
+      "DestinationApproachPoint": {
+        "x": -13.565,
+        "y": 3.92,
+        "z": 30.984
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 2,
+      "CurrentZoneAtResult": "laundry_room_closet",
+      "PlayerPositionAtResult": {
+        "x": -12.069,
+        "y": -0.592,
+        "z": 35.937
+      },
+      "LastTargetKind": "ZoneFallback",
+      "LastTargetPosition": {
+        "x": -11.575,
+        "y": -0.617,
+        "z": 38.023
+      },
+      "LastLocalNavigationContext": null
+    },
+    {
+      "Index": 16,
+      "StepIndex": 16,
       "Key": "transition:office->hallway",
       "FromZone": "office",
       "ToZone": "hallway",
@@ -335,14 +1247,14 @@
       "ConnectorName": "Doors_Office",
       "RequiresInteraction": true,
       "Status": "failed",
-      "StatusDetail": "step timeout currentZone=office6 player=(9.70, -0.60, 7.90) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(9.80, -0.62, 7.09)",
-      "FailureReason": "step timeout currentZone=office6 player=(9.70, -0.60, 7.90)",
-      "DurationSeconds": 8.001,
+      "StatusDetail": "step timeout currentZone=office6 player=(8.06, -0.60, 8.11) localContext=door-threshold-advance-local lastTargetKind=LocalWaypoint lastTarget=(9.66, -0.62, 8.64)",
+      "FailureReason": "step timeout currentZone=office6 player=(8.06, -0.60, 8.11)",
+      "DurationSeconds": 8.033,
       "SpawnSource": "door_clearance",
       "SpawnPosition": {
-        "x": 8.724,
+        "x": 9.22,
         "y": 4.17,
-        "z": 7.589
+        "z": 8.18
       },
       "FromWaypoint": {
         "x": 7.758,
@@ -388,21 +1300,21 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "office6",
       "PlayerPositionAtResult": {
-        "x": 9.7,
-        "y": -0.599,
-        "z": 7.901
+        "x": 8.056,
+        "y": -0.597,
+        "z": 8.107
       },
-      "LastTargetKind": "ZoneFallback",
+      "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
-        "x": 9.804,
+        "x": 9.659,
         "y": -0.617,
-        "z": 7.089
+        "z": 8.644
       },
-      "LastLocalNavigationContext": null
+      "LastLocalNavigationContext": "door-threshold-advance-local"
     },
     {
-      "Index": 5,
-      "StepIndex": 5,
+      "Index": 17,
+      "StepIndex": 17,
       "Key": "transition:office->office_closet",
       "FromZone": "office",
       "ToZone": "office_closet",
@@ -411,9 +1323,9 @@
       "ConnectorName": "Doors_Office_Closet",
       "RequiresInteraction": true,
       "Status": "failed",
-      "StatusDetail": "step timeout currentZone=office5 player=(5.52, -0.60, 25.38) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(3.24, -0.62, 25.90)",
-      "FailureReason": "step timeout currentZone=office5 player=(5.52, -0.60, 25.38)",
-      "DurationSeconds": 8.001,
+      "StatusDetail": "step timeout currentZone=office5 player=(5.66, -0.60, 25.54) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(3.24, -0.62, 25.90)",
+      "FailureReason": "step timeout currentZone=office5 player=(5.66, -0.60, 25.54)",
+      "DurationSeconds": 8.05,
       "SpawnSource": "door_clearance",
       "SpawnPosition": {
         "x": 5.386,
@@ -464,9 +1376,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "office5",
       "PlayerPositionAtResult": {
-        "x": 5.517,
+        "x": 5.663,
         "y": -0.601,
-        "z": 25.384
+        "z": 25.542
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -477,8 +1389,84 @@
       "LastLocalNavigationContext": null
     },
     {
-      "Index": 6,
-      "StepIndex": 6,
+      "Index": 18,
+      "StepIndex": 18,
+      "Key": "transition:office_closet->office",
+      "FromZone": "office_closet",
+      "ToZone": "office",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Office_Closet",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.2,
+      "SpawnSource": "door_clearance",
+      "SpawnPosition": {
+        "x": 2.395,
+        "y": 4.17,
+        "z": 25.931
+      },
+      "FromWaypoint": {
+        "x": -1.071,
+        "y": 4.17,
+        "z": 23.964
+      },
+      "ToWaypoint": {
+        "x": 9.358,
+        "y": 4.17,
+        "z": 24.474
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": -1.071,
+        "y": 4.17,
+        "z": 23.964
+      },
+      "SourceClearPoint": {
+        "x": 3.237,
+        "y": -0.617,
+        "z": 25.899
+      },
+      "DestinationClearPoint": {
+        "x": 4.835,
+        "y": -0.617,
+        "z": 25.978
+      },
+      "DestinationApproachPoint": {
+        "x": 9.358,
+        "y": 4.17,
+        "z": 24.474
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 0,
+      "CurrentZoneAtResult": "dorian_trapdoor1",
+      "PlayerPositionAtResult": {
+        "x": 3.009,
+        "y": -0.598,
+        "z": 25.188
+      },
+      "LastTargetKind": "ZoneFallback",
+      "LastTargetPosition": {
+        "x": 13.98,
+        "y": 4.217,
+        "z": 24.546
+      },
+      "LastLocalNavigationContext": null
+    },
+    {
+      "Index": 19,
+      "StepIndex": 19,
       "Key": "transition:upper_hallway->attic",
       "FromZone": "upper_hallway",
       "ToZone": "attic",
@@ -487,14 +1475,14 @@
       "ConnectorName": "AtticDoors",
       "RequiresInteraction": true,
       "Status": "failed",
-      "StatusDetail": "navigation blocked currentZone=upper_hallway2 detail=transition interaction failed at target step=upper_hallway->attic kind=Door interaction=True connector=AtticDoors from=(-4.25, 18.26, 3.89) to=(12.11, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=upper_hallway->attic kind=Door interaction=True connector=AtticDoors from=(-4.25, 18.26, 3.89) to=(12.11, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=TransitionInteractable lastTarget=(2.16, 12.82, 2.16)",
-      "FailureReason": "navigation blocked currentZone=upper_hallway2 detail=transition interaction failed at target step=upper_hallway->attic kind=Door interaction=True connector=AtticDoors from=(-4.25, 18.26, 3.89) to=(12.11, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=upper_hallway->attic kind=Door interaction=True connector=AtticDoors from=(-4.25, 18.26, 3.89) to=(12.11, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00)",
-      "DurationSeconds": 0.734,
-      "SpawnSource": "from_waypoint",
+      "StatusDetail": "navigation blocked currentZone=upper_hallway2 detail=transition interaction timed out step=upper_hallway->attic kind=Door interaction=True connector=AtticDoors from=(-4.25, 18.26, 3.89) to=(12.11, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=upper_hallway->attic kind=Door interaction=True connector=AtticDoors from=(-4.25, 18.26, 3.89) to=(12.11, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=TransitionInteractable lastTarget=(2.16, 12.82, 2.16)",
+      "FailureReason": "navigation blocked currentZone=upper_hallway2 detail=transition interaction timed out step=upper_hallway->attic kind=Door interaction=True connector=AtticDoors from=(-4.25, 18.26, 3.89) to=(12.11, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=upper_hallway->attic kind=Door interaction=True connector=AtticDoors from=(-4.25, 18.26, 3.89) to=(12.11, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00)",
+      "DurationSeconds": 3.183,
+      "SpawnSource": "zone",
       "SpawnPosition": {
-        "x": -4.25,
-        "y": 18.262,
-        "z": 3.885
+        "x": -7.573,
+        "y": 17.97,
+        "z": 3.853
       },
       "FromWaypoint": {
         "x": -4.25,
@@ -540,9 +1528,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "upper_hallway2",
       "PlayerPositionAtResult": {
-        "x": 1.67,
-        "y": 12.819,
-        "z": 2.295
+        "x": 1.762,
+        "y": 12.818,
+        "z": 2.254
       },
       "LastTargetKind": "TransitionInteractable",
       "LastTargetPosition": {
@@ -553,8 +1541,84 @@
       "LastLocalNavigationContext": null
     },
     {
-      "Index": 7,
-      "StepIndex": 7,
+      "Index": 20,
+      "StepIndex": 20,
+      "Key": "transition:upper_hallway->bedroom",
+      "FromZone": "upper_hallway",
+      "ToZone": "bedroom",
+      "StepKind": "Door",
+      "TransitionKind": "Door",
+      "ConnectorName": "Doors_Bedroom",
+      "RequiresInteraction": true,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.233,
+      "SpawnSource": "door_clearance",
+      "SpawnPosition": {
+        "x": -11.061,
+        "y": 17.84,
+        "z": -4.519
+      },
+      "FromWaypoint": {
+        "x": -12.604,
+        "y": 17.84,
+        "z": 0.034
+      },
+      "ToWaypoint": {
+        "x": -11.997,
+        "y": 17.84,
+        "z": -12.636
+      },
+      "FromCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ToCrossingAnchor": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "SourceApproachPoint": {
+        "x": -12.604,
+        "y": 17.84,
+        "z": 0.034
+      },
+      "SourceClearPoint": {
+        "x": -10.762,
+        "y": 12.825,
+        "z": -5.663
+      },
+      "DestinationClearPoint": {
+        "x": -10.686,
+        "y": 12.825,
+        "z": -7.261
+      },
+      "DestinationApproachPoint": {
+        "x": -11.997,
+        "y": 17.84,
+        "z": -12.636
+      },
+      "ValidationTimeoutSeconds": 8.0,
+      "StaticSuspicionScore": 0,
+      "CurrentZoneAtResult": "upper_hallway4",
+      "PlayerPositionAtResult": {
+        "x": -11.561,
+        "y": 12.818,
+        "z": -5.7
+      },
+      "LastTargetKind": "EntryWaypoint",
+      "LastTargetPosition": {
+        "x": -11.997,
+        "y": 17.84,
+        "z": -12.636
+      },
+      "LastLocalNavigationContext": null
+    },
+    {
+      "Index": 21,
+      "StepIndex": 21,
       "Key": "transition:upper_hallway->gym",
       "FromZone": "upper_hallway",
       "ToZone": "gym",
@@ -562,15 +1626,15 @@
       "TransitionKind": "Door",
       "ConnectorName": "Doors_Gym_Hall",
       "RequiresInteraction": true,
-      "Status": "passed",
-      "StatusDetail": "passed",
-      "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "Status": "failed",
+      "StatusDetail": "step timeout currentZone=upper_hallway player=(-6.07, 12.81, 6.40) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-6.17, 12.82, 8.84)",
+      "FailureReason": "step timeout currentZone=upper_hallway player=(-6.07, 12.81, 6.40)",
+      "DurationSeconds": 8.083,
       "SpawnSource": "door_clearance",
       "SpawnPosition": {
-        "x": -7.106,
+        "x": -5.942,
         "y": 17.84,
-        "z": 6.684
+        "z": 6.479
       },
       "FromWaypoint": {
         "x": -7.748,
@@ -616,17 +1680,17 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "upper_hallway",
       "PlayerPositionAtResult": {
-        "x": -6.964,
-        "y": 12.823,
-        "z": 7.068
+        "x": -6.072,
+        "y": 12.813,
+        "z": 6.403
       },
-      "LastTargetKind": "LocalWaypoint",
+      "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
-        "x": -6.344,
+        "x": -6.166,
         "y": 12.825,
-        "z": 6.656
+        "z": 8.842
       },
-      "LastLocalNavigationContext": "door-threshold-advance-local"
+      "LastLocalNavigationContext": null
     }
   ]
 }

@@ -144,6 +144,7 @@ namespace DateEverythingAccess
 
             float pushThroughDistance = GetPlanarDistanceToTarget(playerPosition, pushThroughPosition);
             float thresholdAdvanceArrivalDistance = GetRawNavigationGoalReachedDistance("door-threshold-advance");
+            float pushThroughLocalArrivalDistance = DoorPushThroughLocalNavigationGoalReachedDistance;
             bool shouldKeepDoorThresholdAdvance = sourceTarget != Vector3.zero &&
                 ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, pushThroughPosition);
 
@@ -219,6 +220,26 @@ namespace DateEverythingAccess
                 return true;
             }
 
+            bool shouldHoldPushThroughAfterNoHandoffCommit =
+                shouldCommitPostThreshold &&
+                isStillInSourceZone &&
+                isNoHandoffPushThroughCommitState &&
+                pushThroughPosition != Vector3.zero &&
+                pushThroughDistance > pushThroughLocalArrivalDistance;
+            if (shouldHoldPushThroughAfterNoHandoffCommit)
+            {
+                position = pushThroughPosition;
+                targetKind = NavigationTargetKind.ZoneFallback;
+                _rawNavigationTargetContext = "door-push-through";
+                LogNavigationTrackerDebug(
+                    "Holding door push-through target after no-handoff commit until local arrival" +
+                    " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " arrivalDistance=" + pushThroughLocalArrivalDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " stage=DoorPushThrough" +
+                    " step=" + DescribeNavigationStep(step));
+                return true;
+            }
+
             bool shouldHoldPushThroughInSourceZone =
                 shouldCommitPostThreshold &&
                 isStillInSourceZone &&
@@ -240,7 +261,8 @@ namespace DateEverythingAccess
 
             if (shouldCommitPostThreshold &&
                 isStillInSourceZone &&
-                isNoHandoffPushThroughCommitState)
+                isNoHandoffPushThroughCommitState &&
+                pushThroughDistance <= pushThroughLocalArrivalDistance)
             {
                 LogNavigationTrackerDebug(
                     "Promoting door entry advance after no-handoff push-through commit" +
@@ -391,6 +413,21 @@ namespace DateEverythingAccess
                             : 0f,
                         out float noHandoffCommitThreshold))
                 {
+                    if (pushThroughPosition != Vector3.zero &&
+                        pushThroughDistance > DoorPushThroughLocalNavigationGoalReachedDistance)
+                    {
+                        position = pushThroughPosition;
+                        targetKind = NavigationTargetKind.ZoneFallback;
+                        _rawNavigationTargetContext = "door-push-through";
+                        LogNavigationTrackerDebug(
+                            "Door committed-source recovery deferring no-handoff entry advance promotion" +
+                            " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " arrivalDistance=" + DoorPushThroughLocalNavigationGoalReachedDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " commitThreshold=" + noHandoffCommitThreshold.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " step=" + DescribeNavigationStep(step));
+                        return true;
+                    }
+
                     ResetDoorCommittedSourceRecoveryState();
                     LogNavigationTrackerDebug(
                         "Door committed-source recovery promoted to entry advance after no-handoff push-through commit" +
@@ -657,6 +694,10 @@ namespace DateEverythingAccess
                 currentZone,
                 out Vector3 activeDoorPushThroughPosition);
             bool isPostThresholdCommitted = IsDoorTraversalPostThresholdCommitted(step);
+            bool isRawDoorPushThrough = string.Equals(
+                _rawNavigationTargetContext,
+                "door-push-through",
+                StringComparison.Ordinal);
 
             if (!string.IsNullOrEmpty(step.FromZone) &&
                 IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) &&
@@ -755,6 +796,32 @@ namespace DateEverythingAccess
                         doorEntryAdvancePlanningGoal);
                     if (forwardProgress <= 0.08f)
                     {
+                        if (isRawDoorPushThrough &&
+                            TryGetDoorSourceLocalPlanningGoal(
+                                step,
+                                currentZone,
+                                activeDoorPushThroughPosition,
+                                "door-push-through-local",
+                                out Vector3 pushThroughRecoveryGoal) &&
+                            ShouldUseLocalNavigationGoal(
+                                playerPosition,
+                                pushThroughRecoveryGoal,
+                                GetLocalNavigationGoalReachedDistance("door-push-through-local")))
+                        {
+                            planningZone = ResolveLocalPlanningZone(
+                                currentZone,
+                                step.FromZone,
+                                playerPosition,
+                                pushThroughRecoveryGoal);
+                            planningGoal = pushThroughRecoveryGoal;
+                            planningContext = "door-push-through-local";
+                            LogNavigationTrackerDebug(
+                                "Promoted door push-through local recovery planning goal after entry-advance discard" +
+                                " planningGoal=" + FormatVector3(pushThroughRecoveryGoal) +
+                                " step=" + DescribeNavigationStep(step));
+                            return true;
+                        }
+
                         LogNavigationTrackerDebug(
                             "Discarded door entry advance local planning goal due to insufficient source-side progress" +
                             " sourceThresholdTarget=" + FormatVector3(sourceThresholdTarget) +

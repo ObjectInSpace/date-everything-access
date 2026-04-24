@@ -240,6 +240,7 @@ namespace DateEverythingAccess
             public string SpawnSource;
             public float TimeoutSeconds;
             public int EntryIndex;
+            public bool UsedZoneFallbackSpawn;
         }
 
         private sealed class LiveRouteAuditSession
@@ -1981,14 +1982,7 @@ namespace DateEverythingAccess
                 return;
             }
 
-            LiveRouteAuditReporter.MutableEntry entry = GetCurrentLiveRouteAuditEntry();
-            if (entry != null)
-            {
-                entry.SpawnPosition = spawnPosition;
-                entry.SpawnSource = spawnSource;
-                entry.Status = "pending";
-                entry.StatusDetail = "spawned";
-            }
+            UpdateCurrentLiveRouteAuditSpawn(spawnPosition, spawnSource, "spawned");
 
             Main.Log.LogInfo(
                 "Live route audit route staged index=" + nextIndex +
@@ -2007,8 +2001,27 @@ namespace DateEverythingAccess
 
             LiveRouteAuditRoute route = _liveRouteAuditSession.CurrentRoute;
             string currentZone = GetCurrentZoneNameInternal();
-            if (!IsZoneEquivalentToNavigationZone(currentZone, route.StartZone))
+            if (!IsAcceptableLiveRouteAuditStartZone(route, currentZone))
             {
+                if (!route.UsedZoneFallbackSpawn &&
+                    TryTeleportLiveRouteAuditPlayer(route, useZoneFallback: true, out Vector3 fallbackPosition, out string fallbackSource))
+                {
+                    route.UsedZoneFallbackSpawn = true;
+                    route.SpawnPosition = fallbackPosition;
+                    route.SpawnSource = fallbackSource;
+                    _liveRouteAuditSession.NextActionTime = Time.unscaledTime + LiveRouteAuditTeleportSettleSeconds;
+                    UpdateCurrentLiveRouteAuditSpawn(fallbackPosition, fallbackSource, "spawned-fallback");
+
+                    Main.Log.LogWarning(
+                        "Live route audit spawn zone mismatch after first teleport. Retrying with fallback spawn currentZone=" +
+                        (currentZone ?? "<null>") +
+                        " fallbackPosition=" + FormatVector3(fallbackPosition) +
+                        " fallbackSource=" + (fallbackSource ?? "<null>") +
+                        " routeKey=" + (route.Key ?? "<null>"));
+                    WriteLiveRouteAuditReport(isComplete: false);
+                    return;
+                }
+
                 RecordLiveRouteAuditFailure(
                     "spawn zone mismatch currentZone=" + (currentZone ?? "<null>") +
                     " expectedZone=" + (route.StartZone ?? "<null>"));
@@ -2047,6 +2060,70 @@ namespace DateEverythingAccess
                 "Live route audit route running key=" + (route.Key ?? "<null>") +
                 " signature=" + (route.RouteSignature ?? "<null>") +
                 " timeoutSeconds=" + route.TimeoutSeconds.ToString("0.00", CultureInfo.InvariantCulture));
+        }
+
+        private void UpdateCurrentLiveRouteAuditSpawn(
+            Vector3 spawnPosition,
+            string spawnSource,
+            string statusDetail)
+        {
+            LiveRouteAuditReporter.MutableEntry entry = GetCurrentLiveRouteAuditEntry();
+            if (entry == null)
+                return;
+
+            entry.SpawnPosition = spawnPosition;
+            entry.SpawnSource = spawnSource;
+            entry.Status = "pending";
+            entry.StatusDetail = statusDetail;
+        }
+
+        private bool IsAcceptableLiveRouteAuditStartZone(
+            LiveRouteAuditRoute route,
+            string currentZone)
+        {
+            if (route == null || string.IsNullOrEmpty(currentZone))
+                return false;
+
+            if (IsZoneEquivalentToNavigationZone(currentZone, route.StartZone))
+                return true;
+
+            if (route.PathSteps == null || route.PathSteps.Count < 1)
+                return false;
+
+            NavigationGraph.PathStep firstStep = route.PathSteps[0];
+            if (firstStep == null)
+                return false;
+
+            if (IsZoneEquivalentToNavigationZone(currentZone, firstStep.FromZone) ||
+                IsAcceptedOverrideSourceZone(firstStep, currentZone))
+            {
+                return true;
+            }
+
+            if (firstStep.Kind == NavigationGraph.StepKind.Door)
+                return false;
+
+            if (BetterPlayerControl.Instance == null)
+                return false;
+
+            Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
+            Vector3 referencePosition = GetTransitionSweepSourceReferencePosition(firstStep);
+            if (referencePosition == Vector3.zero)
+                return false;
+
+            referencePosition.y = playerPosition.y;
+            Vector3 flattenedPlayerPosition = playerPosition;
+            flattenedPlayerPosition.y = playerPosition.y;
+            float sourceDistance = Vector3.Distance(flattenedPlayerPosition, referencePosition);
+            if (sourceDistance > TransitionSweepSourceAcceptanceDistance)
+                return false;
+
+            Main.Log.LogWarning(
+                "Live route audit accepting sibling source zone currentZone=" + currentZone +
+                " expectedZone=" + (firstStep.FromZone ?? "<null>") +
+                " sourceDistance=" + sourceDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                " routeKey=" + (route.Key ?? "<null>"));
+            return true;
         }
 
         private bool TrySkipLiveRouteAuditForUnavailableFirstTransition(
@@ -4668,7 +4745,103 @@ namespace DateEverythingAccess
                 entries.Add(entry);
             }
 
+            routes = BuildRepresentativeLiveRouteAuditRouteOrder(routes);
             return entries;
+        }
+
+        private static List<LiveRouteAuditRoute> BuildRepresentativeLiveRouteAuditRouteOrder(
+            List<LiveRouteAuditRoute> pendingRoutes)
+        {
+            if (pendingRoutes == null || pendingRoutes.Count < 2)
+                return pendingRoutes ?? new List<LiveRouteAuditRoute>();
+
+            var routesByStartZone = new SortedDictionary<string, List<LiveRouteAuditRoute>>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < pendingRoutes.Count; i++)
+            {
+                LiveRouteAuditRoute route = pendingRoutes[i];
+                if (route == null)
+                    continue;
+
+                string startZoneKey = string.IsNullOrWhiteSpace(route.StartZone) ? "<null>" : route.StartZone;
+                if (!routesByStartZone.TryGetValue(startZoneKey, out List<LiveRouteAuditRoute> groupedRoutes))
+                {
+                    groupedRoutes = new List<LiveRouteAuditRoute>();
+                    routesByStartZone[startZoneKey] = groupedRoutes;
+                }
+
+                groupedRoutes.Add(route);
+            }
+
+            if (routesByStartZone.Count < 2)
+                return pendingRoutes;
+
+            var startZoneKeys = new List<string>(routesByStartZone.Keys);
+            var orderedRoutes = new List<LiveRouteAuditRoute>(pendingRoutes.Count);
+            var recentlyUsedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            while (orderedRoutes.Count < pendingRoutes.Count)
+            {
+                bool appendedRoute = false;
+                bool selectedNewTarget = false;
+
+                for (int i = 0; i < startZoneKeys.Count; i++)
+                {
+                    string startZoneKey = startZoneKeys[i];
+                    List<LiveRouteAuditRoute> startZoneRoutes = routesByStartZone[startZoneKey];
+                    if (startZoneRoutes == null || startZoneRoutes.Count == 0)
+                        continue;
+
+                    int selectedIndex = SelectRepresentativeRouteIndex(startZoneRoutes, recentlyUsedTargets, out bool isNewTarget);
+                    LiveRouteAuditRoute selectedRoute = startZoneRoutes[selectedIndex];
+                    startZoneRoutes.RemoveAt(selectedIndex);
+                    orderedRoutes.Add(selectedRoute);
+                    appendedRoute = true;
+
+                    if (isNewTarget)
+                        selectedNewTarget = true;
+
+                    if (!string.IsNullOrWhiteSpace(selectedRoute.TargetZone))
+                        recentlyUsedTargets.Add(selectedRoute.TargetZone);
+                }
+
+                if (!appendedRoute)
+                    break;
+
+                if (!selectedNewTarget)
+                    recentlyUsedTargets.Clear();
+            }
+
+            return orderedRoutes.Count == pendingRoutes.Count
+                ? orderedRoutes
+                : pendingRoutes;
+        }
+
+        private static int SelectRepresentativeRouteIndex(
+            List<LiveRouteAuditRoute> candidateRoutes,
+            HashSet<string> recentlyUsedTargets,
+            out bool isNewTarget)
+        {
+            isNewTarget = false;
+            if (candidateRoutes == null || candidateRoutes.Count == 0)
+                return 0;
+
+            if (recentlyUsedTargets == null || recentlyUsedTargets.Count == 0)
+            {
+                isNewTarget = true;
+                return 0;
+            }
+
+            for (int i = 0; i < candidateRoutes.Count; i++)
+            {
+                string targetZone = candidateRoutes[i] != null ? candidateRoutes[i].TargetZone : null;
+                if (string.IsNullOrWhiteSpace(targetZone) || recentlyUsedTargets.Contains(targetZone))
+                    continue;
+
+                isNewTarget = true;
+                return i;
+            }
+
+            return 0;
         }
 
         private bool TryResolveLiveRouteAuditDoorFirstSpawnPosition(
@@ -4989,15 +5162,37 @@ namespace DateEverythingAccess
             out Vector3 spawnPosition,
             out string spawnSource)
         {
+            return TryTeleportLiveRouteAuditPlayer(route, useZoneFallback: false, out spawnPosition, out spawnSource);
+        }
+
+        private bool TryTeleportLiveRouteAuditPlayer(
+            LiveRouteAuditRoute route,
+            bool useZoneFallback,
+            out Vector3 spawnPosition,
+            out string spawnSource)
+        {
             spawnPosition = Vector3.zero;
             spawnSource = null;
             if (route == null || BetterPlayerControl.Instance == null)
                 return false;
 
-            spawnPosition = route.SpawnPosition;
-            spawnSource = route.SpawnSource;
-            if (spawnPosition == Vector3.zero &&
-                !TryResolveLiveRouteAuditSpawnPosition(route.StartZone, out spawnPosition, out spawnSource, out _))
+            if (useZoneFallback)
+            {
+                if (!TryResolveLiveRouteAuditFallbackSpawnPosition(route, out spawnPosition, out spawnSource))
+                    return false;
+            }
+            else
+            {
+                spawnPosition = route.SpawnPosition;
+                spawnSource = route.SpawnSource;
+                if (spawnPosition == Vector3.zero &&
+                    !TryResolveLiveRouteAuditSpawnPosition(route.StartZone, out spawnPosition, out spawnSource, out _))
+                {
+                    return false;
+                }
+            }
+
+            if (spawnPosition == Vector3.zero)
             {
                 return false;
             }
@@ -5014,6 +5209,74 @@ namespace DateEverythingAccess
             ApplyNavigationInput(Vector3.zero, Vector3.zero);
             ResetAutoWalkProgress();
             return true;
+        }
+
+        private bool TryResolveLiveRouteAuditFallbackSpawnPosition(
+            LiveRouteAuditRoute route,
+            out Vector3 spawnPosition,
+            out string spawnSource)
+        {
+            spawnPosition = Vector3.zero;
+            spawnSource = null;
+            if (route == null)
+                return false;
+
+            NavigationGraph.PathStep firstStep =
+                route.PathSteps != null && route.PathSteps.Count > 0
+                    ? route.PathSteps[0]
+                    : null;
+
+            if (firstStep != null &&
+                firstStep.Kind == NavigationGraph.StepKind.Door &&
+                TryFindTransitionInteractableCandidate(firstStep, out InteractableObj interactable) &&
+                interactable != null)
+            {
+                Vector3 oppositeStandClear = BuildDoorTransitionSweepStandClearPosition(
+                    firstStep,
+                    interactable,
+                    useOppositeLateralSide: true);
+                if (oppositeStandClear != Vector3.zero &&
+                    GetFlatDistance(oppositeStandClear, route.SpawnPosition) > 0.05f)
+                {
+                    spawnPosition = oppositeStandClear;
+                    spawnSource = "fallback_door_clearance_opposite";
+                    return true;
+                }
+            }
+
+            if (firstStep != null &&
+                firstStep.Kind == NavigationGraph.StepKind.Door &&
+                TryGetDoorTransitionSweepSpawnPosition(
+                    firstStep,
+                    useZoneFallback: true,
+                    out Vector3 doorFallbackPosition,
+                    out string doorFallbackSource) &&
+                doorFallbackPosition != Vector3.zero &&
+                GetFlatDistance(doorFallbackPosition, route.SpawnPosition) > 0.05f)
+            {
+                spawnPosition = doorFallbackPosition;
+                spawnSource = string.IsNullOrWhiteSpace(doorFallbackSource)
+                    ? "fallback_door_zone"
+                    : "fallback_door_" + doorFallbackSource;
+                return true;
+            }
+
+            if (TryResolveLiveRouteAuditSpawnPosition(
+                    route.StartZone,
+                    out Vector3 genericFallbackPosition,
+                    out string genericFallbackSource,
+                    out _) &&
+                genericFallbackPosition != Vector3.zero &&
+                GetFlatDistance(genericFallbackPosition, route.SpawnPosition) > 0.05f)
+            {
+                spawnPosition = genericFallbackPosition;
+                spawnSource = string.IsNullOrWhiteSpace(genericFallbackSource)
+                    ? "fallback_zone"
+                    : "fallback_" + genericFallbackSource;
+                return true;
+            }
+
+            return false;
         }
 
         private Vector3 GetLiveRouteAuditLookTarget(LiveRouteAuditRoute route, Vector3 spawnPosition)
