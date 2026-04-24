@@ -1,15 +1,17 @@
 Sweep report import summary
 Kind: Door
-Imported at: 2026-04-16T18:26:46.9630525Z
+Imported at: 2026-04-24T02:14:51.0826271Z
 Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\door_transition_sweep.live.json
 Output: .\artifacts\navigation\door_transition_sweep.live.json
-Report generated at: 2026-04-16T18:09:31.2361206Z
+Report generated at: 04/24/2026 01:44:26
 Active scene: ThirdPersonGreybox
-Runtime build: 0.1.1|utc=2026-04-16T17:58:14.0000000Z|sha256=469F249234CBA0C88B75F8F62D9CD63FB7DF6C65FD0705733DA0DC931081FEBB
-Override load: status=loaded entries=35 normalizedScalarArrays=False detail=Entries=35 normalizedScalarArrays=False
-Latest report totals: total=22 passed=20 failed=2 pending=0
-Imported status changes: newEntries=0 newlyPassed=2 newlyFailed=0 newlyPending=0 unchanged=20
+Runtime build: 0.1.1|utc=2026-04-23T21:36:44.0000000Z|sha256=F1F6BCC014CB0D13FE63B38DC031142822EDA6ECB29E7D8CCEEB2B6B1D48DBB9
+Override load: status=loaded entries=36 normalizedScalarArrays=False detail=Entries=36 normalizedScalarArrays=False
+Latest report totals: total=8 passed=4 failed=4 pending=0
+Imported status changes: newEntries=0 newlyPassed=0 newlyFailed=2 newlyPending=0 unchanged=6
 Door failure breakdown: interactionFalse=0 missingConnectorName=0 highSuspicion=0
 Remaining failed transitions:
-- office -> hallway | suspicion=0 | connector=Doors_Office | step timeout currentZone=office6 player=(8.24, -0.60, 7.55) localContext=door-threshold-handoff-local lastTargetKind=LocalWaypoint lastTarget=(9.16, -0.62, 8.64)
+- attic -> upper_hallway | suspicion=2 | connector=AtticDoors | navigation blocked currentZone=attic detail=transition interaction failed at target step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=TransitionInteractable lastTarget=(5.03, 12.82, 2.13)
+- office -> hallway | suspicion=0 | connector=Doors_Office | step timeout currentZone=office6 player=(9.70, -0.60, 7.90) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(9.80, -0.62, 7.09)
 - office -> office_closet | suspicion=0 | connector=Doors_Office_Closet | step timeout currentZone=office5 player=(5.52, -0.60, 25.38) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(3.24, -0.62, 25.90)
+- upper_hallway -> attic | suspicion=2 | connector=AtticDoors | navigation blocked currentZone=upper_hallway2 detail=transition interaction failed at target step=upper_hallway->attic kind=Door interaction=True connector=AtticDoors from=(-4.25, 18.26, 3.89) to=(12.11, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=upper_hallway->attic kind=Door interaction=True connector=AtticDoors from=(-4.25, 18.26, 3.89) to=(12.11, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=TransitionInteractable lastTarget=(2.16, 12.82, 2.16)

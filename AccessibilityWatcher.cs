@@ -251,6 +251,7 @@ namespace DateEverythingAccess
         private const float EstimatedSpeechWordsPerMinute = 185f;
         private const float EstimatedSpeechLeadInSeconds = 0.75f;
         private const float AutoWalkArrivalDistance = 2f;
+        private const float AutoWalkTransitionInteractableArrivalDistance = 0.75f;
         private const float AutoWalkOpenPassageDestinationApproachDistance = 2.5f;
         private const float AutoWalkLookScaleDegrees = 45f;
         private const float AutoWalkProgressDistance = 0.35f;
@@ -2334,6 +2335,9 @@ namespace DateEverythingAccess
                 IsAcceptedOverrideSourceZone(step, currentZone))
                 return true;
 
+            if (step.Kind == NavigationGraph.StepKind.Door)
+                return false;
+
             if (BetterPlayerControl.Instance == null)
                 return false;
 
@@ -3085,6 +3089,9 @@ namespace DateEverythingAccess
 
         private float GetAutoWalkArrivalDistance(NavigationTargetKind targetKind)
         {
+            if (targetKind == NavigationTargetKind.TransitionInteractable)
+                return AutoWalkTransitionInteractableArrivalDistance;
+
             if (targetKind == NavigationTargetKind.LocalWaypoint &&
                 !string.IsNullOrWhiteSpace(_localNavigationPathContext))
             {
@@ -3535,6 +3542,9 @@ namespace DateEverythingAccess
         {
             if (_transitionSweepSession == null)
                 return;
+
+            if (_isNavigationActive || _isAutoWalking || (_navigationPath != null && _navigationPath.Count > 0))
+                StopNavigationRuntime();
 
             TransitionSweepKind sweepKind = _transitionSweepSession.Kind;
             int totalCount = _transitionSweepSession.Entries.Count;
@@ -4371,6 +4381,9 @@ namespace DateEverythingAccess
                 "Transition sweep result status=" + status +
                 " failureReason=" + (failureReason ?? "<null>") +
                 " step=" + DescribeNavigationStep(step));
+
+            if (_isNavigationActive || _isAutoWalking || (_navigationPath != null && _navigationPath.Count > 0))
+                StopNavigationRuntime();
 
             _transitionSweepSession.CurrentStep = null;
             _transitionSweepSession.StepStartedAt = 0f;
@@ -5247,7 +5260,12 @@ namespace DateEverythingAccess
                     if (!TryAttemptTransitionInteraction(currentStep, allowOptionalDoorInteraction: false) &&
                         !TryRecoverAutoWalk(currentStep, targetKind))
                     {
-                        StopNavigationBlocked("transition interaction failed at target step=" + DescribeNavigationStep(currentStep));
+                        SetNavigationBlockedDetail("transition interaction failed at target step=" + DescribeNavigationStep(currentStep));
+                        if (Time.unscaledTime - _lastAutoWalkProgressTime >=
+                            GetAutoWalkBlockedTimeoutSeconds(currentStep, currentZone, targetKind, nextPosition))
+                        {
+                            StopNavigationBlocked("transition interaction timed out step=" + DescribeNavigationStep(currentStep));
+                        }
                     }
 
                     return;
@@ -5300,7 +5318,8 @@ namespace DateEverythingAccess
                 toTarget.y = 0f;
             }
 
-            if (targetKind == NavigationTargetKind.TransitionInteractable)
+            if (targetKind == NavigationTargetKind.TransitionInteractable &&
+                toTarget.sqrMagnitude <= autoWalkArrivalDistance * autoWalkArrivalDistance)
             {
                 ApplyNavigationInput(Vector3.zero, Vector3.zero);
                 LogNavigationTransitionDebug(
@@ -5576,6 +5595,7 @@ namespace DateEverythingAccess
             if (refreshedFirstStep != null &&
                 refreshedFirstStep.Kind == NavigationGraph.StepKind.OpenPassage)
             {
+                ResetDoorTraversalState();
                 string refreshedFirstStepKey = BuildNavigationStepKey(refreshedFirstStep);
                 if (!string.IsNullOrEmpty(previousOpenPassageStepKey) &&
                     string.Equals(previousOpenPassageStepKey, refreshedFirstStepKey, StringComparison.Ordinal))
@@ -5593,6 +5613,7 @@ namespace DateEverythingAccess
             else if (refreshedFirstStep != null &&
                 refreshedFirstStep.Kind == NavigationGraph.StepKind.Door)
             {
+                ResetOpenPassageTraversalState();
                 string refreshedFirstStepKey = BuildNavigationStepKey(refreshedFirstStep);
                 if (!string.IsNullOrEmpty(previousDoorTraversalStepKey) &&
                     string.Equals(previousDoorTraversalStepKey, refreshedFirstStepKey, StringComparison.Ordinal))
@@ -5604,10 +5625,8 @@ namespace DateEverythingAccess
                 }
                 else
                 {
+                    ResetDoorTraversalState();
                     _doorTraversalStepKey = refreshedFirstStepKey;
-                    _doorTraversalInteractionTriggered = false;
-                    _doorTraversalPushThroughPosition = Vector3.zero;
-                    _doorTraversalPostThresholdCommitted = false;
                 }
             }
             else
@@ -6690,6 +6709,18 @@ namespace DateEverythingAccess
             if (currentStep.Kind == NavigationGraph.StepKind.OpenPassage &&
                 IsCommittedOpenPassageTraversal(currentStep))
             {
+                bool isInSourceZone = !string.IsNullOrEmpty(currentStep.FromZone) &&
+                    (IsZoneEquivalentToNavigationZone(currentZone, currentStep.FromZone) ||
+                     IsAcceptedOverrideSourceZone(currentStep, currentZone));
+                bool isInDestinationZone = !string.IsNullOrEmpty(currentStep.ToZone) &&
+                    (IsZoneEquivalentToNavigationZone(currentZone, currentStep.ToZone) ||
+                     IsAcceptedOverrideDestinationZone(currentStep, currentZone));
+                if (!isInSourceZone && !isInDestinationZone)
+                {
+                    reason = "committed open-passage zone drift";
+                    return true;
+                }
+
                 if (ShouldAdvanceOpenPassageStepByGeometry(currentStep))
                 {
                     reason = "open-passage geometric advance";
@@ -6760,14 +6791,26 @@ namespace DateEverythingAccess
 
         private bool HasAdvancedBeyondStep(NavigationGraph.PathStep step)
         {
-            if (step == null || string.IsNullOrEmpty(step.FromZone))
+            if (step == null)
                 return false;
 
-            string currentZone = GetCurrentZoneNameInternal();
+            string currentZone = GetCurrentZoneNameForNavigation();
             if (string.IsNullOrEmpty(currentZone))
                 return false;
 
-            return !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone);
+            bool isInDestinationZone = !string.IsNullOrEmpty(step.ToZone) &&
+                (IsZoneEquivalentToNavigationZone(currentZone, step.ToZone) ||
+                 IsAcceptedOverrideDestinationZone(step, currentZone));
+            if (isInDestinationZone)
+                return true;
+
+            bool isInSourceZone = !string.IsNullOrEmpty(step.FromZone) &&
+                (IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                 IsAcceptedOverrideSourceZone(step, currentZone));
+            if (isInSourceZone)
+                return false;
+
+            return !string.IsNullOrEmpty(step.FromZone);
         }
 
         private bool IsCommittedOpenPassageTraversal(NavigationGraph.PathStep step)
@@ -6885,7 +6928,9 @@ namespace DateEverythingAccess
             if (!TryGetOpenPassageProgressMetrics(step, out float projectedProgress, out float segmentLength, out float destinationDistance))
                 return false;
 
-            return projectedProgress >= segmentLength ||
+            bool reachedProjectedEnd = projectedProgress >= segmentLength &&
+                destinationDistance <= AutoWalkOpenPassageDestinationApproachDistance;
+            return reachedProjectedEnd ||
                 destinationDistance <= AutoWalkArrivalDistance;
         }
 
@@ -7197,7 +7242,16 @@ namespace DateEverythingAccess
                     out planningGoal,
                     out planningContext))
             {
-                return true;
+                if (HasUsableLocalPlanningResult(planningZone, planningGoal))
+                    return true;
+
+                LogNavigationTrackerDebug(
+                    "Discarded open-passage local planning result due to unavailable planning zone" +
+                    " rawTargetPosition=" + FormatVector3(desiredPosition) +
+                    " step=" + DescribeNavigationStep(step));
+                planningZone = null;
+                planningGoal = Vector3.zero;
+                planningContext = null;
             }
 
             if (step != null)
@@ -7222,7 +7276,16 @@ namespace DateEverythingAccess
                         out planningGoal,
                         out planningContext))
                 {
-                    return true;
+                    if (HasUsableLocalPlanningResult(planningZone, planningGoal))
+                        return true;
+
+                    LogNavigationTrackerDebug(
+                        "Discarded door local planning result due to unavailable planning zone" +
+                        " rawTargetPosition=" + FormatVector3(desiredPosition) +
+                        " step=" + DescribeNavigationStep(step));
+                    planningZone = null;
+                    planningGoal = Vector3.zero;
+                    planningContext = null;
                 }
 
                 if (ShouldSuppressGenericDoorPostInteractionLocalFallback(
@@ -7244,7 +7307,8 @@ namespace DateEverythingAccess
                     planningZone = ResolveLocalPlanningZone(currentZone, step.FromZone, playerPosition, desiredPosition);
                     planningGoal = desiredPosition;
                     planningContext = "step-source";
-                    return true;
+                    if (HasUsableLocalPlanningResult(planningZone, planningGoal))
+                        return true;
                 }
 
                 if (!string.IsNullOrEmpty(step.ToZone) &&
@@ -7257,7 +7321,8 @@ namespace DateEverythingAccess
                     planningZone = ResolveLocalPlanningZone(currentZone, step.ToZone, playerPosition, desiredPosition);
                     planningGoal = desiredPosition;
                     planningContext = "step-destination";
-                    return true;
+                    if (HasUsableLocalPlanningResult(planningZone, planningGoal))
+                        return true;
                 }
             }
 
@@ -7305,6 +7370,12 @@ namespace DateEverythingAccess
                 CanUseLocalPlanningZone(currentNavigationZone, startPosition, goalPosition)
                 ? currentNavigationZone
                 : null;
+        }
+
+        private static bool HasUsableLocalPlanningResult(string planningZone, Vector3 planningGoal)
+        {
+            return !string.IsNullOrWhiteSpace(planningZone) &&
+                planningGoal != Vector3.zero;
         }
 
         private static string ResolveUsableCurrentLocalPlanningZone(
@@ -7501,23 +7572,51 @@ namespace DateEverythingAccess
                 _transitionSweepSession.DoorInteractionTriggered &&
                 !_transitionSweepSession.DoorPostThresholdCommitted &&
                 string.Equals(stepKey, BuildNavigationStepKey(_transitionSweepSession.CurrentStep), StringComparison.Ordinal) &&
-                _transitionSweepSession.DoorPushThroughPosition != Vector3.zero &&
-                GetPlanarDistanceToTarget(playerPosition, _transitionSweepSession.DoorPushThroughPosition) <=
-                DoorPushThroughArrivalDistance + DoorPushThroughNoHandoffCommitTolerance)
+                _transitionSweepSession.DoorPushThroughPosition != Vector3.zero)
             {
-                _transitionSweepSession.DoorPostThresholdCommitted = true;
-                committed = true;
+                NavigationGraph.PathStep sweepStep = _transitionSweepSession.CurrentStep;
+                if (TryGetDoorPushThroughSourceTarget(sweepStep, out Vector3 sourceTarget))
+                {
+                    float sourceThresholdDistance = GetPlanarDistanceToTarget(playerPosition, sourceTarget);
+                    float pushThroughDistance = GetPlanarDistanceToTarget(playerPosition, _transitionSweepSession.DoorPushThroughPosition);
+                    if (IsDoorNoHandoffPushThroughCommitEligible(
+                            sourceTarget,
+                            sourceThresholdDistance,
+                            _transitionSweepSession.DoorPushThroughPosition,
+                            pushThroughDistance,
+                            extraTolerance: 0f,
+                            out _))
+                    {
+                        _transitionSweepSession.DoorPostThresholdCommitted = true;
+                        committed = true;
+                    }
+                }
             }
 
             if (_doorTraversalInteractionTriggered &&
                 !_doorTraversalPostThresholdCommitted &&
                 _doorTraversalPushThroughPosition != Vector3.zero &&
-                string.Equals(stepKey, _doorTraversalStepKey, StringComparison.Ordinal) &&
-                GetPlanarDistanceToTarget(playerPosition, _doorTraversalPushThroughPosition) <=
-                DoorPushThroughArrivalDistance + DoorPushThroughNoHandoffCommitTolerance)
+                string.Equals(stepKey, _doorTraversalStepKey, StringComparison.Ordinal))
             {
-                _doorTraversalPostThresholdCommitted = true;
-                committed = true;
+                NavigationGraph.PathStep traversalStep = GetCurrentNavigationStep();
+                if (traversalStep != null &&
+                    string.Equals(stepKey, BuildNavigationStepKey(traversalStep), StringComparison.Ordinal) &&
+                    TryGetDoorPushThroughSourceTarget(traversalStep, out Vector3 sourceTarget))
+                {
+                    float sourceThresholdDistance = GetPlanarDistanceToTarget(playerPosition, sourceTarget);
+                    float pushThroughDistance = GetPlanarDistanceToTarget(playerPosition, _doorTraversalPushThroughPosition);
+                    if (IsDoorNoHandoffPushThroughCommitEligible(
+                            sourceTarget,
+                            sourceThresholdDistance,
+                            _doorTraversalPushThroughPosition,
+                            pushThroughDistance,
+                            extraTolerance: 0f,
+                            out _))
+                    {
+                        _doorTraversalPostThresholdCommitted = true;
+                        committed = true;
+                    }
+                }
             }
 
             if (committed)
@@ -8955,7 +9054,8 @@ namespace DateEverythingAccess
                 bool rawMatchesOverride = IsZoneEquivalentToNavigationZone(rawCurrentZone, _navigationZoneOverride);
                 bool rawShowsForwardProgress = (step != null &&
                         !string.IsNullOrEmpty(step.ToZone) &&
-                        IsZoneEquivalentToNavigationZone(rawCurrentZone, step.ToZone)) ||
+                        (IsZoneEquivalentToNavigationZone(rawCurrentZone, step.ToZone) ||
+                         IsAcceptedOverrideDestinationZone(step, rawCurrentZone))) ||
                     (!string.IsNullOrEmpty(_navigationTargetZone) && IsExactZoneMatch(rawCurrentZone, _navigationTargetZone));
 
                 if (!stepMatchesOverride || !overrideMatchesStepSource || rawMatchesOverride || rawShowsForwardProgress)

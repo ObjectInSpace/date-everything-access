@@ -240,10 +240,27 @@ namespace DateEverythingAccess
                         sourceGoal,
                         GetLocalNavigationGoalReachedDistance(sourcePlanningContext)))
                 {
-                    planningZone = ResolveLocalPlanningZone(currentZone, step.FromZone, playerPosition, sourceGoal);
-                    planningGoal = sourceGoal;
-                    planningContext = sourcePlanningContext;
-                    return true;
+                    bool allowAcceptedSourceZone = IsAcceptedOverrideSourceZone(step, currentZone);
+                    if (TryResolveOpenPassagePlanningZone(
+                            currentZone,
+                            step.FromZone,
+                            allowAcceptedSourceZone,
+                            playerPosition,
+                            sourceGoal,
+                            out string resolvedPlanningZone))
+                    {
+                        planningZone = resolvedPlanningZone;
+                        planningGoal = sourceGoal;
+                        planningContext = sourcePlanningContext;
+                        return true;
+                    }
+
+                    LogNavigationTrackerDebug(
+                        "Skipped open-passage source local planning due to unavailable planning zone" +
+                        " currentZone=" + (currentZone ?? "<null>") +
+                        " sourceGoal=" + FormatVector3(sourceGoal) +
+                        " context=" + sourcePlanningContext +
+                        " step=" + DescribeNavigationStep(step));
                 }
 
                 return false;
@@ -268,16 +285,60 @@ namespace DateEverythingAccess
                         destinationGoal,
                         GetLocalNavigationGoalReachedDistance(destinationPlanningContext)))
                 {
-                    planningZone = ResolveLocalPlanningZone(currentZone, step.ToZone, playerPosition, destinationGoal);
-                    planningGoal = destinationGoal;
-                    planningContext = destinationPlanningContext;
-                    return true;
+                    bool allowAcceptedDestinationZone = IsAcceptedOverrideDestinationZone(step, currentZone);
+                    if (TryResolveOpenPassagePlanningZone(
+                            currentZone,
+                            step.ToZone,
+                            allowAcceptedDestinationZone,
+                            playerPosition,
+                            destinationGoal,
+                            out string resolvedPlanningZone))
+                    {
+                        planningZone = resolvedPlanningZone;
+                        planningGoal = destinationGoal;
+                        planningContext = destinationPlanningContext;
+                        return true;
+                    }
+
+                    LogNavigationTrackerDebug(
+                        "Skipped open-passage destination local planning due to unavailable planning zone" +
+                        " currentZone=" + (currentZone ?? "<null>") +
+                        " destinationGoal=" + FormatVector3(destinationGoal) +
+                        " context=" + destinationPlanningContext +
+                        " step=" + DescribeNavigationStep(step));
                 }
 
                 return false;
             }
 
             return false;
+        }
+
+        private static bool TryResolveOpenPassagePlanningZone(
+            string currentZone,
+            string canonicalZone,
+            bool allowCurrentZoneFallback,
+            Vector3 playerPosition,
+            Vector3 planningGoal,
+            out string planningZone)
+        {
+            planningZone = ResolveLocalPlanningZone(
+                currentZone,
+                canonicalZone,
+                playerPosition,
+                planningGoal);
+            if (!string.IsNullOrWhiteSpace(planningZone))
+                return true;
+
+            if (!allowCurrentZoneFallback ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                !CanUseLocalPlanningZone(currentZone, playerPosition, planningGoal))
+            {
+                return false;
+            }
+
+            planningZone = currentZone;
+            return true;
         }
 
         private static bool IsOpenPassageSourceZone(NavigationGraph.PathStep step, string currentZone)

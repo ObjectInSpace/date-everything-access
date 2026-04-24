@@ -579,6 +579,8 @@ namespace DateEverythingAccess
         private static int _zoneCount;
         private static int _nodeCount;
         private static long _queueSequence;
+        private static DateTime _lastFailedLoadAttemptUtc = DateTime.MinValue;
+        private static readonly TimeSpan FailedLoadRetryInterval = TimeSpan.FromSeconds(5);
 
         /// <summary>
         /// Loads the generated navigation graph from the BepInEx plugins folder when present.
@@ -586,9 +588,19 @@ namespace DateEverythingAccess
         public static void Initialize()
         {
             if (_initialized)
-                return;
+            {
+                if (_links.Count > 0)
+                    return;
+
+                if (_lastFailedLoadAttemptUtc > DateTime.MinValue &&
+                    DateTime.UtcNow - _lastFailedLoadAttemptUtc < FailedLoadRetryInterval)
+                {
+                    return;
+                }
+            }
 
             _initialized = true;
+            _lastFailedLoadAttemptUtc = DateTime.UtcNow;
             _links.Clear();
             _connections.Clear();
             _knownZones.Clear();
@@ -635,6 +647,7 @@ namespace DateEverythingAccess
                     " Zones=" + (_zoneCount > 0 ? _zoneCount : _knownZones.Count) +
                     " Nodes=" + _nodeCount +
                     " Transitions=" + _links.Count);
+                _lastFailedLoadAttemptUtc = DateTime.MinValue;
             }
             catch (Exception ex)
             {

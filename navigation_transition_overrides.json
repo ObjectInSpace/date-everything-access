@@ -1,585 +1,585 @@
 {
-    "Entries":  [
-                    {
-                        "FromZone":  "bathroom2",
-                        "ToZone":  "dorian_bathroom2",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -18.89,
-                                                          "y":  12.82,
-                                                          "z":  -3.85
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "bathroom2",
-                        "ToZone":  "dorian_bathroom2_1",
-                        "AcceptedSourceZones":  [
-                                                    "bathroom2_3",
-                                                    "bathroom2_5"
-                                                ],
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  10,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -24.804977,
-                                                          "y":  18.23,
-                                                          "z":  -4.284243
-                                                      },
-                                                      {
-                                                          "x":  -25.406582,
-                                                          "y":  17.84,
-                                                          "z":  0.034413
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "bathroom2",
-                        "ToZone":  "dorian_bathroom2_2",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -24.37,
-                                                          "y":  12.82,
-                                                          "z":  -5.38
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "bedroom",
-                        "ToZone":  "dorian_bedroom1",
-                        "AcceptedSourceZones":  [
-                                                    "bedroom2",
-                                                    "bedroom3",
-                                                    "bedroom4",
-                                                    "bedroom5",
-                                                    "bedroom6",
-                                                    "bedroom7",
-                                                    "bedroom8",
-                                                    "bedroom9",
-                                                    "bedroom10"
-                                                ],
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  10,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -13.547646,
-                                                          "y":  16.73,
-                                                          "z":  -10.593616
-                                                      },
-                                                      {
-                                                          "x":  -12.604355,
-                                                          "y":  17.84,
-                                                          "z":  0.034413
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "bedroom_closet",
-                        "ToZone":  "dorian_irondoor",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -9.82,
-                                                          "y":  12.82,
-                                                          "z":  -7.65
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "crawlspace",
-                        "ToZone":  "office",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  15
-                    },
-                    {
-                        "FromZone":  "dining_room",
-                        "ToZone":  "living_room",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -17.35,
-                                                          "y":  6.1,
-                                                          "z":  -5.65
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "dining_room",
-                        "ToZone":  "piano_room",
-                        "AcceptedSourceZones":  [
-                                                    "dining_room2",
-                                                    "dining_room3",
-                                                    "dining_room4",
-                                                    "dining_room5",
-                                                    "dining_room6",
-                                                    "dining_room7",
-                                                    "dining_room8"
-                                                ],
-                        "DestinationApproachBias":  0.45,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  10,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -19.958641,
-                                                          "y":  4.196,
-                                                          "z":  -8.101789
-                                                      },
-                                                      {
-                                                          "x":  -11.559673,
-                                                          "y":  4.842866,
-                                                          "z":  -13.034458
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "dorian_backdoor",
-                        "ToZone":  "laundry_room",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -27.75,
-                                                          "y":  -0.52,
-                                                          "z":  -5.68
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "dorian_bathroom2_2",
-                        "ToZone":  "bathroom2",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -24.31,
-                                                          "y":  12.82,
-                                                          "z":  -7.55
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "dorian_gym2",
-                        "ToZone":  "gym",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -9.64,
-                                                          "y":  12.81,
-                                                          "z":  6.45
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "dorian_gym4",
-                        "ToZone":  "gym",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -24.79,
-                                                          "y":  12.82,
-                                                          "z":  -2.1
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "dorian_gymcloset1",
-                        "ToZone":  "gym_closet",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -5.35,
-                                                          "y":  12.82,
-                                                          "z":  23.36
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "dorian_irondoor",
-                        "ToZone":  "bedroom_closet",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -16.89,
-                                                          "y":  -0.6,
-                                                          "z":  9.02
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "dorian_office_closet1",
-                        "ToZone":  "office_closet",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  5.16,
-                                                          "y":  -0.6,
-                                                          "z":  25.17
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "dorian_office2",
-                        "ToZone":  "office",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  9.21,
-                                                          "y":  -0.6,
-                                                          "z":  5.06
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "dorian_trapdoor1",
-                        "ToZone":  "office",
-                        "AcceptedSourceZones":  [
-                                                    "office_closet"
-                                                ],
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  3.2,
-                                                          "y":  -0.6,
-                                                          "z":  23.58
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "gym",
-                        "ToZone":  "dorian_gym2",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -6.83,
-                                                          "y":  12.82,
-                                                          "z":  8.98
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "gym",
-                        "ToZone":  "dorian_gym4",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -23.83,
-                                                          "y":  12.82,
-                                                          "z":  8.94
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "gym_closet",
-                        "ToZone":  "dorian_gymcloset1",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -3.52,
-                                                          "y":  12.82,
-                                                          "z":  20.93
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "hallway",
-                        "ToZone":  "hallway_arma",
-                        "AcceptedSourceZones":  [
-                                                    "hallway4"
-                                                ],
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  false,
-                        "StepTimeoutSeconds":  10,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  9.563,
-                                                          "y":  4.352,
-                                                          "z":  -3.642
-                                                      },
-                                                      {
-                                                          "x":  5.837,
-                                                          "y":  9.952,
-                                                          "z":  -3.642
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "kitchen_tutorial",
-                        "ToZone":  "kitchen",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -11,
-                                                          "y":  -0.6,
-                                                          "z":  -9.9
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "laundry_room",
-                        "ToZone":  "dorian_backdoor",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -25.17,
-                                                          "y":  -0.6,
-                                                          "z":  29.97
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "laundry_room",
-                        "ToZone":  "dorian_laundry1",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -17.69,
-                                                          "y":  -0.6,
-                                                          "z":  29.47
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "laundry_room",
-                        "ToZone":  "upper_hallway",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -16.38,
-                                                          "y":  -0.6,
-                                                          "z":  29.47
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "living_room",
-                        "ToZone":  "dining_room",
-                        "AcceptedSourceZones":  [
-                                                    "living_room2",
-                                                    "living_room3",
-                                                    "living_room4",
-                                                    "living_room5",
-                                                    "living_room6",
-                                                    "living_room7",
-                                                    "living_room8",
-                                                    "living_room9",
-                                                    "living_room10",
-                                                    "living_room11"
-                                                ],
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -3.217151,
-                                                          "y":  5.67,
-                                                          "z":  -12.813282
-                                                      },
-                                                      {
-                                                          "x":  -17.046043,
-                                                          "y":  4.68,
-                                                          "z":  -1.686586
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "living_room",
-                        "ToZone":  "hallway",
-                        "AcceptedSourceZones":  [
-                                                    "living_room2",
-                                                    "living_room3",
-                                                    "living_room4",
-                                                    "living_room5",
-                                                    "living_room6",
-                                                    "living_room7",
-                                                    "living_room8",
-                                                    "living_room9",
-                                                    "living_room10",
-                                                    "living_room11"
-                                                ],
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  10,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  5.280338,
-                                                          "y":  4.67,
-                                                          "z":  -13.189749
-                                                      },
-                                                      {
-                                                          "x":  12.063061,
-                                                          "y":  4.352,
-                                                          "z":  -0.439635
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "living_room_tutorial",
-                        "ToZone":  "frontdoor",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  14.49,
-                                                          "y":  -0.6,
-                                                          "z":  -7.87
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "office",
-                        "ToZone":  "crawlspace",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  15,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -1.92,
-                                                          "y":  -0.6,
-                                                          "z":  21.47
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "office",
-                        "ToZone":  "dorian_office2",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  9.09,
-                                                          "y":  -0.6,
-                                                          "z":  7.24
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "office",
-                        "ToZone":  "dorian_trapdoor1",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  5.64,
-                                                          "y":  -0.6,
-                                                          "z":  25.5
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "office",
-                        "ToZone":  "dorian_trapdoor2",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  5.64,
-                                                          "y":  -0.6,
-                                                          "z":  25.5
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "office",
-                        "ToZone":  "office_1love",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  6.86,
-                                                          "y":  -0.6,
-                                                          "z":  7.58
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "office_1love",
-                        "ToZone":  "office",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  5.33,
-                                                          "y":  -0.61,
-                                                          "z":  4.82
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "office_closet",
-                        "ToZone":  "dorian_office_closet1",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  3.2,
-                                                          "y":  -0.6,
-                                                          "z":  24.52
-                                                      }
-                                                  ]
-                    },
-                    {
-                        "FromZone":  "upper_hallway",
-                        "ToZone":  "laundry_room",
-                        "DestinationApproachBias":  1,
-                        "UseExplicitCrossingSegments":  true,
-                        "StepTimeoutSeconds":  5,
-                        "IntermediateWaypoints":  [
-                                                      {
-                                                          "x":  -16.05,
-                                                          "y":  12.82,
-                                                          "z":  6.57
-                                                      }
-                                                  ]
-                    }
-                ]
+  "Entries": [
+    {
+      "FromZone": "bathroom2",
+      "ToZone": "dorian_bathroom2",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -18.89,
+          "y": 12.82,
+          "z": -3.85
+        }
+      ]
+    },
+    {
+      "FromZone": "bathroom2",
+      "ToZone": "dorian_bathroom2_1",
+      "AcceptedSourceZones": [
+        "bathroom2_3",
+        "bathroom2_5"
+      ],
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 10.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -24.804977,
+          "y": 18.23,
+          "z": -4.284243
+        },
+        {
+          "x": -25.406582,
+          "y": 17.84,
+          "z": 0.034413
+        }
+      ]
+    },
+    {
+      "FromZone": "bathroom2",
+      "ToZone": "dorian_bathroom2_2",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -24.37,
+          "y": 12.82,
+          "z": -5.38
+        }
+      ]
+    },
+    {
+      "FromZone": "bedroom",
+      "ToZone": "dorian_bedroom1",
+      "AcceptedSourceZones": [
+        "bedroom2",
+        "bedroom3",
+        "bedroom4",
+        "bedroom5",
+        "bedroom6",
+        "bedroom7",
+        "bedroom8",
+        "bedroom9",
+        "bedroom10"
+      ],
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 10.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -13.547646,
+          "y": 16.73,
+          "z": -10.593616
+        },
+        {
+          "x": -12.604355,
+          "y": 17.84,
+          "z": 0.034413
+        }
+      ]
+    },
+    {
+      "FromZone": "bedroom_closet",
+      "ToZone": "dorian_irondoor",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -9.82,
+          "y": 12.82,
+          "z": -7.65
+        }
+      ]
+    },
+    {
+      "FromZone": "crawlspace",
+      "ToZone": "office",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 15.0
+    },
+    {
+      "FromZone": "dining_room",
+      "ToZone": "living_room",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -17.35,
+          "y": 6.1,
+          "z": -5.65
+        }
+      ]
+    },
+    {
+      "FromZone": "dining_room",
+      "ToZone": "piano_room",
+      "AcceptedSourceZones": [
+        "dining_room2",
+        "dining_room3",
+        "dining_room4",
+        "dining_room5",
+        "dining_room6",
+        "dining_room7",
+        "dining_room8"
+      ],
+      "DestinationApproachBias": 0.45,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 10.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -19.958641,
+          "y": 4.196,
+          "z": -8.101789
+        },
+        {
+          "x": -11.559673,
+          "y": 4.842866,
+          "z": -13.034458
+        }
+      ]
+    },
+    {
+      "FromZone": "dorian_backdoor",
+      "ToZone": "laundry_room",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -27.75,
+          "y": -0.52,
+          "z": -5.68
+        }
+      ]
+    },
+    {
+      "FromZone": "dorian_bathroom2_2",
+      "ToZone": "bathroom2",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -24.31,
+          "y": 12.82,
+          "z": -7.55
+        }
+      ]
+    },
+    {
+      "FromZone": "dorian_gym2",
+      "ToZone": "gym",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -9.64,
+          "y": 12.81,
+          "z": 6.45
+        }
+      ]
+    },
+    {
+      "FromZone": "dorian_gym4",
+      "ToZone": "gym",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -24.79,
+          "y": 12.82,
+          "z": -2.1
+        }
+      ]
+    },
+    {
+      "FromZone": "dorian_gymcloset1",
+      "ToZone": "gym_closet",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -5.35,
+          "y": 12.82,
+          "z": 23.36
+        }
+      ]
+    },
+    {
+      "FromZone": "dorian_irondoor",
+      "ToZone": "bedroom_closet",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -16.89,
+          "y": -0.6,
+          "z": 9.02
+        }
+      ]
+    },
+    {
+      "FromZone": "dorian_office_closet1",
+      "ToZone": "office_closet",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 5.16,
+          "y": -0.6,
+          "z": 25.17
+        }
+      ]
+    },
+    {
+      "FromZone": "dorian_office2",
+      "ToZone": "office",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 9.21,
+          "y": -0.6,
+          "z": 5.06
+        }
+      ]
+    },
+    {
+      "FromZone": "dorian_trapdoor1",
+      "ToZone": "office",
+      "AcceptedSourceZones": [
+        "office_closet"
+      ],
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 3.2,
+          "y": -0.6,
+          "z": 23.58
+        }
+      ]
+    },
+    {
+      "FromZone": "gym",
+      "ToZone": "dorian_gym2",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -6.83,
+          "y": 12.82,
+          "z": 8.98
+        }
+      ]
+    },
+    {
+      "FromZone": "gym",
+      "ToZone": "dorian_gym4",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -23.83,
+          "y": 12.82,
+          "z": 8.94
+        }
+      ]
+    },
+    {
+      "FromZone": "gym_closet",
+      "ToZone": "dorian_gymcloset1",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -3.52,
+          "y": 12.82,
+          "z": 20.93
+        }
+      ]
+    },
+    {
+      "FromZone": "hallway",
+      "ToZone": "hallway_arma",
+      "AcceptedSourceZones": [
+        "hallway4"
+      ],
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": false,
+      "StepTimeoutSeconds": 10.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 9.563,
+          "y": 4.352,
+          "z": -3.642
+        },
+        {
+          "x": 5.837,
+          "y": 9.952,
+          "z": -3.642
+        }
+      ]
+    },
+    {
+      "FromZone": "kitchen_tutorial",
+      "ToZone": "kitchen",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -11.0,
+          "y": -0.6,
+          "z": -9.9
+        }
+      ]
+    },
+    {
+      "FromZone": "laundry_room",
+      "ToZone": "dorian_backdoor",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -25.17,
+          "y": -0.6,
+          "z": 29.97
+        }
+      ]
+    },
+    {
+      "FromZone": "laundry_room",
+      "ToZone": "dorian_laundry1",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -17.69,
+          "y": -0.6,
+          "z": 29.47
+        }
+      ]
+    },
+    {
+      "FromZone": "laundry_room",
+      "ToZone": "upper_hallway",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -16.38,
+          "y": -0.6,
+          "z": 29.47
+        }
+      ]
+    },
+    {
+      "FromZone": "living_room",
+      "ToZone": "dining_room",
+      "AcceptedSourceZones": [
+        "living_room2",
+        "living_room3",
+        "living_room4",
+        "living_room5",
+        "living_room6",
+        "living_room7",
+        "living_room8",
+        "living_room9",
+        "living_room10",
+        "living_room11"
+      ],
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -3.217151,
+          "y": 5.67,
+          "z": -12.813282
+        },
+        {
+          "x": -17.046043,
+          "y": 4.68,
+          "z": -1.686586
+        }
+      ]
+    },
+    {
+      "FromZone": "living_room",
+      "ToZone": "hallway",
+      "AcceptedSourceZones": [
+        "living_room2",
+        "living_room3",
+        "living_room4",
+        "living_room5",
+        "living_room6",
+        "living_room7",
+        "living_room8",
+        "living_room9",
+        "living_room10",
+        "living_room11"
+      ],
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 10.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 5.280338,
+          "y": 4.67,
+          "z": -13.189749
+        },
+        {
+          "x": 12.063061,
+          "y": 4.352,
+          "z": -0.439635
+        }
+      ]
+    },
+    {
+      "FromZone": "living_room_tutorial",
+      "ToZone": "frontdoor",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 14.49,
+          "y": -0.6,
+          "z": -7.87
+        }
+      ]
+    },
+    {
+      "FromZone": "office",
+      "ToZone": "crawlspace",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 15.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -1.92,
+          "y": -0.6,
+          "z": 21.47
+        }
+      ]
+    },
+    {
+      "FromZone": "office",
+      "ToZone": "dorian_office2",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 9.09,
+          "y": -0.6,
+          "z": 7.24
+        }
+      ]
+    },
+    {
+      "FromZone": "office",
+      "ToZone": "dorian_trapdoor1",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 5.64,
+          "y": -0.6,
+          "z": 25.5
+        }
+      ]
+    },
+    {
+      "FromZone": "office",
+      "ToZone": "dorian_trapdoor2",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 5.64,
+          "y": -0.6,
+          "z": 25.5
+        }
+      ]
+    },
+    {
+      "FromZone": "office",
+      "ToZone": "office_1love",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 6.86,
+          "y": -0.6,
+          "z": 7.58
+        }
+      ]
+    },
+    {
+      "FromZone": "office_1love",
+      "ToZone": "office",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 5.33,
+          "y": -0.61,
+          "z": 4.82
+        }
+      ]
+    },
+    {
+      "FromZone": "office_closet",
+      "ToZone": "dorian_office_closet1",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 3.2,
+          "y": -0.6,
+          "z": 24.52
+        }
+      ]
+    },
+    {
+      "FromZone": "upper_hallway",
+      "ToZone": "laundry_room",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -16.05,
+          "y": 12.82,
+          "z": 6.57
+        }
+      ]
+    }
+  ]
 }
