@@ -1,0 +1,39 @@
+Live route audit import summary
+Imported at: 2026-04-24T02:22:00.1484670Z
+Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\live_route_audit.live.json
+Output: .\artifacts\navigation\live_route_audit.live.json
+Report generated at: 04/24/2026 02:10:09
+Active scene: ThirdPersonGreybox
+Runtime build: 0.1.1|utc=2026-04-23T21:36:44.0000000Z|sha256=F1F6BCC014CB0D13FE63B38DC031142822EDA6ECB29E7D8CCEEB2B6B1D48DBB9
+Override load: status=loaded entries=36 normalizedScalarArrays=False detail=Entries=36 normalizedScalarArrays=False
+Latest report totals: total=3192 passed=1 failed=78 skipped=280 pending=2833 complete=False
+Failed routes by start zone:
+- bathroom1: 55
+- bathroom2: 23
+Failed routes by first step:
+- transition:bathroom1->hallway: 55
+- transition:bathroom2->bedroom: 20
+- transition:bathroom2->dorian_bathroom2: 1
+- transition:bathroom2->dorian_bathroom2_1: 1
+- transition:bathroom2->dorian_bathroom2_2: 1
+Sample failed routes:
+- route:bathroom1->attic | route timeout elapsed=25.09 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null>
+- route:bathroom1->atticWindow | navigation blocked currentZone=bathroom1 detail=transition interaction failed at target step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:bathroom1->atticWindow
+- route:bathroom1->bathroom2 | navigation blocked currentZone=bathroom1 detail=transition interaction failed at target step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:bathroom1->bathroom2
+- route:bathroom1->bedroom | navigation blocked currentZone=bathroom1 detail=transition interaction failed at target step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:bathroom1->bedroom
+- route:bathroom1->bedroom_closet | route stalled elapsed=8.06 noProgressElapsed=7.04 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null>
+- route:bathroom1->crawlspace | route stalled elapsed=14.78 noProgressElapsed=7.04 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null>
+- route:bathroom1->dining_room | navigation blocked currentZone=bathroom1 detail=transition interaction failed at target step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:bathroom1->dining_room
+- route:bathroom1->dorian_attic1 | route stalled elapsed=8.63 noProgressElapsed=7.07 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null>
+- route:bathroom1->dorian_attic2 | navigation blocked currentZone=bathroom1 detail=transition interaction failed at target step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:bathroom1->dorian_attic2
+- route:bathroom1->dorian_backdoor | route stalled elapsed=9.96 noProgressElapsed=7.07 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null>
+- route:bathroom1->dorian_bathroom2 | route stalled elapsed=14.93 noProgressElapsed=7.04 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null>
+- route:bathroom1->dorian_bathroom2_1 | navigation blocked currentZone=bathroom1 detail=transition interaction failed at target step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:bathroom1->dorian_bathroom2_1
+- route:bathroom1->dorian_bathroom2_2 | route stalled elapsed=9.18 noProgressElapsed=7.02 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null>
+- route:bathroom1->dorian_bedroom1 | route stalled elapsed=8.56 noProgressElapsed=7.09 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null>
+- route:bathroom1->dorian_bedroom2 | navigation blocked currentZone=bathroom1 detail=transition interaction failed at target step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:bathroom1->dorian_bedroom2
+- route:bathroom1->dorian_bedroomcloset1 | navigation blocked currentZone=bathroom1 detail=transition interaction failed at target step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:bathroom1->dorian_bedroomcloset1
+- route:bathroom1->dorian_bedroomcloset2 | navigation blocked currentZone=bathroom1 detail=transition interaction failed at target step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:bathroom1->dorian_bedroomcloset2
+- route:bathroom1->dorian_gym1 | navigation blocked currentZone=bathroom1 detail=transition interaction failed at target step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:bathroom1->dorian_gym1
+- route:bathroom1->dorian_gym2 | navigation blocked currentZone=bathroom1 detail=transition interaction failed at target step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:bathroom1->dorian_gym2
+- route:bathroom1->dorian_gym3 | route stalled elapsed=9.36 noProgressElapsed=7.09 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null>

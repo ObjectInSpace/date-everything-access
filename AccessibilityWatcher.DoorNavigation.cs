@@ -146,17 +146,6 @@ namespace DateEverythingAccess
             float thresholdAdvanceArrivalDistance = GetRawNavigationGoalReachedDistance("door-threshold-advance");
             bool shouldKeepDoorThresholdAdvance = sourceTarget != Vector3.zero &&
                 ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, pushThroughPosition);
-            Vector3 noHandoffNearestDestinationTarget = Vector3.zero;
-            bool hasNoHandoffNearestDestinationTarget =
-                !hasValidHandoffTarget &&
-                (sourceTarget != Vector3.zero || pushThroughPosition != Vector3.zero) &&
-                TryGetDoorTraversalNearestDestinationTarget(
-                    step,
-                    sourceTarget != Vector3.zero
-                        ? sourceTarget
-                        : pushThroughPosition,
-                    out noHandoffNearestDestinationTarget) &&
-                noHandoffNearestDestinationTarget != Vector3.zero;
 
             bool shouldCommitPostThreshold = postThresholdCommitted ||
                 (sourceTarget != Vector3.zero &&
@@ -183,9 +172,20 @@ namespace DateEverythingAccess
                     " step=" + DescribeNavigationStep(step));
             }
 
+            float noHandoffPushThroughCommitThreshold =
+                DoorPushThroughArrivalDistance + DoorPushThroughNoHandoffCommitTolerance;
+            bool isNoHandoffPushThroughCommitState =
+                !hasValidHandoffTarget &&
+                IsDoorNoHandoffPushThroughCommitEligible(
+                    sourceTarget,
+                    sourceThresholdDistance,
+                    pushThroughPosition,
+                    pushThroughDistance,
+                    extraTolerance: 0f,
+                    out noHandoffPushThroughCommitThreshold);
             bool shouldCommitPostThresholdWithoutHandoff =
                 shouldBypassDoorThresholdAdvance &&
-                pushThroughDistance <= DoorPushThroughArrivalDistance + DoorPushThroughNoHandoffCommitTolerance;
+                isNoHandoffPushThroughCommitState;
             if (shouldCommitPostThresholdWithoutHandoff)
             {
                 postThresholdCommitted = true;
@@ -194,7 +194,7 @@ namespace DateEverythingAccess
                     "Committed door post-threshold state without snapped handoff target" +
                     " sourceThresholdDistance=" + sourceThresholdDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                     " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                    " pushThroughCommitThreshold=" + (DoorPushThroughArrivalDistance + DoorPushThroughNoHandoffCommitTolerance).ToString("0.00", CultureInfo.InvariantCulture) +
+                    " pushThroughCommitThreshold=" + noHandoffPushThroughCommitThreshold.ToString("0.00", CultureInfo.InvariantCulture) +
                     " stage=DoorPushThrough" +
                     " step=" + DescribeNavigationStep(step));
             }
@@ -202,10 +202,6 @@ namespace DateEverythingAccess
             bool isStillInSourceZone =
                 !string.IsNullOrEmpty(step.FromZone) &&
                 IsZoneEquivalentToNavigationZone(currentZone, step.FromZone);
-            bool isNoHandoffPushThroughCommitState =
-                !hasValidHandoffTarget &&
-                pushThroughPosition != Vector3.zero &&
-                pushThroughDistance <= DoorPushThroughArrivalDistance + DoorPushThroughNoHandoffCommitTolerance;
             if (shouldCommitPostThreshold &&
                 TryGetDoorCommittedSourceRecoveryTarget(
                     step,
@@ -246,26 +242,6 @@ namespace DateEverythingAccess
                 isStillInSourceZone &&
                 isNoHandoffPushThroughCommitState)
             {
-                if (hasNoHandoffNearestDestinationTarget)
-                {
-                    float noHandoffNearestDestinationDistance =
-                        GetPlanarDistanceToTarget(playerPosition, noHandoffNearestDestinationTarget);
-                    if (noHandoffNearestDestinationDistance >
-                        GetRawNavigationGoalReachedDistance("door-entry-advance"))
-                    {
-                        position = noHandoffNearestDestinationTarget;
-                        targetKind = NavigationTargetKind.ZoneFallback;
-                        _rawNavigationTargetContext = "door-entry-advance";
-                        LogNavigationTrackerDebug(
-                            "Using nearest door destination target after no-handoff push-through commit" +
-                            " destinationPosition=" + FormatVector3(position) +
-                            " destinationDistance=" + noHandoffNearestDestinationDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                            " stage=DoorEntryAdvance" +
-                            " step=" + DescribeNavigationStep(step));
-                        return true;
-                    }
-                }
-
                 LogNavigationTrackerDebug(
                     "Promoting door entry advance after no-handoff push-through commit" +
                     " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
@@ -403,18 +379,17 @@ namespace DateEverythingAccess
 
             if (_doorCommittedSourceRecoveryStage == DoorCommittedSourceRecoveryStagePushThrough)
             {
-                float noHandoffCommitThreshold =
-                    DoorPushThroughArrivalDistance + DoorPushThroughNoHandoffCommitTolerance;
-                if (sourceTarget != Vector3.zero &&
-                    sourceThresholdDistance <= DoorThresholdAdvanceBypassDistance)
-                {
-                    noHandoffCommitThreshold +=
-                        DoorPushThroughRecoveryNoHandoffCommitExtraTolerance;
-                }
-
                 if (!hasValidHandoffTarget &&
-                    pushThroughPosition != Vector3.zero &&
-                    pushThroughDistance <= noHandoffCommitThreshold)
+                    IsDoorNoHandoffPushThroughCommitEligible(
+                        sourceTarget,
+                        sourceThresholdDistance,
+                        pushThroughPosition,
+                        pushThroughDistance,
+                        sourceTarget != Vector3.zero &&
+                        sourceThresholdDistance <= DoorThresholdAdvanceBypassDistance
+                            ? DoorPushThroughRecoveryNoHandoffCommitExtraTolerance
+                            : 0f,
+                        out float noHandoffCommitThreshold))
                 {
                     ResetDoorCommittedSourceRecoveryState();
                     LogNavigationTrackerDebug(
@@ -582,6 +557,28 @@ namespace DateEverythingAccess
             if (TryGetDoorThresholdAdvanceTarget(step, currentZone, out Vector3 sourceTarget) &&
                 sourceTarget != Vector3.zero)
             {
+                if (step.ConnectorObjectPosition != Vector3.zero)
+                {
+                    float sourceToConnectorDistance = GetFlatDistance(sourceTarget, step.ConnectorObjectPosition);
+                    float playerToSourceDistance = GetFlatDistance(playerPosition, sourceTarget);
+                    float playerToConnectorDistance = GetFlatDistance(playerPosition, step.ConnectorObjectPosition);
+                    float maxSourceRetryDistance = AutoWalkConnectorSearchDistance + DoorTraversalClearanceDistance;
+                    if (sourceToConnectorDistance > maxSourceRetryDistance &&
+                        playerToConnectorDistance + 0.35f < playerToSourceDistance)
+                    {
+                        position = step.ConnectorObjectPosition;
+                        TrySnapDoorSourceNavigationTarget(
+                            step,
+                            currentZone,
+                            position,
+                            DoorTraversalClearanceDistance + DoorPushThroughArrivalDistance,
+                            "door-interaction-retry-connector-fallback",
+                            out position);
+                        targetSource = "connector-fallback";
+                        return true;
+                    }
+                }
+
                 position = sourceTarget;
                 targetSource = "threshold";
                 return true;
@@ -611,6 +608,33 @@ namespace DateEverythingAccess
             position = playerPosition;
             targetSource = "player";
             return true;
+        }
+
+        private static bool IsDoorNoHandoffPushThroughCommitEligible(
+            Vector3 sourceTarget,
+            float sourceThresholdDistance,
+            Vector3 pushThroughPosition,
+            float pushThroughDistance,
+            float extraTolerance,
+            out float commitThreshold)
+        {
+            commitThreshold =
+                DoorPushThroughArrivalDistance +
+                DoorPushThroughNoHandoffCommitTolerance +
+                Mathf.Max(0f, extraTolerance);
+            if (sourceTarget == Vector3.zero ||
+                pushThroughPosition == Vector3.zero ||
+                pushThroughDistance > commitThreshold ||
+                sourceThresholdDistance > DoorThresholdAdvanceBypassDistance)
+            {
+                return false;
+            }
+
+            float pushThroughForwardProgress = GetDoorThresholdForwardProgress(
+                sourceTarget,
+                pushThroughPosition,
+                pushThroughPosition);
+            return pushThroughForwardProgress > DoorTraversalClearanceDistance * 0.5f;
         }
 
         private bool TryResolveDoorLocalNavigationGoal(
@@ -731,46 +755,11 @@ namespace DateEverythingAccess
                         doorEntryAdvancePlanningGoal);
                     if (forwardProgress <= 0.08f)
                     {
-                        if (string.Equals(_rawNavigationTargetContext, "door-push-through", StringComparison.Ordinal))
-                        {
-                            LogNavigationTrackerDebug(
-                                "Skipped door entry advance local fallback to source threshold during raw push-through hold" +
-                                " sourceThresholdTarget=" + FormatVector3(sourceThresholdTarget) +
-                                " planningGoal=" + FormatVector3(doorEntryAdvancePlanningGoal) +
-                                " forwardProgress=" + forwardProgress.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " step=" + DescribeNavigationStep(step));
-                            return false;
-                        }
-
-                        float thresholdAdvanceArrivalDistance =
-                            GetLocalNavigationGoalReachedDistance("door-threshold-advance-local");
-                        float sourceThresholdDistance =
-                            GetPlanarDistanceToTarget(playerPosition, sourceThresholdTarget);
-                        if (sourceThresholdDistance > thresholdAdvanceArrivalDistance &&
-                            ShouldUseLocalNavigationGoal(
-                                playerPosition,
-                                sourceThresholdTarget,
-                                thresholdAdvanceArrivalDistance))
-                        {
-                            planningZone = ResolveLocalPlanningZone(
-                                currentZone,
-                                step.FromZone,
-                                playerPosition,
-                                sourceThresholdTarget);
-                            planningGoal = sourceThresholdTarget;
-                            planningContext = "door-threshold-advance-local";
-                            LogNavigationTrackerDebug(
-                                "Fallback door entry advance local planning goal to source threshold" +
-                                " sourceThresholdTarget=" + FormatVector3(sourceThresholdTarget) +
-                                " sourceThresholdDistance=" + sourceThresholdDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                                " step=" + DescribeNavigationStep(step));
-                            return true;
-                        }
-
                         LogNavigationTrackerDebug(
                             "Discarded door entry advance local planning goal due to insufficient source-side progress" +
                             " sourceThresholdTarget=" + FormatVector3(sourceThresholdTarget) +
                             " planningGoal=" + FormatVector3(doorEntryAdvancePlanningGoal) +
+                            " rawContext=" + (_rawNavigationTargetContext ?? "<null>") +
                             " forwardProgress=" + forwardProgress.ToString("0.00", CultureInfo.InvariantCulture) +
                             " step=" + DescribeNavigationStep(step));
                         return false;

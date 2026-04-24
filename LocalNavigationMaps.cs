@@ -26,6 +26,8 @@ namespace DateEverythingAccess
 
         private static bool _isInitialized;
         private static bool _isAvailable;
+        private static DateTime _lastFailedLoadAttemptUtc = DateTime.MinValue;
+        private static readonly TimeSpan FailedLoadRetryInterval = TimeSpan.FromSeconds(5);
 
         [DataContract]
         private sealed class Document
@@ -552,14 +554,33 @@ namespace DateEverythingAccess
         private static void Initialize()
         {
             if (_isInitialized)
-                return;
+            {
+                if (_isAvailable)
+                    return;
+
+                if (_lastFailedLoadAttemptUtc > DateTime.MinValue &&
+                    DateTime.UtcNow - _lastFailedLoadAttemptUtc < FailedLoadRetryInterval)
+                {
+                    return;
+                }
+            }
 
             lock (SyncRoot)
             {
                 if (_isInitialized)
-                    return;
+                {
+                    if (_isAvailable)
+                        return;
+
+                    if (_lastFailedLoadAttemptUtc > DateTime.MinValue &&
+                        DateTime.UtcNow - _lastFailedLoadAttemptUtc < FailedLoadRetryInterval)
+                    {
+                        return;
+                    }
+                }
 
                 _isInitialized = true;
+                _lastFailedLoadAttemptUtc = DateTime.UtcNow;
                 _isAvailable = false;
                 ZonesByName.Clear();
 
@@ -609,6 +630,8 @@ namespace DateEverythingAccess
                     Main.Log?.LogInfo(
                         "Loaded local navigation maps zones=" + ZonesByName.Count +
                         " path=" + Path.Combine(Paths.PluginPath, "local_navigation_maps.generated.json"));
+                    if (_isAvailable)
+                        _lastFailedLoadAttemptUtc = DateTime.MinValue;
                 }
                 catch (Exception ex)
                 {
