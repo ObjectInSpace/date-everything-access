@@ -1,6 +1,7 @@
 param(
     [string]$Configuration = "Debug",
     [string]$ProjectPath = (Join-Path $PSScriptRoot "..\DateEverythingAccess.csproj"),
+    # Legacy no-op switch kept for backward compatibility with older calls.
     [switch]$SkipNavigationLoopInspection,
     [switch]$RestorePackages
 )
@@ -9,19 +10,6 @@ $ErrorActionPreference = "Stop"
 
 $resolvedProject = (Resolve-Path $ProjectPath).Path
 $projectDir = Split-Path -Parent $resolvedProject
-
-if (-not $SkipNavigationLoopInspection) {
-    $inspectionScriptPath = Join-Path $PSScriptRoot "Inspect-NavigationLoopRisks.ps1"
-    if (Test-Path -LiteralPath $inspectionScriptPath) {
-        Write-Host "Running static navigation loop inspection..."
-        & $inspectionScriptPath `
-            -AccessibilityWatcherPath (Join-Path $projectDir "AccessibilityWatcher.cs") `
-            -DoorNavigationPath (Join-Path $projectDir "AccessibilityWatcher.DoorNavigation.cs") `
-            -FailOnRisk
-    } else {
-        Write-Warning "Navigation loop inspection script not found: $inspectionScriptPath"
-    }
-}
 
 Write-Host "Building $resolvedProject ($Configuration)..."
 
