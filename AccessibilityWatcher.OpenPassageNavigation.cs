@@ -222,10 +222,11 @@ namespace DateEverythingAccess
 
             if (isInSourceZone)
             {
-                Vector3 sourceGoal = _openPassageTraversalStage == OpenPassageTraversalStage.SourceWaypoint
+                OpenPassageTraversalStage traversalStage = GetOpenPassageTraversalStageState();
+                Vector3 sourceGoal = traversalStage == OpenPassageTraversalStage.SourceWaypoint
                     ? GetOpenPassageSourceGuidanceOrigin(step)
                     : GetOpenPassageSourceHandoffOrigin(step);
-                string sourcePlanningContext = _openPassageTraversalStage == OpenPassageTraversalStage.SourceWaypoint
+                string sourcePlanningContext = traversalStage == OpenPassageTraversalStage.SourceWaypoint
                     ? "open-passage-source"
                     : "open-passage-handoff";
                 if (hasOverridePlanningGoal)
