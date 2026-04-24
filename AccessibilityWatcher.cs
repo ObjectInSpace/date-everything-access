@@ -49,6 +49,29 @@ namespace DateEverythingAccess
             DestinationHandoff
         }
 
+        private enum OpenPassageTraversalTrigger
+        {
+            ActivateStep,
+            SourceWaypointCommitted,
+            SourceHandoffCompleted,
+            DestinationWaypointReached,
+            DestinationZoneReached
+        }
+
+        private enum DoorCommittedSourceRecoveryStage
+        {
+            None,
+            SourceThreshold,
+            PushThrough
+        }
+
+        private enum DoorCommittedSourceRecoveryTrigger
+        {
+            ActivateFromLoop,
+            EscalateFromRepeatedLoop,
+            SourceThresholdSatisfied
+        }
+
         private enum TrackedNavigationMode
         {
             None,
@@ -308,9 +331,6 @@ namespace DateEverythingAccess
         private const float LiveRouteAuditMinimumTimeoutSeconds = 10f;
         private const float LiveRouteAuditRouteOverheadSeconds = 2f;
         private const int AutoWalkMaxRecoveryAttempts = 2;
-        private const int DoorCommittedSourceRecoveryStageNone = 0;
-        private const int DoorCommittedSourceRecoveryStageSourceThreshold = 1;
-        private const int DoorCommittedSourceRecoveryStagePushThrough = 2;
         private const int DoorCommittedSourceWatchdogLoopTripsBeforeRetry = 2;
         private const int DoorCommittedSourceWatchdogMaxInteractionRetries = 1;
         private const int VkUp = 0x26;
@@ -368,6 +388,9 @@ namespace DateEverythingAccess
         private static FieldInfo _saveSlotDaysPlayedField;
         private static FieldInfo _betterPlayerControlMoveField;
         private static FieldInfo _betterPlayerControlLookField;
+        private static FieldInfo _doorMovingField;
+        private static FieldInfo _slidingDoorMovingField;
+        private static FieldInfo _teleporterInAnimationField;
         private static Type _engagementType;
         private static Type _loadingFactsType;
         private static int _repeatLastSpeechRequested;
@@ -499,13 +522,13 @@ namespace DateEverythingAccess
         private int _openPassageDestinationHandoffRecoveryFloor;
         private float _openPassageSourceHandoffProgressFloor;
         private float _openPassageDestinationHandoffProgressFloor;
-        private OpenPassageTraversalStage _openPassageTraversalStage;
+        private EventStateMachine<OpenPassageTraversalStage, OpenPassageTraversalTrigger> _openPassageTraversalStateMachine;
         private string _doorTraversalStepKey;
         private bool _doorTraversalInteractionTriggered;
         private Vector3 _doorTraversalPushThroughPosition;
         private bool _doorTraversalPostThresholdCommitted;
         private string _doorCommittedSourceRecoveryStepKey;
-        private int _doorCommittedSourceRecoveryStage;
+        private EventStateMachine<DoorCommittedSourceRecoveryStage, DoorCommittedSourceRecoveryTrigger> _doorCommittedSourceRecoveryStateMachine;
         private string _doorCommittedSourceWatchdogStepKey;
         private int _doorCommittedSourceWatchdogLoopTripCount;
         private int _doorCommittedSourceWatchdogInteractionRetryCount;
@@ -3082,7 +3105,7 @@ namespace DateEverythingAccess
 
         private float GetOpenPassageGuidedWaypointAdvanceDistance()
         {
-            return _openPassageTraversalStage == OpenPassageTraversalStage.SourceHandoff
+            return GetOpenPassageTraversalStageState() == OpenPassageTraversalStage.SourceHandoff
                 ? OpenPassageOverrideLocalNavigationGoalReachedDistance
                 : OpenPassageGuidedWaypointAdvanceDistance;
         }
@@ -3849,10 +3872,11 @@ namespace DateEverythingAccess
                     continue;
                 }
 
-                if (!TryTriggerNavigationTransitionInteraction(interactable))
+                if (!TryTriggerNavigationTransitionInteraction(interactable, out string triggerFailureReason))
                 {
                     LogNavigationTransitionDebug(
                         "Door sweep interaction failed: trigger rejected alternateSide=" + useOppositeLateralSide +
+                        " reason=" + triggerFailureReason +
                         " interactable=" + DescribeInteractable(interactable) +
                         " step=" + DescribeNavigationStep(step));
                     continue;
@@ -5585,7 +5609,7 @@ namespace DateEverythingAccess
             }
 
             string previousOpenPassageStepKey = _openPassageTraversalStepKey;
-            OpenPassageTraversalStage previousOpenPassageTraversalStage = _openPassageTraversalStage;
+            OpenPassageTraversalStage previousOpenPassageTraversalStage = GetOpenPassageTraversalStageState();
             string previousDoorTraversalStepKey = _doorTraversalStepKey;
             bool previousDoorTraversalInteractionTriggered = _doorTraversalInteractionTriggered;
             Vector3 previousDoorTraversalPushThroughPosition = _doorTraversalPushThroughPosition;
@@ -5601,13 +5625,13 @@ namespace DateEverythingAccess
                     string.Equals(previousOpenPassageStepKey, refreshedFirstStepKey, StringComparison.Ordinal))
                 {
                     _openPassageTraversalStepKey = previousOpenPassageStepKey;
-                    _openPassageTraversalStage = previousOpenPassageTraversalStage;
+                    SetOpenPassageTraversalStage(previousOpenPassageTraversalStage);
                 }
                 else
                 {
                     ResetOpenPassageTraversalState();
                     _openPassageTraversalStepKey = refreshedFirstStepKey;
-                    _openPassageTraversalStage = OpenPassageTraversalStage.SourceWaypoint;
+                    SetOpenPassageTraversalStage(OpenPassageTraversalStage.SourceWaypoint);
                 }
             }
             else if (refreshedFirstStep != null &&
@@ -6822,9 +6846,10 @@ namespace DateEverythingAccess
             if (!string.Equals(_openPassageTraversalStepKey, stepKey, StringComparison.Ordinal))
                 return false;
 
-            return _openPassageTraversalStage == OpenPassageTraversalStage.SourceHandoff ||
-                _openPassageTraversalStage == OpenPassageTraversalStage.DestinationWaypoint ||
-                _openPassageTraversalStage == OpenPassageTraversalStage.DestinationHandoff;
+            OpenPassageTraversalStage traversalStage = GetOpenPassageTraversalStageState();
+            return traversalStage == OpenPassageTraversalStage.SourceHandoff ||
+                traversalStage == OpenPassageTraversalStage.DestinationWaypoint ||
+                traversalStage == OpenPassageTraversalStage.DestinationHandoff;
         }
 
         private bool TryGetOpenPassageProgressMetrics(
@@ -6920,7 +6945,7 @@ namespace DateEverythingAccess
             if (step == null ||
                 step.Kind != NavigationGraph.StepKind.OpenPassage ||
                 !IsCommittedOpenPassageTraversal(step) ||
-                _openPassageTraversalStage != OpenPassageTraversalStage.DestinationHandoff)
+                GetOpenPassageTraversalStageState() != OpenPassageTraversalStage.DestinationHandoff)
             {
                 return false;
             }
@@ -7867,11 +7892,95 @@ namespace DateEverythingAccess
         {
             _openPassageTraversalStepKey = null;
             _openPassageOverrideWaypointIndex = 0;
-            _openPassageTraversalStage = OpenPassageTraversalStage.None;
+            SetOpenPassageTraversalStage(OpenPassageTraversalStage.None);
             _openPassageSourceHandoffRecoveryFloor = 0;
             _openPassageDestinationHandoffRecoveryFloor = 0;
             _openPassageSourceHandoffProgressFloor = 0f;
             _openPassageDestinationHandoffProgressFloor = 0f;
+        }
+
+        private OpenPassageTraversalStage GetOpenPassageTraversalStageState()
+        {
+            return _openPassageTraversalStateMachine != null
+                ? _openPassageTraversalStateMachine.CurrentState
+                : OpenPassageTraversalStage.None;
+        }
+
+        private void SetOpenPassageTraversalStage(OpenPassageTraversalStage stage)
+        {
+            EnsureOpenPassageTraversalStateMachine();
+            _openPassageTraversalStateMachine.SetState(stage);
+        }
+
+        private void EnsureOpenPassageTraversalStateMachine()
+        {
+            if (_openPassageTraversalStateMachine != null)
+                return;
+
+            _openPassageTraversalStateMachine =
+                new EventStateMachine<OpenPassageTraversalStage, OpenPassageTraversalTrigger>(
+                    OpenPassageTraversalStage.None);
+
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.None,
+                OpenPassageTraversalTrigger.ActivateStep,
+                OpenPassageTraversalStage.SourceWaypoint);
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.SourceWaypoint,
+                OpenPassageTraversalTrigger.ActivateStep,
+                OpenPassageTraversalStage.SourceWaypoint);
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.SourceHandoff,
+                OpenPassageTraversalTrigger.ActivateStep,
+                OpenPassageTraversalStage.SourceWaypoint);
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.DestinationWaypoint,
+                OpenPassageTraversalTrigger.ActivateStep,
+                OpenPassageTraversalStage.SourceWaypoint);
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.DestinationHandoff,
+                OpenPassageTraversalTrigger.ActivateStep,
+                OpenPassageTraversalStage.SourceWaypoint);
+
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.SourceWaypoint,
+                OpenPassageTraversalTrigger.SourceWaypointCommitted,
+                OpenPassageTraversalStage.SourceHandoff);
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.SourceHandoff,
+                OpenPassageTraversalTrigger.SourceHandoffCompleted,
+                OpenPassageTraversalStage.DestinationWaypoint);
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.DestinationWaypoint,
+                OpenPassageTraversalTrigger.DestinationWaypointReached,
+                OpenPassageTraversalStage.DestinationHandoff);
+
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.None,
+                OpenPassageTraversalTrigger.DestinationZoneReached,
+                OpenPassageTraversalStage.DestinationHandoff);
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.SourceWaypoint,
+                OpenPassageTraversalTrigger.DestinationZoneReached,
+                OpenPassageTraversalStage.DestinationHandoff);
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.SourceHandoff,
+                OpenPassageTraversalTrigger.DestinationZoneReached,
+                OpenPassageTraversalStage.DestinationHandoff);
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.DestinationWaypoint,
+                OpenPassageTraversalTrigger.DestinationZoneReached,
+                OpenPassageTraversalStage.DestinationHandoff);
+            _openPassageTraversalStateMachine.AddTransition(
+                OpenPassageTraversalStage.DestinationHandoff,
+                OpenPassageTraversalTrigger.DestinationZoneReached,
+                OpenPassageTraversalStage.DestinationHandoff);
+        }
+
+        private bool TryAdvanceOpenPassageTraversalStage(OpenPassageTraversalTrigger trigger)
+        {
+            EnsureOpenPassageTraversalStateMachine();
+            return _openPassageTraversalStateMachine.TryFire(trigger);
         }
 
         private void ResetDoorTraversalState()
@@ -7907,7 +8016,52 @@ namespace DateEverythingAccess
         private void ResetDoorCommittedSourceRecoveryState()
         {
             _doorCommittedSourceRecoveryStepKey = null;
-            _doorCommittedSourceRecoveryStage = DoorCommittedSourceRecoveryStageNone;
+            EnsureDoorCommittedSourceRecoveryStateMachine();
+            _doorCommittedSourceRecoveryStateMachine.SetState(DoorCommittedSourceRecoveryStage.None);
+        }
+
+        private DoorCommittedSourceRecoveryStage GetDoorCommittedSourceRecoveryStage()
+        {
+            return _doorCommittedSourceRecoveryStateMachine != null
+                ? _doorCommittedSourceRecoveryStateMachine.CurrentState
+                : DoorCommittedSourceRecoveryStage.None;
+        }
+
+        private void EnsureDoorCommittedSourceRecoveryStateMachine()
+        {
+            if (_doorCommittedSourceRecoveryStateMachine != null)
+                return;
+
+            _doorCommittedSourceRecoveryStateMachine =
+                new EventStateMachine<DoorCommittedSourceRecoveryStage, DoorCommittedSourceRecoveryTrigger>(
+                    DoorCommittedSourceRecoveryStage.None);
+
+            _doorCommittedSourceRecoveryStateMachine.AddTransition(
+                DoorCommittedSourceRecoveryStage.None,
+                DoorCommittedSourceRecoveryTrigger.ActivateFromLoop,
+                DoorCommittedSourceRecoveryStage.SourceThreshold);
+            _doorCommittedSourceRecoveryStateMachine.AddTransition(
+                DoorCommittedSourceRecoveryStage.SourceThreshold,
+                DoorCommittedSourceRecoveryTrigger.ActivateFromLoop,
+                DoorCommittedSourceRecoveryStage.SourceThreshold);
+            _doorCommittedSourceRecoveryStateMachine.AddTransition(
+                DoorCommittedSourceRecoveryStage.PushThrough,
+                DoorCommittedSourceRecoveryTrigger.ActivateFromLoop,
+                DoorCommittedSourceRecoveryStage.SourceThreshold);
+            _doorCommittedSourceRecoveryStateMachine.AddTransition(
+                DoorCommittedSourceRecoveryStage.SourceThreshold,
+                DoorCommittedSourceRecoveryTrigger.EscalateFromRepeatedLoop,
+                DoorCommittedSourceRecoveryStage.PushThrough);
+            _doorCommittedSourceRecoveryStateMachine.AddTransition(
+                DoorCommittedSourceRecoveryStage.SourceThreshold,
+                DoorCommittedSourceRecoveryTrigger.SourceThresholdSatisfied,
+                DoorCommittedSourceRecoveryStage.PushThrough);
+        }
+
+        private bool TryAdvanceDoorCommittedSourceRecoveryStage(DoorCommittedSourceRecoveryTrigger trigger)
+        {
+            EnsureDoorCommittedSourceRecoveryStateMachine();
+            return _doorCommittedSourceRecoveryStateMachine.TryFire(trigger);
         }
 
         private void ResetDoorCommittedSourceWatchdogState()
@@ -7949,11 +8103,11 @@ namespace DateEverythingAccess
             }
 
             if (string.Equals(_doorCommittedSourceRecoveryStepKey, stepKey, StringComparison.Ordinal) &&
-                _doorCommittedSourceRecoveryStage != DoorCommittedSourceRecoveryStageNone)
+                GetDoorCommittedSourceRecoveryStage() != DoorCommittedSourceRecoveryStage.None)
             {
-                if (_doorCommittedSourceRecoveryStage == DoorCommittedSourceRecoveryStageSourceThreshold)
+                if (GetDoorCommittedSourceRecoveryStage() == DoorCommittedSourceRecoveryStage.SourceThreshold &&
+                    TryAdvanceDoorCommittedSourceRecoveryStage(DoorCommittedSourceRecoveryTrigger.EscalateFromRepeatedLoop))
                 {
-                    _doorCommittedSourceRecoveryStage = DoorCommittedSourceRecoveryStagePushThrough;
                     LogNavigationAutoWalkDebug(
                         "Escalated door committed-source recovery stage=PushThrough due to repeated loop detection" +
                         " targetKind=" + targetKind +
@@ -7965,7 +8119,7 @@ namespace DateEverythingAccess
             }
 
             _doorCommittedSourceRecoveryStepKey = stepKey;
-            _doorCommittedSourceRecoveryStage = DoorCommittedSourceRecoveryStageSourceThreshold;
+            TryAdvanceDoorCommittedSourceRecoveryStage(DoorCommittedSourceRecoveryTrigger.ActivateFromLoop);
             LogNavigationAutoWalkDebug(
                 "Activated door committed-source recovery stage=SourceThreshold" +
                 " targetKind=" + targetKind +
@@ -8097,15 +8251,15 @@ namespace DateEverythingAccess
             {
                 _openPassageTraversalStepKey = stepKey;
                 _openPassageOverrideWaypointIndex = 0;
-                _openPassageTraversalStage = OpenPassageTraversalStage.SourceWaypoint;
+                SetOpenPassageTraversalStage(OpenPassageTraversalStage.SourceWaypoint);
                 _openPassageSourceHandoffRecoveryFloor = 0;
                 _openPassageDestinationHandoffRecoveryFloor = 0;
                 _openPassageSourceHandoffProgressFloor = 0f;
                 _openPassageDestinationHandoffProgressFloor = 0f;
             }
-            else if (_openPassageTraversalStage == OpenPassageTraversalStage.None)
+            else if (GetOpenPassageTraversalStageState() == OpenPassageTraversalStage.None)
             {
-                _openPassageTraversalStage = OpenPassageTraversalStage.SourceWaypoint;
+                TryAdvanceOpenPassageTraversalStage(OpenPassageTraversalTrigger.ActivateStep);
             }
         }
 
@@ -8137,7 +8291,7 @@ namespace DateEverythingAccess
             if (!string.Equals(_openPassageTraversalStepKey, stepKey, StringComparison.Ordinal))
                 return;
 
-            switch (_openPassageTraversalStage)
+            switch (GetOpenPassageTraversalStageState())
             {
                 case OpenPassageTraversalStage.SourceHandoff:
                     _openPassageSourceHandoffRecoveryFloor = Mathf.Max(_openPassageSourceHandoffRecoveryFloor, recoveryAttempt);
@@ -8166,7 +8320,7 @@ namespace DateEverythingAccess
                 return;
 
             Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
-            switch (_openPassageTraversalStage)
+            switch (GetOpenPassageTraversalStageState())
             {
                 case OpenPassageTraversalStage.SourceHandoff:
                     if (TryGetOpenPassageSourceHandoffMetrics(step, playerPosition, out float sourceProgress, out float sourceSegmentLength))
@@ -8243,23 +8397,24 @@ namespace DateEverythingAccess
             if (step == null || step.Kind != NavigationGraph.StepKind.OpenPassage)
                 return OpenPassageTraversalStage.None;
 
+            OpenPassageTraversalStage traversalStage = GetOpenPassageTraversalStageState();
             if ((!string.IsNullOrEmpty(step.ToZone) &&
                  IsZoneEquivalentToNavigationZone(currentZone, step.ToZone)) ||
                 IsAcceptedOverrideDestinationZone(step, currentZone))
             {
-                if (_openPassageTraversalStage != OpenPassageTraversalStage.DestinationHandoff)
+                if (traversalStage != OpenPassageTraversalStage.DestinationHandoff)
                     _openPassageDestinationHandoffProgressFloor = 0f;
-                _openPassageTraversalStage = OpenPassageTraversalStage.DestinationHandoff;
-                return _openPassageTraversalStage;
+                TryAdvanceOpenPassageTraversalStage(OpenPassageTraversalTrigger.DestinationZoneReached);
+                return GetOpenPassageTraversalStageState();
             }
 
-            switch (_openPassageTraversalStage)
+            switch (traversalStage)
             {
                 case OpenPassageTraversalStage.SourceWaypoint:
                     if (fromDistance <= AutoWalkOpenPassageCommitDistance)
                     {
                         _openPassageSourceHandoffProgressFloor = 0f;
-                        _openPassageTraversalStage = OpenPassageTraversalStage.SourceHandoff;
+                        TryAdvanceOpenPassageTraversalStage(OpenPassageTraversalTrigger.SourceWaypointCommitted);
                     }
                     break;
 
@@ -8271,7 +8426,7 @@ namespace DateEverythingAccess
                             sourceSegmentDistance))
                     {
                         _openPassageDestinationHandoffProgressFloor = 0f;
-                        _openPassageTraversalStage = OpenPassageTraversalStage.DestinationWaypoint;
+                        TryAdvanceOpenPassageTraversalStage(OpenPassageTraversalTrigger.SourceHandoffCompleted);
                     }
                     break;
 
@@ -8280,12 +8435,12 @@ namespace DateEverythingAccess
                         (_autoWalkRecoveryAttempts > 0 && destinationWaypointDistance <= AutoWalkZoneBoundaryFallbackDistance))
                     {
                         _openPassageDestinationHandoffProgressFloor = 0f;
-                        _openPassageTraversalStage = OpenPassageTraversalStage.DestinationHandoff;
+                        TryAdvanceOpenPassageTraversalStage(OpenPassageTraversalTrigger.DestinationWaypointReached);
                     }
                     break;
             }
 
-            return _openPassageTraversalStage;
+            return GetOpenPassageTraversalStageState();
         }
 
         private bool ShouldAttemptAutoWalkInteractionRecovery(
@@ -8574,13 +8729,15 @@ namespace DateEverythingAccess
                 return false;
             }
 
-            if (!TryTriggerNavigationTransitionInteraction(interactable))
+            if (!TryTriggerNavigationTransitionInteraction(interactable, out string triggerFailureReason))
             {
                 SetNavigationBlockedDetail(
                     "transition interaction failed: safe trigger path rejected interactable=" + DescribeInteractable(interactable) +
+                    " reason=" + triggerFailureReason +
                     " step=" + DescribeNavigationStep(step));
                 LogNavigationTransitionDebug(
                     "Transition interaction failed: safe trigger path rejected interactable=" + DescribeInteractable(interactable) +
+                    " reason=" + triggerFailureReason +
                     " step=" + DescribeNavigationStep(step));
                 return false;
             }
@@ -8621,25 +8778,77 @@ namespace DateEverythingAccess
                 "Transition interaction fired interactable=" + DescribeInteractable(interactable) +
                 " step=" + DescribeNavigationStep(step));
 
-            if (step.TransitionWaitSeconds > 0f)
+            float transitionWaitSeconds = ResolveTransitionInteractionWaitSeconds(step, interactable, out string transitionWaitReason);
+            if (transitionWaitSeconds > 0f)
             {
-                _autoWalkTransitionUntil = Time.unscaledTime + step.TransitionWaitSeconds;
+                _autoWalkTransitionUntil = Time.unscaledTime + transitionWaitSeconds;
                 ApplyNavigationInput(Vector3.zero, Vector3.zero);
                 ObjectTracker.StopTracking();
                 LogNavigationTransitionDebug(
-                    "Transition interaction started wait seconds=" + step.TransitionWaitSeconds.ToString("0.00", CultureInfo.InvariantCulture) +
+                    "Transition interaction started wait seconds=" + transitionWaitSeconds.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " reason=" + transitionWaitReason +
                     " step=" + DescribeNavigationStep(step));
             }
 
             return true;
         }
 
-        private static bool TryTriggerNavigationTransitionInteraction(InteractableObj interactable)
+        private static float ResolveTransitionInteractionWaitSeconds(
+            NavigationGraph.PathStep step,
+            InteractableObj interactable,
+            out string reason)
         {
-            if (interactable == null || Singleton<GameController>.Instance == null)
-                return false;
+            float stepWaitSeconds = step != null ? Mathf.Max(0f, step.TransitionWaitSeconds) : 0f;
+            reason = "step_wait";
+            if (step == null || step.Kind != NavigationGraph.StepKind.Teleporter || interactable == null)
+                return stepWaitSeconds;
 
-            GameController.SelectObjResult result = Singleton<GameController>.Instance.SelectObj(
+            Teleporter teleporter = interactable.GetComponent<Teleporter>();
+            if (teleporter == null)
+            {
+                reason = "step_wait teleporter_component_missing";
+                return stepWaitSeconds;
+            }
+
+            float teleporterWaitSeconds = Mathf.Max(0f, teleporter.WaitInSeconds);
+            if (teleporterWaitSeconds > stepWaitSeconds)
+            {
+                reason = "teleporter_wait";
+                return teleporterWaitSeconds;
+            }
+
+            reason = "step_wait teleporter_wait_not_greater";
+            return stepWaitSeconds;
+        }
+
+        private static bool TryTriggerNavigationTransitionInteraction(InteractableObj interactable, out string reason)
+        {
+            reason = null;
+            if (interactable == null)
+            {
+                reason = "interactable missing";
+                return false;
+            }
+
+            GameController gameController = Singleton<GameController>.Instance;
+            if (gameController == null)
+            {
+                reason = "game controller missing";
+                return false;
+            }
+
+            if (!gameController.CanSelectObj(
+                    interactable,
+                    forceWithoutGlasses: false,
+                    stopTime: false,
+                    ignoreGlassesAwakening: true,
+                    isFrontDoorInteraction: false))
+            {
+                reason = "CanSelectObj rejected";
+                return false;
+            }
+
+            GameController.SelectObjResult result = gameController.SelectObj(
                 interactable,
                 forceWithoutGlasses: false,
                 delegateMethod: null,
@@ -8647,7 +8856,13 @@ namespace DateEverythingAccess
                 ignoreGlassesAwakening: true,
                 isFrontDoorInteraction: false);
 
-            return result != GameController.SelectObjResult.FAILED;
+            if (result == GameController.SelectObjResult.FAILED)
+            {
+                reason = "SelectObj failed";
+                return false;
+            }
+
+            return true;
         }
 
         private bool TryFindTransitionInteractable(NavigationGraph.PathStep step, out InteractableObj interactable)
@@ -8939,6 +9154,59 @@ namespace DateEverythingAccess
             return Vector3.Distance(playerPosition, interactable.transform.position) <= allowedDistance;
         }
 
+        private static bool TryReadPrivateBoolField(object target, FieldInfo field, out bool value)
+        {
+            value = false;
+            if (target == null || field == null)
+                return false;
+
+            try
+            {
+                if (field.GetValue(target) is bool boolValue)
+                {
+                    value = boolValue;
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _instance?.LogNavigationTransitionDebug(
+                    "Transition interaction reflection read failed field=" + field.Name +
+                    " targetType=" + target.GetType().Name +
+                    " error=" + ex.Message);
+            }
+
+            return false;
+        }
+
+        private static bool IsDoorMoving(Door door)
+        {
+            if (door == null)
+                return false;
+
+            EnsureReflectionCache();
+            return TryReadPrivateBoolField(door, _doorMovingField, out bool moving) && moving;
+        }
+
+        private static bool IsSlidingDoorMoving(SlidingDoor slidingDoor)
+        {
+            if (slidingDoor == null)
+                return false;
+
+            EnsureReflectionCache();
+            return TryReadPrivateBoolField(slidingDoor, _slidingDoorMovingField, out bool moving) && moving;
+        }
+
+        private static bool TryGetTeleporterInAnimation(Teleporter teleporter, out bool inAnimation)
+        {
+            inAnimation = false;
+            if (teleporter == null)
+                return false;
+
+            EnsureReflectionCache();
+            return TryReadPrivateBoolField(teleporter, _teleporterInAnimationField, out inAnimation);
+        }
+
         private static bool CanAutoInteractWithStep(NavigationGraph.PathStep step, InteractableObj interactable, out string reason)
         {
             reason = null;
@@ -8950,10 +9218,21 @@ namespace DateEverythingAccess
 
             if (step.Kind == NavigationGraph.StepKind.Teleporter)
             {
-                reason = interactable.GetComponent<Teleporter>() != null
-                    ? "teleporter"
-                    : "teleporter component missing";
-                return interactable.GetComponent<Teleporter>() != null;
+                Teleporter teleporter = interactable.GetComponent<Teleporter>();
+                if (teleporter == null)
+                {
+                    reason = "teleporter component missing";
+                    return false;
+                }
+
+                if (TryGetTeleporterInAnimation(teleporter, out bool inAnimation) && inAnimation)
+                {
+                    reason = "teleporter in animation";
+                    return false;
+                }
+
+                reason = "teleporter";
+                return true;
             }
 
             Door door = interactable.GetComponent<Door>();
@@ -8968,6 +9247,18 @@ namespace DateEverythingAccess
                 if (door.open)
                 {
                     reason = "door already open";
+                    return false;
+                }
+
+                if (door.blockInteraction)
+                {
+                    reason = "door interaction blocked";
+                    return false;
+                }
+
+                if (IsDoorMoving(door))
+                {
+                    reason = "door moving";
                     return false;
                 }
 
@@ -8987,6 +9278,12 @@ namespace DateEverythingAccess
                 if (slidingDoor.open)
                 {
                     reason = "sliding door already open";
+                    return false;
+                }
+
+                if (IsSlidingDoorMoving(slidingDoor))
+                {
+                    reason = "sliding door moving";
                     return false;
                 }
 
@@ -14561,6 +14858,9 @@ namespace DateEverythingAccess
             _saveSlotDaysPlayedField = typeof(SaveSlot).GetField("daysPlayed", flags);
             _betterPlayerControlMoveField = typeof(BetterPlayerControl).GetField("move", flags);
             _betterPlayerControlLookField = typeof(BetterPlayerControl).GetField("look", flags);
+            _doorMovingField = typeof(Door).GetField("moving", flags);
+            _slidingDoorMovingField = typeof(SlidingDoor).GetField("moving", flags);
+            _teleporterInAnimationField = typeof(Teleporter).GetField("inAnimation", flags);
             _engagementType = FindLoadedType("T17.Flow.Engagement");
             if (_engagementType != null)
             {

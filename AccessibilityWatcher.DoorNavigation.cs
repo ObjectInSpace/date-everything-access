@@ -353,7 +353,7 @@ namespace DateEverythingAccess
             if (!IsDoorCommittedSourceRecoveryActiveForStep(step, currentZone, isStillInSourceZone))
                 return false;
 
-            if (_doorCommittedSourceRecoveryStage <= DoorCommittedSourceRecoveryStageSourceThreshold)
+            if (GetDoorCommittedSourceRecoveryStage() == DoorCommittedSourceRecoveryStage.SourceThreshold)
             {
                 float sourceThresholdArrivalDistance = GetRawNavigationGoalReachedDistance("door-threshold-advance");
                 if (sourceTarget != Vector3.zero &&
@@ -370,14 +370,14 @@ namespace DateEverythingAccess
                     return true;
                 }
 
-                _doorCommittedSourceRecoveryStage = DoorCommittedSourceRecoveryStagePushThrough;
+                TryAdvanceDoorCommittedSourceRecoveryStage(DoorCommittedSourceRecoveryTrigger.SourceThresholdSatisfied);
                 LogNavigationTrackerDebug(
                     "Door committed-source recovery advanced stage=PushThrough" +
                     " sourceThresholdDistance=" + sourceThresholdDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                     " step=" + DescribeNavigationStep(step));
             }
 
-            if (_doorCommittedSourceRecoveryStage == DoorCommittedSourceRecoveryStagePushThrough)
+            if (GetDoorCommittedSourceRecoveryStage() == DoorCommittedSourceRecoveryStage.PushThrough)
             {
                 if (!hasValidHandoffTarget &&
                     IsDoorNoHandoffPushThroughCommitEligible(
@@ -431,7 +431,7 @@ namespace DateEverythingAccess
             string currentZone,
             bool isStillInSourceZone)
         {
-            if (_doorCommittedSourceRecoveryStage == DoorCommittedSourceRecoveryStageNone ||
+            if (GetDoorCommittedSourceRecoveryStage() == DoorCommittedSourceRecoveryStage.None ||
                 string.IsNullOrWhiteSpace(_doorCommittedSourceRecoveryStepKey))
             {
                 return false;
@@ -461,7 +461,7 @@ namespace DateEverythingAccess
             NavigationGraph.PathStep step,
             string currentZone)
         {
-            if (_doorCommittedSourceRecoveryStage != DoorCommittedSourceRecoveryStagePushThrough ||
+            if (GetDoorCommittedSourceRecoveryStage() != DoorCommittedSourceRecoveryStage.PushThrough ||
                 step == null ||
                 step.Kind != NavigationGraph.StepKind.Door ||
                 string.IsNullOrWhiteSpace(currentZone) ||
