@@ -352,6 +352,13 @@
       ]
     },
     {
+      "FromZone": "kitchen",
+      "ToZone": "kitchen_tutorial",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0
+    },
+    {
       "FromZone": "kitchen_tutorial",
       "ToZone": "kitchen",
       "DestinationApproachBias": 1.0,

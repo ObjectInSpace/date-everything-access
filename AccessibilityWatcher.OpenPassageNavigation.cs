@@ -250,6 +250,20 @@ namespace DateEverythingAccess
                             sourceGoal,
                             out string resolvedPlanningZone))
                     {
+                        sourceGoal = ResolveOpenPassageReachablePlanningGoal(
+                            resolvedPlanningZone,
+                            step,
+                            playerPosition,
+                            sourceGoal,
+                            sourcePlanningContext);
+                        if (!ShouldUseLocalNavigationGoal(
+                                playerPosition,
+                                sourceGoal,
+                                GetLocalNavigationGoalReachedDistance(sourcePlanningContext)))
+                        {
+                            return false;
+                        }
+
                         planningZone = resolvedPlanningZone;
                         planningGoal = sourceGoal;
                         planningContext = sourcePlanningContext;
@@ -295,6 +309,20 @@ namespace DateEverythingAccess
                             destinationGoal,
                             out string resolvedPlanningZone))
                     {
+                        destinationGoal = ResolveOpenPassageReachablePlanningGoal(
+                            resolvedPlanningZone,
+                            step,
+                            playerPosition,
+                            destinationGoal,
+                            destinationPlanningContext);
+                        if (!ShouldUseLocalNavigationGoal(
+                                playerPosition,
+                                destinationGoal,
+                                GetLocalNavigationGoalReachedDistance(destinationPlanningContext)))
+                        {
+                            return false;
+                        }
+
                         planningZone = resolvedPlanningZone;
                         planningGoal = destinationGoal;
                         planningContext = destinationPlanningContext;
@@ -313,6 +341,97 @@ namespace DateEverythingAccess
             }
 
             return false;
+        }
+
+        private Vector3 ResolveOpenPassageReachablePlanningGoal(
+            string planningZone,
+            NavigationGraph.PathStep step,
+            Vector3 playerPosition,
+            Vector3 planningGoal,
+            string planningContext)
+        {
+            if (string.IsNullOrWhiteSpace(planningZone) ||
+                planningGoal == Vector3.zero ||
+                !UsesExplicitOpenPassageCrossingSegments(step) ||
+                (!string.Equals(planningContext, "open-passage-handoff", System.StringComparison.Ordinal) &&
+                 !string.Equals(planningContext, "open-passage-destination", System.StringComparison.Ordinal)))
+            {
+                return planningGoal;
+            }
+
+            if (!LocalNavigationMaps.TryResolveReachableProxyInStartComponent(
+                    planningZone,
+                    playerPosition,
+                    planningGoal,
+                    out Vector3 proxyGoal,
+                    out string proxyDetail) ||
+                proxyGoal == Vector3.zero)
+            {
+                return planningGoal;
+            }
+
+            LogNavigationTrackerDebug(
+                "Using reachable open-passage local planning proxy" +
+                " planningZone=" + planningZone +
+                " context=" + (planningContext ?? "<null>") +
+                " originalGoal=" + FormatVector3(planningGoal) +
+                " proxyGoal=" + FormatVector3(proxyGoal) +
+                " detail=" + (proxyDetail ?? "<null>") +
+                " step=" + DescribeNavigationStep(step));
+            return proxyGoal;
+        }
+
+        private bool HasReachedOpenPassageReachableSourceProxy(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 playerPosition,
+            out string detail)
+        {
+            detail = null;
+            if (step == null ||
+                !UsesExplicitOpenPassageCrossingSegments(step))
+            {
+                return false;
+            }
+
+            Vector3 sourceTarget = GetOpenPassageSourceSegmentTarget(step);
+            if (sourceTarget == Vector3.zero)
+                return false;
+
+            bool allowAcceptedSourceZone = IsAcceptedOverrideSourceZone(step, currentZone);
+            if (!TryResolveOpenPassagePlanningZone(
+                    currentZone,
+                    step.FromZone,
+                    allowAcceptedSourceZone,
+                    playerPosition,
+                    sourceTarget,
+                    out string planningZone))
+            {
+                return false;
+            }
+
+            if (!LocalNavigationMaps.TryResolveReachableProxyInStartComponent(
+                    planningZone,
+                    playerPosition,
+                    sourceTarget,
+                    out Vector3 proxyGoal,
+                    out string proxyDetail) ||
+                proxyGoal == Vector3.zero)
+            {
+                return false;
+            }
+
+            float proxyDistance = GetFlatDistance(playerPosition, proxyGoal);
+            if (proxyDistance > OpenPassageOverrideLocalNavigationGoalReachedDistance)
+                return false;
+
+            detail =
+                "planningZone=" + planningZone +
+                " proxyGoal=" + FormatVector3(proxyGoal) +
+                " proxyDistance=" + proxyDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                " sourceTarget=" + FormatVector3(sourceTarget) +
+                " proxyDetail=" + (proxyDetail ?? "<null>");
+            return true;
         }
 
         private static bool TryResolveOpenPassagePlanningZone(
@@ -347,6 +466,13 @@ namespace DateEverythingAccess
             return !string.IsNullOrEmpty(step?.FromZone) &&
                 (IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
                  IsAcceptedOverrideSourceZone(step, currentZone));
+        }
+
+        private static bool UsesExplicitOpenPassageCrossingSegments(NavigationGraph.PathStep step)
+        {
+            return step != null &&
+                TryGetOpenPassageTransitionOverride(step, out OpenPassageTransitionOverride transitionOverride) &&
+                transitionOverride.UseExplicitCrossingSegments;
         }
 
         private bool TryGetOpenPassageOverridePlanningGoal(

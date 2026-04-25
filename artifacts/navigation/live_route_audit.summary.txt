@@ -1,58 +1,114 @@
 Live route audit import summary
-Imported at: 2026-04-24T19:32:17.4059702Z
+Imported at: 2026-04-25T02:06:17.9279513Z
 Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\live_route_audit.live.json
 Output: .\artifacts\navigation\live_route_audit.live.json
-Report generated at: 04/24/2026 18:53:18
+Report generated at: 04/25/2026 01:59:13
 Active scene: ThirdPersonGreybox
-Runtime build: 0.1.1|utc=2026-04-24T15:01:30.0000000Z|sha256=C974570DA5E103C6E5483A5B429D40F59E2161892BD6BB7E1C67F2DE740CEF50
-Override load: status=loaded entries=36 normalizedScalarArrays=False detail=Entries=36 normalizedScalarArrays=False
-Latest report totals: total=3192 passed=21 failed=842 skipped=280 pending=2049 complete=False
+Runtime build: 0.1.1|utc=2026-04-25T01:39:12.0000000Z|sha256=FCFC84280778F208769AC8BEAAC60B36533C4DE9DFFEA7DCC7A74CDA58213E79
+Override load: status=loaded entries=37 normalizedScalarArrays=False detail=Entries=37 normalizedScalarArrays=False
+Latest report totals: total=3192 passed=0 failed=31 skipped=280 pending=2881 complete=False
+
 Failed routes by start zone:
-- bathroom2: 56
-- dining_room: 56
-- dorian_bathroom2_1: 56
-- dorian_bathroom2_2: 56
-- dorian_bedroomcloset1: 56
-- dorian_bedroomcloset2: 56
-- bathroom1: 55
-- bedroom: 55
-- dorian_backdoor: 55
-- dorian_bathroom1: 55
-- bedroom_closet: 54
-- dorian_gym1: 54
-- dorian_bathroom2: 53
-- dorian_bedroom1: 52
-- dorian_bedroom2: 52
-- dorian_gym2: 21
+- bathroom1: 1
+- bathroom2: 1
+- bedroom: 1
+- bedroom_closet: 1
+- dining_room: 1
+- dorian_backdoor: 1
+- dorian_bathroom1: 1
+- dorian_bathroom2: 1
+- dorian_bathroom2_1: 1
+- dorian_bathroom2_2: 1
+- dorian_bedroom1: 1
+- dorian_bedroom2: 1
+- dorian_bedroomcloset1: 1
+- dorian_bedroomcloset2: 1
+- dorian_gym1: 1
+- dorian_gym2: 1
+- dorian_gym3: 1
+- dorian_gym4: 1
+- dorian_gymcloset1: 1
+- dorian_gymcloset2: 1
+- dorian_irondoor: 1
+- dorian_laundry1: 1
+- dorian_laundry2: 1
+- dorian_laundrycloset1: 1
+- dorian_office_closet1: 1
+- dorian_office_closet2: 1
+- dorian_office1: 1
+- dorian_office2: 1
+- dorian_trapdoor1: 1
+- dorian_trapdoor2: 1
+- dorian_upperhallcloset1: 1
+
 Failed routes by first step:
-- transition:dorian_bedroomcloset2->bedroom_closet: 56
-- transition:dorian_bedroomcloset1->bedroom_closet: 56
-- transition:dorian_bathroom2_2->bathroom2: 56
-- transition:dorian_bathroom2_1->bathroom2: 56
-- transition:bathroom1->hallway: 55
-- transition:dorian_bathroom1->bathroom1: 55
-- transition:dorian_backdoor->laundry_room: 55
-- transition:dorian_gym1->gym: 54
-- transition:bathroom2->bedroom: 53
-- transition:bedroom_closet->bedroom: 53
+- transition:bathroom1->hallway: 1
+- transition:bathroom2->bedroom: 1
+- transition:bedroom_closet->bedroom: 1
+- transition:bedroom->upper_hallway: 1
+- transition:dining_room->living_room: 1
+- transition:dorian_backdoor->laundry_room: 1
+- transition:dorian_bathroom1->bathroom1: 1
+- transition:dorian_bathroom2_1->bathroom2: 1
+- transition:dorian_bathroom2_2->bathroom2: 1
+- transition:dorian_bathroom2->bathroom2: 1
+- transition:dorian_bedroom1->bedroom: 1
+- transition:dorian_bedroom2->bedroom: 1
+- transition:dorian_bedroomcloset1->bedroom_closet: 1
+- transition:dorian_bedroomcloset2->bedroom_closet: 1
+- transition:dorian_gym1->gym: 1
+- transition:dorian_gym2->gym: 1
+- transition:dorian_gym3->gym: 1
+- transition:dorian_gym4->gym: 1
+- transition:dorian_gymcloset1->gym_closet: 1
+- transition:dorian_gymcloset2->gym_closet: 1
+- transition:dorian_irondoor->bedroom_closet: 1
+- transition:dorian_laundry1->laundry_room: 1
+- transition:dorian_laundry2->laundry_room: 1
+- transition:dorian_laundrycloset1->laundry_room_closet: 1
+- transition:dorian_office_closet1->office_closet: 1
+- transition:dorian_office_closet2->office_closet: 1
+- transition:dorian_office1->office: 1
+- transition:dorian_office2->office: 1
+- transition:dorian_trapdoor1->office: 1
+- transition:dorian_trapdoor2->office: 1
+- transition:dorian_upperhallcloset1->upper_hallway: 1
+
+Failed routes by reason bucket:
+- route stalled: 20
+- auto-walk loop detected: 9
+- route timeout: 1
+- spawn zone mismatch: 1
+
 Sample failed routes:
-- route:bathroom1->attic | route stalled elapsed=11.50 noProgressElapsed=7.02 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->atticWindow | route stalled elapsed=7.67 noProgressElapsed=7.10 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->bathroom2 | route stalled elapsed=7.45 noProgressElapsed=7.02 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->bedroom | route stalled elapsed=7.43 noProgressElapsed=7.02 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->bedroom_closet | route stalled elapsed=7.48 noProgressElapsed=7.07 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->crawlspace | route stalled elapsed=7.50 noProgressElapsed=7.07 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dining_room | route stalled elapsed=7.70 noProgressElapsed=7.23 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_attic1 | route stalled elapsed=7.47 noProgressElapsed=7.12 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_attic2 | route stalled elapsed=7.55 noProgressElapsed=7.12 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_backdoor | route stalled elapsed=7.47 noProgressElapsed=7.12 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_bathroom2 | route stalled elapsed=7.40 noProgressElapsed=7.03 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_bathroom2_1 | route stalled elapsed=7.60 noProgressElapsed=7.02 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_bathroom2_2 | route stalled elapsed=8.20 noProgressElapsed=7.08 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_bedroom1 | route stalled elapsed=7.50 noProgressElapsed=7.03 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_bedroom2 | route stalled elapsed=7.48 noProgressElapsed=7.03 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_bedroomcloset1 | route stalled elapsed=7.53 noProgressElapsed=7.01 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_bedroomcloset2 | route stalled elapsed=7.58 noProgressElapsed=7.11 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_gym1 | route stalled elapsed=7.58 noProgressElapsed=7.11 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_gym2 | route stalled elapsed=10.02 noProgressElapsed=7.11 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
-- route:bathroom1->dorian_gym3 | route stalled elapsed=7.58 noProgressElapsed=7.11 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> detail=Live room-to-room route failed while exercising normal navigation.
+- route:bathroom1->attic | firstStep=transition:bathroom1->hallway | route stalled elapsed=9.29 noProgressElapsed=7.03 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=bathroom1 localContext=door-threshold-advance-local lastTargetKind=LocalWaypoint
+- route:bathroom2->atticWindow | firstStep=transition:bathroom2->bedroom | route stalled elapsed=7.13 noProgressElapsed=7.03 currentZone=bathroom2 currentStep=bathroom2->bedroom kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-25.41, 17.84, 0.03) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=bathroom2 localContext= lastTargetKind=ZoneFallback
+- route:bedroom->bathroom1 | firstStep=transition:bedroom->upper_hallway | route stalled elapsed=7.43 noProgressElapsed=7.10 currentZone=bedroom currentStep=bedroom->upper_hallway kind=Door interaction=True connector=Doors_Bedroom from=(-12.00, 17.84, -12.64) to=(-12.60, 17.84, 0.03) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=bedroom localContext=door-threshold-advance-local lastTargetKind=LocalWaypoint
+- route:bedroom_closet->bathroom2 | firstStep=transition:bedroom_closet->bedroom | route stalled elapsed=7.54 noProgressElapsed=7.10 currentZone=bedroom_closet currentStep=bedroom_closet->bedroom kind=Door interaction=True connector=Doors_Bedroom_ClosetRight_Outer from=(-10.54, 18.02, -24.00) to=(-10.54, 18.02, -11.73) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=bedroom_closet localContext=door-threshold-advance-local lastTargetKind=LocalWaypoint
+- route:dining_room->bedroom | firstStep=transition:dining_room->living_room | navigation blocked currentZone=dining_room detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.04 zone=dining_room targetKind=ExitWaypoint targetPosition=(-17.05, 4.68, -1.69) rawContext=<null> localContext=<null> step=dining_room->living_room kind=OpenPassage interaction=False connector=<null> from=(-17.05, 4.68, -1.69) to=(-3.22, 5.67, -12.81) fromCross=(-12.88, 4.68, -5.67) toCross=(-6.15, 5.67, -8.26) routeKey=route:dining_room->bedroom | statusDetail=Live room-to-room route blocked while exercising normal navigation. | zone=dining_room localContext= lastTargetKind=ExitWaypoint
+- route:dorian_backdoor->bedroom_closet | firstStep=transition:dorian_backdoor->laundry_room | navigation blocked currentZone=piano_room3 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.14 zone=piano_room9 targetKind=ExitWaypoint targetPosition=(-11.56, 4.84, -13.03) rawContext=<null> localContext=<null> step=piano_room->dining_room kind=OpenPassage interaction=False connector=<null> from=(-11.56, 4.84, -13.03) to=(-19.96, 4.20, -8.10) fromCross=(-16.95, 4.84, -10.13) toCross=(-17.59, 4.20, -10.13) routeKey=route:dorian_backdoor->bedroom_closet | statusDetail=Live room-to-room route blocked while exercising normal navigation. | zone=piano_room3 localContext= lastTargetKind=ExitWaypoint
+- route:dorian_bathroom1->crawlspace | firstStep=transition:dorian_bathroom1->bathroom1 | route stalled elapsed=8.42 noProgressElapsed=7.11 currentZone=bathroom1 currentStep=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(-0.03, 4.17, 11.49) to=(0.52, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=bathroom1 localContext=door-threshold-advance-local lastTargetKind=LocalWaypoint
+- route:dorian_bathroom2->dining_room | firstStep=transition:dorian_bathroom2->bathroom2 | navigation blocked currentZone=hallway6 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=hallway6 targetKind=LocalWaypoint targetPosition=(9.90, 4.35, -5.39) rawContext=open-passage-guided localContext=open-passage-handoff step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(9.37, 4.67, -6.63) routeKey=route:dorian_bathroom2->dining_room | statusDetail=Live room-to-room route blocked while exercising normal navigation. | zone=hallway6 localContext=open-passage-handoff lastTargetKind=LocalWaypoint
+- route:dorian_bathroom2_1->dorian_attic1 | firstStep=transition:dorian_bathroom2_1->bathroom2 | route stalled elapsed=7.76 noProgressElapsed=7.07 currentZone=bathroom2 currentStep=bathroom2->bedroom kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-25.41, 17.84, 0.03) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=bathroom2 localContext= lastTargetKind=ZoneFallback
+- route:dorian_bathroom2_2->dorian_attic2 | firstStep=transition:dorian_bathroom2_2->bathroom2 | spawn zone mismatch currentZone=bedroom4 expectedZone=dorian_bathroom2_2 | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=bedroom4 localContext= lastTargetKind=
+- route:dorian_bedroom1->dorian_backdoor | firstStep=transition:dorian_bedroom1->bedroom | route stalled elapsed=12.57 noProgressElapsed=7.00 currentZone=upper_hallway5 currentStep=upper_hallway->laundry_room kind=OpenPassage interaction=False connector=<null> from=(-13.57, 18.17, 3.56) to=(-18.38, 4.98, 33.88) fromCross=(-15.97, 18.17, 6.76) toCross=(-15.97, 4.98, 29.42) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=upper_hallway5 localContext=open-passage-source lastTargetKind=LocalWaypoint
+- route:dorian_bedroom2->dorian_bathroom1 | firstStep=transition:dorian_bedroom2->bedroom | route stalled elapsed=8.16 noProgressElapsed=7.05 currentZone=bedroom currentStep=bedroom->upper_hallway kind=Door interaction=True connector=Doors_Bedroom from=(-12.00, 17.84, -12.64) to=(-12.60, 17.84, 0.03) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=bedroom localContext=door-threshold-advance-local lastTargetKind=LocalWaypoint
+- route:dorian_bedroomcloset1->dorian_bathroom2 | firstStep=transition:dorian_bedroomcloset1->bedroom_closet | route stalled elapsed=8.70 noProgressElapsed=7.08 currentZone=bedroom_closet currentStep=bedroom_closet->bedroom kind=Door interaction=True connector=Doors_Bedroom_ClosetRight_Outer from=(-10.54, 18.02, -24.00) to=(-10.54, 18.02, -11.73) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=bedroom_closet localContext=door-threshold-advance-local lastTargetKind=LocalWaypoint
+- route:dorian_bedroomcloset2->dorian_bathroom2_1 | firstStep=transition:dorian_bedroomcloset2->bedroom_closet | route stalled elapsed=7.76 noProgressElapsed=7.09 currentZone=bedroom_closet currentStep=bedroom_closet->bedroom kind=Door interaction=True connector=Doors_Bedroom_ClosetRight_Outer from=(-10.54, 18.02, -24.00) to=(-10.54, 18.02, -11.73) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=bedroom_closet localContext=door-threshold-advance-local lastTargetKind=LocalWaypoint
+- route:dorian_gym1->dorian_bathroom2_2 | firstStep=transition:dorian_gym1->gym | route stalled elapsed=7.96 noProgressElapsed=7.08 currentZone=gym8 currentStep=gym->upper_hallway kind=Door interaction=True connector=Doors_Gym_Hall from=(-7.75, 17.84, 13.56) to=(-7.75, 17.84, 1.71) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=gym8 localContext= lastTargetKind=ZoneFallback
+- route:dorian_gym2->dorian_bedroom1 | firstStep=transition:dorian_gym2->gym | route stalled elapsed=8.48 noProgressElapsed=7.03 currentZone=upper_hallway4 currentStep=upper_hallway->bedroom kind=Door interaction=True connector=Doors_Bedroom from=(-12.60, 17.84, 0.03) to=(-12.00, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=upper_hallway4 localContext= lastTargetKind=ZoneFallback
+- route:dorian_gym3->dorian_bedroom2 | firstStep=transition:dorian_gym3->gym | route stalled elapsed=9.71 noProgressElapsed=7.09 currentZone=gym8 currentStep=gym->upper_hallway kind=Door interaction=True connector=Doors_Gym_Hall from=(-7.75, 17.84, 13.56) to=(-7.75, 17.84, 1.71) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=gym8 localContext= lastTargetKind=ZoneFallback
+- route:dorian_gym4->dorian_bedroomcloset1 | firstStep=transition:dorian_gym4->gym | route stalled elapsed=8.09 noProgressElapsed=7.10 currentZone=bathroom2 currentStep=bathroom2->bedroom kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-25.41, 17.84, 0.03) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=bathroom2 localContext= lastTargetKind=ZoneFallback
+- route:dorian_gymcloset1->dorian_bedroomcloset2 | firstStep=transition:dorian_gymcloset1->gym_closet | route stalled elapsed=8.71 noProgressElapsed=7.05 currentZone=gym8 currentStep=gym->upper_hallway kind=Door interaction=True connector=Doors_Gym_Hall from=(-7.75, 17.84, 13.56) to=(-7.75, 17.84, 1.71) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=gym8 localContext= lastTargetKind=ZoneFallback
+- route:dorian_gymcloset2->dorian_gym1 | firstStep=transition:dorian_gymcloset2->gym_closet | route stalled elapsed=12.56 noProgressElapsed=7.09 currentZone=gym_closet2 currentStep=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=gym_closet2 localContext= lastTargetKind=ZoneFallback
+- route:dorian_irondoor->dorian_gym2 | firstStep=transition:dorian_irondoor->bedroom_closet | navigation blocked currentZone=kitchen detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.13 zone=kitchen4 targetKind=ZoneFallback targetPosition=(-16.34, 4.68, -0.45) rawContext=open-passage-guided localContext=<null> step=kitchen->dining_room kind=OpenPassage interaction=False connector=<null> from=(-12.30, 3.37, 9.68) to=(-17.05, 4.68, -1.69) fromCross=(-14.67, 3.37, 2.30) toCross=(-14.67, 4.68, 2.30) routeKey=route:dorian_irondoor->dorian_gym2 | statusDetail=Live room-to-room route blocked while exercising normal navigation. | zone=kitchen localContext= lastTargetKind=ZoneFallback
+- route:dorian_laundry1->dorian_gym3 | firstStep=transition:dorian_laundry1->laundry_room | navigation blocked currentZone=kitchen2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=kitchen2 targetKind=ExitWaypoint targetPosition=(-12.30, 3.37, 9.68) rawContext=<null> localContext=<null> step=kitchen->dining_room kind=OpenPassage interaction=False connector=<null> from=(-12.30, 3.37, 9.68) to=(-17.05, 4.68, -1.69) fromCross=(-14.67, 3.37, 2.30) toCross=(-14.67, 4.68, 2.30) routeKey=route:dorian_laundry1->dorian_gym3 | statusDetail=Live room-to-room route blocked while exercising normal navigation. | zone=kitchen2 localContext= lastTargetKind=ExitWaypoint
+- route:dorian_laundry2->dorian_gym4 | firstStep=transition:dorian_laundry2->laundry_room | route stalled elapsed=7.87 noProgressElapsed=7.03 currentZone=laundry_room currentStep=laundry_room->upper_hallway kind=OpenPassage interaction=False connector=<null> from=(-18.38, 4.98, 33.88) to=(-13.57, 18.17, 3.56) fromCross=(-15.97, 4.98, 29.42) toCross=(-15.97, 18.17, 6.76) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=laundry_room localContext= lastTargetKind=ZoneFallback
+- route:dorian_laundrycloset1->dorian_gymcloset1 | firstStep=transition:dorian_laundrycloset1->laundry_room_closet | route stalled elapsed=7.84 noProgressElapsed=7.10 currentZone=laundry_room_closet currentStep=laundry_room_closet->laundry_room kind=Door interaction=True connector=Doors_Laundry_Closet from=(-13.19, 4.98, 29.03) to=(-13.56, 3.92, 30.98) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=laundry_room_closet localContext= lastTargetKind=ZoneFallback
+- route:dorian_office1->dorian_gymcloset2 | firstStep=transition:dorian_office1->office | route stalled elapsed=10.66 noProgressElapsed=7.10 currentZone=office6 currentStep=office->hallway kind=Door interaction=True connector=Doors_Office from=(7.76, 4.17, 11.49) to=(8.31, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=office6 localContext=door-threshold-advance-local lastTargetKind=LocalWaypoint
+- route:dorian_office2->dorian_irondoor | firstStep=transition:dorian_office2->office | navigation blocked currentZone=hallway6 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.02 zone=hallway6 targetKind=LocalWaypoint targetPosition=(9.90, 9.69, -2.89) rawContext=<null> localContext=step-source step=hallway->upper_hallway kind=Stairs interaction=False connector=<null> from=(6.49, 9.69, -3.09) to=(-1.10, 15.17, -3.37) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:dorian_office2->dorian_irondoor | statusDetail=Live room-to-room route blocked while exercising normal navigation. | zone=hallway6 localContext=step-source lastTargetKind=LocalWaypoint
+- route:dorian_office_closet1->dorian_laundry1 | firstStep=transition:dorian_office_closet1->office_closet | route stalled elapsed=12.02 noProgressElapsed=7.05 currentZone=office6 currentStep=office->hallway kind=Door interaction=True connector=Doors_Office from=(7.76, 4.17, 11.49) to=(8.31, 4.17, 0.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=office6 localContext=door-threshold-advance-local lastTargetKind=LocalWaypoint
+- route:dorian_office_closet2->dorian_laundry2 | firstStep=transition:dorian_office_closet2->office_closet | navigation blocked currentZone=dorian_trapdoor1 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.13 zone=dorian_trapdoor1 targetKind=ZoneFallback targetPosition=(5.65, 4.37, 25.34) rawContext=open-passage-guided localContext=<null> step=dorian_trapdoor1->office kind=OpenPassage interaction=False connector=<null> from=(3.29, 4.17, 25.34) to=(8.15, 4.37, 23.26) fromCross=(3.29, 4.17, 25.34) toCross=(5.65, 4.37, 25.34) routeKey=route:dorian_office_closet2->dorian_laundry2 | statusDetail=Live room-to-room route blocked while exercising normal navigation. | zone=dorian_trapdoor1 localContext= lastTargetKind=ZoneFallback
+- route:dorian_trapdoor1->dorian_laundrycloset1 | firstStep=transition:dorian_trapdoor1->office | navigation blocked currentZone=dorian_trapdoor1 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.09 zone=dorian_trapdoor1 targetKind=LocalWaypoint targetPosition=(3.29, 4.17, 25.34) rawContext=open-passage-guided localContext=open-passage-handoff step=dorian_trapdoor1->office kind=OpenPassage interaction=False connector=<null> from=(3.29, 4.17, 25.34) to=(8.15, 4.37, 23.26) fromCross=(3.29, 4.17, 25.34) toCross=(5.65, 4.37, 25.34) routeKey=route:dorian_trapdoor1->dorian_laundrycloset1 | statusDetail=Live room-to-room route blocked while exercising normal navigation. | zone=dorian_trapdoor1 localContext=open-passage-handoff lastTargetKind=LocalWaypoint
+- route:dorian_trapdoor2->dorian_office1 | firstStep=transition:dorian_trapdoor2->office | route timeout elapsed=12.95 currentZone=crawlspace2 currentStep=crawlspace->office kind=Teleporter interaction=True connector=CrawlspaceLadder from=(-1.62, -9.59, 25.01) to=(2.40, -0.40, 24.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) detail=<null> | statusDetail=Live room-to-room route failed while exercising normal navigation. | zone=crawlspace2 localContext=step-source lastTargetKind=LocalWaypoint
+- route:dorian_upperhallcloset1->dorian_office2 | firstStep=transition:dorian_upperhallcloset1->upper_hallway | navigation blocked currentZone=upper_hallway2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.06 zone=upper_hallway2 targetKind=ExitWaypoint targetPosition=(-1.10, 15.17, -3.37) rawContext=<null> localContext=<null> step=upper_hallway->hallway kind=Stairs interaction=False connector=<null> from=(-1.10, 15.17, -3.37) to=(6.49, 9.69, -3.09) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) routeKey=route:dorian_upperhallcloset1->dorian_office2 | statusDetail=Live room-to-room route blocked while exercising normal navigation. | zone=upper_hallway2 localContext= lastTargetKind=ExitWaypoint
