@@ -432,6 +432,139 @@ namespace DateEverythingAccess
         }
 
         /// <summary>
+        /// Finds the nearest walkable proxy in the start component when the requested target snaps to another component.
+        /// </summary>
+        internal static bool TryResolveReachableProxyInStartComponent(
+            string zoneName,
+            Vector3 startPosition,
+            Vector3 targetPosition,
+            out Vector3 proxyPosition,
+            out string detail)
+        {
+            proxyPosition = Vector3.zero;
+            detail = null;
+
+            Initialize();
+            if (!_isAvailable)
+            {
+                detail = "LocalNavigationMapsUnavailable";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(zoneName))
+            {
+                detail = "MissingZoneName";
+                return false;
+            }
+
+            if (!ZonesByName.TryGetValue(zoneName, out ZoneMap zone))
+            {
+                detail = "ZoneNotFound";
+                return false;
+            }
+
+            if (zone.Walkable == null || zone.Walkable.Length == 0)
+            {
+                detail = "ZoneHasNoWalkableCells";
+                return false;
+            }
+
+            if (!TryFindNearestWalkableCellIndex(
+                    zone,
+                    startPosition,
+                    out int startIndex,
+                    out Vector3 snappedStartPosition,
+                    out string startSnapDetail))
+            {
+                detail = "StartSnapFailed " + (startSnapDetail ?? "<null>");
+                return false;
+            }
+
+            if (!TryFindNearestWalkableCellIndex(
+                    zone,
+                    targetPosition,
+                    out int targetIndex,
+                    out Vector3 snappedTargetPosition,
+                    out string targetSnapDetail))
+            {
+                detail = "TargetSnapFailed " + (targetSnapDetail ?? "<null>");
+                return false;
+            }
+
+            EnsureComponentCache(zone);
+            if (zone.ComponentIds == null ||
+                startIndex < 0 ||
+                startIndex >= zone.ComponentIds.Length ||
+                targetIndex < 0 ||
+                targetIndex >= zone.ComponentIds.Length)
+            {
+                detail = "ComponentCacheUnavailable";
+                return false;
+            }
+
+            int startComponentId = zone.ComponentIds[startIndex];
+            int targetComponentId = zone.ComponentIds[targetIndex];
+            if (startComponentId < 0 || targetComponentId < 0)
+            {
+                detail =
+                    "ComponentNotAssigned" +
+                    " startComponentId=" + startComponentId +
+                    " targetComponentId=" + targetComponentId;
+                return false;
+            }
+
+            if (startComponentId == targetComponentId)
+            {
+                detail =
+                    "TargetAlreadyReachable" +
+                    " componentId=" + startComponentId +
+                    " start={" + (startSnapDetail ?? "<null>") + "}" +
+                    " target={" + (targetSnapDetail ?? "<null>") + "}";
+                return false;
+            }
+
+            int bestIndex = -1;
+            float bestDistance = float.PositiveInfinity;
+            for (int i = 0; i < zone.Walkable.Length; i++)
+            {
+                if (!zone.Walkable[i] ||
+                    zone.ComponentIds[i] != startComponentId)
+                {
+                    continue;
+                }
+
+                Vector3 candidatePosition = GetCellCenter(zone, i, targetPosition.y);
+                float candidateDistance = ComputeFlatDistance(candidatePosition, targetPosition);
+                if (candidateDistance >= bestDistance)
+                    continue;
+
+                bestDistance = candidateDistance;
+                bestIndex = i;
+                proxyPosition = candidatePosition;
+            }
+
+            if (bestIndex < 0 || proxyPosition == Vector3.zero)
+            {
+                detail = "NoProxyInStartComponent startComponentId=" + startComponentId;
+                return false;
+            }
+
+            float snappedTargetDistance = ComputeFlatDistance(snappedTargetPosition, targetPosition);
+            float proxyDistance = ComputeFlatDistance(proxyPosition, targetPosition);
+            detail =
+                "startComponentId=" + startComponentId +
+                " targetComponentId=" + targetComponentId +
+                " start={" + (startSnapDetail ?? "<null>") + "}" +
+                " target={" + (targetSnapDetail ?? "<null>") + "}" +
+                " snappedTargetDistance=" + snappedTargetDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                " proxyDistance=" + proxyDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                " snappedStart=" + FormatPosition(snappedStartPosition) +
+                " snappedTarget=" + FormatPosition(snappedTargetPosition) +
+                " proxy=" + FormatPosition(proxyPosition);
+            return true;
+        }
+
+        /// <summary>
         /// Resolves a walkable approach target while constraining candidates to a specific connected component.
         /// </summary>
         internal static bool TryResolveApproachTargetForComponent(
