@@ -1,20 +1,19 @@
 Sweep report import summary
 Kind: OpenPassage
-Imported at: 2026-04-25T23:06:20.5594100Z
+Imported at: 2026-04-29T01:45:39.7080077Z
 Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\transition_sweep.live.json
 Output: .\artifacts\navigation\transition_sweep.live.json
-Report generated at: 04/25/2026 23:01:48
+Report generated at: 04/29/2026 01:43:26
 Active scene: ThirdPersonGreybox
-Runtime build: 0.1.1|utc=2026-04-25T22:51:38.0000000Z|sha256=AFB66D68FA52C58A2E9222264EA474244E2051AABB6CEA0325B434006606ED1E
-Override load: status=loaded entries=37 normalizedScalarArrays=False detail=Entries=37 normalizedScalarArrays=False
-Latest report totals: total=82 passed=75 failed=7 pending=0
-Imported status changes: newEntries=0 newlyPassed=1 newlyFailed=2 newlyPending=0 unchanged=79
-Open-passage override refresh: added=1 refreshed=1 preservedManualWaypoints=3 failedWithoutWaypoint=3 retainedWithoutCurrentFailure=31 totalEntries=38
+Runtime build: 0.1.1|utc=2026-04-29T01:34:18.0000000Z|sha256=BB49ECF9E75DBD740195BFAB5BE15CA2B0B970BCD0B69547E5BC5B551B346245
+Override load: status=loaded entries=38 normalizedScalarArrays=False detail=Entries=38 normalizedScalarArrays=False
+Latest report totals: total=88 passed=82 failed=6 pending=0
+Imported status changes: newEntries=6 newlyPassed=7 newlyFailed=1 newlyPending=0 unchanged=80
+Open-passage override refresh: added=1 refreshed=1 preservedManualWaypoints=2 failedWithoutWaypoint=3 retainedWithoutCurrentFailure=33 totalEntries=39
 Remaining failed transitions:
-- bathroom2 -> dorian_bathroom2_1 | suspicion=0 | connector=<none> | step timeout currentZone=bathroom2_3 player=(-25.12, 12.82, -2.32) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(-25.31, 18.23, -3.82)
-- bedroom -> dorian_bedroom1 | suspicion=2 | connector=<none> | step timeout currentZone=bedroom player=(-12.68, 12.84, -6.50) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(-12.70, 16.73, -7.53)
+- attic -> dorian_attic1 | suspicion=4 | connector=<none> | navigation blocked currentZone=attic detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.01 zone=attic targetKind=ZoneFallback targetPosition=(2.32, 18.26, 3.90) rawContext=open-passage-guided localContext=<null> step=attic->dorian_attic1 kind=OpenPassage interaction=False connector=<null> from=(14.36, 18.10, 3.74) to=(-4.25, 18.26, 3.89) fromCross=(4.78, 18.10, 3.89) toCross=(-4.25, 18.26, 3.89) step=attic->dorian_attic1 kind=OpenPassage interaction=False connector=<null> from=(14.36, 18.10, 3.74) to=(-4.25, 18.26, 3.89) fromCross=(4.78, 18.10, 3.89) toCross=(-4.25, 18.26, 3.89) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(2.32, 18.26, 3.90)
+- bathroom2 -> dorian_bathroom2_1 | suspicion=0 | connector=<none> | step timeout currentZone=bathroom2_3 player=(-24.29, 12.82, -3.30) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(-25.31, 18.23, -3.82)
 - dining_room -> piano_room | suspicion=0 | connector=<none> | navigation blocked currentZone=dining_room detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=dining_room targetKind=LocalWaypoint targetPosition=(-17.90, 4.20, -9.88) rawContext=open-passage-guided localContext=open-passage-handoff step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(-17.90, 4.20, -9.88)
-- dorian_trapdoor1 -> office | suspicion=0 | connector=<none> | step timeout currentZone=office_closet player=(3.20, -0.60, 25.15) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(5.65, 4.37, 25.34)
+- dorian_trapdoor1 -> office | suspicion=0 | connector=<none> | step timeout currentZone=office_closet player=(3.20, -0.59, 25.15) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(5.65, 4.37, 25.34)
 - hallway -> hallway_arma | suspicion=2 | connector=<none> | step timeout currentZone=stairsup player=(5.84, 4.50, -3.64) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(5.84, 9.95, -3.64)
-- kitchen -> kitchen_tutorial | suspicion=4 | connector=<none> | navigation blocked currentZone=kitchen detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.00 zone=kitchen targetKind=ZoneFallback targetPosition=(-11.20, 5.48, -2.90) rawContext=open-passage-guided localContext=<null> step=kitchen->kitchen_tutorial kind=OpenPassage interaction=False connector=<null> from=(-12.30, 3.37, 9.68) to=(-11.00, 5.48, -20.51) fromCross=(-11.00, 3.37, 0.20) toCross=(-11.00, 5.48, -20.51) step=kitchen->kitchen_tutorial kind=OpenPassage interaction=False connector=<null> from=(-12.30, 3.37, 9.68) to=(-11.00, 5.48, -20.51) fromCross=(-11.00, 3.37, 0.20) toCross=(-11.00, 5.48, -20.51) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-11.20, 5.48, -2.90)
 - living_room -> hallway | suspicion=0 | connector=<none> | navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)

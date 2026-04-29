@@ -422,15 +422,72 @@ namespace DateEverythingAccess
             }
 
             float proxyDistance = GetFlatDistance(playerPosition, proxyGoal);
-            if (proxyDistance > OpenPassageOverrideLocalNavigationGoalReachedDistance)
+            string progressDetail = null;
+            if (proxyDistance > OpenPassageOverrideLocalNavigationGoalReachedDistance &&
+                !HasCompletedOpenPassageSourceProxyBySegmentProgress(
+                    step,
+                    playerPosition,
+                    proxyGoal,
+                    sourceTarget,
+                    out progressDetail))
+            {
                 return false;
+            }
 
             detail =
                 "planningZone=" + planningZone +
                 " proxyGoal=" + FormatVector3(proxyGoal) +
                 " proxyDistance=" + proxyDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                 " sourceTarget=" + FormatVector3(sourceTarget) +
-                " proxyDetail=" + (proxyDetail ?? "<null>");
+                " proxyDetail=" + (proxyDetail ?? "<null>") +
+                " progressDetail=" + (progressDetail ?? "<null>");
+            return true;
+        }
+
+        private static bool HasCompletedOpenPassageSourceProxyBySegmentProgress(
+            NavigationGraph.PathStep step,
+            Vector3 playerPosition,
+            Vector3 proxyGoal,
+            Vector3 sourceTarget,
+            out string detail)
+        {
+            detail = null;
+            if (step == null || proxyGoal == Vector3.zero || sourceTarget == Vector3.zero)
+                return false;
+
+            Vector3 sourceStart = GetOpenPassageSourceGuidanceOrigin(step);
+            if (sourceStart == Vector3.zero ||
+                !TryGetSegmentMetrics(
+                    sourceStart,
+                    sourceTarget,
+                    playerPosition,
+                    out Vector3 segmentDirection,
+                    out float playerProgress,
+                    out float segmentLength) ||
+                segmentLength <= 0f)
+            {
+                return false;
+            }
+
+            Vector3 proxyOffset = proxyGoal - sourceStart;
+            proxyOffset.y = 0f;
+            float proxyProgress = Mathf.Clamp(Vector3.Dot(proxyOffset, segmentDirection), 0f, segmentLength);
+            Vector3 closestPointOnSegment = sourceStart + segmentDirection * Mathf.Clamp(playerProgress, 0f, segmentLength);
+            closestPointOnSegment.y = playerPosition.y;
+            float lateralDistance = GetFlatDistance(playerPosition, closestPointOnSegment);
+            float requiredProgress = Mathf.Max(0f, proxyProgress - OpenPassageOverrideLocalNavigationGoalReachedDistance);
+            if (playerProgress < requiredProgress ||
+                lateralDistance > AutoWalkZoneBoundaryFallbackDistance)
+            {
+                return false;
+            }
+
+            detail =
+                "playerProgress=" + playerProgress.ToString("0.00", CultureInfo.InvariantCulture) +
+                " proxyProgress=" + proxyProgress.ToString("0.00", CultureInfo.InvariantCulture) +
+                " requiredProgress=" + requiredProgress.ToString("0.00", CultureInfo.InvariantCulture) +
+                " segmentLength=" + segmentLength.ToString("0.00", CultureInfo.InvariantCulture) +
+                " lateralDistance=" + lateralDistance.ToString("0.00", CultureInfo.InvariantCulture);
             return true;
         }
 

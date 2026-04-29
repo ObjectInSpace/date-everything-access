@@ -1,6 +1,13 @@
 {
   "Entries": [
     {
+      "FromZone": "upper_hallway",
+      "ToZone": "dorian_attic1",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0
+    },
+    {
       "FromZone": "bathroom2",
       "ToZone": "dorian_bathroom2",
       "DestinationApproachBias": 1.0,
@@ -40,6 +47,9 @@
     {
       "FromZone": "bathroom2",
       "ToZone": "dorian_bathroom2_2",
+      "AcceptedDestinationZones": [
+        "bedroom4"
+      ],
       "DestinationApproachBias": 1.0,
       "UseExplicitCrossingSegments": true,
       "StepTimeoutSeconds": 5.0,
@@ -175,6 +185,9 @@
     {
       "FromZone": "dorian_bathroom2_2",
       "ToZone": "bathroom2",
+      "AcceptedSourceZones": [
+        "bedroom4"
+      ],
       "DestinationApproachBias": 1.0,
       "UseExplicitCrossingSegments": true,
       "StepTimeoutSeconds": 5.0,
@@ -272,17 +285,14 @@
     },
     {
       "FromZone": "dorian_trapdoor1",
-      "ToZone": "office",
-      "AcceptedSourceZones": [
-        "office_closet"
-      ],
+      "ToZone": "office_closet",
       "DestinationApproachBias": 1.0,
       "UseExplicitCrossingSegments": true,
       "StepTimeoutSeconds": 5.0,
       "IntermediateWaypoints": [
         {
           "x": 3.2,
-          "y": -0.6,
+          "y": -0.59,
           "z": 25.15
         }
       ]
@@ -519,7 +529,7 @@
       ]
     },
     {
-      "FromZone": "office",
+      "FromZone": "office_closet",
       "ToZone": "dorian_trapdoor1",
       "DestinationApproachBias": 1.0,
       "UseExplicitCrossingSegments": true,
