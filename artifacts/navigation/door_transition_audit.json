@@ -1,1643 +1,1621 @@
-﻿{
-    "Summary":  {
-                    "GeneratedAtUtc":  "2026-04-17T02:28:46.8008094Z",
-                    "GraphPath":  "D:\\SteamLibrary\\steamapps\\Common\\Date Everything\\BepInEx\\plugins\\navigation_graph.json",
-                    "SceneDataPath":  "C:\\Users\\amock\\mod template\\artifacts\\navigation\\thirdpersongreybox-navigation-data.json",
-                    "TotalDoorPairs":  11,
-                    "SuspiciousDoorPairs":  0,
-                    "MissingConnectorNamePairs":  0,
-                    "CameraWaypointFallbackPairs":  0,
-                    "LargeMismatchPairs":  0
-                },
-    "Entries":  [
-                    {
-                        "PairKey":  "attic\u003c-\u003eupper_hallway",
-                        "DirectedKeys":  [
-                                             "upper_hallway-\u003eattic",
-                                             "attic-\u003eupper_hallway"
-                                         ],
-                        "DirectedTransitionIds":  [
-                                                      "transition:upper_hallway-\u003eattic",
-                                                      "transition:attic-\u003eupper_hallway"
-                                                  ],
-                        "ConnectorNames":  [
-                                               "AtticDoors"
-                                           ],
-                        "AssetDerivationSources":  [
-                                                       "DoorObjectAndCameraWaypoints"
-                                                   ],
-                        "ConnectorObjectPosition":  {
-                                                        "x":  3.69,
-                                                        "y":  12.824811,
-                                                        "z":  2.044
-                                                    },
-                        "FromWaypoint":  {
-                                             "x":  -4.249802,
-                                             "y":  18.261999,
-                                             "z":  3.885414
-                                         },
-                        "ToWaypoint":  {
-                                           "x":  12.111662,
-                                           "y":  18.261999,
-                                           "z":  3.885414
-                                       },
-                        "SourceClearPoint":  {
-                                                 "x":  2.89,
-                                                 "y":  12.824811,
-                                                 "z":  2.044
-                                             },
-                        "DestinationClearPoint":  {
-                                                      "x":  4.49,
-                                                      "y":  12.824811,
-                                                      "z":  2.044
-                                                  },
-                        "ReferenceDoorMatchType":  "ExactNamedDoor",
-                        "ReferenceDoor":  {
-                                              "Name":  "AtticDoors",
-                                              "FamilyName":  "AtticDoors",
-                                              "Position":  {
-                                                               "x":  3.69,
-                                                               "y":  12.824811,
-                                                               "z":  2.044
-                                                           },
-                                              "PlanarDistance":  0,
-                                              "HeightDistance":  0,
-                                              "Distance3D":  0
-                                          },
-                        "ExactConnectorMatches":  [
-                                                      {
-                                                          "Name":  "AtticDoors",
-                                                          "FamilyName":  "AtticDoors",
-                                                          "Position":  {
-                                                                           "x":  3.69,
-                                                                           "y":  12.824811,
-                                                                           "z":  2.044
-                                                                       },
-                                                          "PlanarDistance":  0,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0
-                                                      }
-                                                  ],
-                        "TopCandidateDoors":  [
-                                                  {
-                                                      "Name":  "AtticDoors",
-                                                      "FamilyName":  "AtticDoors",
-                                                      "Position":  {
-                                                                       "x":  3.69,
-                                                                       "y":  12.824811,
-                                                                       "z":  2.044
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  0,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Attic_Locked",
-                                                      "FamilyName":  "Doors_Attic",
-                                                      "Position":  {
-                                                                       "x":  3.837,
-                                                                       "y":  16.799999,
-                                                                       "z":  3.435
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  1.3987,
-                                                      "HeightDistance":  3.9752,
-                                                      "Distance3D":  4.2141
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Attic_Unlocked",
-                                                      "FamilyName":  "Doors_Attic",
-                                                      "Position":  {
-                                                                       "x":  3.837,
-                                                                       "y":  16.799999,
-                                                                       "z":  3.435
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  1.3987,
-                                                      "HeightDistance":  3.9752,
-                                                      "Distance3D":  4.2141
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Attic_Unlocking",
-                                                      "FamilyName":  "Doors_Attic",
-                                                      "Position":  {
-                                                                       "x":  1.91,
-                                                                       "y":  17.524811,
-                                                                       "z":  3.723999
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  2.4476,
-                                                      "HeightDistance":  4.7,
-                                                      "Distance3D":  5.2991
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_UpperHall_Electric",
-                                                      "FamilyName":  "Doors_UpperHall_Electric",
-                                                      "Position":  {
-                                                                       "x":  1.341,
-                                                                       "y":  12.824811,
-                                                                       "z":  7.725
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  6.1475,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  6.1475
-                                                  }
-                                              ],
-                        "TopCandidateFamilies":  [
-                                                     "AtticDoors",
-                                                     "Doors_Attic",
-                                                     "Doors_UpperHall_Electric"
-                                                 ],
-                        "SuspicionScore":  0,
-                        "Issues":  [
-
-                                   ]
-                    },
-                    {
-                        "PairKey":  "bathroom1\u003c-\u003ehallway",
-                        "DirectedKeys":  [
-                                             "hallway-\u003ebathroom1",
-                                             "bathroom1-\u003ehallway"
-                                         ],
-                        "DirectedTransitionIds":  [
-                                                      "transition:hallway-\u003ebathroom1",
-                                                      "transition:bathroom1-\u003ehallway"
-                                                  ],
-                        "ConnectorNames":  [
-                                               "Doors_Bathroom1"
-                                           ],
-                        "AssetDerivationSources":  [
-                                                       "DoorObjectAndCameraWaypoints"
-                                                   ],
-                        "ConnectorObjectPosition":  {
-                                                        "x":  2.11,
-                                                        "y":  -0.617448,
-                                                        "z":  6.421805
-                                                    },
-                        "FromWaypoint":  {
-                                             "x":  0.523441,
-                                             "y":  4.17,
-                                             "z":  0.664414
-                                         },
-                        "ToWaypoint":  {
-                                           "x":  -0.028381,
-                                           "y":  4.17,
-                                           "z":  11.494413
-                                       },
-                        "SourceClearPoint":  {
-                                                 "x":  2.15071,
-                                                 "y":  -0.617448,
-                                                 "z":  5.622841
-                                             },
-                        "DestinationClearPoint":  {
-                                                      "x":  2.06929,
-                                                      "y":  -0.617448,
-                                                      "z":  7.220769
-                                                  },
-                        "ReferenceDoorMatchType":  "ExactNamedDoor",
-                        "ReferenceDoor":  {
-                                              "Name":  "Doors_Bathroom1",
-                                              "FamilyName":  "Doors_Bathroom1",
-                                              "Position":  {
-                                                               "x":  2.11,
-                                                               "y":  -0.617448,
-                                                               "z":  6.421805
-                                                           },
-                                              "PlanarDistance":  0,
-                                              "HeightDistance":  0,
-                                              "Distance3D":  0
-                                          },
-                        "ExactConnectorMatches":  [
-                                                      {
-                                                          "Name":  "Doors_Bathroom1",
-                                                          "FamilyName":  "Doors_Bathroom1",
-                                                          "Position":  {
-                                                                           "x":  2.11,
-                                                                           "y":  -0.617448,
-                                                                           "z":  6.421805
-                                                                       },
-                                                          "PlanarDistance":  0,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0
-                                                      }
-                                                  ],
-                        "TopCandidateDoors":  [
-                                                  {
-                                                      "Name":  "Doors_Bathroom1",
-                                                      "FamilyName":  "Doors_Bathroom1",
-                                                      "Position":  {
-                                                                       "x":  2.11,
-                                                                       "y":  -0.617448,
-                                                                       "z":  6.421805
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  0,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Gym_Bathroom",
-                                                      "FamilyName":  "Doors_Gym_Bathroom",
-                                                      "Position":  {
-                                                                       "x":  -23.153,
-                                                                       "y":  12.824811,
-                                                                       "z":  8.003
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  25.3124,
-                                                      "HeightDistance":  13.4423,
-                                                      "Distance3D":  28.6603
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom_Bathroom",
-                                                      "FamilyName":  "Doors_Bedroom_Bathroom",
-                                                      "Position":  {
-                                                                       "x":  -23.663,
-                                                                       "y":  12.824811,
-                                                                       "z":  -6.324
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  28.7524,
-                                                      "HeightDistance":  13.4423,
-                                                      "Distance3D":  31.7395
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_UpperHall_Electric",
-                                                      "FamilyName":  "Doors_UpperHall_Electric",
-                                                      "Position":  {
-                                                                       "x":  1.341,
-                                                                       "y":  12.824811,
-                                                                       "z":  7.725
-                                                                   },
-                                                      "TokenOverlapScore":  0,
-                                                      "PlanarDistance":  1.5132,
-                                                      "HeightDistance":  13.4423,
-                                                      "Distance3D":  13.5272
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Attic_Unlocking",
-                                                      "FamilyName":  "Doors_Attic",
-                                                      "Position":  {
-                                                                       "x":  1.91,
-                                                                       "y":  17.524811,
-                                                                       "z":  3.723999
-                                                                   },
-                                                      "TokenOverlapScore":  0,
-                                                      "PlanarDistance":  2.7052,
-                                                      "HeightDistance":  18.1423,
-                                                      "Distance3D":  18.3428
-                                                  }
-                                              ],
-                        "TopCandidateFamilies":  [
-                                                     "Doors_Bathroom1",
-                                                     "Doors_Gym_Bathroom",
-                                                     "Doors_Bedroom_Bathroom",
-                                                     "Doors_UpperHall_Electric",
-                                                     "Doors_Attic"
-                                                 ],
-                        "SuspicionScore":  0,
-                        "Issues":  [
-
-                                   ]
-                    },
-                    {
-                        "PairKey":  "bathroom2\u003c-\u003ebedroom",
-                        "DirectedKeys":  [
-                                             "bedroom-\u003ebathroom2",
-                                             "bathroom2-\u003ebedroom"
-                                         ],
-                        "DirectedTransitionIds":  [
-                                                      "transition:bedroom-\u003ebathroom2",
-                                                      "transition:bathroom2-\u003ebedroom"
-                                                  ],
-                        "ConnectorNames":  [
-                                               "Doors_Bedroom_Bathroom"
-                                           ],
-                        "AssetDerivationSources":  [
-                                                       "DoorObjectAndCameraWaypoints"
-                                                   ],
-                        "ConnectorObjectPosition":  {
-                                                        "x":  -23.663,
-                                                        "y":  12.824811,
-                                                        "z":  -6.324
-                                                    },
-                        "FromWaypoint":  {
-                                             "x":  -25.461765,
-                                             "y":  17.84,
-                                             "z":  -12.635586
-                                         },
-                        "ToWaypoint":  {
-                                           "x":  -25.406582,
-                                           "y":  17.84,
-                                           "z":  0.034413
-                                       },
-                        "SourceClearPoint":  {
-                                                 "x":  -23.666484,
-                                                 "y":  12.824811,
-                                                 "z":  -7.123992
-                                             },
-                        "DestinationClearPoint":  {
-                                                      "x":  -23.659516,
-                                                      "y":  12.824811,
-                                                      "z":  -5.524008
-                                                  },
-                        "ReferenceDoorMatchType":  "ExactNamedDoor",
-                        "ReferenceDoor":  {
-                                              "Name":  "Doors_Bedroom_Bathroom",
-                                              "FamilyName":  "Doors_Bedroom_Bathroom",
-                                              "Position":  {
-                                                               "x":  -23.663,
-                                                               "y":  12.824811,
-                                                               "z":  -6.324
-                                                           },
-                                              "PlanarDistance":  0,
-                                              "HeightDistance":  0,
-                                              "Distance3D":  0
-                                          },
-                        "ExactConnectorMatches":  [
-                                                      {
-                                                          "Name":  "Doors_Bedroom_Bathroom",
-                                                          "FamilyName":  "Doors_Bedroom_Bathroom",
-                                                          "Position":  {
-                                                                           "x":  -23.663,
-                                                                           "y":  12.824811,
-                                                                           "z":  -6.324
-                                                                       },
-                                                          "PlanarDistance":  0,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0
-                                                      }
-                                                  ],
-                        "TopCandidateDoors":  [
-                                                  {
-                                                      "Name":  "Doors_Bedroom_Bathroom",
-                                                      "FamilyName":  "Doors_Bedroom_Bathroom",
-                                                      "Position":  {
-                                                                       "x":  -23.663,
-                                                                       "y":  12.824811,
-                                                                       "z":  -6.324
-                                                                   },
-                                                      "TokenOverlapScore":  2,
-                                                      "PlanarDistance":  0,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom",
-                                                      "FamilyName":  "Doors_Bedroom",
-                                                      "Position":  {
-                                                                       "x":  -10.724,
-                                                                       "y":  12.824811,
-                                                                       "z":  -6.462
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  12.9397,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  12.9397
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Gym_Bathroom",
-                                                      "FamilyName":  "Doors_Gym_Bathroom",
-                                                      "Position":  {
-                                                                       "x":  -23.153,
-                                                                       "y":  12.824811,
-                                                                       "z":  8.003
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  14.3361,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  14.3361
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom_ClosetLeft_Inner",
-                                                      "FamilyName":  "Doors_Bedroom_ClosetLeft",
-                                                      "Position":  {
-                                                                       "x":  -4.544,
-                                                                       "y":  12.824811,
-                                                                       "z":  -8.596948
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  19.2536,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  19.2536
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom_ClosetLeft_Outer",
-                                                      "FamilyName":  "Doors_Bedroom_ClosetLeft",
-                                                      "Position":  {
-                                                                       "x":  -4.526314,
-                                                                       "y":  12.824811,
-                                                                       "z":  -8.596948
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  19.2712,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  19.2712
-                                                  }
-                                              ],
-                        "TopCandidateFamilies":  [
-                                                     "Doors_Bedroom_Bathroom",
-                                                     "Doors_Bedroom",
-                                                     "Doors_Gym_Bathroom",
-                                                     "Doors_Bedroom_ClosetLeft"
-                                                 ],
-                        "SuspicionScore":  0,
-                        "Issues":  [
-
-                                   ]
-                    },
-                    {
-                        "PairKey":  "bathroom2\u003c-\u003edorian_bathroom2_2",
-                        "DirectedKeys":  [
-                                             "dorian_bathroom2_2-\u003ebathroom2",
-                                             "bathroom2-\u003edorian_bathroom2_2"
-                                         ],
-                        "DirectedTransitionIds":  [
-                                                      "transition:dorian_bathroom2_2-\u003ebathroom2",
-                                                      "transition:bathroom2-\u003edorian_bathroom2_2"
-                                                  ],
-                        "ConnectorNames":  [
-                                               "Doors_Bedroom_Bathroom"
-                                           ],
-                        "AssetDerivationSources":  [
-                                                       "DoorObjectAndCameraWaypoints"
-                                                   ],
-                        "ConnectorObjectPosition":  {
-                                                        "x":  -23.663,
-                                                        "y":  12.824811,
-                                                        "z":  -6.324
-                                                    },
-                        "FromWaypoint":  {
-                                             "x":  -25.461765,
-                                             "y":  17.84,
-                                             "z":  -12.635586
-                                         },
-                        "ToWaypoint":  {
-                                           "x":  -24.804977,
-                                           "y":  18.23,
-                                           "z":  -4.284243
-                                       },
-                        "SourceClearPoint":  {
-                                                 "x":  -23.725722,
-                                                 "y":  12.824811,
-                                                 "z":  -7.121537
-                                             },
-                        "DestinationClearPoint":  {
-                                                      "x":  -23.600278,
-                                                      "y":  12.824811,
-                                                      "z":  -5.526463
-                                                  },
-                        "ReferenceDoorMatchType":  "ExactNamedDoor",
-                        "ReferenceDoor":  {
-                                              "Name":  "Doors_Bedroom_Bathroom",
-                                              "FamilyName":  "Doors_Bedroom_Bathroom",
-                                              "Position":  {
-                                                               "x":  -23.663,
-                                                               "y":  12.824811,
-                                                               "z":  -6.324
-                                                           },
-                                              "PlanarDistance":  0,
-                                              "HeightDistance":  0,
-                                              "Distance3D":  0
-                                          },
-                        "ExactConnectorMatches":  [
-                                                      {
-                                                          "Name":  "Doors_Bedroom_Bathroom",
-                                                          "FamilyName":  "Doors_Bedroom_Bathroom",
-                                                          "Position":  {
-                                                                           "x":  -23.663,
-                                                                           "y":  12.824811,
-                                                                           "z":  -6.324
-                                                                       },
-                                                          "PlanarDistance":  0,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0
-                                                      }
-                                                  ],
-                        "TopCandidateDoors":  [
-                                                  {
-                                                      "Name":  "Doors_Bedroom_Bathroom",
-                                                      "FamilyName":  "Doors_Bedroom_Bathroom",
-                                                      "Position":  {
-                                                                       "x":  -23.663,
-                                                                       "y":  12.824811,
-                                                                       "z":  -6.324
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  0,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Gym_Bathroom",
-                                                      "FamilyName":  "Doors_Gym_Bathroom",
-                                                      "Position":  {
-                                                                       "x":  -23.153,
-                                                                       "y":  12.824811,
-                                                                       "z":  8.003
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  14.3361,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  14.3361
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bathroom1",
-                                                      "FamilyName":  "Doors_Bathroom1",
-                                                      "Position":  {
-                                                                       "x":  2.11,
-                                                                       "y":  -0.617448,
-                                                                       "z":  6.421805
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  28.7524,
-                                                      "HeightDistance":  13.4423,
-                                                      "Distance3D":  31.7395
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom",
-                                                      "FamilyName":  "Doors_Bedroom",
-                                                      "Position":  {
-                                                                       "x":  -10.724,
-                                                                       "y":  12.824811,
-                                                                       "z":  -6.462
-                                                                   },
-                                                      "TokenOverlapScore":  0,
-                                                      "PlanarDistance":  12.9397,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  12.9397
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom_ClosetLeft_Inner",
-                                                      "FamilyName":  "Doors_Bedroom_ClosetLeft",
-                                                      "Position":  {
-                                                                       "x":  -4.544,
-                                                                       "y":  12.824811,
-                                                                       "z":  -8.596948
-                                                                   },
-                                                      "TokenOverlapScore":  0,
-                                                      "PlanarDistance":  19.2536,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  19.2536
-                                                  }
-                                              ],
-                        "TopCandidateFamilies":  [
-                                                     "Doors_Bedroom_Bathroom",
-                                                     "Doors_Gym_Bathroom",
-                                                     "Doors_Bathroom1",
-                                                     "Doors_Bedroom",
-                                                     "Doors_Bedroom_ClosetLeft"
-                                                 ],
-                        "SuspicionScore":  0,
-                        "Issues":  [
-
-                                   ]
-                    },
-                    {
-                        "PairKey":  "bedroom\u003c-\u003ebedroom_closet",
-                        "DirectedKeys":  [
-                                             "bedroom-\u003ebedroom_closet",
-                                             "bedroom_closet-\u003ebedroom"
-                                         ],
-                        "DirectedTransitionIds":  [
-                                                      "transition:bedroom-\u003ebedroom_closet",
-                                                      "transition:bedroom_closet-\u003ebedroom"
-                                                  ],
-                        "ConnectorNames":  [
-                                               "Doors_Bedroom_ClosetRight_Outer",
-                                               "Doors_Bedroom_ClosetRight_Inner"
-                                           ],
-                        "AssetDerivationSources":  [
-                                                       "DoorObjectAndCameraWaypoints"
-                                                   ],
-                        "ConnectorObjectPosition":  {
-                                                        "x":  -4.526314,
-                                                        "y":  12.824811,
-                                                        "z":  -20.603844
-                                                    },
-                        "FromWaypoint":  {
-                                             "x":  -10.53503,
-                                             "y":  18.02,
-                                             "z":  -11.725586
-                                         },
-                        "ToWaypoint":  {
-                                           "x":  -10.53503,
-                                           "y":  18.02,
-                                           "z":  -23.995586
-                                       },
-                        "SourceClearPoint":  {
-                                                 "x":  -4.526314,
-                                                 "y":  12.824811,
-                                                 "z":  -19.803844
-                                             },
-                        "DestinationClearPoint":  {
-                                                      "x":  -4.526314,
-                                                      "y":  12.824811,
-                                                      "z":  -21.403844
-                                                  },
-                        "ReferenceDoorMatchType":  "ExactNamedDoor",
-                        "ReferenceDoor":  {
-                                              "Name":  "Doors_Bedroom_ClosetRight_Outer",
-                                              "FamilyName":  "Doors_Bedroom_ClosetRight",
-                                              "Position":  {
-                                                               "x":  -4.526314,
-                                                               "y":  12.824811,
-                                                               "z":  -20.603844
-                                                           },
-                                              "PlanarDistance":  0,
-                                              "HeightDistance":  0,
-                                              "Distance3D":  0
-                                          },
-                        "ExactConnectorMatches":  [
-                                                      {
-                                                          "Name":  "Doors_Bedroom_ClosetRight_Outer",
-                                                          "FamilyName":  "Doors_Bedroom_ClosetRight",
-                                                          "Position":  {
-                                                                           "x":  -4.526314,
-                                                                           "y":  12.824811,
-                                                                           "z":  -20.603844
-                                                                       },
-                                                          "PlanarDistance":  0,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0
-                                                      },
-                                                      {
-                                                          "Name":  "Doors_Bedroom_ClosetRight_Inner",
-                                                          "FamilyName":  "Doors_Bedroom_ClosetRight",
-                                                          "Position":  {
-                                                                           "x":  -4.543,
-                                                                           "y":  12.824811,
-                                                                           "z":  -20.603844
-                                                                       },
-                                                          "PlanarDistance":  0.0167,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0.0167
-                                                      }
-                                                  ],
-                        "TopCandidateDoors":  [
-                                                  {
-                                                      "Name":  "Doors_Bedroom_ClosetRight_Outer",
-                                                      "FamilyName":  "Doors_Bedroom_ClosetRight",
-                                                      "Position":  {
-                                                                       "x":  -4.526314,
-                                                                       "y":  12.824811,
-                                                                       "z":  -20.603844
-                                                                   },
-                                                      "TokenOverlapScore":  2,
-                                                      "PlanarDistance":  0,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom_ClosetRight_Inner",
-                                                      "FamilyName":  "Doors_Bedroom_ClosetRight",
-                                                      "Position":  {
-                                                                       "x":  -4.543,
-                                                                       "y":  12.824811,
-                                                                       "z":  -20.603844
-                                                                   },
-                                                      "TokenOverlapScore":  2,
-                                                      "PlanarDistance":  0.0167,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0.0167
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom_ClosetLeft_Inner",
-                                                      "FamilyName":  "Doors_Bedroom_ClosetLeft",
-                                                      "Position":  {
-                                                                       "x":  -4.544,
-                                                                       "y":  12.824811,
-                                                                       "z":  -8.596948
-                                                                   },
-                                                      "TokenOverlapScore":  2,
-                                                      "PlanarDistance":  12.0069,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  12.0069
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom_ClosetLeft_Outer",
-                                                      "FamilyName":  "Doors_Bedroom_ClosetLeft",
-                                                      "Position":  {
-                                                                       "x":  -4.526314,
-                                                                       "y":  12.824811,
-                                                                       "z":  -8.596948
-                                                                   },
-                                                      "TokenOverlapScore":  2,
-                                                      "PlanarDistance":  12.0069,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  12.0069
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom",
-                                                      "FamilyName":  "Doors_Bedroom",
-                                                      "Position":  {
-                                                                       "x":  -10.724,
-                                                                       "y":  12.824811,
-                                                                       "z":  -6.462
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  15.4403,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  15.4403
-                                                  }
-                                              ],
-                        "TopCandidateFamilies":  [
-                                                     "Doors_Bedroom_ClosetRight",
-                                                     "Doors_Bedroom_ClosetLeft",
-                                                     "Doors_Bedroom"
-                                                 ],
-                        "SuspicionScore":  0,
-                        "Issues":  [
-
-                                   ]
-                    },
-                    {
-                        "PairKey":  "bedroom\u003c-\u003eupper_hallway",
-                        "DirectedKeys":  [
-                                             "upper_hallway-\u003ebedroom",
-                                             "bedroom-\u003eupper_hallway"
-                                         ],
-                        "DirectedTransitionIds":  [
-                                                      "transition:upper_hallway-\u003ebedroom",
-                                                      "transition:bedroom-\u003eupper_hallway"
-                                                  ],
-                        "ConnectorNames":  [
-                                               "Doors_Bedroom"
-                                           ],
-                        "AssetDerivationSources":  [
-                                                       "DoorObjectAndCameraWaypoints"
-                                                   ],
-                        "ConnectorObjectPosition":  {
-                                                        "x":  -10.724,
-                                                        "y":  12.824811,
-                                                        "z":  -6.462
-                                                    },
-                        "FromWaypoint":  {
-                                             "x":  -12.604355,
-                                             "y":  17.84,
-                                             "z":  0.034413
-                                         },
-                        "ToWaypoint":  {
-                                           "x":  -11.997356,
-                                           "y":  17.84,
-                                           "z":  -12.635586
-                                       },
-                        "SourceClearPoint":  {
-                                                 "x":  -10.762283,
-                                                 "y":  12.824811,
-                                                 "z":  -5.662917
-                                             },
-                        "DestinationClearPoint":  {
-                                                      "x":  -10.685717,
-                                                      "y":  12.824811,
-                                                      "z":  -7.261083
-                                                  },
-                        "ReferenceDoorMatchType":  "ExactNamedDoor",
-                        "ReferenceDoor":  {
-                                              "Name":  "Doors_Bedroom",
-                                              "FamilyName":  "Doors_Bedroom",
-                                              "Position":  {
-                                                               "x":  -10.724,
-                                                               "y":  12.824811,
-                                                               "z":  -6.462
-                                                           },
-                                              "PlanarDistance":  0,
-                                              "HeightDistance":  0,
-                                              "Distance3D":  0
-                                          },
-                        "ExactConnectorMatches":  [
-                                                      {
-                                                          "Name":  "Doors_Bedroom",
-                                                          "FamilyName":  "Doors_Bedroom",
-                                                          "Position":  {
-                                                                           "x":  -10.724,
-                                                                           "y":  12.824811,
-                                                                           "z":  -6.462
-                                                                       },
-                                                          "PlanarDistance":  0,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0
-                                                      }
-                                                  ],
-                        "TopCandidateDoors":  [
-                                                  {
-                                                      "Name":  "Doors_Bedroom",
-                                                      "FamilyName":  "Doors_Bedroom",
-                                                      "Position":  {
-                                                                       "x":  -10.724,
-                                                                       "y":  12.824811,
-                                                                       "z":  -6.462
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  0,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom_ClosetLeft_Inner",
-                                                      "FamilyName":  "Doors_Bedroom_ClosetLeft",
-                                                      "Position":  {
-                                                                       "x":  -4.544,
-                                                                       "y":  12.824811,
-                                                                       "z":  -8.596948
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  6.5384,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  6.5384
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom_ClosetLeft_Outer",
-                                                      "FamilyName":  "Doors_Bedroom_ClosetLeft",
-                                                      "Position":  {
-                                                                       "x":  -4.526314,
-                                                                       "y":  12.824811,
-                                                                       "z":  -8.596948
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  6.5551,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  6.5551
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom_Bathroom",
-                                                      "FamilyName":  "Doors_Bedroom_Bathroom",
-                                                      "Position":  {
-                                                                       "x":  -23.663,
-                                                                       "y":  12.824811,
-                                                                       "z":  -6.324
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  12.9397,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  12.9397
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Bedroom_ClosetRight_Inner",
-                                                      "FamilyName":  "Doors_Bedroom_ClosetRight",
-                                                      "Position":  {
-                                                                       "x":  -4.543,
-                                                                       "y":  12.824811,
-                                                                       "z":  -20.603844
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  15.4336,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  15.4336
-                                                  }
-                                              ],
-                        "TopCandidateFamilies":  [
-                                                     "Doors_Bedroom",
-                                                     "Doors_Bedroom_ClosetLeft",
-                                                     "Doors_Bedroom_Bathroom",
-                                                     "Doors_Bedroom_ClosetRight"
-                                                 ],
-                        "SuspicionScore":  0,
-                        "Issues":  [
-
-                                   ]
-                    },
-                    {
-                        "PairKey":  "gym\u003c-\u003egym_closet",
-                        "DirectedKeys":  [
-                                             "gym-\u003egym_closet",
-                                             "gym_closet-\u003egym"
-                                         ],
-                        "DirectedTransitionIds":  [
-                                                      "transition:gym-\u003egym_closet",
-                                                      "transition:gym_closet-\u003egym"
-                                                  ],
-                        "ConnectorNames":  [
-                                               "Doors_Gym_ClosetOuter",
-                                               "Doors_Gym_ClosetInner"
-                                           ],
-                        "AssetDerivationSources":  [
-                                                       "DoorObjectAndCameraWaypoints"
-                                                   ],
-                        "ConnectorObjectPosition":  {
-                                                        "x":  -4.526314,
-                                                        "y":  12.824811,
-                                                        "z":  23.932253
-                                                    },
-                        "FromWaypoint":  {
-                                             "x":  -10.53503,
-                                             "y":  18.02,
-                                             "z":  20.664413
-                                         },
-                        "ToWaypoint":  {
-                                           "x":  1.831253,
-                                           "y":  18.02,
-                                           "z":  20.084414
-                                       },
-                        "SourceClearPoint":  {
-                                                 "x":  -5.325436,
-                                                 "y":  12.824811,
-                                                 "z":  23.969733
-                                             },
-                        "DestinationClearPoint":  {
-                                                      "x":  -3.727192,
-                                                      "y":  12.824811,
-                                                      "z":  23.894773
-                                                  },
-                        "ReferenceDoorMatchType":  "ExactNamedDoor",
-                        "ReferenceDoor":  {
-                                              "Name":  "Doors_Gym_ClosetOuter",
-                                              "FamilyName":  "Doors_Gym_Closet",
-                                              "Position":  {
-                                                               "x":  -4.526314,
-                                                               "y":  12.824811,
-                                                               "z":  23.932253
-                                                           },
-                                              "PlanarDistance":  0,
-                                              "HeightDistance":  0,
-                                              "Distance3D":  0
-                                          },
-                        "ExactConnectorMatches":  [
-                                                      {
-                                                          "Name":  "Doors_Gym_ClosetOuter",
-                                                          "FamilyName":  "Doors_Gym_Closet",
-                                                          "Position":  {
-                                                                           "x":  -4.526314,
-                                                                           "y":  12.824811,
-                                                                           "z":  23.932253
-                                                                       },
-                                                          "PlanarDistance":  0,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0
-                                                      },
-                                                      {
-                                                          "Name":  "Doors_Gym_ClosetInner",
-                                                          "FamilyName":  "Doors_Gym_Closet",
-                                                          "Position":  {
-                                                                           "x":  -4.56,
-                                                                           "y":  12.824811,
-                                                                           "z":  23.932253
-                                                                       },
-                                                          "PlanarDistance":  0.0337,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0.0337
-                                                      }
-                                                  ],
-                        "TopCandidateDoors":  [
-                                                  {
-                                                      "Name":  "Doors_Gym_ClosetOuter",
-                                                      "FamilyName":  "Doors_Gym_Closet",
-                                                      "Position":  {
-                                                                       "x":  -4.526314,
-                                                                       "y":  12.824811,
-                                                                       "z":  23.932253
-                                                                   },
-                                                      "TokenOverlapScore":  2,
-                                                      "PlanarDistance":  0,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Gym_ClosetInner",
-                                                      "FamilyName":  "Doors_Gym_Closet",
-                                                      "Position":  {
-                                                                       "x":  -4.56,
-                                                                       "y":  12.824811,
-                                                                       "z":  23.932253
-                                                                   },
-                                                      "TokenOverlapScore":  2,
-                                                      "PlanarDistance":  0.0337,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0.0337
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Office_ClosetLocked",
-                                                      "FamilyName":  "Doors_Office_Closet",
-                                                      "Position":  {
-                                                                       "x":  4.134,
-                                                                       "y":  3.358,
-                                                                       "z":  24.345999
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  8.6702,
-                                                      "HeightDistance":  9.4668,
-                                                      "Distance3D":  12.8372
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Office_Closet",
-                                                      "FamilyName":  "Doors_Office_Closet",
-                                                      "Position":  {
-                                                                       "x":  4.036,
-                                                                       "y":  -0.617448,
-                                                                       "z":  25.93852
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  8.7942,
-                                                      "HeightDistance":  13.4423,
-                                                      "Distance3D":  16.0634
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Laundry_Closet",
-                                                      "FamilyName":  "Doors_Laundry_Closet",
-                                                      "Position":  {
-                                                                       "x":  -11.424,
-                                                                       "y":  -0.617448,
-                                                                       "z":  37.237
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  14.9865,
-                                                      "HeightDistance":  13.4423,
-                                                      "Distance3D":  20.1318
-                                                  }
-                                              ],
-                        "TopCandidateFamilies":  [
-                                                     "Doors_Gym_Closet",
-                                                     "Doors_Office_Closet",
-                                                     "Doors_Laundry_Closet"
-                                                 ],
-                        "SuspicionScore":  0,
-                        "Issues":  [
-
-                                   ]
-                    },
-                    {
-                        "PairKey":  "gym\u003c-\u003eupper_hallway",
-                        "DirectedKeys":  [
-                                             "upper_hallway-\u003egym",
-                                             "gym-\u003eupper_hallway"
-                                         ],
-                        "DirectedTransitionIds":  [
-                                                      "transition:upper_hallway-\u003egym",
-                                                      "transition:gym-\u003eupper_hallway"
-                                                  ],
-                        "ConnectorNames":  [
-                                               "Doors_Gym_Hall"
-                                           ],
-                        "AssetDerivationSources":  [
-                                                       "DoorObjectAndCameraWaypoints"
-                                                   ],
-                        "ConnectorObjectPosition":  {
-                                                        "x":  -6.166,
-                                                        "y":  12.824811,
-                                                        "z":  8.042243
-                                                    },
-                        "FromWaypoint":  {
-                                             "x":  -7.748341,
-                                             "y":  17.84,
-                                             "z":  1.714413
-                                         },
-                        "ToWaypoint":  {
-                                           "x":  -7.748341,
-                                           "y":  17.84,
-                                           "z":  13.564413
-                                       },
-                        "SourceClearPoint":  {
-                                                 "x":  -6.166,
-                                                 "y":  12.824811,
-                                                 "z":  7.242243
-                                             },
-                        "DestinationClearPoint":  {
-                                                      "x":  -6.166,
-                                                      "y":  12.824811,
-                                                      "z":  8.842243
-                                                  },
-                        "ReferenceDoorMatchType":  "ExactNamedDoor",
-                        "ReferenceDoor":  {
-                                              "Name":  "Doors_Gym_Hall",
-                                              "FamilyName":  "Doors_Gym_Hall",
-                                              "Position":  {
-                                                               "x":  -6.166,
-                                                               "y":  12.824811,
-                                                               "z":  8.042243
-                                                           },
-                                              "PlanarDistance":  0,
-                                              "HeightDistance":  0,
-                                              "Distance3D":  0
-                                          },
-                        "ExactConnectorMatches":  [
-                                                      {
-                                                          "Name":  "Doors_Gym_Hall",
-                                                          "FamilyName":  "Doors_Gym_Hall",
-                                                          "Position":  {
-                                                                           "x":  -6.166,
-                                                                           "y":  12.824811,
-                                                                           "z":  8.042243
-                                                                       },
-                                                          "PlanarDistance":  0,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0
-                                                      }
-                                                  ],
-                        "TopCandidateDoors":  [
-                                                  {
-                                                      "Name":  "Doors_Gym_Hall",
-                                                      "FamilyName":  "Doors_Gym_Hall",
-                                                      "Position":  {
-                                                                       "x":  -6.166,
-                                                                       "y":  12.824811,
-                                                                       "z":  8.042243
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  0,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_UpperHall_Electric",
-                                                      "FamilyName":  "Doors_UpperHall_Electric",
-                                                      "Position":  {
-                                                                       "x":  1.341,
-                                                                       "y":  12.824811,
-                                                                       "z":  7.725
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  7.5137,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  7.5137
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Gym_ClosetInner",
-                                                      "FamilyName":  "Doors_Gym_Closet",
-                                                      "Position":  {
-                                                                       "x":  -4.56,
-                                                                       "y":  12.824811,
-                                                                       "z":  23.932253
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  15.971,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  15.971
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Gym_ClosetOuter",
-                                                      "FamilyName":  "Doors_Gym_Closet",
-                                                      "Position":  {
-                                                                       "x":  -4.526314,
-                                                                       "y":  12.824811,
-                                                                       "z":  23.932253
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  15.9744,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  15.9744
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Gym_Bathroom",
-                                                      "FamilyName":  "Doors_Gym_Bathroom",
-                                                      "Position":  {
-                                                                       "x":  -23.153,
-                                                                       "y":  12.824811,
-                                                                       "z":  8.003
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  16.987,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  16.987
-                                                  }
-                                              ],
-                        "TopCandidateFamilies":  [
-                                                     "Doors_Gym_Hall",
-                                                     "Doors_UpperHall_Electric",
-                                                     "Doors_Gym_Closet",
-                                                     "Doors_Gym_Bathroom"
-                                                 ],
-                        "SuspicionScore":  0,
-                        "Issues":  [
-
-                                   ]
-                    },
-                    {
-                        "PairKey":  "hallway\u003c-\u003eoffice",
-                        "DirectedKeys":  [
-                                             "hallway-\u003eoffice",
-                                             "office-\u003ehallway"
-                                         ],
-                        "DirectedTransitionIds":  [
-                                                      "transition:hallway-\u003eoffice",
-                                                      "transition:office-\u003ehallway"
-                                                  ],
-                        "ConnectorNames":  [
-                                               "Doors_Office"
-                                           ],
-                        "AssetDerivationSources":  [
-                                                       "DoorObjectAndCameraWaypoints"
-                                                   ],
-                        "ConnectorObjectPosition":  {
-                                                        "x":  9.845,
-                                                        "y":  -0.617448,
-                                                        "z":  6.29
-                                                    },
-                        "FromWaypoint":  {
-                                             "x":  8.309622,
-                                             "y":  4.17,
-                                             "z":  0.664414
-                                         },
-                        "ToWaypoint":  {
-                                           "x":  7.757801,
-                                           "y":  4.17,
-                                           "z":  11.494413
-                                       },
-                        "SourceClearPoint":  {
-                                                 "x":  9.88571,
-                                                 "y":  -0.617448,
-                                                 "z":  5.491036
-                                             },
-                        "DestinationClearPoint":  {
-                                                      "x":  9.80429,
-                                                      "y":  -0.617448,
-                                                      "z":  7.088964
-                                                  },
-                        "ReferenceDoorMatchType":  "ExactNamedDoor",
-                        "ReferenceDoor":  {
-                                              "Name":  "Doors_Office",
-                                              "FamilyName":  "Doors_Office",
-                                              "Position":  {
-                                                               "x":  9.845,
-                                                               "y":  -0.617448,
-                                                               "z":  6.29
-                                                           },
-                                              "PlanarDistance":  0,
-                                              "HeightDistance":  0,
-                                              "Distance3D":  0
-                                          },
-                        "ExactConnectorMatches":  [
-                                                      {
-                                                          "Name":  "Doors_Office",
-                                                          "FamilyName":  "Doors_Office",
-                                                          "Position":  {
-                                                                           "x":  9.845,
-                                                                           "y":  -0.617448,
-                                                                           "z":  6.29
-                                                                       },
-                                                          "PlanarDistance":  0,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0
-                                                      }
-                                                  ],
-                        "TopCandidateDoors":  [
-                                                  {
-                                                      "Name":  "Doors_Office",
-                                                      "FamilyName":  "Doors_Office",
-                                                      "Position":  {
-                                                                       "x":  9.845,
-                                                                       "y":  -0.617448,
-                                                                       "z":  6.29
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  0,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Office_Locked",
-                                                      "FamilyName":  "Doors_Office",
-                                                      "Position":  {
-                                                                       "x":  1.66,
-                                                                       "y":  -3.996,
-                                                                       "z":  -0.14
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  10.4086,
-                                                      "HeightDistance":  3.3786,
-                                                      "Distance3D":  10.9432
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Office_ClosetLocked",
-                                                      "FamilyName":  "Doors_Office_Closet",
-                                                      "Position":  {
-                                                                       "x":  4.134,
-                                                                       "y":  3.358,
-                                                                       "z":  24.345999
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  18.9377,
-                                                      "HeightDistance":  3.9754,
-                                                      "Distance3D":  19.3504
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Office_Closet",
-                                                      "FamilyName":  "Doors_Office_Closet",
-                                                      "Position":  {
-                                                                       "x":  4.036,
-                                                                       "y":  -0.617448,
-                                                                       "z":  25.93852
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  20.4892,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  20.4892
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Attic_Locked",
-                                                      "FamilyName":  "Doors_Attic",
-                                                      "Position":  {
-                                                                       "x":  3.837,
-                                                                       "y":  16.799999,
-                                                                       "z":  3.435
-                                                                   },
-                                                      "TokenOverlapScore":  0,
-                                                      "PlanarDistance":  6.6518,
-                                                      "HeightDistance":  17.4174,
-                                                      "Distance3D":  18.6444
-                                                  }
-                                              ],
-                        "TopCandidateFamilies":  [
-                                                     "Doors_Office",
-                                                     "Doors_Office_Closet",
-                                                     "Doors_Attic"
-                                                 ],
-                        "SuspicionScore":  0,
-                        "Issues":  [
-
-                                   ]
-                    },
-                    {
-                        "PairKey":  "laundry_room\u003c-\u003elaundry_room_closet",
-                        "DirectedKeys":  [
-                                             "laundry_room-\u003elaundry_room_closet",
-                                             "laundry_room_closet-\u003elaundry_room"
-                                         ],
-                        "DirectedTransitionIds":  [
-                                                      "transition:laundry_room-\u003elaundry_room_closet",
-                                                      "transition:laundry_room_closet-\u003elaundry_room"
-                                                  ],
-                        "ConnectorNames":  [
-                                               "Doors_Laundry_Closet"
-                                           ],
-                        "AssetDerivationSources":  [
-                                                       "DoorObjectAndCameraWaypoints"
-                                                   ],
-                        "ConnectorObjectPosition":  {
-                                                        "x":  -11.424,
-                                                        "y":  -0.617448,
-                                                        "z":  37.237
-                                                    },
-                        "FromWaypoint":  {
-                                             "x":  -13.564522,
-                                             "y":  3.92,
-                                             "z":  30.984411
-                                         },
-                        "ToWaypoint":  {
-                                           "x":  -13.189285,
-                                           "y":  4.98,
-                                           "z":  29.026415
-                                       },
-                        "SourceClearPoint":  {
-                                                 "x":  -11.574575,
-                                                 "y":  -0.617448,
-                                                 "z":  38.022702
-                                             },
-                        "DestinationClearPoint":  {
-                                                      "x":  -11.273425,
-                                                      "y":  -0.617448,
-                                                      "z":  36.451298
-                                                  },
-                        "ReferenceDoorMatchType":  "ExactNamedDoor",
-                        "ReferenceDoor":  {
-                                              "Name":  "Doors_Laundry_Closet",
-                                              "FamilyName":  "Doors_Laundry_Closet",
-                                              "Position":  {
-                                                               "x":  -11.424,
-                                                               "y":  -0.617448,
-                                                               "z":  37.237
-                                                           },
-                                              "PlanarDistance":  0,
-                                              "HeightDistance":  0,
-                                              "Distance3D":  0
-                                          },
-                        "ExactConnectorMatches":  [
-                                                      {
-                                                          "Name":  "Doors_Laundry_Closet",
-                                                          "FamilyName":  "Doors_Laundry_Closet",
-                                                          "Position":  {
-                                                                           "x":  -11.424,
-                                                                           "y":  -0.617448,
-                                                                           "z":  37.237
-                                                                       },
-                                                          "PlanarDistance":  0,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0
-                                                      }
-                                                  ],
-                        "TopCandidateDoors":  [
-                                                  {
-                                                      "Name":  "Doors_Laundry_Closet",
-                                                      "FamilyName":  "Doors_Laundry_Closet",
-                                                      "Position":  {
-                                                                       "x":  -11.424,
-                                                                       "y":  -0.617448,
-                                                                       "z":  37.237
-                                                                   },
-                                                      "TokenOverlapScore":  2,
-                                                      "PlanarDistance":  0,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Laundry",
-                                                      "FamilyName":  "Doors_Laundry",
-                                                      "Position":  {
-                                                                       "x":  -15.599,
-                                                                       "y":  -0.617448,
-                                                                       "z":  28.637308
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  9.5596,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  9.5596
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Gym_ClosetInner",
-                                                      "FamilyName":  "Doors_Gym_Closet",
-                                                      "Position":  {
-                                                                       "x":  -4.56,
-                                                                       "y":  12.824811,
-                                                                       "z":  23.932253
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  14.971,
-                                                      "HeightDistance":  13.4423,
-                                                      "Distance3D":  20.1203
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Gym_ClosetOuter",
-                                                      "FamilyName":  "Doors_Gym_Closet",
-                                                      "Position":  {
-                                                                       "x":  -4.526314,
-                                                                       "y":  12.824811,
-                                                                       "z":  23.932253
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  14.9865,
-                                                      "HeightDistance":  13.4423,
-                                                      "Distance3D":  20.1318
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Office_Closet",
-                                                      "FamilyName":  "Doors_Office_Closet",
-                                                      "Position":  {
-                                                                       "x":  4.036,
-                                                                       "y":  -0.617448,
-                                                                       "z":  25.93852
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  19.1486,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  19.1486
-                                                  }
-                                              ],
-                        "TopCandidateFamilies":  [
-                                                     "Doors_Laundry_Closet",
-                                                     "Doors_Laundry",
-                                                     "Doors_Gym_Closet",
-                                                     "Doors_Office_Closet"
-                                                 ],
-                        "SuspicionScore":  0,
-                        "Issues":  [
-
-                                   ]
-                    },
-                    {
-                        "PairKey":  "office\u003c-\u003eoffice_closet",
-                        "DirectedKeys":  [
-                                             "office-\u003eoffice_closet",
-                                             "office_closet-\u003eoffice"
-                                         ],
-                        "DirectedTransitionIds":  [
-                                                      "transition:office-\u003eoffice_closet",
-                                                      "transition:office_closet-\u003eoffice"
-                                                  ],
-                        "ConnectorNames":  [
-                                               "Doors_Office_Closet"
-                                           ],
-                        "AssetDerivationSources":  [
-                                                       "DoorObjectAndCameraWaypoints"
-                                                   ],
-                        "ConnectorObjectPosition":  {
-                                                        "x":  4.036,
-                                                        "y":  -0.617448,
-                                                        "z":  25.93852
-                                                    },
-                        "FromWaypoint":  {
-                                             "x":  9.35808,
-                                             "y":  4.17,
-                                             "z":  24.474413
-                                         },
-                        "ToWaypoint":  {
-                                           "x":  -1.07132,
-                                           "y":  4.17,
-                                           "z":  23.964413
-                                       },
-                        "SourceClearPoint":  {
-                                                 "x":  4.835045,
-                                                 "y":  -0.617448,
-                                                 "z":  25.977593
-                                             },
-                        "DestinationClearPoint":  {
-                                                      "x":  3.236955,
-                                                      "y":  -0.617448,
-                                                      "z":  25.899447
-                                                  },
-                        "ReferenceDoorMatchType":  "ExactNamedDoor",
-                        "ReferenceDoor":  {
-                                              "Name":  "Doors_Office_Closet",
-                                              "FamilyName":  "Doors_Office_Closet",
-                                              "Position":  {
-                                                               "x":  4.036,
-                                                               "y":  -0.617448,
-                                                               "z":  25.93852
-                                                           },
-                                              "PlanarDistance":  0,
-                                              "HeightDistance":  0,
-                                              "Distance3D":  0
-                                          },
-                        "ExactConnectorMatches":  [
-                                                      {
-                                                          "Name":  "Doors_Office_Closet",
-                                                          "FamilyName":  "Doors_Office_Closet",
-                                                          "Position":  {
-                                                                           "x":  4.036,
-                                                                           "y":  -0.617448,
-                                                                           "z":  25.93852
-                                                                       },
-                                                          "PlanarDistance":  0,
-                                                          "HeightDistance":  0,
-                                                          "Distance3D":  0
-                                                      }
-                                                  ],
-                        "TopCandidateDoors":  [
-                                                  {
-                                                      "Name":  "Doors_Office_Closet",
-                                                      "FamilyName":  "Doors_Office_Closet",
-                                                      "Position":  {
-                                                                       "x":  4.036,
-                                                                       "y":  -0.617448,
-                                                                       "z":  25.93852
-                                                                   },
-                                                      "TokenOverlapScore":  2,
-                                                      "PlanarDistance":  0,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  0
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Office_ClosetLocked",
-                                                      "FamilyName":  "Doors_Office_Closet",
-                                                      "Position":  {
-                                                                       "x":  4.134,
-                                                                       "y":  3.358,
-                                                                       "z":  24.345999
-                                                                   },
-                                                      "TokenOverlapScore":  2,
-                                                      "PlanarDistance":  1.5955,
-                                                      "HeightDistance":  3.9754,
-                                                      "Distance3D":  4.2837
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Gym_ClosetOuter",
-                                                      "FamilyName":  "Doors_Gym_Closet",
-                                                      "Position":  {
-                                                                       "x":  -4.526314,
-                                                                       "y":  12.824811,
-                                                                       "z":  23.932253
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  8.7942,
-                                                      "HeightDistance":  13.4423,
-                                                      "Distance3D":  16.0634
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Gym_ClosetInner",
-                                                      "FamilyName":  "Doors_Gym_Closet",
-                                                      "Position":  {
-                                                                       "x":  -4.56,
-                                                                       "y":  12.824811,
-                                                                       "z":  23.932253
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  8.827,
-                                                      "HeightDistance":  13.4423,
-                                                      "Distance3D":  16.0814
-                                                  },
-                                                  {
-                                                      "Name":  "Doors_Laundry_Closet",
-                                                      "FamilyName":  "Doors_Laundry_Closet",
-                                                      "Position":  {
-                                                                       "x":  -11.424,
-                                                                       "y":  -0.617448,
-                                                                       "z":  37.237
-                                                                   },
-                                                      "TokenOverlapScore":  1,
-                                                      "PlanarDistance":  19.1486,
-                                                      "HeightDistance":  0,
-                                                      "Distance3D":  19.1486
-                                                  }
-                                              ],
-                        "TopCandidateFamilies":  [
-                                                     "Doors_Office_Closet",
-                                                     "Doors_Gym_Closet",
-                                                     "Doors_Laundry_Closet"
-                                                 ],
-                        "SuspicionScore":  0,
-                        "Issues":  [
-
-                                   ]
-                    }
-                ]
+{
+  "Summary": {
+    "GeneratedAtUtc": "2026-04-29T17:10:57.5476488Z",
+    "GraphPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\navigation_graph.generated.json",
+    "SceneDataPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\thirdpersongreybox-navigation-data.json",
+    "TotalDoorPairs": 11,
+    "SuspiciousDoorPairs": 0,
+    "MissingConnectorNamePairs": 0,
+    "CameraWaypointFallbackPairs": 0,
+    "LargeMismatchPairs": 0
+  },
+  "Entries": [
+    {
+      "PairKey": "attic<->upper_hallway",
+      "DirectedKeys": [
+        "upper_hallway->attic",
+        "attic->upper_hallway"
+      ],
+      "DirectedTransitionIds": [
+        "transition:upper_hallway->attic",
+        "transition:attic->upper_hallway"
+      ],
+      "ConnectorNames": [
+        "AtticDoors"
+      ],
+      "AssetDerivationSources": [
+        "DoorObjectAndCameraWaypoints"
+      ],
+      "ConnectorObjectPosition": {
+        "x": 3.69,
+        "y": 12.824811,
+        "z": 2.044
+      },
+      "FromWaypoint": {
+        "x": -4.249802,
+        "y": 18.261999,
+        "z": 3.885414
+      },
+      "ToWaypoint": {
+        "x": 12.111662,
+        "y": 18.261999,
+        "z": 3.885414
+      },
+      "SourceClearPoint": {
+        "x": 2.89,
+        "y": 12.824811,
+        "z": 2.044
+      },
+      "DestinationClearPoint": {
+        "x": 4.49,
+        "y": 12.824811,
+        "z": 2.044
+      },
+      "ReferenceDoorMatchType": "ExactNamedDoor",
+      "ReferenceDoor": {
+        "Name": "AtticDoors",
+        "FamilyName": "AtticDoors",
+        "Position": {
+          "x": 3.69,
+          "y": 12.824811,
+          "z": 2.044
+        },
+        "PlanarDistance": 0.0,
+        "HeightDistance": 0.0,
+        "Distance3D": 0.0
+      },
+      "ExactConnectorMatches": [
+        {
+          "Name": "AtticDoors",
+          "FamilyName": "AtticDoors",
+          "Position": {
+            "x": 3.69,
+            "y": 12.824811,
+            "z": 2.044
+          },
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        }
+      ],
+      "TopCandidateDoors": [
+        {
+          "Name": "AtticDoors",
+          "FamilyName": "AtticDoors",
+          "Position": {
+            "x": 3.69,
+            "y": 12.824811,
+            "z": 2.044
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_Attic_Locked",
+          "FamilyName": "Doors_Attic",
+          "Position": {
+            "x": 3.837,
+            "y": 16.799999,
+            "z": 3.435
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 1.3987,
+          "HeightDistance": 3.9752,
+          "Distance3D": 4.2141
+        },
+        {
+          "Name": "Doors_Attic_Unlocked",
+          "FamilyName": "Doors_Attic",
+          "Position": {
+            "x": 3.837,
+            "y": 16.799999,
+            "z": 3.435
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 1.3987,
+          "HeightDistance": 3.9752,
+          "Distance3D": 4.2141
+        },
+        {
+          "Name": "Doors_Attic_Unlocking",
+          "FamilyName": "Doors_Attic",
+          "Position": {
+            "x": 1.91,
+            "y": 17.524811,
+            "z": 3.723999
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 2.4476,
+          "HeightDistance": 4.7,
+          "Distance3D": 5.2991
+        },
+        {
+          "Name": "Doors_UpperHall_Electric",
+          "FamilyName": "Doors_UpperHall_Electric",
+          "Position": {
+            "x": 1.341,
+            "y": 12.824811,
+            "z": 7.725
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 6.1475,
+          "HeightDistance": 0.0,
+          "Distance3D": 6.1475
+        }
+      ],
+      "TopCandidateFamilies": [
+        "AtticDoors",
+        "Doors_Attic",
+        "Doors_UpperHall_Electric"
+      ],
+      "SuspicionScore": 0,
+      "Issues": []
+    },
+    {
+      "PairKey": "bathroom1<->hallway",
+      "DirectedKeys": [
+        "hallway->bathroom1",
+        "bathroom1->hallway"
+      ],
+      "DirectedTransitionIds": [
+        "transition:hallway->bathroom1",
+        "transition:bathroom1->hallway"
+      ],
+      "ConnectorNames": [
+        "Doors_Bathroom1"
+      ],
+      "AssetDerivationSources": [
+        "DoorObjectAndCameraWaypoints"
+      ],
+      "ConnectorObjectPosition": {
+        "x": 2.11,
+        "y": -0.617448,
+        "z": 6.421805
+      },
+      "FromWaypoint": {
+        "x": 0.523441,
+        "y": 4.17,
+        "z": 0.664414
+      },
+      "ToWaypoint": {
+        "x": -0.028381,
+        "y": 4.17,
+        "z": 11.494413
+      },
+      "SourceClearPoint": {
+        "x": 2.15071,
+        "y": -0.617448,
+        "z": 5.622841
+      },
+      "DestinationClearPoint": {
+        "x": 2.06929,
+        "y": -0.617448,
+        "z": 7.220769
+      },
+      "ReferenceDoorMatchType": "ExactNamedDoor",
+      "ReferenceDoor": {
+        "Name": "Doors_Bathroom1",
+        "FamilyName": "Doors_Bathroom1",
+        "Position": {
+          "x": 2.11,
+          "y": -0.617448,
+          "z": 6.421805
+        },
+        "PlanarDistance": 0.0,
+        "HeightDistance": 0.0,
+        "Distance3D": 0.0
+      },
+      "ExactConnectorMatches": [
+        {
+          "Name": "Doors_Bathroom1",
+          "FamilyName": "Doors_Bathroom1",
+          "Position": {
+            "x": 2.11,
+            "y": -0.617448,
+            "z": 6.421805
+          },
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        }
+      ],
+      "TopCandidateDoors": [
+        {
+          "Name": "Doors_Bathroom1",
+          "FamilyName": "Doors_Bathroom1",
+          "Position": {
+            "x": 2.11,
+            "y": -0.617448,
+            "z": 6.421805
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_Gym_Bathroom",
+          "FamilyName": "Doors_Gym_Bathroom",
+          "Position": {
+            "x": -23.153,
+            "y": 12.824811,
+            "z": 8.003
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 25.3124,
+          "HeightDistance": 13.4423,
+          "Distance3D": 28.6603
+        },
+        {
+          "Name": "Doors_Bedroom_Bathroom",
+          "FamilyName": "Doors_Bedroom_Bathroom",
+          "Position": {
+            "x": -23.663,
+            "y": 12.824811,
+            "z": -6.324
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 28.7524,
+          "HeightDistance": 13.4423,
+          "Distance3D": 31.7395
+        },
+        {
+          "Name": "Doors_UpperHall_Electric",
+          "FamilyName": "Doors_UpperHall_Electric",
+          "Position": {
+            "x": 1.341,
+            "y": 12.824811,
+            "z": 7.725
+          },
+          "TokenOverlapScore": 0,
+          "PlanarDistance": 1.5132,
+          "HeightDistance": 13.4423,
+          "Distance3D": 13.5272
+        },
+        {
+          "Name": "Doors_Attic_Unlocking",
+          "FamilyName": "Doors_Attic",
+          "Position": {
+            "x": 1.91,
+            "y": 17.524811,
+            "z": 3.723999
+          },
+          "TokenOverlapScore": 0,
+          "PlanarDistance": 2.7052,
+          "HeightDistance": 18.1423,
+          "Distance3D": 18.3428
+        }
+      ],
+      "TopCandidateFamilies": [
+        "Doors_Bathroom1",
+        "Doors_Gym_Bathroom",
+        "Doors_Bedroom_Bathroom",
+        "Doors_UpperHall_Electric",
+        "Doors_Attic"
+      ],
+      "SuspicionScore": 0,
+      "Issues": []
+    },
+    {
+      "PairKey": "bathroom2<->bedroom",
+      "DirectedKeys": [
+        "bedroom->bathroom2",
+        "bathroom2->bedroom"
+      ],
+      "DirectedTransitionIds": [
+        "transition:bedroom->bathroom2",
+        "transition:bathroom2->bedroom"
+      ],
+      "ConnectorNames": [
+        "Doors_Bedroom_Bathroom"
+      ],
+      "AssetDerivationSources": [
+        "DoorObjectAndCameraWaypoints"
+      ],
+      "ConnectorObjectPosition": {
+        "x": -23.663,
+        "y": 12.824811,
+        "z": -6.324
+      },
+      "FromWaypoint": {
+        "x": -25.461765,
+        "y": 17.84,
+        "z": -12.635586
+      },
+      "ToWaypoint": {
+        "x": -25.406582,
+        "y": 17.84,
+        "z": 0.034413
+      },
+      "SourceClearPoint": {
+        "x": -23.666484,
+        "y": 12.824811,
+        "z": -7.123992
+      },
+      "DestinationClearPoint": {
+        "x": -23.659516,
+        "y": 12.824811,
+        "z": -5.524008
+      },
+      "ReferenceDoorMatchType": "ExactNamedDoor",
+      "ReferenceDoor": {
+        "Name": "Doors_Bedroom_Bathroom",
+        "FamilyName": "Doors_Bedroom_Bathroom",
+        "Position": {
+          "x": -23.663,
+          "y": 12.824811,
+          "z": -6.324
+        },
+        "PlanarDistance": 0.0,
+        "HeightDistance": 0.0,
+        "Distance3D": 0.0
+      },
+      "ExactConnectorMatches": [
+        {
+          "Name": "Doors_Bedroom_Bathroom",
+          "FamilyName": "Doors_Bedroom_Bathroom",
+          "Position": {
+            "x": -23.663,
+            "y": 12.824811,
+            "z": -6.324
+          },
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        }
+      ],
+      "TopCandidateDoors": [
+        {
+          "Name": "Doors_Bedroom_Bathroom",
+          "FamilyName": "Doors_Bedroom_Bathroom",
+          "Position": {
+            "x": -23.663,
+            "y": 12.824811,
+            "z": -6.324
+          },
+          "TokenOverlapScore": 2,
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_Bedroom",
+          "FamilyName": "Doors_Bedroom",
+          "Position": {
+            "x": -10.724,
+            "y": 12.824811,
+            "z": -6.462
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 12.9397,
+          "HeightDistance": 0.0,
+          "Distance3D": 12.9397
+        },
+        {
+          "Name": "Doors_Gym_Bathroom",
+          "FamilyName": "Doors_Gym_Bathroom",
+          "Position": {
+            "x": -23.153,
+            "y": 12.824811,
+            "z": 8.003
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 14.3361,
+          "HeightDistance": 0.0,
+          "Distance3D": 14.3361
+        },
+        {
+          "Name": "Doors_Bedroom_ClosetLeft_Inner",
+          "FamilyName": "Doors_Bedroom_ClosetLeft",
+          "Position": {
+            "x": -4.544,
+            "y": 12.824811,
+            "z": -8.596948
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 19.2536,
+          "HeightDistance": 0.0,
+          "Distance3D": 19.2536
+        },
+        {
+          "Name": "Doors_Bedroom_ClosetLeft_Outer",
+          "FamilyName": "Doors_Bedroom_ClosetLeft",
+          "Position": {
+            "x": -4.526314,
+            "y": 12.824811,
+            "z": -8.596948
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 19.2712,
+          "HeightDistance": 0.0,
+          "Distance3D": 19.2712
+        }
+      ],
+      "TopCandidateFamilies": [
+        "Doors_Bedroom_Bathroom",
+        "Doors_Bedroom",
+        "Doors_Gym_Bathroom",
+        "Doors_Bedroom_ClosetLeft"
+      ],
+      "SuspicionScore": 0,
+      "Issues": []
+    },
+    {
+      "PairKey": "bathroom2<->dorian_bathroom2_2",
+      "DirectedKeys": [
+        "dorian_bathroom2_2->bathroom2",
+        "bathroom2->dorian_bathroom2_2"
+      ],
+      "DirectedTransitionIds": [
+        "transition:dorian_bathroom2_2->bathroom2",
+        "transition:bathroom2->dorian_bathroom2_2"
+      ],
+      "ConnectorNames": [
+        "Doors_Bedroom_Bathroom"
+      ],
+      "AssetDerivationSources": [
+        "DoorObjectAndCameraWaypoints"
+      ],
+      "ConnectorObjectPosition": {
+        "x": -23.663,
+        "y": 12.824811,
+        "z": -6.324
+      },
+      "FromWaypoint": {
+        "x": -25.461765,
+        "y": 17.84,
+        "z": -12.635586
+      },
+      "ToWaypoint": {
+        "x": -24.804977,
+        "y": 18.23,
+        "z": -4.284243
+      },
+      "SourceClearPoint": {
+        "x": -23.725722,
+        "y": 12.824811,
+        "z": -7.121537
+      },
+      "DestinationClearPoint": {
+        "x": -23.600278,
+        "y": 12.824811,
+        "z": -5.526463
+      },
+      "ReferenceDoorMatchType": "ExactNamedDoor",
+      "ReferenceDoor": {
+        "Name": "Doors_Bedroom_Bathroom",
+        "FamilyName": "Doors_Bedroom_Bathroom",
+        "Position": {
+          "x": -23.663,
+          "y": 12.824811,
+          "z": -6.324
+        },
+        "PlanarDistance": 0.0,
+        "HeightDistance": 0.0,
+        "Distance3D": 0.0
+      },
+      "ExactConnectorMatches": [
+        {
+          "Name": "Doors_Bedroom_Bathroom",
+          "FamilyName": "Doors_Bedroom_Bathroom",
+          "Position": {
+            "x": -23.663,
+            "y": 12.824811,
+            "z": -6.324
+          },
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        }
+      ],
+      "TopCandidateDoors": [
+        {
+          "Name": "Doors_Bedroom_Bathroom",
+          "FamilyName": "Doors_Bedroom_Bathroom",
+          "Position": {
+            "x": -23.663,
+            "y": 12.824811,
+            "z": -6.324
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_Gym_Bathroom",
+          "FamilyName": "Doors_Gym_Bathroom",
+          "Position": {
+            "x": -23.153,
+            "y": 12.824811,
+            "z": 8.003
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 14.3361,
+          "HeightDistance": 0.0,
+          "Distance3D": 14.3361
+        },
+        {
+          "Name": "Doors_Bathroom1",
+          "FamilyName": "Doors_Bathroom1",
+          "Position": {
+            "x": 2.11,
+            "y": -0.617448,
+            "z": 6.421805
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 28.7524,
+          "HeightDistance": 13.4423,
+          "Distance3D": 31.7395
+        },
+        {
+          "Name": "Doors_Bedroom",
+          "FamilyName": "Doors_Bedroom",
+          "Position": {
+            "x": -10.724,
+            "y": 12.824811,
+            "z": -6.462
+          },
+          "TokenOverlapScore": 0,
+          "PlanarDistance": 12.9397,
+          "HeightDistance": 0.0,
+          "Distance3D": 12.9397
+        },
+        {
+          "Name": "Doors_Bedroom_ClosetLeft_Inner",
+          "FamilyName": "Doors_Bedroom_ClosetLeft",
+          "Position": {
+            "x": -4.544,
+            "y": 12.824811,
+            "z": -8.596948
+          },
+          "TokenOverlapScore": 0,
+          "PlanarDistance": 19.2536,
+          "HeightDistance": 0.0,
+          "Distance3D": 19.2536
+        }
+      ],
+      "TopCandidateFamilies": [
+        "Doors_Bedroom_Bathroom",
+        "Doors_Gym_Bathroom",
+        "Doors_Bathroom1",
+        "Doors_Bedroom",
+        "Doors_Bedroom_ClosetLeft"
+      ],
+      "SuspicionScore": 0,
+      "Issues": []
+    },
+    {
+      "PairKey": "bedroom<->bedroom_closet",
+      "DirectedKeys": [
+        "bedroom->bedroom_closet",
+        "bedroom_closet->bedroom"
+      ],
+      "DirectedTransitionIds": [
+        "transition:bedroom->bedroom_closet",
+        "transition:bedroom_closet->bedroom"
+      ],
+      "ConnectorNames": [
+        "Doors_Bedroom_ClosetRight_Outer",
+        "Doors_Bedroom_ClosetRight_Inner"
+      ],
+      "AssetDerivationSources": [
+        "DoorObjectCameraAndClearOverrides"
+      ],
+      "ConnectorObjectPosition": {
+        "x": -4.526314,
+        "y": 12.824811,
+        "z": -20.603844
+      },
+      "FromWaypoint": {
+        "x": -10.53503,
+        "y": 18.02,
+        "z": -11.725586
+      },
+      "ToWaypoint": {
+        "x": -10.53503,
+        "y": 18.02,
+        "z": -23.995586
+      },
+      "SourceClearPoint": {
+        "x": -10.075526,
+        "y": 16.73,
+        "z": -13.94941
+      },
+      "DestinationClearPoint": {
+        "x": -4.526314,
+        "y": 18.85,
+        "z": -20.603844
+      },
+      "ReferenceDoorMatchType": "ExactNamedDoor",
+      "ReferenceDoor": {
+        "Name": "Doors_Bedroom_ClosetRight_Outer",
+        "FamilyName": "Doors_Bedroom_ClosetRight",
+        "Position": {
+          "x": -4.526314,
+          "y": 12.824811,
+          "z": -20.603844
+        },
+        "PlanarDistance": 0.0,
+        "HeightDistance": 0.0,
+        "Distance3D": 0.0
+      },
+      "ExactConnectorMatches": [
+        {
+          "Name": "Doors_Bedroom_ClosetRight_Outer",
+          "FamilyName": "Doors_Bedroom_ClosetRight",
+          "Position": {
+            "x": -4.526314,
+            "y": 12.824811,
+            "z": -20.603844
+          },
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_Bedroom_ClosetRight_Inner",
+          "FamilyName": "Doors_Bedroom_ClosetRight",
+          "Position": {
+            "x": -4.543,
+            "y": 12.824811,
+            "z": -20.603844
+          },
+          "PlanarDistance": 0.0167,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0167
+        }
+      ],
+      "TopCandidateDoors": [
+        {
+          "Name": "Doors_Bedroom_ClosetRight_Outer",
+          "FamilyName": "Doors_Bedroom_ClosetRight",
+          "Position": {
+            "x": -4.526314,
+            "y": 12.824811,
+            "z": -20.603844
+          },
+          "TokenOverlapScore": 2,
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_Bedroom_ClosetRight_Inner",
+          "FamilyName": "Doors_Bedroom_ClosetRight",
+          "Position": {
+            "x": -4.543,
+            "y": 12.824811,
+            "z": -20.603844
+          },
+          "TokenOverlapScore": 2,
+          "PlanarDistance": 0.0167,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0167
+        },
+        {
+          "Name": "Doors_Bedroom_ClosetLeft_Inner",
+          "FamilyName": "Doors_Bedroom_ClosetLeft",
+          "Position": {
+            "x": -4.544,
+            "y": 12.824811,
+            "z": -8.596948
+          },
+          "TokenOverlapScore": 2,
+          "PlanarDistance": 12.0069,
+          "HeightDistance": 0.0,
+          "Distance3D": 12.0069
+        },
+        {
+          "Name": "Doors_Bedroom_ClosetLeft_Outer",
+          "FamilyName": "Doors_Bedroom_ClosetLeft",
+          "Position": {
+            "x": -4.526314,
+            "y": 12.824811,
+            "z": -8.596948
+          },
+          "TokenOverlapScore": 2,
+          "PlanarDistance": 12.0069,
+          "HeightDistance": 0.0,
+          "Distance3D": 12.0069
+        },
+        {
+          "Name": "Doors_Bedroom",
+          "FamilyName": "Doors_Bedroom",
+          "Position": {
+            "x": -10.724,
+            "y": 12.824811,
+            "z": -6.462
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 15.4403,
+          "HeightDistance": 0.0,
+          "Distance3D": 15.4403
+        }
+      ],
+      "TopCandidateFamilies": [
+        "Doors_Bedroom_ClosetRight",
+        "Doors_Bedroom_ClosetLeft",
+        "Doors_Bedroom"
+      ],
+      "SuspicionScore": 0,
+      "Issues": []
+    },
+    {
+      "PairKey": "bedroom<->upper_hallway",
+      "DirectedKeys": [
+        "upper_hallway->bedroom",
+        "bedroom->upper_hallway"
+      ],
+      "DirectedTransitionIds": [
+        "transition:upper_hallway->bedroom",
+        "transition:bedroom->upper_hallway"
+      ],
+      "ConnectorNames": [
+        "Doors_Bedroom"
+      ],
+      "AssetDerivationSources": [
+        "DoorObjectAndCameraWaypoints"
+      ],
+      "ConnectorObjectPosition": {
+        "x": -10.724,
+        "y": 12.824811,
+        "z": -6.462
+      },
+      "FromWaypoint": {
+        "x": -12.604355,
+        "y": 17.84,
+        "z": 0.034413
+      },
+      "ToWaypoint": {
+        "x": -11.997356,
+        "y": 17.84,
+        "z": -12.635586
+      },
+      "SourceClearPoint": {
+        "x": -10.762283,
+        "y": 12.824811,
+        "z": -5.662917
+      },
+      "DestinationClearPoint": {
+        "x": -10.685717,
+        "y": 12.824811,
+        "z": -7.261083
+      },
+      "ReferenceDoorMatchType": "ExactNamedDoor",
+      "ReferenceDoor": {
+        "Name": "Doors_Bedroom",
+        "FamilyName": "Doors_Bedroom",
+        "Position": {
+          "x": -10.724,
+          "y": 12.824811,
+          "z": -6.462
+        },
+        "PlanarDistance": 0.0,
+        "HeightDistance": 0.0,
+        "Distance3D": 0.0
+      },
+      "ExactConnectorMatches": [
+        {
+          "Name": "Doors_Bedroom",
+          "FamilyName": "Doors_Bedroom",
+          "Position": {
+            "x": -10.724,
+            "y": 12.824811,
+            "z": -6.462
+          },
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        }
+      ],
+      "TopCandidateDoors": [
+        {
+          "Name": "Doors_Bedroom",
+          "FamilyName": "Doors_Bedroom",
+          "Position": {
+            "x": -10.724,
+            "y": 12.824811,
+            "z": -6.462
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_Bedroom_ClosetLeft_Inner",
+          "FamilyName": "Doors_Bedroom_ClosetLeft",
+          "Position": {
+            "x": -4.544,
+            "y": 12.824811,
+            "z": -8.596948
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 6.5384,
+          "HeightDistance": 0.0,
+          "Distance3D": 6.5384
+        },
+        {
+          "Name": "Doors_Bedroom_ClosetLeft_Outer",
+          "FamilyName": "Doors_Bedroom_ClosetLeft",
+          "Position": {
+            "x": -4.526314,
+            "y": 12.824811,
+            "z": -8.596948
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 6.5551,
+          "HeightDistance": 0.0,
+          "Distance3D": 6.5551
+        },
+        {
+          "Name": "Doors_Bedroom_Bathroom",
+          "FamilyName": "Doors_Bedroom_Bathroom",
+          "Position": {
+            "x": -23.663,
+            "y": 12.824811,
+            "z": -6.324
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 12.9397,
+          "HeightDistance": 0.0,
+          "Distance3D": 12.9397
+        },
+        {
+          "Name": "Doors_Bedroom_ClosetRight_Inner",
+          "FamilyName": "Doors_Bedroom_ClosetRight",
+          "Position": {
+            "x": -4.543,
+            "y": 12.824811,
+            "z": -20.603844
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 15.4336,
+          "HeightDistance": 0.0,
+          "Distance3D": 15.4336
+        }
+      ],
+      "TopCandidateFamilies": [
+        "Doors_Bedroom",
+        "Doors_Bedroom_ClosetLeft",
+        "Doors_Bedroom_Bathroom",
+        "Doors_Bedroom_ClosetRight"
+      ],
+      "SuspicionScore": 0,
+      "Issues": []
+    },
+    {
+      "PairKey": "gym<->gym_closet",
+      "DirectedKeys": [
+        "gym->gym_closet",
+        "gym_closet->gym"
+      ],
+      "DirectedTransitionIds": [
+        "transition:gym->gym_closet",
+        "transition:gym_closet->gym"
+      ],
+      "ConnectorNames": [
+        "Doors_Gym_ClosetOuter",
+        "Doors_Gym_ClosetInner"
+      ],
+      "AssetDerivationSources": [
+        "DoorObjectAndCameraWaypoints"
+      ],
+      "ConnectorObjectPosition": {
+        "x": -4.526314,
+        "y": 12.824811,
+        "z": 23.932253
+      },
+      "FromWaypoint": {
+        "x": -10.53503,
+        "y": 18.02,
+        "z": 20.664413
+      },
+      "ToWaypoint": {
+        "x": 1.831253,
+        "y": 18.02,
+        "z": 20.084414
+      },
+      "SourceClearPoint": {
+        "x": -5.325436,
+        "y": 12.824811,
+        "z": 23.969733
+      },
+      "DestinationClearPoint": {
+        "x": -3.727192,
+        "y": 12.824811,
+        "z": 23.894773
+      },
+      "ReferenceDoorMatchType": "ExactNamedDoor",
+      "ReferenceDoor": {
+        "Name": "Doors_Gym_ClosetOuter",
+        "FamilyName": "Doors_Gym_Closet",
+        "Position": {
+          "x": -4.526314,
+          "y": 12.824811,
+          "z": 23.932253
+        },
+        "PlanarDistance": 0.0,
+        "HeightDistance": 0.0,
+        "Distance3D": 0.0
+      },
+      "ExactConnectorMatches": [
+        {
+          "Name": "Doors_Gym_ClosetOuter",
+          "FamilyName": "Doors_Gym_Closet",
+          "Position": {
+            "x": -4.526314,
+            "y": 12.824811,
+            "z": 23.932253
+          },
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_Gym_ClosetInner",
+          "FamilyName": "Doors_Gym_Closet",
+          "Position": {
+            "x": -4.56,
+            "y": 12.824811,
+            "z": 23.932253
+          },
+          "PlanarDistance": 0.0337,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0337
+        }
+      ],
+      "TopCandidateDoors": [
+        {
+          "Name": "Doors_Gym_ClosetOuter",
+          "FamilyName": "Doors_Gym_Closet",
+          "Position": {
+            "x": -4.526314,
+            "y": 12.824811,
+            "z": 23.932253
+          },
+          "TokenOverlapScore": 2,
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_Gym_ClosetInner",
+          "FamilyName": "Doors_Gym_Closet",
+          "Position": {
+            "x": -4.56,
+            "y": 12.824811,
+            "z": 23.932253
+          },
+          "TokenOverlapScore": 2,
+          "PlanarDistance": 0.0337,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0337
+        },
+        {
+          "Name": "Doors_Office_ClosetLocked",
+          "FamilyName": "Doors_Office_Closet",
+          "Position": {
+            "x": 4.134,
+            "y": 3.358,
+            "z": 24.345999
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 8.6702,
+          "HeightDistance": 9.4668,
+          "Distance3D": 12.8372
+        },
+        {
+          "Name": "Doors_Office_Closet",
+          "FamilyName": "Doors_Office_Closet",
+          "Position": {
+            "x": 4.036,
+            "y": -0.617448,
+            "z": 25.93852
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 8.7942,
+          "HeightDistance": 13.4423,
+          "Distance3D": 16.0634
+        },
+        {
+          "Name": "Doors_Laundry_Closet",
+          "FamilyName": "Doors_Laundry_Closet",
+          "Position": {
+            "x": -11.424,
+            "y": -0.617448,
+            "z": 37.237
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 14.9865,
+          "HeightDistance": 13.4423,
+          "Distance3D": 20.1318
+        }
+      ],
+      "TopCandidateFamilies": [
+        "Doors_Gym_Closet",
+        "Doors_Office_Closet",
+        "Doors_Laundry_Closet"
+      ],
+      "SuspicionScore": 0,
+      "Issues": []
+    },
+    {
+      "PairKey": "gym<->upper_hallway",
+      "DirectedKeys": [
+        "upper_hallway->gym",
+        "gym->upper_hallway"
+      ],
+      "DirectedTransitionIds": [
+        "transition:upper_hallway->gym",
+        "transition:gym->upper_hallway"
+      ],
+      "ConnectorNames": [
+        "Doors_Gym_Hall"
+      ],
+      "AssetDerivationSources": [
+        "DoorObjectAndCameraWaypoints"
+      ],
+      "ConnectorObjectPosition": {
+        "x": -6.166,
+        "y": 12.824811,
+        "z": 8.042243
+      },
+      "FromWaypoint": {
+        "x": -7.748341,
+        "y": 17.84,
+        "z": 1.714413
+      },
+      "ToWaypoint": {
+        "x": -7.748341,
+        "y": 17.84,
+        "z": 13.564413
+      },
+      "SourceClearPoint": {
+        "x": -6.166,
+        "y": 12.824811,
+        "z": 7.242243
+      },
+      "DestinationClearPoint": {
+        "x": -6.166,
+        "y": 12.824811,
+        "z": 8.842243
+      },
+      "ReferenceDoorMatchType": "ExactNamedDoor",
+      "ReferenceDoor": {
+        "Name": "Doors_Gym_Hall",
+        "FamilyName": "Doors_Gym_Hall",
+        "Position": {
+          "x": -6.166,
+          "y": 12.824811,
+          "z": 8.042243
+        },
+        "PlanarDistance": 0.0,
+        "HeightDistance": 0.0,
+        "Distance3D": 0.0
+      },
+      "ExactConnectorMatches": [
+        {
+          "Name": "Doors_Gym_Hall",
+          "FamilyName": "Doors_Gym_Hall",
+          "Position": {
+            "x": -6.166,
+            "y": 12.824811,
+            "z": 8.042243
+          },
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        }
+      ],
+      "TopCandidateDoors": [
+        {
+          "Name": "Doors_Gym_Hall",
+          "FamilyName": "Doors_Gym_Hall",
+          "Position": {
+            "x": -6.166,
+            "y": 12.824811,
+            "z": 8.042243
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_UpperHall_Electric",
+          "FamilyName": "Doors_UpperHall_Electric",
+          "Position": {
+            "x": 1.341,
+            "y": 12.824811,
+            "z": 7.725
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 7.5137,
+          "HeightDistance": 0.0,
+          "Distance3D": 7.5137
+        },
+        {
+          "Name": "Doors_Gym_ClosetInner",
+          "FamilyName": "Doors_Gym_Closet",
+          "Position": {
+            "x": -4.56,
+            "y": 12.824811,
+            "z": 23.932253
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 15.971,
+          "HeightDistance": 0.0,
+          "Distance3D": 15.971
+        },
+        {
+          "Name": "Doors_Gym_ClosetOuter",
+          "FamilyName": "Doors_Gym_Closet",
+          "Position": {
+            "x": -4.526314,
+            "y": 12.824811,
+            "z": 23.932253
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 15.9744,
+          "HeightDistance": 0.0,
+          "Distance3D": 15.9744
+        },
+        {
+          "Name": "Doors_Gym_Bathroom",
+          "FamilyName": "Doors_Gym_Bathroom",
+          "Position": {
+            "x": -23.153,
+            "y": 12.824811,
+            "z": 8.003
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 16.987,
+          "HeightDistance": 0.0,
+          "Distance3D": 16.987
+        }
+      ],
+      "TopCandidateFamilies": [
+        "Doors_Gym_Hall",
+        "Doors_UpperHall_Electric",
+        "Doors_Gym_Closet",
+        "Doors_Gym_Bathroom"
+      ],
+      "SuspicionScore": 0,
+      "Issues": []
+    },
+    {
+      "PairKey": "hallway<->office",
+      "DirectedKeys": [
+        "hallway->office",
+        "office->hallway"
+      ],
+      "DirectedTransitionIds": [
+        "transition:hallway->office",
+        "transition:office->hallway"
+      ],
+      "ConnectorNames": [
+        "Doors_Office"
+      ],
+      "AssetDerivationSources": [
+        "DoorObjectAndCameraWaypoints"
+      ],
+      "ConnectorObjectPosition": {
+        "x": 9.845,
+        "y": -0.617448,
+        "z": 6.29
+      },
+      "FromWaypoint": {
+        "x": 8.309622,
+        "y": 4.17,
+        "z": 0.664414
+      },
+      "ToWaypoint": {
+        "x": 7.757801,
+        "y": 4.17,
+        "z": 11.494413
+      },
+      "SourceClearPoint": {
+        "x": 9.88571,
+        "y": -0.617448,
+        "z": 5.491036
+      },
+      "DestinationClearPoint": {
+        "x": 9.80429,
+        "y": -0.617448,
+        "z": 7.088964
+      },
+      "ReferenceDoorMatchType": "ExactNamedDoor",
+      "ReferenceDoor": {
+        "Name": "Doors_Office",
+        "FamilyName": "Doors_Office",
+        "Position": {
+          "x": 9.845,
+          "y": -0.617448,
+          "z": 6.29
+        },
+        "PlanarDistance": 0.0,
+        "HeightDistance": 0.0,
+        "Distance3D": 0.0
+      },
+      "ExactConnectorMatches": [
+        {
+          "Name": "Doors_Office",
+          "FamilyName": "Doors_Office",
+          "Position": {
+            "x": 9.845,
+            "y": -0.617448,
+            "z": 6.29
+          },
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        }
+      ],
+      "TopCandidateDoors": [
+        {
+          "Name": "Doors_Office",
+          "FamilyName": "Doors_Office",
+          "Position": {
+            "x": 9.845,
+            "y": -0.617448,
+            "z": 6.29
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_Office_Locked",
+          "FamilyName": "Doors_Office",
+          "Position": {
+            "x": 1.66,
+            "y": -3.996,
+            "z": -0.14
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 10.4086,
+          "HeightDistance": 3.3786,
+          "Distance3D": 10.9432
+        },
+        {
+          "Name": "Doors_Office_ClosetLocked",
+          "FamilyName": "Doors_Office_Closet",
+          "Position": {
+            "x": 4.134,
+            "y": 3.358,
+            "z": 24.345999
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 18.9377,
+          "HeightDistance": 3.9754,
+          "Distance3D": 19.3504
+        },
+        {
+          "Name": "Doors_Office_Closet",
+          "FamilyName": "Doors_Office_Closet",
+          "Position": {
+            "x": 4.036,
+            "y": -0.617448,
+            "z": 25.93852
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 20.4892,
+          "HeightDistance": 0.0,
+          "Distance3D": 20.4892
+        },
+        {
+          "Name": "Doors_Attic_Locked",
+          "FamilyName": "Doors_Attic",
+          "Position": {
+            "x": 3.837,
+            "y": 16.799999,
+            "z": 3.435
+          },
+          "TokenOverlapScore": 0,
+          "PlanarDistance": 6.6518,
+          "HeightDistance": 17.4174,
+          "Distance3D": 18.6444
+        }
+      ],
+      "TopCandidateFamilies": [
+        "Doors_Office",
+        "Doors_Office_Closet",
+        "Doors_Attic"
+      ],
+      "SuspicionScore": 0,
+      "Issues": []
+    },
+    {
+      "PairKey": "laundry_room<->laundry_room_closet",
+      "DirectedKeys": [
+        "laundry_room->laundry_room_closet",
+        "laundry_room_closet->laundry_room"
+      ],
+      "DirectedTransitionIds": [
+        "transition:laundry_room->laundry_room_closet",
+        "transition:laundry_room_closet->laundry_room"
+      ],
+      "ConnectorNames": [
+        "Doors_Laundry_Closet"
+      ],
+      "AssetDerivationSources": [
+        "DoorObjectCameraAndClearOverrides"
+      ],
+      "ConnectorObjectPosition": {
+        "x": -11.424,
+        "y": -0.617448,
+        "z": 37.237
+      },
+      "FromWaypoint": {
+        "x": -17.123764,
+        "y": 3.92,
+        "z": 35.194416
+      },
+      "ToWaypoint": {
+        "x": -13.564522,
+        "y": 3.92,
+        "z": 30.984411
+      },
+      "SourceClearPoint": {
+        "x": -15.173267,
+        "y": 4.98,
+        "z": 37.237
+      },
+      "DestinationClearPoint": {
+        "x": -11.424,
+        "y": 4.98,
+        "z": 36.130107
+      },
+      "ReferenceDoorMatchType": "ExactNamedDoor",
+      "ReferenceDoor": {
+        "Name": "Doors_Laundry_Closet",
+        "FamilyName": "Doors_Laundry_Closet",
+        "Position": {
+          "x": -11.424,
+          "y": -0.617448,
+          "z": 37.237
+        },
+        "PlanarDistance": 0.0,
+        "HeightDistance": 0.0,
+        "Distance3D": 0.0
+      },
+      "ExactConnectorMatches": [
+        {
+          "Name": "Doors_Laundry_Closet",
+          "FamilyName": "Doors_Laundry_Closet",
+          "Position": {
+            "x": -11.424,
+            "y": -0.617448,
+            "z": 37.237
+          },
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        }
+      ],
+      "TopCandidateDoors": [
+        {
+          "Name": "Doors_Laundry_Closet",
+          "FamilyName": "Doors_Laundry_Closet",
+          "Position": {
+            "x": -11.424,
+            "y": -0.617448,
+            "z": 37.237
+          },
+          "TokenOverlapScore": 2,
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_Laundry",
+          "FamilyName": "Doors_Laundry",
+          "Position": {
+            "x": -15.599,
+            "y": -0.617448,
+            "z": 28.637308
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 9.5596,
+          "HeightDistance": 0.0,
+          "Distance3D": 9.5596
+        },
+        {
+          "Name": "Doors_Gym_ClosetInner",
+          "FamilyName": "Doors_Gym_Closet",
+          "Position": {
+            "x": -4.56,
+            "y": 12.824811,
+            "z": 23.932253
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 14.971,
+          "HeightDistance": 13.4423,
+          "Distance3D": 20.1203
+        },
+        {
+          "Name": "Doors_Gym_ClosetOuter",
+          "FamilyName": "Doors_Gym_Closet",
+          "Position": {
+            "x": -4.526314,
+            "y": 12.824811,
+            "z": 23.932253
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 14.9865,
+          "HeightDistance": 13.4423,
+          "Distance3D": 20.1318
+        },
+        {
+          "Name": "Doors_Office_Closet",
+          "FamilyName": "Doors_Office_Closet",
+          "Position": {
+            "x": 4.036,
+            "y": -0.617448,
+            "z": 25.93852
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 19.1486,
+          "HeightDistance": 0.0,
+          "Distance3D": 19.1486
+        }
+      ],
+      "TopCandidateFamilies": [
+        "Doors_Laundry_Closet",
+        "Doors_Laundry",
+        "Doors_Gym_Closet",
+        "Doors_Office_Closet"
+      ],
+      "SuspicionScore": 0,
+      "Issues": []
+    },
+    {
+      "PairKey": "office<->office_closet",
+      "DirectedKeys": [
+        "office->office_closet",
+        "office_closet->office"
+      ],
+      "DirectedTransitionIds": [
+        "transition:office->office_closet",
+        "transition:office_closet->office"
+      ],
+      "ConnectorNames": [
+        "Doors_Office_Closet"
+      ],
+      "AssetDerivationSources": [
+        "DoorObjectAndCameraWaypoints"
+      ],
+      "ConnectorObjectPosition": {
+        "x": 4.036,
+        "y": -0.617448,
+        "z": 25.93852
+      },
+      "FromWaypoint": {
+        "x": 9.35808,
+        "y": 4.17,
+        "z": 24.474413
+      },
+      "ToWaypoint": {
+        "x": -1.07132,
+        "y": 4.17,
+        "z": 23.964413
+      },
+      "SourceClearPoint": {
+        "x": 4.835045,
+        "y": -0.617448,
+        "z": 25.977593
+      },
+      "DestinationClearPoint": {
+        "x": 3.236955,
+        "y": -0.617448,
+        "z": 25.899447
+      },
+      "ReferenceDoorMatchType": "ExactNamedDoor",
+      "ReferenceDoor": {
+        "Name": "Doors_Office_Closet",
+        "FamilyName": "Doors_Office_Closet",
+        "Position": {
+          "x": 4.036,
+          "y": -0.617448,
+          "z": 25.93852
+        },
+        "PlanarDistance": 0.0,
+        "HeightDistance": 0.0,
+        "Distance3D": 0.0
+      },
+      "ExactConnectorMatches": [
+        {
+          "Name": "Doors_Office_Closet",
+          "FamilyName": "Doors_Office_Closet",
+          "Position": {
+            "x": 4.036,
+            "y": -0.617448,
+            "z": 25.93852
+          },
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        }
+      ],
+      "TopCandidateDoors": [
+        {
+          "Name": "Doors_Office_Closet",
+          "FamilyName": "Doors_Office_Closet",
+          "Position": {
+            "x": 4.036,
+            "y": -0.617448,
+            "z": 25.93852
+          },
+          "TokenOverlapScore": 2,
+          "PlanarDistance": 0.0,
+          "HeightDistance": 0.0,
+          "Distance3D": 0.0
+        },
+        {
+          "Name": "Doors_Office_ClosetLocked",
+          "FamilyName": "Doors_Office_Closet",
+          "Position": {
+            "x": 4.134,
+            "y": 3.358,
+            "z": 24.345999
+          },
+          "TokenOverlapScore": 2,
+          "PlanarDistance": 1.5955,
+          "HeightDistance": 3.9754,
+          "Distance3D": 4.2837
+        },
+        {
+          "Name": "Doors_Gym_ClosetOuter",
+          "FamilyName": "Doors_Gym_Closet",
+          "Position": {
+            "x": -4.526314,
+            "y": 12.824811,
+            "z": 23.932253
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 8.7942,
+          "HeightDistance": 13.4423,
+          "Distance3D": 16.0634
+        },
+        {
+          "Name": "Doors_Gym_ClosetInner",
+          "FamilyName": "Doors_Gym_Closet",
+          "Position": {
+            "x": -4.56,
+            "y": 12.824811,
+            "z": 23.932253
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 8.827,
+          "HeightDistance": 13.4423,
+          "Distance3D": 16.0814
+        },
+        {
+          "Name": "Doors_Laundry_Closet",
+          "FamilyName": "Doors_Laundry_Closet",
+          "Position": {
+            "x": -11.424,
+            "y": -0.617448,
+            "z": 37.237
+          },
+          "TokenOverlapScore": 1,
+          "PlanarDistance": 19.1486,
+          "HeightDistance": 0.0,
+          "Distance3D": 19.1486
+        }
+      ],
+      "TopCandidateFamilies": [
+        "Doors_Office_Closet",
+        "Doors_Gym_Closet",
+        "Doors_Laundry_Closet"
+      ],
+      "SuspicionScore": 0,
+      "Issues": []
+    }
+  ]
 }

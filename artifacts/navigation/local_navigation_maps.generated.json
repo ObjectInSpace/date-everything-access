@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "GeneratedAt": "2026-04-16T14:30:13.8776055-04:00",
+  "GeneratedAt": "2026-04-29T13:10:57.1247135-04:00",
   "Inputs": {
     "NavigationDataPath": ".\\artifacts\\navigation\\thirdpersongreybox-navigation-data.json",
     "BlockerDataPath": ".\\artifacts\\navigation\\thirdpersongreybox-blockers.json",

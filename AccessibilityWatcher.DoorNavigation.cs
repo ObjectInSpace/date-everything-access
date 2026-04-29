@@ -146,11 +146,22 @@ namespace DateEverythingAccess
             float thresholdAdvanceArrivalDistance = GetRawNavigationGoalReachedDistance("door-threshold-advance");
             float pushThroughLocalArrivalDistance = DoorPushThroughLocalNavigationGoalReachedDistance;
             float handoffArrivalDistance = GetLocalNavigationGoalReachedDistance("door-threshold-handoff");
+            bool thresholdAdvanceLocalReached = IsDoorSourceLocalGoalCompleted(
+                step,
+                "door-threshold-advance-local");
+            bool thresholdHandoffLocalReached = IsDoorSourceLocalGoalCompleted(
+                step,
+                "door-threshold-handoff-local");
+            bool pushThroughLocalReached = IsDoorSourceLocalGoalCompleted(
+                step,
+                "door-push-through-local");
             bool sourceThresholdReached = sourceTarget != Vector3.zero &&
-                sourceThresholdDistance <= thresholdAdvanceArrivalDistance;
+                (sourceThresholdDistance <= thresholdAdvanceArrivalDistance ||
+                 thresholdAdvanceLocalReached);
             bool handoffReached = hasValidHandoffTarget &&
                 handoffTarget != Vector3.zero &&
-                handoffDistance <= handoffArrivalDistance;
+                (handoffDistance <= handoffArrivalDistance ||
+                 thresholdHandoffLocalReached);
             bool wouldKeepDoorThresholdAdvance = sourceTarget != Vector3.zero &&
                 ShouldKeepDoorThresholdAdvance(playerPosition, sourceTarget, pushThroughPosition);
             bool shouldKeepDoorThresholdAdvance =
@@ -205,6 +216,22 @@ namespace DateEverythingAccess
                     pushThroughDistance,
                     extraTolerance: 0f,
                     out noHandoffPushThroughCommitThreshold);
+            if (!isNoHandoffPushThroughCommitState &&
+                !hasValidHandoffTarget &&
+                pushThroughLocalReached &&
+                sourceTarget != Vector3.zero &&
+                pushThroughPosition != Vector3.zero &&
+                sourceThresholdDistance <= DoorThresholdAdvanceBypassDistance &&
+                pushThroughDistance <= noHandoffPushThroughCommitThreshold)
+            {
+                isNoHandoffPushThroughCommitState = true;
+                LogNavigationTrackerDebug(
+                    "Accepted completed door push-through local goal as no-handoff commit" +
+                    " sourceThresholdDistance=" + sourceThresholdDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " pushThroughCommitThreshold=" + noHandoffPushThroughCommitThreshold.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " step=" + DescribeNavigationStep(step));
+            }
             bool shouldCommitPostThresholdWithoutHandoff =
                 shouldBypassDoorThresholdAdvance &&
                 isNoHandoffPushThroughCommitState;
@@ -745,6 +772,7 @@ namespace DateEverythingAccess
                     TryGetDoorSourceLocalPlanningGoal(
                         step,
                         currentZone,
+                        playerPosition,
                         desiredPosition,
                         isThresholdAdvanceGoal && !isThresholdHandoffGoal
                             ? "door-threshold-advance-local"
@@ -775,6 +803,7 @@ namespace DateEverythingAccess
                 if (!TryGetDoorSourceLocalPlanningGoal(
                         step,
                         currentZone,
+                        playerPosition,
                         desiredPosition,
                         "door-push-through-local",
                         out Vector3 doorPushThroughPlanningGoal))
@@ -822,6 +851,7 @@ namespace DateEverythingAccess
                 TryGetDoorSourceLocalPlanningGoal(
                     step,
                     currentZone,
+                    playerPosition,
                     activeDoorPushThroughPosition,
                     "door-entry-advance-local",
                     out Vector3 doorEntryAdvancePlanningGoal))
@@ -839,6 +869,7 @@ namespace DateEverythingAccess
                             TryGetDoorSourceLocalPlanningGoal(
                                 step,
                                 currentZone,
+                                playerPosition,
                                 activeDoorPushThroughPosition,
                                 "door-push-through-local",
                                 out Vector3 pushThroughRecoveryGoal) &&
@@ -915,6 +946,7 @@ namespace DateEverythingAccess
         private bool TryGetDoorSourceLocalPlanningGoal(
             NavigationGraph.PathStep step,
             string currentZone,
+            Vector3 playerPosition,
             Vector3 desiredPosition,
             string planningContext,
             out Vector3 planningGoal)
@@ -990,7 +1022,61 @@ namespace DateEverythingAccess
                 }
             }
 
+            planningGoal = ResolveDoorReachableLocalPlanningGoal(
+                step,
+                currentZone,
+                playerPosition,
+                planningGoal,
+                planningContext);
             return planningGoal != Vector3.zero;
+        }
+
+        private Vector3 ResolveDoorReachableLocalPlanningGoal(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 playerPosition,
+            Vector3 planningGoal,
+            string planningContext)
+        {
+            if (step == null ||
+                planningGoal == Vector3.zero ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                string.IsNullOrWhiteSpace(step.FromZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                (!string.Equals(planningContext, "door-threshold-advance-local", StringComparison.Ordinal) &&
+                 !string.Equals(planningContext, "door-threshold-handoff-local", StringComparison.Ordinal) &&
+                 !string.Equals(planningContext, "door-push-through-local", StringComparison.Ordinal) &&
+                 !string.Equals(planningContext, "door-entry-advance-local", StringComparison.Ordinal)))
+            {
+                return planningGoal;
+            }
+
+            string planningZone = ResolveLocalPlanningZone(
+                currentZone,
+                step.FromZone,
+                playerPosition,
+                planningGoal);
+            if (string.IsNullOrWhiteSpace(planningZone) ||
+                !LocalNavigationMaps.TryResolveReachableProxyInStartComponent(
+                    planningZone,
+                    playerPosition,
+                    planningGoal,
+                    out Vector3 proxyGoal,
+                    out string proxyDetail) ||
+                proxyGoal == Vector3.zero)
+            {
+                return planningGoal;
+            }
+
+            LogNavigationTrackerDebug(
+                "Using reachable door local planning proxy" +
+                " planningZone=" + planningZone +
+                " context=" + (planningContext ?? "<null>") +
+                " originalGoal=" + FormatVector3(planningGoal) +
+                " proxyGoal=" + FormatVector3(proxyGoal) +
+                " detail=" + (proxyDetail ?? "<null>") +
+                " step=" + DescribeNavigationStep(step));
+            return proxyGoal;
         }
 
         private bool TryResolveDoorPushThroughBridgeLocalNavigationGoal(

@@ -482,6 +482,64 @@ if ($null -ne $linksProperty -and $null -ne $linksProperty.Value) {
 
     $inputLinks = @($links)
 }
+
+function Get-NavigationLinkPairKey {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FirstZone,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SecondZone
+    )
+
+    if ([System.StringComparer]::OrdinalIgnoreCase.Compare($FirstZone, $SecondZone) -le 0) {
+        return $FirstZone + "|" + $SecondZone
+    }
+
+    return $SecondZone + "|" + $FirstZone
+}
+
+$linkCorrections = @{}
+$linkCorrections[(Get-NavigationLinkPairKey -FirstZone "attic" -SecondZone "dorian_attic1")] = [pscustomobject]@{
+    FromZone = "dorian_attic1"
+    ToZone = "upper_hallway"
+}
+$linkCorrections[(Get-NavigationLinkPairKey -FirstZone "dorian_trapdoor1" -SecondZone "office")] = [pscustomobject]@{
+    FromZone = "dorian_trapdoor1"
+    ToZone = "office_closet"
+}
+
+$correctedLinks = New-Object System.Collections.ArrayList
+$seenCorrectedLinks = @{}
+foreach ($link in $inputLinks) {
+    if ($null -eq $link -or
+        [string]::IsNullOrWhiteSpace($link.FromZone) -or
+        [string]::IsNullOrWhiteSpace($link.ToZone)) {
+        continue
+    }
+
+    $fromZone = [string]$link.FromZone
+    $toZone = [string]$link.ToZone
+    $correctionKey = Get-NavigationLinkPairKey -FirstZone $fromZone -SecondZone $toZone
+    if ($linkCorrections.ContainsKey($correctionKey)) {
+        $correction = $linkCorrections[$correctionKey]
+        $fromZone = [string]$correction.FromZone
+        $toZone = [string]$correction.ToZone
+    }
+
+    $dedupeKey = Get-NavigationLinkPairKey -FirstZone $fromZone -SecondZone $toZone
+    if ($seenCorrectedLinks.ContainsKey($dedupeKey)) {
+        continue
+    }
+
+    $seenCorrectedLinks[$dedupeKey] = $true
+    [void]$correctedLinks.Add([pscustomobject]@{
+        FromZone = $fromZone
+        ToZone = $toZone
+    })
+}
+
+$inputLinks = @($correctedLinks)
 $sceneNameProperty = $inputGraph.PSObject.Properties["SceneName"]
 $inputSceneName = if ($null -ne $sceneNameProperty -and -not [string]::IsNullOrWhiteSpace($sceneNameProperty.Value)) {
     [string]$sceneNameProperty.Value
@@ -600,6 +658,26 @@ function Get-ConnectorObjectPosition {
     return Lerp-Vec3 -A $FromWaypoint -B $ToWaypoint -T 0.5
 }
 
+function Get-ZoneBoundaryPointNearDoor {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ZoneName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DoorName
+    )
+
+    if (-not $zonesByName.ContainsKey($ZoneName)) {
+        throw "Unknown zone '$ZoneName'"
+    }
+
+    if (-not $doorByName.ContainsKey($DoorName)) {
+        throw "Unknown door '$DoorName'"
+    }
+
+    return Get-NearestPointOnZoneGeometry -Zone $zonesByName[$ZoneName] -TargetPosition $doorByName[$DoorName].Position
+}
+
 function Get-SceneZoneNodeId {
     param(
         [Parameter(Mandatory = $true)]
@@ -696,6 +774,8 @@ function Get-ConnectorGeometry {
     $toWaypoint = Copy-Vec3 $WaypointPair.ToWaypoint
     $fromCrossingAnchor = Get-MetadataValue -Metadata $WaypointPair -Key "FromCrossingAnchor"
     $toCrossingAnchor = Get-MetadataValue -Metadata $WaypointPair -Key "ToCrossingAnchor"
+    $authoredSourceClearPoint = Get-MetadataValue -Metadata $WaypointPair -Key "SourceClearPoint"
+    $authoredDestinationClearPoint = Get-MetadataValue -Metadata $WaypointPair -Key "DestinationClearPoint"
     $connectorName = Get-MetadataValue -Metadata $Metadata -Key "ConnectorName"
     $connectorNames = @(Get-MetadataStringArray -Metadata $Metadata -Key "ConnectorNames")
     $connectorPosition = Get-ConnectorObjectPosition -StepKind $StepKind -ConnectorName $connectorName -ConnectorNames $connectorNames -FromWaypoint $fromWaypoint -ToWaypoint $toWaypoint
@@ -739,6 +819,20 @@ function Get-ConnectorGeometry {
         }
     }
 
+    if (-not (Test-ZeroVector $authoredSourceClearPoint)) {
+        $sourceClearPoint = Copy-Vec3 $authoredSourceClearPoint
+        if ($StepKind -eq "Door") {
+            $assetDerivationSource = "DoorObjectCameraAndClearOverrides"
+        }
+    }
+
+    if (-not (Test-ZeroVector $authoredDestinationClearPoint)) {
+        $destinationClearPoint = Copy-Vec3 $authoredDestinationClearPoint
+        if ($StepKind -eq "Door") {
+            $assetDerivationSource = "DoorObjectCameraAndClearOverrides"
+        }
+    }
+
     return [ordered]@{
         SourceApproachPoint = $sourceApproachPoint
         SourceClearPoint = $sourceClearPoint
@@ -752,6 +846,31 @@ function Get-ConnectorGeometry {
                 $destinationApproachPoint))
         AssetDerivationSource = $assetDerivationSource
     }
+}
+
+function Get-TransitionCrossingAnchor {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$StepKind,
+
+        [Parameter()]
+        [AllowNull()]
+        [object]$AuthoredAnchor,
+
+        [Parameter()]
+        [AllowNull()]
+        [object]$FallbackAnchor
+    )
+
+    if (-not (Test-ZeroVector $AuthoredAnchor)) {
+        return Copy-Vec3 $AuthoredAnchor
+    }
+
+    if ($StepKind -eq "Stairs" -and -not (Test-ZeroVector $FallbackAnchor)) {
+        return Copy-Vec3 $FallbackAnchor
+    }
+
+    return $null
 }
 
 function Get-TransitionValidationMetadata {
@@ -852,6 +971,8 @@ $directedOverrides = @{
     "bedroom|bedroom_closet" = [ordered]@{
         FromWaypoint = Get-CameraWaypoint "Camera_DorianBedroomClosetDoor1"
         ToWaypoint = Get-CameraWaypoint "Camera_DorianBedroomClosetDoor2"
+        SourceClearPoint = Get-ZoneBoundaryPointNearDoor -ZoneName "bedroom" -DoorName "Doors_Bedroom_ClosetRight_Outer"
+        DestinationClearPoint = Get-ZoneBoundaryPointNearDoor -ZoneName "bedroom_closet" -DoorName "Doors_Bedroom_ClosetRight_Outer"
     }
     "bedroom|bathroom2" = [ordered]@{
         FromWaypoint = Get-CameraWaypoint "Camera_DorianBathroom2Door2"
@@ -866,12 +987,14 @@ $directedOverrides = @{
         ToWaypoint = Get-CameraWaypoint "Camera_StairsUp"
     }
     "hallway_arma|hallway" = [ordered]@{
-        FromWaypoint = Get-ZoneWaypoint "hallway4"
-        ToWaypoint = Get-ZoneWaypoint "hallway_arma"
+        FromWaypoint = Get-ZoneWaypoint "hallway_arma"
+        ToWaypoint = Get-ZoneWaypoint "hallway4"
     }
     "laundry_room|laundry_room_closet" = [ordered]@{
-        FromWaypoint = Get-CameraWaypoint "Camera_DorianLaundryCloset1"
-        ToWaypoint = Get-CameraWaypoint "Camera_Laundry Room_Closet"
+        FromWaypoint = Get-CameraWaypoint "Camera_DorianLaundry2"
+        ToWaypoint = Get-CameraWaypoint "Camera_DorianLaundryCloset1"
+        SourceClearPoint = Get-ZoneBoundaryPointNearDoor -ZoneName "laundry_room" -DoorName "Doors_Laundry_Closet"
+        DestinationClearPoint = Get-ZoneBoundaryPointNearDoor -ZoneName "laundry_room_closet" -DoorName "Doors_Laundry_Closet"
     }
     "upper_hallway|gym" = [ordered]@{
         FromWaypoint = Get-CameraWaypoint "Camera_DorianGymDoor2"
@@ -1078,8 +1201,14 @@ foreach ($link in $inputLinks) {
         ToNodeId = $toNodeId
         FromWaypoint = $waypointPair.FromWaypoint
         ToWaypoint = $waypointPair.ToWaypoint
-        FromCrossingAnchor = Get-MetadataValue -Metadata $waypointPair -Key "FromCrossingAnchor"
-        ToCrossingAnchor = Get-MetadataValue -Metadata $waypointPair -Key "ToCrossingAnchor"
+        FromCrossingAnchor = Get-TransitionCrossingAnchor `
+            -StepKind $stepKind `
+            -AuthoredAnchor (Get-MetadataValue -Metadata $waypointPair -Key "FromCrossingAnchor") `
+            -FallbackAnchor $connectorGeometry.SourceClearPoint
+        ToCrossingAnchor = Get-TransitionCrossingAnchor `
+            -StepKind $stepKind `
+            -AuthoredAnchor (Get-MetadataValue -Metadata $waypointPair -Key "ToCrossingAnchor") `
+            -FallbackAnchor $connectorGeometry.DestinationClearPoint
         SourceApproachPoint = $connectorGeometry.SourceApproachPoint
         SourceClearPoint = $connectorGeometry.SourceClearPoint
         DestinationClearPoint = $connectorGeometry.DestinationClearPoint
@@ -1119,8 +1248,14 @@ foreach ($link in $inputLinks) {
         ToNodeId = $fromNodeId
         FromWaypoint = Copy-Vec3 $waypointPair.ToWaypoint
         ToWaypoint = Copy-Vec3 $waypointPair.FromWaypoint
-        FromCrossingAnchor = Get-MetadataValue -Metadata $waypointPair -Key "ToCrossingAnchor"
-        ToCrossingAnchor = Get-MetadataValue -Metadata $waypointPair -Key "FromCrossingAnchor"
+        FromCrossingAnchor = Get-TransitionCrossingAnchor `
+            -StepKind $stepKind `
+            -AuthoredAnchor (Get-MetadataValue -Metadata $waypointPair -Key "ToCrossingAnchor") `
+            -FallbackAnchor $connectorGeometry.DestinationClearPoint
+        ToCrossingAnchor = Get-TransitionCrossingAnchor `
+            -StepKind $stepKind `
+            -AuthoredAnchor (Get-MetadataValue -Metadata $waypointPair -Key "FromCrossingAnchor") `
+            -FallbackAnchor $connectorGeometry.SourceClearPoint
         SourceApproachPoint = $connectorGeometry.DestinationApproachPoint
         SourceClearPoint = $connectorGeometry.DestinationClearPoint
         DestinationClearPoint = $connectorGeometry.SourceClearPoint

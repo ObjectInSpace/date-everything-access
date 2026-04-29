@@ -1,6 +1,6 @@
-﻿Door Transition Metadata Audit
-GeneratedAtUtc: 2026-04-17T02:28:46.8008094Z
-GraphPath: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json
+Door Transition Metadata Audit
+GeneratedAtUtc: 2026-04-29T17:10:57.5476488Z
+GraphPath: C:\Users\amock\mod template\artifacts\navigation\navigation_graph.generated.json
 SceneDataPath: C:\Users\amock\mod template\artifacts\navigation\thirdpersongreybox-navigation-data.json
 TotalDoorPairs: 11
 SuspiciousDoorPairs: 0
