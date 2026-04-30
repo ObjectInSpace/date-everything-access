@@ -262,6 +262,7 @@ namespace DateEverythingAccess
                     sourceThresholdDistance,
                     pushThroughPosition,
                     pushThroughDistance,
+                    pushThroughLocalReached,
                     out position,
                     out targetKind))
             {
@@ -273,7 +274,8 @@ namespace DateEverythingAccess
                 isStillInSourceZone &&
                 isNoHandoffPushThroughCommitState &&
                 pushThroughPosition != Vector3.zero &&
-                pushThroughDistance > pushThroughLocalArrivalDistance;
+                pushThroughDistance > pushThroughLocalArrivalDistance &&
+                !pushThroughLocalReached;
             if (shouldHoldPushThroughAfterNoHandoffCommit)
             {
                 position = pushThroughPosition;
@@ -293,7 +295,8 @@ namespace DateEverythingAccess
                 isStillInSourceZone &&
                 pushThroughPosition != Vector3.zero &&
                 pushThroughDistance > DoorPushThroughLocalNavigationGoalReachedDistance &&
-                !isNoHandoffPushThroughCommitState;
+                !isNoHandoffPushThroughCommitState &&
+                !pushThroughLocalReached;
             if (shouldHoldPushThroughInSourceZone)
             {
                 position = pushThroughPosition;
@@ -324,7 +327,7 @@ namespace DateEverythingAccess
                 !shouldBypassDoorThresholdAdvance &&
                 sourceTarget != Vector3.zero &&
                 (shouldKeepDoorThresholdAdvance ||
-                 sourceThresholdDistance > thresholdAdvanceArrivalDistance);
+                 !sourceThresholdReached);
             if (shouldContinueDoorThresholdAdvance)
             {
                 position = sourceTarget;
@@ -415,6 +418,7 @@ namespace DateEverythingAccess
             float sourceThresholdDistance,
             Vector3 pushThroughPosition,
             float pushThroughDistance,
+            bool pushThroughLocalReached,
             out Vector3 position,
             out NavigationTargetKind targetKind)
         {
@@ -449,6 +453,16 @@ namespace DateEverythingAccess
 
             if (GetDoorCommittedSourceRecoveryStage() == DoorCommittedSourceRecoveryStage.PushThrough)
             {
+                if (pushThroughLocalReached)
+                {
+                    ResetDoorCommittedSourceRecoveryState();
+                    LogNavigationTrackerDebug(
+                        "Door committed-source recovery completed after push-through local goal" +
+                        " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " step=" + DescribeNavigationStep(step));
+                    return false;
+                }
+
                 if (!hasValidHandoffTarget &&
                     IsDoorNoHandoffPushThroughCommitEligible(
                         sourceTarget,
@@ -605,6 +619,9 @@ namespace DateEverythingAccess
                 return true;
             }
 
+            if (!string.Equals(_rawNavigationTargetContext, "door-threshold-handoff", StringComparison.Ordinal))
+                return false;
+
             if (!TryGetDoorThresholdAdvanceTarget(step, currentZone, out Vector3 sourceTarget) ||
                 sourceTarget == Vector3.zero ||
                 !TryGetDoorThresholdHandoffTarget(
@@ -746,6 +763,13 @@ namespace DateEverythingAccess
                 _rawNavigationTargetContext,
                 "door-push-through",
                 StringComparison.Ordinal);
+            bool isRawDoorEntryAdvance = string.Equals(
+                _rawNavigationTargetContext,
+                "door-entry-advance",
+                StringComparison.Ordinal);
+            bool isStillInSourceZone =
+                !string.IsNullOrEmpty(step.FromZone) &&
+                IsZoneEquivalentToNavigationZone(currentZone, step.FromZone);
 
             if (!string.IsNullOrEmpty(step.FromZone) &&
                 IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) &&
@@ -769,34 +793,51 @@ namespace DateEverythingAccess
                 }
 
                 if ((isThresholdAdvanceGoal || isThresholdHandoffGoal) &&
-                    TryGetDoorSourceLocalPlanningGoal(
+                    !isRawDoorPushThrough)
+                {
+                    bool shouldUseThresholdAdvanceLocal =
+                        isThresholdAdvanceGoal &&
+                        (!isThresholdHandoffGoal ||
+                         string.Equals(_rawNavigationTargetContext, "door-threshold-advance", StringComparison.Ordinal));
+                    string doorThresholdPlanningContext = shouldUseThresholdAdvanceLocal
+                        ? "door-threshold-advance-local"
+                        : "door-threshold-handoff-local";
+                    if (!TryGetDoorSourceLocalPlanningGoal(
                         step,
                         currentZone,
                         playerPosition,
                         desiredPosition,
-                        isThresholdAdvanceGoal && !isThresholdHandoffGoal
-                            ? "door-threshold-advance-local"
-                            : "door-threshold-handoff-local",
-                        out Vector3 doorThresholdPlanningGoal) &&
-                    ShouldUseLocalNavigationGoal(
-                        playerPosition,
-                        doorThresholdPlanningGoal,
-                        GetLocalNavigationGoalReachedDistance(
-                            isThresholdAdvanceGoal && !isThresholdHandoffGoal
-                                ? "door-threshold-advance-local"
-                                : "door-threshold-handoff-local")))
-                {
+                        doorThresholdPlanningContext,
+                        out Vector3 doorThresholdPlanningGoal))
+                    {
+                        return false;
+                    }
+
+                    if (!ShouldUseLocalNavigationGoal(
+                            playerPosition,
+                            doorThresholdPlanningGoal,
+                            GetLocalNavigationGoalReachedDistance(doorThresholdPlanningContext)))
+                    {
+                        MarkDoorSourceLocalGoalReached(
+                            BuildNavigationStepKey(step),
+                            doorThresholdPlanningContext,
+                            doorThresholdPlanningGoal,
+                            GetFlatDistance(playerPosition, doorThresholdPlanningGoal));
+                        return false;
+                    }
+
                     planningZone = ResolveLocalPlanningZone(currentZone, step.FromZone, playerPosition, doorThresholdPlanningGoal);
                     planningGoal = doorThresholdPlanningGoal;
-                    planningContext = isThresholdAdvanceGoal && !isThresholdHandoffGoal
-                        ? "door-threshold-advance-local"
-                        : "door-threshold-handoff-local";
+                    planningContext = doorThresholdPlanningContext;
                     return true;
                 }
             }
 
             if ((!isPostThresholdCommitted ||
-                 IsDoorCommittedSourceRecoveryPushThroughStage(step, currentZone)) &&
+                 IsDoorCommittedSourceRecoveryPushThroughStage(step, currentZone) ||
+                 (isRawDoorPushThrough &&
+                  isStillInSourceZone &&
+                  !IsDoorSourceLocalGoalCompleted(step, "door-push-through-local"))) &&
                 hasActiveDoorPushThroughPosition &&
                 GetFlatDistance(activeDoorPushThroughPosition, desiredPosition) <= 0.35f)
             {
@@ -822,6 +863,19 @@ namespace DateEverythingAccess
                     return true;
                 }
 
+                float remainingDistance = GetFlatDistance(playerPosition, doorPushThroughPlanningGoal);
+                string stepKey = BuildNavigationStepKey(step);
+                MarkDoorSourceLocalGoalReached(
+                    stepKey,
+                    "door-push-through-local",
+                    doorPushThroughPlanningGoal,
+                    remainingDistance);
+                TryCommitDoorPostThresholdAfterLocalPushThroughGoalReached(
+                    stepKey,
+                    "door-push-through-local",
+                    playerPosition,
+                    doorPushThroughPlanningGoal,
+                    remainingDistance);
                 return false;
             }
 
@@ -865,31 +919,46 @@ namespace DateEverythingAccess
                         doorEntryAdvancePlanningGoal);
                     if (forwardProgress <= 0.08f)
                     {
-                        if (isRawDoorPushThrough &&
+                        if ((isRawDoorPushThrough || isRawDoorEntryAdvance) &&
                             TryGetDoorSourceLocalPlanningGoal(
                                 step,
                                 currentZone,
                                 playerPosition,
                                 activeDoorPushThroughPosition,
                                 "door-push-through-local",
-                                out Vector3 pushThroughRecoveryGoal) &&
-                            ShouldUseLocalNavigationGoal(
-                                playerPosition,
-                                pushThroughRecoveryGoal,
-                                GetLocalNavigationGoalReachedDistance("door-push-through-local")))
+                                out Vector3 pushThroughRecoveryGoal))
                         {
-                            planningZone = ResolveLocalPlanningZone(
-                                currentZone,
-                                step.FromZone,
-                                playerPosition,
-                                pushThroughRecoveryGoal);
-                            planningGoal = pushThroughRecoveryGoal;
-                            planningContext = "door-push-through-local";
+                            if (ShouldUseLocalNavigationGoal(
+                                    playerPosition,
+                                    pushThroughRecoveryGoal,
+                                    GetLocalNavigationGoalReachedDistance("door-push-through-local")))
+                            {
+                                planningZone = ResolveLocalPlanningZone(
+                                    currentZone,
+                                    step.FromZone,
+                                    playerPosition,
+                                    pushThroughRecoveryGoal);
+                                planningGoal = pushThroughRecoveryGoal;
+                                planningContext = "door-push-through-local";
+                                LogNavigationTrackerDebug(
+                                    "Promoted door push-through local recovery planning goal after entry-advance discard" +
+                                    " planningGoal=" + FormatVector3(pushThroughRecoveryGoal) +
+                                    " step=" + DescribeNavigationStep(step));
+                                return true;
+                            }
+
+                            float pushThroughRemainingDistance = GetFlatDistance(playerPosition, pushThroughRecoveryGoal);
+                            MarkDoorSourceLocalGoalReached(
+                                BuildNavigationStepKey(step),
+                                "door-push-through-local",
+                                pushThroughRecoveryGoal,
+                                pushThroughRemainingDistance);
                             LogNavigationTrackerDebug(
-                                "Promoted door push-through local recovery planning goal after entry-advance discard" +
+                                "Accepted close door push-through local recovery goal after entry-advance discard" +
                                 " planningGoal=" + FormatVector3(pushThroughRecoveryGoal) +
+                                " remainingDistance=" + pushThroughRemainingDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                                 " step=" + DescribeNavigationStep(step));
-                            return true;
+                            return false;
                         }
 
                         LogNavigationTrackerDebug(

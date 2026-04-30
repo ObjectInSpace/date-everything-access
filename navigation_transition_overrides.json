@@ -1,13 +1,6 @@
 {
   "Entries": [
     {
-      "FromZone": "upper_hallway",
-      "ToZone": "dorian_attic1",
-      "DestinationApproachBias": 1.0,
-      "UseExplicitCrossingSegments": true,
-      "StepTimeoutSeconds": 5.0
-    },
-    {
       "FromZone": "bathroom2",
       "ToZone": "dorian_bathroom2",
       "DestinationApproachBias": 1.0,
@@ -29,7 +22,7 @@
         "bathroom2_5"
       ],
       "DestinationApproachBias": 1.0,
-      "UseExplicitCrossingSegments": true,
+      "UseExplicitCrossingSegments": false,
       "StepTimeoutSeconds": 10.0,
       "IntermediateWaypoints": [
         {
@@ -139,7 +132,7 @@
         "dining_room8"
       ],
       "DestinationApproachBias": 0.45,
-      "UseExplicitCrossingSegments": true,
+      "UseExplicitCrossingSegments": false,
       "StepTimeoutSeconds": 10.0,
       "IntermediateWaypoints": [
         {
@@ -471,13 +464,23 @@
         "living_room11"
       ],
       "DestinationApproachBias": 1.0,
-      "UseExplicitCrossingSegments": true,
+      "UseExplicitCrossingSegments": false,
       "StepTimeoutSeconds": 10.0,
       "IntermediateWaypoints": [
         {
           "x": 5.280338,
           "y": 4.67,
           "z": -13.189749
+        },
+        {
+          "x": 9.370822,
+          "y": 4.67,
+          "z": -6.627208
+        },
+        {
+          "x": 9.563061,
+          "y": 4.352,
+          "z": -5.600156
         },
         {
           "x": 12.063061,
@@ -525,20 +528,6 @@
           "x": 9.09,
           "y": -0.6,
           "z": 7.24
-        }
-      ]
-    },
-    {
-      "FromZone": "office_closet",
-      "ToZone": "dorian_trapdoor1",
-      "DestinationApproachBias": 1.0,
-      "UseExplicitCrossingSegments": true,
-      "StepTimeoutSeconds": 5.0,
-      "IntermediateWaypoints": [
-        {
-          "x": 5.64,
-          "y": -0.6,
-          "z": 25.5
         }
       ]
     },
@@ -597,6 +586,27 @@
           "z": 24.52
         }
       ]
+    },
+    {
+      "FromZone": "office_closet",
+      "ToZone": "dorian_trapdoor1",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 5.64,
+          "y": -0.6,
+          "z": 25.5
+        }
+      ]
+    },
+    {
+      "FromZone": "upper_hallway",
+      "ToZone": "dorian_attic1",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": true,
+      "StepTimeoutSeconds": 5.0
     },
     {
       "FromZone": "upper_hallway",
