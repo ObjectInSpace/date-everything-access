@@ -223,6 +223,18 @@ namespace DateEverythingAccess
             if (isInSourceZone)
             {
                 OpenPassageTraversalStage traversalStage = GetOpenPassageTraversalStageState();
+                if (traversalStage == OpenPassageTraversalStage.DestinationWaypoint ||
+                    traversalStage == OpenPassageTraversalStage.DestinationHandoff)
+                {
+                    LogNavigationTrackerDebug(
+                        "Skipped open-passage source local planning after source handoff" +
+                        " currentZone=" + (currentZone ?? "<null>") +
+                        " stage=" + traversalStage +
+                        " desiredPosition=" + FormatVector3(desiredPosition) +
+                        " step=" + DescribeNavigationStep(step));
+                    return false;
+                }
+
                 Vector3 sourceGoal = traversalStage == OpenPassageTraversalStage.SourceWaypoint
                     ? GetOpenPassageSourceGuidanceOrigin(step)
                     : GetOpenPassageSourceHandoffOrigin(step);
