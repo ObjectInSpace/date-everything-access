@@ -1,6 +1,6 @@
 {
   "Summary": {
-    "GeneratedAtUtc": "2026-04-29T17:10:57.2735476Z",
+    "GeneratedAtUtc": "2026-04-29T22:28:22.8231565Z",
     "InputPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\navigation_graph.generated.json",
     "TotalTransitions": 112,
     "SuspiciousTransitions": 56,
@@ -963,13 +963,13 @@
       "ValidationTimeoutSeconds": 7.0,
       "BuilderSuspicionScore": 2,
       "SuspicionScore": 2,
-      "WaypointDistance": 8.96496052769559,
-      "CrossingDistance": 1.7929914071249755,
+      "WaypointDistance": 6.726038678498512,
+      "CrossingDistance": 6.726038678498512,
       "HeightDelta": 5.6,
-      "FromWaypointToCrossingDistance": 3.585984560285361,
-      "ToWaypointToCrossingDistance": 3.585984560285362,
-      "SourceApproachToClearDistance": 3.585984560285361,
-      "DestinationClearToApproachDistance": 3.585984560285362,
+      "FromWaypointToCrossingDistance": 0.0,
+      "ToWaypointToCrossingDistance": 0.0,
+      "SourceApproachToClearDistance": 0.0,
+      "DestinationClearToApproachDistance": 0.0,
       "BuilderIssues": "LargeHeightDelta",
       "Issues": [
         "LargeHeightDelta"
@@ -1011,13 +1011,13 @@
       "ValidationTimeoutSeconds": 7.0,
       "BuilderSuspicionScore": 2,
       "SuspicionScore": 2,
-      "WaypointDistance": 8.96496052769559,
-      "CrossingDistance": 1.7929914071249755,
+      "WaypointDistance": 6.726038678498512,
+      "CrossingDistance": 6.726038678498512,
       "HeightDelta": 5.6,
-      "FromWaypointToCrossingDistance": 3.585984560285362,
-      "ToWaypointToCrossingDistance": 3.585984560285361,
-      "SourceApproachToClearDistance": 3.585984560285362,
-      "DestinationClearToApproachDistance": 3.585984560285361,
+      "FromWaypointToCrossingDistance": 0.0,
+      "ToWaypointToCrossingDistance": 0.0,
+      "SourceApproachToClearDistance": 0.0,
+      "DestinationClearToApproachDistance": 0.0,
       "BuilderIssues": "LargeHeightDelta",
       "Issues": [
         "LargeHeightDelta"

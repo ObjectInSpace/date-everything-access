@@ -988,7 +988,9 @@ $directedOverrides = @{
     }
     "hallway_arma|hallway" = [ordered]@{
         FromWaypoint = Get-ZoneWaypoint "hallway_arma"
-        ToWaypoint = Get-ZoneWaypoint "hallway4"
+        ToWaypoint = New-Vec3 -X 9.563 -Y 4.352 -Z -3.642
+        SourceClearPoint = Get-ZoneWaypoint "hallway_arma"
+        DestinationClearPoint = New-Vec3 -X 9.563 -Y 4.352 -Z -3.642
     }
     "laundry_room|laundry_room_closet" = [ordered]@{
         FromWaypoint = Get-CameraWaypoint "Camera_DorianLaundry2"

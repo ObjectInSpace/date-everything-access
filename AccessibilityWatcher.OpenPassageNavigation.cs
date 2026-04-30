@@ -16,7 +16,7 @@ namespace DateEverythingAccess
             position = Vector3.zero;
             targetKind = NavigationTargetKind.ZoneFallback;
             if (step == null ||
-                step.Kind != NavigationGraph.StepKind.OpenPassage ||
+                !UsesOpenPassageTraversalModel(step) ||
                 string.IsNullOrEmpty(step.FromZone) ||
                 string.IsNullOrEmpty(step.ToZone) ||
                 step.FromWaypoint == Vector3.zero ||
@@ -208,7 +208,7 @@ namespace DateEverythingAccess
             planningZone = null;
             planningGoal = Vector3.zero;
             planningContext = null;
-            if (step == null || step.Kind != NavigationGraph.StepKind.OpenPassage)
+            if (step == null || !UsesOpenPassageTraversalModel(step))
                 return false;
 
             bool isInSourceZone = IsOpenPassageSourceZone(step, currentZone);
@@ -350,11 +350,19 @@ namespace DateEverythingAccess
             Vector3 planningGoal,
             string planningContext)
         {
+            bool canUseReachableProxy =
+                UsesExplicitOpenPassageCrossingSegments(step) &&
+                (string.Equals(planningContext, "open-passage-handoff", System.StringComparison.Ordinal) ||
+                 string.Equals(planningContext, "open-passage-destination", System.StringComparison.Ordinal));
+            canUseReachableProxy =
+                canUseReachableProxy ||
+                (UsesOverrideOnlyOpenPassageGuidance(step) &&
+                 (string.Equals(planningContext, "open-passage-override-source", System.StringComparison.Ordinal) ||
+                  string.Equals(planningContext, "open-passage-override-destination", System.StringComparison.Ordinal)));
+
             if (string.IsNullOrWhiteSpace(planningZone) ||
                 planningGoal == Vector3.zero ||
-                !UsesExplicitOpenPassageCrossingSegments(step) ||
-                (!string.Equals(planningContext, "open-passage-handoff", System.StringComparison.Ordinal) &&
-                 !string.Equals(planningContext, "open-passage-destination", System.StringComparison.Ordinal)))
+                !canUseReachableProxy)
             {
                 return planningGoal;
             }
@@ -523,6 +531,20 @@ namespace DateEverythingAccess
             return !string.IsNullOrEmpty(step?.FromZone) &&
                 (IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
                  IsAcceptedOverrideSourceZone(step, currentZone));
+        }
+
+        private static bool UsesOpenPassageTraversalModel(NavigationGraph.PathStep step)
+        {
+            if (step == null)
+                return false;
+
+            if (step.Kind == NavigationGraph.StepKind.OpenPassage)
+                return true;
+
+            return step.Kind == NavigationGraph.StepKind.Stairs &&
+                TryGetOpenPassageTransitionOverride(step, out OpenPassageTransitionOverride transitionOverride) &&
+                transitionOverride.IntermediateWaypoints != null &&
+                transitionOverride.IntermediateWaypoints.Length > 0;
         }
 
         private static bool UsesExplicitOpenPassageCrossingSegments(NavigationGraph.PathStep step)
