@@ -242,9 +242,9 @@
       "StepTimeoutSeconds": 5.0,
       "IntermediateWaypoints": [
         {
-          "x": -16.89,
+          "x": -23.91,
           "y": -0.6,
-          "z": 9.02
+          "z": 16.28
         }
       ]
     },
@@ -355,11 +355,47 @@
       ]
     },
     {
+      "FromZone": "hallway",
+      "ToZone": "living_room",
+      "DestinationApproachBias": 1.0,
+      "UseExplicitCrossingSegments": false,
+      "StepTimeoutSeconds": 10.0,
+      "IntermediateWaypoints": [
+        {
+          "x": 12.063061,
+          "y": 4.352,
+          "z": -0.439635
+        },
+        {
+          "x": 9.563061,
+          "y": 4.352,
+          "z": -5.600156
+        },
+        {
+          "x": 5.103968,
+          "y": 4.67,
+          "z": -6.703552
+        },
+        {
+          "x": 5.280338,
+          "y": 4.67,
+          "z": -13.189749
+        }
+      ]
+    },
+    {
       "FromZone": "kitchen",
       "ToZone": "kitchen_tutorial",
       "DestinationApproachBias": 1.0,
       "UseExplicitCrossingSegments": true,
-      "StepTimeoutSeconds": 5.0
+      "StepTimeoutSeconds": 5.0,
+      "IntermediateWaypoints": [
+        {
+          "x": -11.41,
+          "y": -0.53,
+          "z": -16.23
+        }
+      ]
     },
     {
       "FromZone": "kitchen_tutorial",
@@ -473,9 +509,9 @@
           "z": -13.189749
         },
         {
-          "x": 9.370822,
+          "x": 5.103968,
           "y": 4.67,
-          "z": -6.627208
+          "z": -6.703552
         },
         {
           "x": 9.563061,

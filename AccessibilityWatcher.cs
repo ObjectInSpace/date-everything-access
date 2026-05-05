@@ -316,6 +316,7 @@ namespace DateEverythingAccess
         private const float TransitionSweepHeartbeatSeconds = 1f;
         private const float DoorTraversalClearanceDistance = 1.4f;
         private const float DoorTraversalLateralOffsetDistance = 0.6f;
+        private const float DoorThresholdAdvanceProxyCompletionDistance = DoorTraversalClearanceDistance + DoorTraversalLateralOffsetDistance;
         private const float DoorTransitionSweepInteractionSettleSeconds = 0.75f;
         private const float DoorTraversalPushThroughDistance = 1.35f;
         private const float DoorTraversalMaximumPushThroughDistance = 3.25f;
@@ -513,8 +514,8 @@ namespace DateEverythingAccess
         private string _doorPostInteractionFallbackExhaustedDetail;
         private string _doorPostInteractionLoopSignature;
         private string _doorPushThroughBridgeLocalCompletedStepKey;
-        private string _doorSourceLocalCompletedStepKey;
-        private string _doorSourceLocalCompletedContext;
+        private readonly HashSet<string> _doorSourceLocalCompletedKeys = new HashSet<string>(StringComparer.Ordinal);
+        private string _openPassageDestinationBridgeCompletedStepKey;
         private string _localNavigationStallSignature;
         private string _localNavigationBypassSignature;
         private string _lastTrackerTargetKind;
@@ -529,6 +530,7 @@ namespace DateEverythingAccess
         private Vector3 _trackedInteractableApproachReferencePosition;
         private Vector3 _trackedInteractableApproachTarget;
         private Vector3 _localNavigationPathGoal;
+        private Vector3 _openPassageDestinationBridgeCompletedGoal;
         private readonly string[] _autoWalkLoopSignatureWindow = new string[AutoWalkLoopSampleWindowSize];
         private List<NavigationGraph.PathStep> _navigationPath;
         private List<Vector3> _localNavigationPathPoints;
@@ -3209,6 +3211,8 @@ namespace DateEverythingAccess
                 ? DoorPushThroughLocalNavigationGoalReachedDistance
                 : string.Equals(planningContext, "door-entry-advance-local", StringComparison.Ordinal)
                 ? DoorEntryAdvanceLocalNavigationGoalReachedDistance
+                : string.Equals(planningContext, "door-entry-advance-extended-local", StringComparison.Ordinal)
+                ? DoorEntryAdvanceLocalNavigationGoalReachedDistance
                 : string.Equals(planningContext, "door-threshold-advance-local", StringComparison.Ordinal)
                 ? DoorThresholdAdvanceRawGoalReachedDistance
                 : string.Equals(planningContext, "door-push-through", StringComparison.Ordinal) ||
@@ -3232,7 +3236,8 @@ namespace DateEverythingAccess
                 ? DoorPushThroughLocalNavigationGoalReachedDistance
                 : string.Equals(targetContext, "door-threshold-handoff", StringComparison.Ordinal)
                     ? DoorTraversalClearanceDistance
-                : string.Equals(targetContext, "door-entry-advance", StringComparison.Ordinal)
+                : string.Equals(targetContext, "door-entry-advance", StringComparison.Ordinal) ||
+                  string.Equals(targetContext, "door-entry-advance-extended", StringComparison.Ordinal)
                     ? DoorEntryAdvanceLocalNavigationGoalReachedDistance
                 : string.Equals(targetContext, "open-passage-guided", StringComparison.Ordinal)
                 ? GetOpenPassageGuidedWaypointAdvanceDistance()
@@ -8089,7 +8094,8 @@ namespace DateEverythingAccess
             return string.Equals(rawContext, "door-threshold-advance", StringComparison.Ordinal) ||
                 string.Equals(rawContext, "door-threshold-handoff", StringComparison.Ordinal) ||
                 string.Equals(rawContext, "door-push-through", StringComparison.Ordinal) ||
-                string.Equals(rawContext, "door-entry-advance", StringComparison.Ordinal);
+                string.Equals(rawContext, "door-entry-advance", StringComparison.Ordinal) ||
+                string.Equals(rawContext, "door-entry-advance-extended", StringComparison.Ordinal);
         }
 
         private static string GetDoorPostInteractionStageName(string rawContext)
@@ -8105,6 +8111,9 @@ namespace DateEverythingAccess
 
             if (string.Equals(rawContext, "door-entry-advance", StringComparison.Ordinal))
                 return "DoorEntryAdvance";
+
+            if (string.Equals(rawContext, "door-entry-advance-extended", StringComparison.Ordinal))
+                return "DoorEntryAdvanceExtended";
 
             return rawContext ?? "<null>";
         }
@@ -8163,7 +8172,11 @@ namespace DateEverythingAccess
             }
 
             float remainingDistance = ComputeLocalNavigationRemainingDistance(playerPosition);
-            if (string.Equals(_localNavigationPathContext, "door-threshold-advance-local", StringComparison.Ordinal) &&
+            bool isDoorSourceLocalProxyReleaseContext =
+                string.Equals(_localNavigationPathContext, "door-threshold-advance-local", StringComparison.Ordinal) ||
+                string.Equals(_localNavigationPathContext, "door-push-through-local", StringComparison.Ordinal) ||
+                string.Equals(_localNavigationPathContext, "door-entry-advance-extended-local", StringComparison.Ordinal);
+            if (isDoorSourceLocalProxyReleaseContext &&
                 step.Kind == NavigationGraph.StepKind.Door &&
                 !string.IsNullOrWhiteSpace(currentZone) &&
                 IsZoneEquivalentToNavigationZone(currentZone, step.FromZone))
@@ -8175,12 +8188,21 @@ namespace DateEverythingAccess
                     remainingDistance);
                 if (!completedDoorSourceLocalGoal)
                     return false;
+                bool committedDoorPostThreshold =
+                    TryCommitDoorPostThresholdAfterLocalPushThroughGoalReached(
+                        stepKey,
+                        _localNavigationPathContext,
+                        playerPosition,
+                        _localNavigationPathGoal,
+                        remainingDistance);
 
                 LogNavigationAutoWalkDebug(
-                    "Released stalled door threshold local proxy" +
+                    "Released stalled door source local proxy" +
                     " stepKey=" + stepKey +
+                    " context=" + _localNavigationPathContext +
                     " target=" + FormatVector3(targetPosition) +
                     " remainingDistance=" + remainingDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " committedDoorPostThreshold=" + committedDoorPostThreshold +
                     " loopDetail=" + (loopDetail ?? "<null>"));
                 ClearLocalNavigationPathState();
                 ResetLocalNavigationStallTracking();
@@ -8585,6 +8607,64 @@ namespace DateEverythingAccess
 
             AdvanceLocalNavigationPathIndex(playerPosition);
             float remainingDistance = ComputeLocalNavigationRemainingDistance(playerPosition);
+            if (string.Equals(planningContext, "door-threshold-advance-local", StringComparison.Ordinal) &&
+                _localNavigationPathPoints != null &&
+                _localNavigationPathPoints.Count <= 2 &&
+                _localNavigationPathIndex >= _localNavigationPathPoints.Count - 1 &&
+                remainingDistance <= DoorThresholdAdvanceProxyCompletionDistance &&
+                MarkDoorSourceLocalGoalReached(
+                    stepKey,
+                    planningContext,
+                    planningGoal,
+                    remainingDistance))
+            {
+                LogNavigationTrackerDebug(
+                    "Completed door threshold advance local proxy at terminal path point" +
+                    " stepKey=" + (stepKey ?? "<null>") +
+                    " zone=" + planningZone +
+                    " context=" + planningContext +
+                    " goal=" + FormatVector3(planningGoal) +
+                    " remainingDistance=" + remainingDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " completionDistance=" + DoorThresholdAdvanceProxyCompletionDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " pathCount=" + _localNavigationPathPoints.Count);
+                ClearLocalNavigationPathState();
+                localGoalReached = true;
+                return false;
+            }
+
+            if (string.Equals(planningContext, "door-push-through-local", StringComparison.Ordinal) &&
+                _localNavigationPathPoints != null &&
+                _localNavigationPathPoints.Count <= 2 &&
+                _localNavigationPathIndex >= _localNavigationPathPoints.Count - 1 &&
+                remainingDistance <= DoorThresholdAdvanceProxyCompletionDistance &&
+                MarkDoorSourceLocalGoalReached(
+                    stepKey,
+                    planningContext,
+                    planningGoal,
+                    remainingDistance))
+            {
+                bool committedDoorPostThreshold =
+                    TryCommitDoorPostThresholdAfterLocalPushThroughGoalReached(
+                        stepKey,
+                        planningContext,
+                        playerPosition,
+                        planningGoal,
+                        remainingDistance);
+                LogNavigationTrackerDebug(
+                    "Completed door push-through local proxy at terminal path point" +
+                    " stepKey=" + (stepKey ?? "<null>") +
+                    " zone=" + planningZone +
+                    " context=" + planningContext +
+                    " goal=" + FormatVector3(planningGoal) +
+                    " remainingDistance=" + remainingDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " completionDistance=" + DoorThresholdAdvanceProxyCompletionDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " pathCount=" + _localNavigationPathPoints.Count +
+                    " committedDoorPostThreshold=" + committedDoorPostThreshold);
+                ClearLocalNavigationPathState();
+                localGoalReached = true;
+                return false;
+            }
+
             if (remainingDistance <= GetLocalNavigationGoalReachedDistance(planningContext))
             {
                 bool completedDoorPushThroughBridge =
@@ -8699,13 +8779,13 @@ namespace DateEverythingAccess
             if (string.IsNullOrWhiteSpace(stepKey) ||
                 (!string.Equals(planningContext, "door-threshold-advance-local", StringComparison.Ordinal) &&
                  !string.Equals(planningContext, "door-threshold-handoff-local", StringComparison.Ordinal) &&
-                 !string.Equals(planningContext, "door-push-through-local", StringComparison.Ordinal)))
+                 !string.Equals(planningContext, "door-push-through-local", StringComparison.Ordinal) &&
+                 !string.Equals(planningContext, "door-entry-advance-extended-local", StringComparison.Ordinal)))
             {
                 return false;
             }
 
-            _doorSourceLocalCompletedStepKey = stepKey;
-            _doorSourceLocalCompletedContext = planningContext;
+            _doorSourceLocalCompletedKeys.Add(stepKey + "|" + planningContext);
             LogNavigationTrackerDebug(
                 "Completed door source local goal" +
                 " stepKey=" + stepKey +
@@ -8734,21 +8814,19 @@ namespace DateEverythingAccess
         {
             if (step == null ||
                 string.IsNullOrWhiteSpace(planningContext) ||
-                string.IsNullOrWhiteSpace(_doorSourceLocalCompletedStepKey) ||
-                !string.Equals(_doorSourceLocalCompletedContext, planningContext, StringComparison.Ordinal))
+                _doorSourceLocalCompletedKeys.Count == 0)
             {
                 return false;
             }
 
             string stepKey = BuildNavigationStepKey(step);
             return !string.IsNullOrWhiteSpace(stepKey) &&
-                string.Equals(_doorSourceLocalCompletedStepKey, stepKey, StringComparison.Ordinal);
+                _doorSourceLocalCompletedKeys.Contains(stepKey + "|" + planningContext);
         }
 
         private void ResetDoorSourceLocalGoalCompletion()
         {
-            _doorSourceLocalCompletedStepKey = null;
-            _doorSourceLocalCompletedContext = null;
+            _doorSourceLocalCompletedKeys.Clear();
         }
 
         private bool TryCommitDoorPostThresholdAfterLocalPushThroughGoalReached(
@@ -9068,6 +9146,7 @@ namespace DateEverythingAccess
         {
             _openPassageTraversalStepKey = null;
             _openPassageOverrideWaypointIndex = 0;
+            ResetOpenPassageDestinationBridgeLocalGoalCompletion();
             SetOpenPassageTraversalStage(OpenPassageTraversalStage.None);
             _openPassageSourceHandoffRecoveryFloor = 0;
             _openPassageDestinationHandoffRecoveryFloor = 0;
@@ -9834,15 +9913,69 @@ namespace DateEverythingAccess
                 " remainingDistance=" + remainingDistance.ToString("0.00", CultureInfo.InvariantCulture);
             if (completed)
             {
+                bool completedDestinationBridge =
+                    MarkOpenPassageDestinationBridgeLocalGoalReached(
+                        stepKey,
+                        planningContext,
+                        planningGoal,
+                        remainingDistance);
                 LogNavigationTrackerDebug(
                     "Completed open-passage override local goal" +
                     " stepKey=" + stepKey +
                     " context=" + planningContext +
                     " goal=" + FormatVector3(planningGoal) +
+                    " completedDestinationBridge=" + completedDestinationBridge +
                     " " + detail);
             }
 
             return true;
+        }
+
+        private bool MarkOpenPassageDestinationBridgeLocalGoalReached(
+            string stepKey,
+            string planningContext,
+            Vector3 planningGoal,
+            float remainingDistance)
+        {
+            if (string.IsNullOrWhiteSpace(stepKey) ||
+                planningGoal == Vector3.zero ||
+                !string.Equals(planningContext, "open-passage-override-destination", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            _openPassageDestinationBridgeCompletedStepKey = stepKey;
+            _openPassageDestinationBridgeCompletedGoal = planningGoal;
+            LogNavigationTrackerDebug(
+                "Completed open-passage destination bridge local goal" +
+                " stepKey=" + stepKey +
+                " goal=" + FormatVector3(planningGoal) +
+                " remainingDistance=" + remainingDistance.ToString("0.00", CultureInfo.InvariantCulture));
+            return true;
+        }
+
+        private bool IsOpenPassageDestinationBridgeLocalGoalCompleted(
+            NavigationGraph.PathStep step,
+            Vector3 planningGoal)
+        {
+            if (step == null ||
+                planningGoal == Vector3.zero ||
+                string.IsNullOrWhiteSpace(_openPassageDestinationBridgeCompletedStepKey) ||
+                _openPassageDestinationBridgeCompletedGoal == Vector3.zero)
+            {
+                return false;
+            }
+
+            string stepKey = BuildNavigationStepKey(step);
+            return !string.IsNullOrWhiteSpace(stepKey) &&
+                string.Equals(_openPassageDestinationBridgeCompletedStepKey, stepKey, StringComparison.Ordinal) &&
+                GetFlatDistance(_openPassageDestinationBridgeCompletedGoal, planningGoal) <= LocalNavigationGoalRetargetDistance;
+        }
+
+        private void ResetOpenPassageDestinationBridgeLocalGoalCompletion()
+        {
+            _openPassageDestinationBridgeCompletedStepKey = null;
+            _openPassageDestinationBridgeCompletedGoal = Vector3.zero;
         }
 
         private NavigationGraph.PathStep ResolveLocalCompletionStep(string stepKey)

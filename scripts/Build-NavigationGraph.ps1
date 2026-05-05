@@ -978,6 +978,14 @@ $directedOverrides = @{
         FromWaypoint = Get-CameraWaypoint "Camera_DorianBathroom2Door2"
         ToWaypoint = Get-CameraWaypoint "Camera_DorianBathroom2Door1"
     }
+    "hallway|living_room" = [ordered]@{
+        FromWaypoint = New-Vec3 -X 12.063061 -Y 4.352 -Z -0.439635
+        ToWaypoint = New-Vec3 -X 5.280338 -Y 4.67 -Z -13.189749
+        FromCrossingAnchor = New-Vec3 -X 9.563061 -Y 4.352 -Z -5.600156
+        ToCrossingAnchor = New-Vec3 -X 5.103968 -Y 4.67 -Z -6.703552
+        SourceClearPoint = New-Vec3 -X 9.563061 -Y 4.352 -Z -5.600156
+        DestinationClearPoint = New-Vec3 -X 5.103968 -Y 4.67 -Z -6.703552
+    }
     "hallway|bathroom1" = [ordered]@{
         FromWaypoint = Get-CameraWaypoint "Camera_DorianBathroomDoor2"
         ToWaypoint = Get-CameraWaypoint "Camera_DorianBathroomDoor1"
@@ -1009,6 +1017,8 @@ $directedOverrides = @{
     "upper_hallway|attic" = [ordered]@{
         FromWaypoint = Get-CameraWaypoint "Camera_DorianAtticDoor1"
         ToWaypoint = Get-CameraWaypoint "Camera_DorianAtticDoor2"
+        SourceClearPoint = New-Vec3 -X 2.504 -Y 18.262 -Z 3.435
+        DestinationClearPoint = New-Vec3 -X 4.777 -Y 18.099 -Z 3.435
     }
 }
 

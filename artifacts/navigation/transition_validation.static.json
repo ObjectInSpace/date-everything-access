@@ -1,9 +1,9 @@
 {
   "Summary": {
-    "GeneratedAtUtc": "2026-04-29T22:28:22.8231565Z",
+    "GeneratedAtUtc": "2026-05-05T19:43:49.4126050Z",
     "InputPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\navigation_graph.generated.json",
     "TotalTransitions": 112,
-    "SuspiciousTransitions": 56,
+    "SuspiciousTransitions": 54,
     "HighSuspicionTransitions": 12
   },
   "Entries": [
@@ -409,34 +409,6 @@
       "BuilderIssues": "CollapsedCrossingGap",
       "Issues": [
         "CollapsedCrossingGap"
-      ]
-    },
-    {
-      "Key": "attic->upper_hallway",
-      "FromZone": "attic",
-      "ToZone": "upper_hallway",
-      "StepKind": "Door",
-      "FromNodeId": "zone:attic|scene:attic",
-      "ToNodeId": "zone:upper_hallway|scene:upper_hallway2",
-      "ConnectorName": "AtticDoors",
-      "RequiresInteraction": true,
-      "ValidationTimeoutSeconds": 8.0,
-      "BuilderSuspicionScore": 2,
-      "SuspicionScore": 2,
-      "WaypointDistance": 16.361464,
-      "CrossingDistance": -1,
-      "HeightDelta": 0.0,
-      "FromWaypointToCrossingDistance": -1,
-      "ToWaypointToCrossingDistance": -1,
-      "SourceApproachToClearDistance": 9.541674408036778,
-      "DestinationClearToApproachDistance": 9.161364061423603,
-      "BuilderIssues": [
-        "FarFromConnectorSourceApproach",
-        "FarFromConnectorDestinationApproach"
-      ],
-      "Issues": [
-        "FarFromSourceApproachToClear",
-        "FarFromDestinationClearToApproach"
       ]
     },
     {
@@ -1312,34 +1284,6 @@
       ]
     },
     {
-      "Key": "upper_hallway->attic",
-      "FromZone": "upper_hallway",
-      "ToZone": "attic",
-      "StepKind": "Door",
-      "FromNodeId": "zone:upper_hallway|scene:upper_hallway2",
-      "ToNodeId": "zone:attic|scene:attic",
-      "ConnectorName": "AtticDoors",
-      "RequiresInteraction": true,
-      "ValidationTimeoutSeconds": 8.0,
-      "BuilderSuspicionScore": 2,
-      "SuspicionScore": 2,
-      "WaypointDistance": 16.361464,
-      "CrossingDistance": -1,
-      "HeightDelta": 0.0,
-      "FromWaypointToCrossingDistance": -1,
-      "ToWaypointToCrossingDistance": -1,
-      "SourceApproachToClearDistance": 9.161364061423603,
-      "DestinationClearToApproachDistance": 9.541674408036778,
-      "BuilderIssues": [
-        "FarFromConnectorSourceApproach",
-        "FarFromConnectorDestinationApproach"
-      ],
-      "Issues": [
-        "FarFromSourceApproachToClear",
-        "FarFromDestinationClearToApproach"
-      ]
-    },
-    {
       "Key": "upper_hallway->dorian_attic1",
       "FromZone": "upper_hallway",
       "ToZone": "dorian_attic1",
@@ -1434,6 +1378,28 @@
       "Issues": [
         "CollapsedCrossingGap"
       ]
+    },
+    {
+      "Key": "attic->upper_hallway",
+      "FromZone": "attic",
+      "ToZone": "upper_hallway",
+      "StepKind": "Door",
+      "FromNodeId": "zone:attic|scene:attic",
+      "ToNodeId": "zone:upper_hallway|scene:upper_hallway2",
+      "ConnectorName": "AtticDoors",
+      "RequiresInteraction": true,
+      "ValidationTimeoutSeconds": 8.0,
+      "BuilderSuspicionScore": 0,
+      "SuspicionScore": 0,
+      "WaypointDistance": 16.361464,
+      "CrossingDistance": -1,
+      "HeightDelta": 0.0,
+      "FromWaypointToCrossingDistance": -1,
+      "ToWaypointToCrossingDistance": -1,
+      "SourceApproachToClearDistance": 7.350286259707238,
+      "DestinationClearToApproachDistance": 6.768804490203643,
+      "BuilderIssues": null,
+      "Issues": []
     },
     {
       "Key": "bathroom1->dorian_bathroom1",
@@ -2152,12 +2118,12 @@
       "BuilderSuspicionScore": 0,
       "SuspicionScore": 0,
       "WaypointDistance": 14.44547895736673,
-      "CrossingDistance": 1.0922067770459034,
+      "CrossingDistance": 4.60457567159722,
       "HeightDelta": 0.3179999999999996,
       "FromWaypointToCrossingDistance": 5.7341936653239225,
-      "ToWaypointToCrossingDistance": 7.73298155506251,
+      "ToWaypointToCrossingDistance": 6.488594447159493,
       "SourceApproachToClearDistance": 5.7341936653239225,
-      "DestinationClearToApproachDistance": 7.73298155506251,
+      "DestinationClearToApproachDistance": 6.488594447159493,
       "BuilderIssues": null,
       "Issues": []
     },
@@ -2306,11 +2272,11 @@
       "BuilderSuspicionScore": 0,
       "SuspicionScore": 0,
       "WaypointDistance": 14.44547895736673,
-      "CrossingDistance": 1.0922067770459034,
+      "CrossingDistance": 4.60457567159722,
       "HeightDelta": 0.3179999999999996,
-      "FromWaypointToCrossingDistance": 7.73298155506251,
+      "FromWaypointToCrossingDistance": 6.488594447159493,
       "ToWaypointToCrossingDistance": 5.7341936653239225,
-      "SourceApproachToClearDistance": 7.73298155506251,
+      "SourceApproachToClearDistance": 6.488594447159493,
       "DestinationClearToApproachDistance": 5.7341936653239225,
       "BuilderIssues": null,
       "Issues": []
@@ -2598,6 +2564,28 @@
       "ToWaypointToCrossingDistance": 3.116542140868626,
       "SourceApproachToClearDistance": 6.126496069165882,
       "DestinationClearToApproachDistance": 3.116542140868626,
+      "BuilderIssues": null,
+      "Issues": []
+    },
+    {
+      "Key": "upper_hallway->attic",
+      "FromZone": "upper_hallway",
+      "ToZone": "attic",
+      "StepKind": "Door",
+      "FromNodeId": "zone:upper_hallway|scene:upper_hallway2",
+      "ToNodeId": "zone:attic|scene:attic",
+      "ConnectorName": "AtticDoors",
+      "RequiresInteraction": true,
+      "ValidationTimeoutSeconds": 8.0,
+      "BuilderSuspicionScore": 0,
+      "SuspicionScore": 0,
+      "WaypointDistance": 16.361464,
+      "CrossingDistance": -1,
+      "HeightDelta": 0.0,
+      "FromWaypointToCrossingDistance": -1,
+      "ToWaypointToCrossingDistance": -1,
+      "SourceApproachToClearDistance": 6.768804490203643,
+      "DestinationClearToApproachDistance": 7.350286259707238,
       "BuilderIssues": null,
       "Issues": []
     },

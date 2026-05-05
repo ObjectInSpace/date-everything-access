@@ -1,6 +1,6 @@
 {
   "Summary": {
-    "GeneratedAtUtc": "2026-04-29T22:28:23.0269134Z",
+    "GeneratedAtUtc": "2026-05-05T19:43:49.7983394Z",
     "GraphPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\navigation_graph.generated.json",
     "SceneDataPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\thirdpersongreybox-navigation-data.json",
     "TotalDoorPairs": 11,
@@ -24,7 +24,7 @@
         "AtticDoors"
       ],
       "AssetDerivationSources": [
-        "DoorObjectAndCameraWaypoints"
+        "DoorObjectCameraAndClearOverrides"
       ],
       "ConnectorObjectPosition": {
         "x": 3.69,
@@ -42,14 +42,14 @@
         "z": 3.885414
       },
       "SourceClearPoint": {
-        "x": 2.89,
-        "y": 12.824811,
-        "z": 2.044
+        "x": 2.504,
+        "y": 18.262,
+        "z": 3.435
       },
       "DestinationClearPoint": {
-        "x": 4.49,
-        "y": 12.824811,
-        "z": 2.044
+        "x": 4.777,
+        "y": 18.099,
+        "z": 3.435
       },
       "ReferenceDoorMatchType": "ExactNamedDoor",
       "ReferenceDoor": {

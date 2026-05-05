@@ -1,15 +1,15 @@
 Sweep report import summary
 Kind: Door
-Imported at: 2026-04-30T03:37:48.9009273Z
+Imported at: 2026-05-05T19:58:11.4276915Z
 Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\door_transition_sweep.live.json
 Output: .\artifacts\navigation\door_transition_sweep.live.json
-Report generated at: 04/30/2026 03:32:56
+Report generated at: 05/05/2026 19:57:26
 Active scene: ThirdPersonGreybox
-Runtime build: 0.1.1|utc=2026-04-30T03:16:24.0000000Z|sha256=EB3805BFFC55946417F8335DE70381542281A953D25BDC3A028AC9A51B034E52
-Override load: status=loaded entries=39 normalizedScalarArrays=False detail=Entries=39 normalizedScalarArrays=False
+Runtime build: 0.1.1|utc=2026-05-05T19:44:12.0000000Z|sha256=2DC22B7A042FAD77A66C0794216F90CDD999977A31C1D37E51622B378545CD64
+Override load: status=loaded entries=40 normalizedScalarArrays=False detail=Entries=40 normalizedScalarArrays=False
 Latest report totals: total=22 passed=20 failed=2 pending=0
 Imported status changes: newEntries=0 newlyPassed=3 newlyFailed=0 newlyPending=0 unchanged=19
 Door failure breakdown: interactionFalse=0 missingConnectorName=0 highSuspicion=0
 Remaining failed transitions:
-- office -> hallway | suspicion=0 | connector=Doors_Office | step timeout currentZone=office6 player=(8.06, -0.60, 8.11) localContext=door-threshold-advance-local lastTargetKind=LocalWaypoint lastTarget=(9.66, -0.62, 8.64)
+- bathroom1 -> hallway | suspicion=0 | connector=Doors_Bathroom1 | step timeout currentZone=bathroom1 player=(2.14, -0.60, 7.94) localContext=door-push-through-local lastTargetKind=LocalWaypoint lastTarget=(2.23, -0.62, 7.09)
 - office -> office_closet | suspicion=0 | connector=Doors_Office_Closet | navigation blocked currentZone=office5 detail=door post-interaction loop exhausted loopDetections=4 movement=0.00 stage=DoorEntryAdvance currentZone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) rawContext=door-entry-advance localContext=<null> step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-1.07, 4.17, 23.96)

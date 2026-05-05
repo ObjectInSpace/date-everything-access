@@ -226,6 +226,20 @@ namespace DateEverythingAccess
                 if (traversalStage == OpenPassageTraversalStage.DestinationWaypoint ||
                     traversalStage == OpenPassageTraversalStage.DestinationHandoff)
                 {
+                    if (TryResolveOpenPassageDestinationStageSourceBridgeLocalNavigationGoal(
+                            currentZone,
+                            step,
+                            playerPosition,
+                            desiredPosition,
+                            overridePlanningGoal,
+                            traversalStage,
+                            out planningZone,
+                            out planningGoal,
+                            out planningContext))
+                    {
+                        return true;
+                    }
+
                     LogNavigationTrackerDebug(
                         "Skipped open-passage source local planning after source handoff" +
                         " currentZone=" + (currentZone ?? "<null>") +
@@ -353,6 +367,113 @@ namespace DateEverythingAccess
             }
 
             return false;
+        }
+
+        private bool TryResolveOpenPassageDestinationStageSourceBridgeLocalNavigationGoal(
+            string currentZone,
+            NavigationGraph.PathStep step,
+            Vector3 playerPosition,
+            Vector3 desiredPosition,
+            Vector3 overridePlanningGoal,
+            OpenPassageTraversalStage traversalStage,
+            out string planningZone,
+            out Vector3 planningGoal,
+            out string planningContext)
+        {
+            planningZone = null;
+            planningGoal = Vector3.zero;
+            planningContext = null;
+            if (step == null ||
+                !UsesOverrideOnlyOpenPassageGuidance(step) ||
+                overridePlanningGoal == Vector3.zero)
+            {
+                return false;
+            }
+
+            if (step.Kind == NavigationGraph.StepKind.Stairs)
+            {
+                LogNavigationTrackerDebug(
+                    "Skipped open-passage destination-stage source bridge for stairs" +
+                    " currentZone=" + (currentZone ?? "<null>") +
+                    " stage=" + traversalStage +
+                    " desiredPosition=" + FormatVector3(desiredPosition) +
+                    " step=" + DescribeNavigationStep(step));
+                return false;
+            }
+
+            const string bridgePlanningContext = "open-passage-override-destination";
+            Vector3 bridgeGoal = overridePlanningGoal;
+            if (!ShouldUseLocalNavigationGoal(
+                    playerPosition,
+                    bridgeGoal,
+                    GetLocalNavigationGoalReachedDistance(bridgePlanningContext)))
+            {
+                return false;
+            }
+
+            bool allowAcceptedSourceZone = IsAcceptedOverrideSourceZone(step, currentZone);
+            if (!TryResolveOpenPassagePlanningZone(
+                    currentZone,
+                    step.FromZone,
+                    allowAcceptedSourceZone,
+                    playerPosition,
+                    bridgeGoal,
+                    out string resolvedPlanningZone))
+            {
+                LogNavigationTrackerDebug(
+                    "Skipped open-passage destination-stage source bridge due to unavailable planning zone" +
+                    " currentZone=" + (currentZone ?? "<null>") +
+                    " bridgeGoal=" + FormatVector3(bridgeGoal) +
+                    " desiredPosition=" + FormatVector3(desiredPosition) +
+                    " stage=" + traversalStage +
+                    " context=" + bridgePlanningContext +
+                    " step=" + DescribeNavigationStep(step));
+                return false;
+            }
+
+            Vector3 originalBridgeGoal = bridgeGoal;
+            bridgeGoal = ResolveOpenPassageReachablePlanningGoal(
+                resolvedPlanningZone,
+                step,
+                playerPosition,
+                bridgeGoal,
+                bridgePlanningContext);
+            if (IsOpenPassageDestinationBridgeLocalGoalCompleted(step, bridgeGoal))
+            {
+                LogNavigationTrackerDebug(
+                    "Skipped completed open-passage destination-stage source bridge local goal" +
+                    " currentZone=" + (currentZone ?? "<null>") +
+                    " planningZone=" + resolvedPlanningZone +
+                    " stage=" + traversalStage +
+                    " bridgeGoal=" + FormatVector3(bridgeGoal) +
+                    " desiredPosition=" + FormatVector3(desiredPosition) +
+                    " context=" + bridgePlanningContext +
+                    " step=" + DescribeNavigationStep(step));
+                return false;
+            }
+
+            if (!ShouldUseLocalNavigationGoal(
+                    playerPosition,
+                    bridgeGoal,
+                    GetLocalNavigationGoalReachedDistance(bridgePlanningContext)))
+            {
+                return false;
+            }
+
+            planningZone = resolvedPlanningZone;
+            planningGoal = bridgeGoal;
+            planningContext = bridgePlanningContext;
+            LogNavigationTrackerDebug(
+                "Using open-passage destination-stage source bridge local planning" +
+                " currentZone=" + (currentZone ?? "<null>") +
+                " planningZone=" + planningZone +
+                " stage=" + traversalStage +
+                " originalGoal=" + FormatVector3(originalBridgeGoal) +
+                " bridgeGoal=" + FormatVector3(bridgeGoal) +
+                " desiredPosition=" + FormatVector3(desiredPosition) +
+                " context=" + bridgePlanningContext +
+                " step=" + DescribeNavigationStep(step));
+            return true;
         }
 
         private Vector3 ResolveOpenPassageReachablePlanningGoal(
