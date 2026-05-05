@@ -1215,6 +1215,7 @@ function Get-SemanticClassification {
             $_ -eq "UnknownTransitionKind" -or
             $_ -eq "MissingAcceptedSourceZones" -or
             $_ -eq "MissingAcceptedDestinationZones" -or
+            $_ -eq "MissingVerticalConnectorPlanningMode" -or
             $_ -eq "InteractionTransitionMissingConnectorName"
         })
 
@@ -1306,6 +1307,14 @@ function New-TransitionSemanticRecord {
     $staticValidation = $null
     if ($StaticValidationMap.ContainsKey($key)) {
         $staticValidation = $StaticValidationMap[$key]
+    }
+
+    if ($kind -ieq "Stairs" -and $null -ne $staticValidation) {
+        $staticIssues = @(Get-StringArrayValues -Values (Get-JsonPropertyValue -InputObject $staticValidation -Name "Issues" -Default @()))
+        $staticBuilderIssues = @(Get-StringArrayValues -Values (Get-JsonPropertyValue -InputObject $staticValidation -Name "BuilderIssues" -Default @()))
+        if (($staticIssues -contains "LargeHeightDelta") -or ($staticBuilderIssues -contains "LargeHeightDelta")) {
+            Add-UniqueIssue -Issues $issues -Issue "MissingVerticalConnectorPlanningMode"
+        }
     }
 
     $doorAudit = $null
