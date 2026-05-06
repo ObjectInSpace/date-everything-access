@@ -1,16 +1,16 @@
 Sweep report import summary
 Kind: OpenPassage
-Imported at: 2026-05-05T19:58:11.1914194Z
+Imported at: 2026-05-06T23:08:12.3457098Z
 Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\transition_sweep.live.json
 Output: .\artifacts\navigation\transition_sweep.live.json
-Report generated at: 05/05/2026 19:52:35
+Report generated at: 05/06/2026 21:41:30
 Active scene: ThirdPersonGreybox
-Runtime build: 0.1.1|utc=2026-05-05T19:44:12.0000000Z|sha256=2DC22B7A042FAD77A66C0794216F90CDD999977A31C1D37E51622B378545CD64
+Runtime build: 0.1.1|utc=2026-05-06T21:35:08.0000000Z|sha256=9FA70BB9FF09430F3434D696FC0BF490FF6C8014B54E4250D6A35FBE4C0611DB
 Override load: status=loaded entries=40 normalizedScalarArrays=False detail=Entries=40 normalizedScalarArrays=False
 Latest report totals: total=88 passed=85 failed=3 pending=0
-Imported status changes: newEntries=0 newlyPassed=1 newlyFailed=0 newlyPending=0 unchanged=87
+Imported status changes: newEntries=0 newlyPassed=0 newlyFailed=0 newlyPending=0 unchanged=88
 Open-passage override refresh: added=0 refreshed=0 preservedManualWaypoints=0 failedWithoutWaypoint=3 retainedWithoutCurrentFailure=37 totalEntries=40
 Remaining failed transitions:
 - dining_room -> piano_room | suspicion=0 | connector=<none> | navigation blocked currentZone=dining_room detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=dining_room targetKind=EntryWaypoint targetPosition=(-16.61, 4.84, -10.39) rawContext=open-passage-guided localContext=<null> step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-16.61, 4.84, -10.39)
-- hallway -> living_room | suspicion=0 | connector=<none> | navigation blocked currentZone=hallway4 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.20 zone=hallway4 targetKind=EntryWaypoint targetPosition=(7.70, 4.67, -7.12) rawContext=open-passage-guided localContext=<null> step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(7.70, 4.67, -7.12)
+- hallway -> living_room | suspicion=0 | connector=<none> | navigation blocked currentZone=hallway4 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.04 zone=hallway4 targetKind=EntryWaypoint targetPosition=(7.55, 4.67, -7.13) rawContext=open-passage-guided localContext=<null> step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(7.55, 4.67, -7.13)
 - living_room -> hallway | suspicion=0 | connector=<none> | navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=EntryWaypoint targetPosition=(6.72, 4.35, -6.06) rawContext=open-passage-guided localContext=<null> step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(6.72, 4.35, -6.06)

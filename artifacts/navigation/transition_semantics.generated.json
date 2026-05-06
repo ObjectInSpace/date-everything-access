@@ -1,7 +1,7 @@
 {
   "SchemaVersion": 1,
   "Summary": {
-    "GeneratedAtUtc": "2026-05-05T19:58:16.7113996Z",
+    "GeneratedAtUtc": "2026-05-06T22:38:37.0354382Z",
     "GraphPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\navigation_graph.generated.json",
     "LocalMapPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\local_navigation_maps.generated.json",
     "StaticValidationPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\transition_validation.static.json",
@@ -10,11 +10,11 @@
     "DoorSweepPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\door_transition_sweep.live.json",
     "TotalTransitions": 112,
     "ClassificationCounts": {
-      "complete": 103,
+      "complete": 98,
       "incomplete": 4,
       "contradictory": 0,
       "locked/unavailable": 0,
-      "execution-only failure": 5,
+      "execution-only failure": 10,
       "unknown": 0
     },
     "KindCounts": {
@@ -25,17 +25,17 @@
     },
     "LocalMapZones": 57,
     "OpenSweep": {
-      "RuntimeBuildStamp": "0.1.1|utc=2026-05-05T19:44:12.0000000Z|sha256=2DC22B7A042FAD77A66C0794216F90CDD999977A31C1D37E51622B378545CD64",
+      "RuntimeBuildStamp": "0.1.1|utc=2026-05-06T21:35:08.0000000Z|sha256=9FA70BB9FF09430F3434D696FC0BF490FF6C8014B54E4250D6A35FBE4C0611DB",
       "TotalCount": 88,
       "PassedCount": 85,
       "FailedCount": 3,
       "PendingCount": 0
     },
     "DoorSweep": {
-      "RuntimeBuildStamp": "0.1.1|utc=2026-05-05T19:44:12.0000000Z|sha256=2DC22B7A042FAD77A66C0794216F90CDD999977A31C1D37E51622B378545CD64",
+      "RuntimeBuildStamp": "0.1.1|utc=2026-05-06T22:31:44.0000000Z|sha256=CB39B26A8F5963E751009C4124F59F9BB0DB7185BE96E8F1C62D575CAD7A992B",
       "TotalCount": 22,
-      "PassedCount": 20,
-      "FailedCount": 2,
+      "PassedCount": 15,
+      "FailedCount": 7,
       "PendingCount": 0
     }
   },
@@ -283,7 +283,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.117,
+        "DurationSeconds": 0.115,
         "CurrentZoneAtResult": "upper_hallway2",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -306,7 +306,7 @@
       "Key": "bathroom1->hallway",
       "Kind": "Door",
       "Subtype": "interaction-door",
-      "Classification": "execution-only failure",
+      "Classification": "complete",
       "SourceZone": "bathroom1",
       "DestinationZone": "hallway",
       "AcceptedSourceZones": [
@@ -535,10 +535,10 @@
       },
       "SweepEvidence": {
         "Source": "Door",
-        "Status": "failed",
-        "StatusDetail": "step timeout currentZone=bathroom1 player=(2.14, -0.60, 7.94) localContext=door-push-through-local lastTargetKind=LocalWaypoint lastTarget=(2.23, -0.62, 7.09)",
-        "FailureReason": "step timeout currentZone=bathroom1 player=(2.14, -0.60, 7.94)",
-        "DurationSeconds": 8.083,
+        "Status": "passed",
+        "StatusDetail": "passed",
+        "FailureReason": null,
+        "DurationSeconds": 0.125,
         "CurrentZoneAtResult": "bathroom1",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -546,12 +546,12 @@
           "y": -0.617,
           "z": 7.094
         },
-        "LastLocalNavigationContext": "door-push-through-local"
+        "LastLocalNavigationContext": "door-threshold-advance-local"
       },
-      "FailureSignature": "localContext=door-push-through-local lastTargetKind=LocalWaypoint",
+      "FailureSignature": "localContext=door-threshold-advance-local lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": "door-push-through-local",
+      "FailureLocalContext": "door-threshold-advance-local",
       "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
@@ -561,7 +561,7 @@
       "Key": "bathroom2->bedroom",
       "Kind": "Door",
       "Subtype": "interaction-door",
-      "Classification": "complete",
+      "Classification": "execution-only failure",
       "SourceZone": "bathroom2",
       "DestinationZone": "bedroom",
       "AcceptedSourceZones": [
@@ -793,10 +793,10 @@
       },
       "SweepEvidence": {
         "Source": "Door",
-        "Status": "passed",
-        "StatusDetail": "passed",
-        "FailureReason": null,
-        "DurationSeconds": 0.2,
+        "Status": "failed",
+        "StatusDetail": "navigation blocked currentZone=bathroom2 detail=door post-interaction loop exhausted loopDetections=4 movement=0.03 stage=DoorEntryAdvanceExtended currentZone=bathroom2 targetKind=EntryWaypoint targetPosition=(-25.46, 17.84, -12.64) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.10 zone=bathroom2 targetKind=EntryWaypoint targetPosition=(-25.46, 17.84, -12.64) rawContext=door-entry-advance-extended localContext=<null> step=bathroom2->bedroom kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-25.41, 17.84, 0.03) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=bathroom2->bedroom kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-25.41, 17.84, 0.03) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=bathroom2->bedroom kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-25.41, 17.84, 0.03) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-25.46, 17.84, -12.64)",
+        "FailureReason": "navigation blocked currentZone=bathroom2 detail=door post-interaction loop exhausted loopDetections=4 movement=0.03 stage=DoorEntryAdvanceExtended currentZone=bathroom2 targetKind=EntryWaypoint targetPosition=(-25.46, 17.84, -12.64) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.10 zone=bathroom2 targetKind=EntryWaypoint targetPosition=(-25.46, 17.84, -12.64) rawContext=door-entry-advance-extended localContext=<null> step=bathroom2->bedroom kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-25.41, 17.84, 0.03) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=bathroom2->bedroom kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-25.41, 17.84, 0.03) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=bathroom2->bedroom kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-25.41, 17.84, 0.03) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00)",
+        "DurationSeconds": 5.62,
         "CurrentZoneAtResult": "bathroom2",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -806,10 +806,10 @@
         },
         "LastLocalNavigationContext": null
       },
-      "FailureSignature": "lastTargetKind=EntryWaypoint",
-      "FailureStage": null,
+      "FailureSignature": "stage=DoorEntryAdvanceExtended localContext=<null> lastTargetKind=EntryWaypoint",
+      "FailureStage": "DoorEntryAdvanceExtended",
       "FailureContext": null,
-      "FailureLocalContext": null,
+      "FailureLocalContext": "<null>",
       "FailureTargetKind": "EntryWaypoint",
       "Issues": [
         "BeaconSnapsFar:sourceApproach",
@@ -822,7 +822,7 @@
       "Key": "bathroom2->dorian_bathroom2_2",
       "Kind": "Door",
       "Subtype": "interaction-door",
-      "Classification": "complete",
+      "Classification": "execution-only failure",
       "SourceZone": "bathroom2",
       "DestinationZone": "dorian_bathroom2_2",
       "AcceptedSourceZones": [
@@ -1045,10 +1045,10 @@
       },
       "SweepEvidence": {
         "Source": "Door",
-        "Status": "passed",
-        "StatusDetail": "passed",
-        "FailureReason": null,
-        "DurationSeconds": 0.317,
+        "Status": "failed",
+        "StatusDetail": "navigation blocked currentZone=bathroom2 detail=door post-interaction loop exhausted loopDetections=4 movement=0.09 stage=DoorEntryAdvanceExtended currentZone=bathroom2 targetKind=EntryWaypoint targetPosition=(-25.46, 17.84, -12.64) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.04 zone=bathroom2 targetKind=EntryWaypoint targetPosition=(-25.46, 17.84, -12.64) rawContext=door-entry-advance-extended localContext=<null> step=bathroom2->dorian_bathroom2_2 kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-24.80, 18.23, -4.28) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=bathroom2->dorian_bathroom2_2 kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-24.80, 18.23, -4.28) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=bathroom2->dorian_bathroom2_2 kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-24.80, 18.23, -4.28) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-25.46, 17.84, -12.64)",
+        "FailureReason": "navigation blocked currentZone=bathroom2 detail=door post-interaction loop exhausted loopDetections=4 movement=0.09 stage=DoorEntryAdvanceExtended currentZone=bathroom2 targetKind=EntryWaypoint targetPosition=(-25.46, 17.84, -12.64) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.04 zone=bathroom2 targetKind=EntryWaypoint targetPosition=(-25.46, 17.84, -12.64) rawContext=door-entry-advance-extended localContext=<null> step=bathroom2->dorian_bathroom2_2 kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-24.80, 18.23, -4.28) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=bathroom2->dorian_bathroom2_2 kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-24.80, 18.23, -4.28) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=bathroom2->dorian_bathroom2_2 kind=Door interaction=True connector=Doors_Bedroom_Bathroom from=(-24.80, 18.23, -4.28) to=(-25.46, 17.84, -12.64) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00)",
+        "DurationSeconds": 4.851,
         "CurrentZoneAtResult": "bathroom2",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -1058,10 +1058,10 @@
         },
         "LastLocalNavigationContext": null
       },
-      "FailureSignature": "lastTargetKind=EntryWaypoint",
-      "FailureStage": null,
+      "FailureSignature": "stage=DoorEntryAdvanceExtended localContext=<null> lastTargetKind=EntryWaypoint",
+      "FailureStage": "DoorEntryAdvanceExtended",
       "FailureContext": null,
-      "FailureLocalContext": null,
+      "FailureLocalContext": "<null>",
       "FailureTargetKind": "EntryWaypoint",
       "Issues": [
         "BeaconSnapsFar:destinationClear"
@@ -1308,7 +1308,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.317,
+        "DurationSeconds": 0.333,
         "CurrentZoneAtResult": "bedroom4",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -1836,7 +1836,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.417,
+        "DurationSeconds": 0.529,
         "CurrentZoneAtResult": "bedroom",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -2096,7 +2096,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.317,
+        "DurationSeconds": 0.333,
         "CurrentZoneAtResult": "bedroom_closet",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -2345,7 +2345,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.3,
+        "DurationSeconds": 0.24,
         "CurrentZoneAtResult": "bedroom4",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -2370,7 +2370,7 @@
       "Key": "gym->gym_closet",
       "Kind": "Door",
       "Subtype": "interaction-door",
-      "Classification": "complete",
+      "Classification": "execution-only failure",
       "SourceZone": "gym",
       "DestinationZone": "gym_closet",
       "AcceptedSourceZones": [
@@ -2610,24 +2610,24 @@
       },
       "SweepEvidence": {
         "Source": "Door",
-        "Status": "passed",
-        "StatusDetail": "passed",
-        "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "Status": "failed",
+        "StatusDetail": "step timeout currentZone=gym4 player=(-4.92, 12.82, 19.60) localContext=door-entry-advance-local lastTargetKind=LocalWaypoint lastTarget=(-5.59, 18.02, 20.30)",
+        "FailureReason": "step timeout currentZone=gym4 player=(-4.92, 12.82, 19.60)",
+        "DurationSeconds": 8.018,
         "CurrentZoneAtResult": "gym4",
-        "LastTargetKind": "EntryWaypoint",
+        "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
-          "x": 1.831,
+          "x": -5.592,
           "y": 18.02,
-          "z": 20.084
+          "z": 20.303
         },
-        "LastLocalNavigationContext": null
+        "LastLocalNavigationContext": "door-entry-advance-local"
       },
-      "FailureSignature": "lastTargetKind=EntryWaypoint",
+      "FailureSignature": "localContext=door-entry-advance-local lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": null,
-      "FailureTargetKind": "EntryWaypoint",
+      "FailureLocalContext": "door-entry-advance-local",
+      "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -2876,7 +2876,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.217,
+        "DurationSeconds": 0.121,
         "CurrentZoneAtResult": "gym8",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -2899,7 +2899,7 @@
       "Key": "gym_closet->gym",
       "Kind": "Door",
       "Subtype": "interaction-door",
-      "Classification": "complete",
+      "Classification": "execution-only failure",
       "SourceZone": "gym_closet",
       "DestinationZone": "gym",
       "AcceptedSourceZones": [
@@ -3139,10 +3139,10 @@
       },
       "SweepEvidence": {
         "Source": "Door",
-        "Status": "passed",
-        "StatusDetail": "passed",
-        "FailureReason": null,
-        "DurationSeconds": 6.05,
+        "Status": "failed",
+        "StatusDetail": "navigation blocked currentZone=gym_closet2 detail=door post-interaction loop exhausted loopDetections=4 movement=0.15 stage=DoorEntryAdvanceExtended currentZone=gym_closet2 targetKind=EntryWaypoint targetPosition=(-10.54, 18.02, 20.66) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.03 zone=gym_closet2 targetKind=EntryWaypoint targetPosition=(-10.54, 18.02, 20.66) rawContext=door-entry-advance-extended localContext=<null> step=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-10.54, 18.02, 20.66)",
+        "FailureReason": "navigation blocked currentZone=gym_closet2 detail=door post-interaction loop exhausted loopDetections=4 movement=0.15 stage=DoorEntryAdvanceExtended currentZone=gym_closet2 targetKind=EntryWaypoint targetPosition=(-10.54, 18.02, 20.66) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.03 zone=gym_closet2 targetKind=EntryWaypoint targetPosition=(-10.54, 18.02, 20.66) rawContext=door-entry-advance-extended localContext=<null> step=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00)",
+        "DurationSeconds": 4.067,
         "CurrentZoneAtResult": "gym_closet2",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -3152,10 +3152,10 @@
         },
         "LastLocalNavigationContext": null
       },
-      "FailureSignature": "lastTargetKind=EntryWaypoint",
-      "FailureStage": null,
+      "FailureSignature": "stage=DoorEntryAdvanceExtended localContext=<null> lastTargetKind=EntryWaypoint",
+      "FailureStage": "DoorEntryAdvanceExtended",
       "FailureContext": null,
-      "FailureLocalContext": null,
+      "FailureLocalContext": "<null>",
       "FailureTargetKind": "EntryWaypoint",
       "Issues": [],
       "Contradictions": []
@@ -3397,8 +3397,8 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.167,
-        "CurrentZoneAtResult": "bathroom1",
+        "DurationSeconds": 0.271,
+        "CurrentZoneAtResult": "hallway6",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
           "x": -0.028,
@@ -3420,7 +3420,7 @@
       "Key": "hallway->office",
       "Kind": "Door",
       "Subtype": "interaction-door",
-      "Classification": "complete",
+      "Classification": "execution-only failure",
       "SourceZone": "hallway",
       "DestinationZone": "office",
       "AcceptedSourceZones": [
@@ -3657,24 +3657,24 @@
       },
       "SweepEvidence": {
         "Source": "Door",
-        "Status": "passed",
-        "StatusDetail": "passed",
-        "FailureReason": null,
-        "DurationSeconds": 0.117,
-        "CurrentZoneAtResult": "hallway6",
-        "LastTargetKind": "EntryWaypoint",
+        "Status": "failed",
+        "StatusDetail": "step timeout currentZone=dining_room8 player=(7.02, -0.60, 5.62) localContext=current-zone lastTargetKind=LocalWaypoint lastTarget=(-18.40, -0.60, 5.62)",
+        "FailureReason": "step timeout currentZone=dining_room8 player=(7.02, -0.60, 5.62)",
+        "DurationSeconds": 8.1,
+        "CurrentZoneAtResult": "dining_room8",
+        "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
-          "x": 7.758,
-          "y": 4.17,
-          "z": 11.494
+          "x": -18.399,
+          "y": -0.597,
+          "z": 5.619
         },
-        "LastLocalNavigationContext": null
+        "LastLocalNavigationContext": "current-zone"
       },
-      "FailureSignature": "lastTargetKind=EntryWaypoint",
+      "FailureSignature": "localContext=current-zone lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": null,
-      "FailureTargetKind": "EntryWaypoint",
+      "FailureLocalContext": "current-zone",
+      "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -4168,7 +4168,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.117,
         "CurrentZoneAtResult": "laundry_room_closet",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -4191,7 +4191,7 @@
       "Key": "office->hallway",
       "Kind": "Door",
       "Subtype": "interaction-door",
-      "Classification": "complete",
+      "Classification": "execution-only failure",
       "SourceZone": "office",
       "DestinationZone": "hallway",
       "AcceptedSourceZones": [
@@ -4428,24 +4428,24 @@
       },
       "SweepEvidence": {
         "Source": "Door",
-        "Status": "passed",
-        "StatusDetail": "passed",
-        "FailureReason": null,
-        "DurationSeconds": 1.167,
+        "Status": "failed",
+        "StatusDetail": "step timeout currentZone=office6 player=(8.07, -0.60, 8.04) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(8.31, 4.17, 0.66)",
+        "FailureReason": "step timeout currentZone=office6 player=(8.07, -0.60, 8.04)",
+        "DurationSeconds": 8.0,
         "CurrentZoneAtResult": "office6",
-        "LastTargetKind": "ZoneFallback",
+        "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
-          "x": 9.804,
-          "y": -0.617,
-          "z": 7.089
+          "x": 8.31,
+          "y": 4.17,
+          "z": 0.664
         },
         "LastLocalNavigationContext": null
       },
-      "FailureSignature": "lastTargetKind=ZoneFallback",
+      "FailureSignature": "localContext=<null> lastTargetKind=EntryWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": null,
-      "FailureTargetKind": "ZoneFallback",
+      "FailureLocalContext": "<null>",
+      "FailureTargetKind": "EntryWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -4686,9 +4686,9 @@
       "SweepEvidence": {
         "Source": "Door",
         "Status": "failed",
-        "StatusDetail": "navigation blocked currentZone=office5 detail=door post-interaction loop exhausted loopDetections=4 movement=0.00 stage=DoorEntryAdvance currentZone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) rawContext=door-entry-advance localContext=<null> step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-1.07, 4.17, 23.96)",
-        "FailureReason": "navigation blocked currentZone=office5 detail=door post-interaction loop exhausted loopDetections=4 movement=0.00 stage=DoorEntryAdvance currentZone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) rawContext=door-entry-advance localContext=<null> step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00)",
-        "DurationSeconds": 2.067,
+        "StatusDetail": "navigation blocked currentZone=office5 detail=door post-interaction loop exhausted loopDetections=4 movement=0.01 stage=DoorEntryAdvanceExtended currentZone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.03 zone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) rawContext=door-entry-advance-extended localContext=<null> step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-1.07, 4.17, 23.96)",
+        "FailureReason": "navigation blocked currentZone=office5 detail=door post-interaction loop exhausted loopDetections=4 movement=0.01 stage=DoorEntryAdvanceExtended currentZone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.03 zone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) rawContext=door-entry-advance-extended localContext=<null> step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00)",
+        "DurationSeconds": 2.538,
         "CurrentZoneAtResult": "office5",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -4698,8 +4698,8 @@
         },
         "LastLocalNavigationContext": null
       },
-      "FailureSignature": "stage=DoorEntryAdvance localContext=<null> lastTargetKind=EntryWaypoint",
-      "FailureStage": "DoorEntryAdvance",
+      "FailureSignature": "stage=DoorEntryAdvanceExtended localContext=<null> lastTargetKind=EntryWaypoint",
+      "FailureStage": "DoorEntryAdvanceExtended",
       "FailureContext": null,
       "FailureLocalContext": "<null>",
       "FailureTargetKind": "EntryWaypoint",
@@ -4945,21 +4945,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.3,
-        "CurrentZoneAtResult": "dorian_trapdoor1",
-        "LastTargetKind": "ZoneFallback",
+        "DurationSeconds": 0.317,
+        "CurrentZoneAtResult": "office_closet",
+        "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
-          "x": 13.98,
-          "y": 4.217,
-          "z": 24.546
+          "x": 9.358,
+          "y": 4.17,
+          "z": 24.474
         },
         "LastLocalNavigationContext": null
       },
-      "FailureSignature": "lastTargetKind=ZoneFallback",
+      "FailureSignature": "lastTargetKind=EntryWaypoint",
       "FailureStage": null,
       "FailureContext": null,
       "FailureLocalContext": null,
-      "FailureTargetKind": "ZoneFallback",
+      "FailureTargetKind": "EntryWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -5206,7 +5206,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.983,
+        "DurationSeconds": 1.021,
         "CurrentZoneAtResult": "upper_hallway2",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -5471,7 +5471,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.117,
+        "DurationSeconds": 0.1,
         "CurrentZoneAtResult": "upper_hallway4",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -5734,7 +5734,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.2,
+        "DurationSeconds": 0.217,
         "CurrentZoneAtResult": "upper_hallway",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -6016,8 +6016,8 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.317,
-        "CurrentZoneAtResult": "attic6",
+        "DurationSeconds": 0.222,
+        "CurrentZoneAtResult": "attic",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
           "x": 14.527,
@@ -6298,7 +6298,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.102,
         "CurrentZoneAtResult": "attic",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -6853,7 +6853,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.2,
+        "DurationSeconds": 0.205,
         "CurrentZoneAtResult": "bathroom1_2",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -7134,7 +7134,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.517,
+        "DurationSeconds": 0.555,
         "CurrentZoneAtResult": "bathroom2",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -7407,7 +7407,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.3,
+        "DurationSeconds": 0.323,
         "CurrentZoneAtResult": "bathroom2_3",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -7693,7 +7693,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.95,
+        "DurationSeconds": 0.989,
         "CurrentZoneAtResult": "upper_hallway4",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -8248,7 +8248,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.633,
+        "DurationSeconds": 0.79,
         "CurrentZoneAtResult": "bedroom_closet",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -8521,7 +8521,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.633,
+        "DurationSeconds": 0.662,
         "CurrentZoneAtResult": "bedroom_closet",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -8804,7 +8804,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.967,
+        "DurationSeconds": 0.978,
         "CurrentZoneAtResult": "bedroom_closet",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -9088,7 +9088,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.133,
+        "DurationSeconds": 0.521,
         "CurrentZoneAtResult": "kitchen",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -9388,7 +9388,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.217,
+        "DurationSeconds": 0.42,
         "CurrentZoneAtResult": "dining_room4",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -9683,7 +9683,7 @@
         "Status": "failed",
         "StatusDetail": "navigation blocked currentZone=dining_room detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=dining_room targetKind=EntryWaypoint targetPosition=(-16.61, 4.84, -10.39) rawContext=open-passage-guided localContext=<null> step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-16.61, 4.84, -10.39)",
         "FailureReason": "navigation blocked currentZone=dining_room detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=dining_room targetKind=EntryWaypoint targetPosition=(-16.61, 4.84, -10.39) rawContext=open-passage-guided localContext=<null> step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13)",
-        "DurationSeconds": 1.867,
+        "DurationSeconds": 2.161,
         "CurrentZoneAtResult": "dining_room",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -9967,7 +9967,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.111,
         "CurrentZoneAtResult": "upper_hallway2",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -10249,21 +10249,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.0,
+        "DurationSeconds": 0.11,
         "CurrentZoneAtResult": "attic",
-        "LastTargetKind": "LocalWaypoint",
+        "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
-          "x": 14.527,
+          "x": 14.364,
           "y": 18.099,
-          "z": 3.626
+          "z": 3.74
         },
-        "LastLocalNavigationContext": "open-passage-destination"
+        "LastLocalNavigationContext": null
       },
-      "FailureSignature": "localContext=open-passage-destination lastTargetKind=LocalWaypoint",
+      "FailureSignature": "lastTargetKind=ZoneFallback",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": "open-passage-destination",
-      "FailureTargetKind": "LocalWaypoint",
+      "FailureLocalContext": null,
+      "FailureTargetKind": "ZoneFallback",
       "Issues": [],
       "Contradictions": []
     },
@@ -10533,7 +10533,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 1.7,
+        "DurationSeconds": 1.87,
         "CurrentZoneAtResult": "dining_room7",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -11087,21 +11087,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.3,
-        "CurrentZoneAtResult": "hallway6",
-        "LastTargetKind": "ZoneFallback",
+        "DurationSeconds": 0.45,
+        "CurrentZoneAtResult": "dining_room8",
+        "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
-          "x": -4.13,
-          "y": -0.6,
-          "z": 1.15
+          "x": -18.399,
+          "y": 18.23,
+          "z": 4.619
         },
-        "LastLocalNavigationContext": null
+        "LastLocalNavigationContext": "current-zone"
       },
-      "FailureSignature": "lastTargetKind=ZoneFallback",
+      "FailureSignature": "localContext=current-zone lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": null,
-      "FailureTargetKind": "ZoneFallback",
+      "FailureLocalContext": "current-zone",
+      "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -11360,21 +11360,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.115,
         "CurrentZoneAtResult": "bathroom2_3",
-        "LastTargetKind": "LocalWaypoint",
+        "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
-          "x": -25.312,
-          "y": 13.399,
-          "z": -3.82
+          "x": -25.406,
+          "y": 18.23,
+          "z": -3.154
         },
-        "LastLocalNavigationContext": "open-passage-destination"
+        "LastLocalNavigationContext": null
       },
-      "FailureSignature": "localContext=open-passage-destination lastTargetKind=LocalWaypoint",
+      "FailureSignature": "lastTargetKind=ZoneFallback",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": "open-passage-destination",
-      "FailureTargetKind": "LocalWaypoint",
+      "FailureLocalContext": null,
+      "FailureTargetKind": "ZoneFallback",
       "Issues": [],
       "Contradictions": []
     },
@@ -11646,7 +11646,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.633,
+        "DurationSeconds": 0.878,
         "CurrentZoneAtResult": "upper_hallway4",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -11928,21 +11928,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.033,
-        "CurrentZoneAtResult": "bedroom",
-        "LastTargetKind": "ZoneFallback",
+        "DurationSeconds": 0.117,
+        "CurrentZoneAtResult": "dorian_bedroom2",
+        "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
-          "x": -13.509,
-          "y": 16.73,
-          "z": -10.644
+          "x": -11.997,
+          "y": 17.84,
+          "z": -12.636
         },
-        "LastLocalNavigationContext": null
+        "LastLocalNavigationContext": "open-passage-handoff"
       },
-      "FailureSignature": "lastTargetKind=ZoneFallback",
+      "FailureSignature": "localContext=open-passage-handoff lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": null,
-      "FailureTargetKind": "ZoneFallback",
+      "FailureLocalContext": "open-passage-handoff",
+      "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -12201,21 +12201,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.0,
-        "CurrentZoneAtResult": "bedroom_closet",
-        "LastTargetKind": "LocalWaypoint",
+        "DurationSeconds": 0.1,
+        "CurrentZoneAtResult": "dorian_bedroomcloset1",
+        "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
-          "x": -6.349,
+          "x": -8.732,
           "y": 18.85,
-          "z": -15.412
+          "z": -13.997
         },
-        "LastLocalNavigationContext": "open-passage-destination"
+        "LastLocalNavigationContext": null
       },
-      "FailureSignature": "localContext=open-passage-destination lastTargetKind=LocalWaypoint",
+      "FailureSignature": "lastTargetKind=ZoneFallback",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": "open-passage-destination",
-      "FailureTargetKind": "LocalWaypoint",
+      "FailureLocalContext": null,
+      "FailureTargetKind": "ZoneFallback",
       "Issues": [],
       "Contradictions": []
     },
@@ -12474,21 +12474,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.0,
+        "DurationSeconds": 0.1,
         "CurrentZoneAtResult": "bedroom_closet",
-        "LastTargetKind": "LocalWaypoint",
+        "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
-          "x": -6.349,
+          "x": -8.529,
           "y": 18.85,
-          "z": -20.412
+          "z": -21.559
         },
-        "LastLocalNavigationContext": "open-passage-destination"
+        "LastLocalNavigationContext": null
       },
-      "FailureSignature": "localContext=open-passage-destination lastTargetKind=LocalWaypoint",
+      "FailureSignature": "lastTargetKind=ZoneFallback",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": "open-passage-destination",
-      "FailureTargetKind": "LocalWaypoint",
+      "FailureLocalContext": null,
+      "FailureTargetKind": "ZoneFallback",
       "Issues": [],
       "Contradictions": []
     },
@@ -12754,21 +12754,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.116,
         "CurrentZoneAtResult": "gym8",
-        "LastTargetKind": "LocalWaypoint",
+        "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
-          "x": -10.592,
+          "x": -10.674,
           "y": 18.14,
-          "z": 13.803
+          "z": 13.578
         },
-        "LastLocalNavigationContext": "open-passage-destination"
+        "LastLocalNavigationContext": null
       },
-      "FailureSignature": "localContext=open-passage-destination lastTargetKind=LocalWaypoint",
+      "FailureSignature": "lastTargetKind=ZoneFallback",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": "open-passage-destination",
-      "FailureTargetKind": "LocalWaypoint",
+      "FailureLocalContext": null,
+      "FailureTargetKind": "ZoneFallback",
       "Issues": [],
       "Contradictions": []
     },
@@ -13038,21 +13038,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.417,
+        "DurationSeconds": 0.336,
         "CurrentZoneAtResult": "upper_hallway",
-        "LastTargetKind": "ZoneFallback",
+        "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
-          "x": -9.64,
+          "x": -9.844,
           "y": 12.81,
-          "z": 6.45
+          "z": 6.656
         },
-        "LastLocalNavigationContext": null
+        "LastLocalNavigationContext": "current-zone"
       },
-      "FailureSignature": "lastTargetKind=ZoneFallback",
+      "FailureSignature": "localContext=current-zone lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": null,
-      "FailureTargetKind": "ZoneFallback",
+      "FailureLocalContext": "current-zone",
+      "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -13318,7 +13318,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.117,
         "CurrentZoneAtResult": "gym3",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -13602,21 +13602,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.2,
+        "DurationSeconds": 0.235,
         "CurrentZoneAtResult": "bathroom2_3",
-        "LastTargetKind": "LocalWaypoint",
+        "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
-          "x": -24.312,
-          "y": 13.025,
-          "z": -3.82
+          "x": -24.79,
+          "y": 12.82,
+          "z": -2.1
         },
-        "LastLocalNavigationContext": "current-zone"
+        "LastLocalNavigationContext": null
       },
-      "FailureSignature": "localContext=current-zone lastTargetKind=LocalWaypoint",
+      "FailureSignature": "lastTargetKind=ZoneFallback",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": "current-zone",
-      "FailureTargetKind": "LocalWaypoint",
+      "FailureLocalContext": null,
+      "FailureTargetKind": "ZoneFallback",
       "Issues": [],
       "Contradictions": []
     },
@@ -13881,7 +13881,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.417,
+        "DurationSeconds": 0.433,
         "CurrentZoneAtResult": "gym4",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -14160,20 +14160,20 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.117,
-        "CurrentZoneAtResult": "dorian_gymcloset2",
+        "DurationSeconds": 0.118,
+        "CurrentZoneAtResult": "gym_closet2",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
-          "x": 1.831,
-          "y": 18.02,
-          "z": 20.084
+          "x": -0.142,
+          "y": 18.042,
+          "z": 23.491
         },
-        "LastLocalNavigationContext": "open-passage-handoff"
+        "LastLocalNavigationContext": "open-passage-destination"
       },
-      "FailureSignature": "localContext=open-passage-handoff lastTargetKind=LocalWaypoint",
+      "FailureSignature": "localContext=open-passage-destination lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": "open-passage-handoff",
+      "FailureLocalContext": "open-passage-destination",
       "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
@@ -14443,21 +14443,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.433,
+        "DurationSeconds": 0.45,
         "CurrentZoneAtResult": "kitchen3",
-        "LastTargetKind": "ZoneFallback",
+        "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
-          "x": -23.91,
+          "x": -23.732,
           "y": -0.6,
-          "z": 16.28
+          "z": 16.448
         },
-        "LastLocalNavigationContext": null
+        "LastLocalNavigationContext": "current-zone"
       },
-      "FailureSignature": "lastTargetKind=ZoneFallback",
+      "FailureSignature": "localContext=current-zone lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": null,
-      "FailureTargetKind": "ZoneFallback",
+      "FailureLocalContext": "current-zone",
+      "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -14725,7 +14725,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.633,
+        "DurationSeconds": 0.767,
         "CurrentZoneAtResult": "kitchen2",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -15003,21 +15003,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.117,
+        "DurationSeconds": 0.1,
         "CurrentZoneAtResult": "dorian_laundry2",
-        "LastTargetKind": "LocalWaypoint",
+        "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
-          "x": -17.124,
-          "y": 3.92,
-          "z": 35.194
+          "x": -18.383,
+          "y": 4.98,
+          "z": 33.885
         },
-        "LastLocalNavigationContext": "open-passage-handoff"
+        "LastLocalNavigationContext": null
       },
-      "FailureSignature": "localContext=open-passage-handoff lastTargetKind=LocalWaypoint",
+      "FailureSignature": "lastTargetKind=ZoneFallback",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": "open-passage-handoff",
-      "FailureTargetKind": "LocalWaypoint",
+      "FailureLocalContext": null,
+      "FailureTargetKind": "ZoneFallback",
       "Issues": [],
       "Contradictions": []
     },
@@ -15276,21 +15276,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
-        "CurrentZoneAtResult": "laundry_room_closet",
-        "LastTargetKind": "ZoneFallback",
+        "DurationSeconds": 0.105,
+        "CurrentZoneAtResult": "dorian_laundrycloset1",
+        "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
-          "x": -12.574,
-          "y": 4.98,
-          "z": 32.835
+          "x": -13.565,
+          "y": 3.92,
+          "z": 30.984
         },
-        "LastLocalNavigationContext": null
+        "LastLocalNavigationContext": "open-passage-handoff"
       },
-      "FailureSignature": "lastTargetKind=ZoneFallback",
+      "FailureSignature": "localContext=open-passage-handoff lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": null,
-      "FailureTargetKind": "ZoneFallback",
+      "FailureLocalContext": "open-passage-handoff",
+      "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -15553,7 +15553,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.317,
+        "DurationSeconds": 0.35,
         "CurrentZoneAtResult": "office5",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -15826,7 +15826,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.09,
         "CurrentZoneAtResult": "office_closet",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -16107,8 +16107,8 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
-        "CurrentZoneAtResult": "office6",
+        "DurationSeconds": 0.117,
+        "CurrentZoneAtResult": "dorian_office1",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
           "x": 8.538,
@@ -16392,13 +16392,13 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.317,
+        "DurationSeconds": 0.321,
         "CurrentZoneAtResult": "hallway6",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
-          "x": 9.21,
-          "y": -0.6,
-          "z": 5.06
+          "x": 8.57,
+          "y": 4.623,
+          "z": 6.398
         },
         "LastLocalNavigationContext": null
       },
@@ -16665,21 +16665,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.05,
+        "DurationSeconds": 0.0,
         "CurrentZoneAtResult": "office_closet",
-        "LastTargetKind": "EntryWaypoint",
+        "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
-          "x": 0.307,
+          "x": -0.893,
           "y": 5.01,
-          "z": 26.092
+          "z": 26.294
         },
-        "LastLocalNavigationContext": null
+        "LastLocalNavigationContext": "open-passage-destination"
       },
-      "FailureSignature": "lastTargetKind=EntryWaypoint",
+      "FailureSignature": "localContext=open-passage-destination lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": null,
-      "FailureTargetKind": "EntryWaypoint",
+      "FailureLocalContext": "open-passage-destination",
+      "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -16952,21 +16952,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.117,
+        "DurationSeconds": 0.106,
         "CurrentZoneAtResult": "dorian_trapdoor2",
-        "LastTargetKind": "ZoneFallback",
+        "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
-          "x": 5.652,
-          "y": 4.37,
+          "x": 3.288,
+          "y": -7.03,
           "z": 25.344
         },
-        "LastLocalNavigationContext": null
+        "LastLocalNavigationContext": "open-passage-handoff"
       },
-      "FailureSignature": "lastTargetKind=ZoneFallback",
+      "FailureSignature": "localContext=open-passage-handoff lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": null,
-      "FailureTargetKind": "ZoneFallback",
+      "FailureLocalContext": "open-passage-handoff",
+      "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -17509,7 +17509,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.75,
+        "DurationSeconds": 0.767,
         "CurrentZoneAtResult": "hallway2",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -17789,7 +17789,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.2,
+        "DurationSeconds": 0.217,
         "CurrentZoneAtResult": "gym8",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -18073,21 +18073,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.533,
+        "DurationSeconds": 0.55,
         "CurrentZoneAtResult": "gym8",
-        "LastTargetKind": "EntryWaypoint",
+        "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
-          "x": -7.708,
-          "y": 17.84,
-          "z": 7.204
+          "x": -6.83,
+          "y": 12.82,
+          "z": 8.98
         },
         "LastLocalNavigationContext": null
       },
-      "FailureSignature": "lastTargetKind=EntryWaypoint",
+      "FailureSignature": "lastTargetKind=ZoneFallback",
       "FailureStage": null,
       "FailureContext": null,
       "FailureLocalContext": null,
-      "FailureTargetKind": "EntryWaypoint",
+      "FailureTargetKind": "ZoneFallback",
       "Issues": [],
       "Contradictions": []
     },
@@ -18353,7 +18353,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.017,
+        "DurationSeconds": 0.03,
         "CurrentZoneAtResult": "dorian_gym3",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -18637,7 +18637,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.417,
+        "DurationSeconds": 0.422,
         "CurrentZoneAtResult": "gym2",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -18916,7 +18916,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.3,
+        "DurationSeconds": 0.316,
         "CurrentZoneAtResult": "gym_closet2",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -19195,7 +19195,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.317,
+        "DurationSeconds": 0.337,
         "CurrentZoneAtResult": "gym_closet2",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -19482,15 +19482,15 @@
       "SweepEvidence": {
         "Source": "OpenPassage",
         "Status": "failed",
-        "StatusDetail": "navigation blocked currentZone=hallway4 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.20 zone=hallway4 targetKind=EntryWaypoint targetPosition=(7.70, 4.67, -7.12) rawContext=open-passage-guided localContext=<null> step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(7.70, 4.67, -7.12)",
-        "FailureReason": "navigation blocked currentZone=hallway4 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.20 zone=hallway4 targetKind=EntryWaypoint targetPosition=(7.70, 4.67, -7.12) rawContext=open-passage-guided localContext=<null> step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70)",
-        "DurationSeconds": 4.333,
+        "StatusDetail": "navigation blocked currentZone=hallway4 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.04 zone=hallway4 targetKind=EntryWaypoint targetPosition=(7.55, 4.67, -7.13) rawContext=open-passage-guided localContext=<null> step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(7.55, 4.67, -7.13)",
+        "FailureReason": "navigation blocked currentZone=hallway4 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.04 zone=hallway4 targetKind=EntryWaypoint targetPosition=(7.55, 4.67, -7.13) rawContext=open-passage-guided localContext=<null> step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70)",
+        "DurationSeconds": 5.696,
         "CurrentZoneAtResult": "hallway4",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
-          "x": 7.697,
+          "x": 7.554,
           "y": 4.67,
-          "z": -7.116
+          "z": -7.134
         },
         "LastLocalNavigationContext": null
       },
@@ -19768,7 +19768,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.683,
+        "DurationSeconds": 0.672,
         "CurrentZoneAtResult": "kitchen",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -20337,7 +20337,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.15,
+        "DurationSeconds": 0.192,
         "CurrentZoneAtResult": "kitchen_ronald",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -20622,7 +20622,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 2.65,
+        "DurationSeconds": 2.772,
         "CurrentZoneAtResult": "piano_room11",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -20903,21 +20903,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
-        "CurrentZoneAtResult": "kitchen5",
-        "LastTargetKind": "EntryWaypoint",
+        "DurationSeconds": 0.117,
+        "CurrentZoneAtResult": "kitchen_cake",
+        "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
-          "x": -20.927,
+          "x": -19.263,
           "y": 4.15,
-          "z": 23.974
+          "z": 25.163
         },
-        "LastLocalNavigationContext": null
+        "LastLocalNavigationContext": "open-passage-handoff"
       },
-      "FailureSignature": "lastTargetKind=EntryWaypoint",
+      "FailureSignature": "localContext=open-passage-handoff lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": null,
-      "FailureTargetKind": "EntryWaypoint",
+      "FailureLocalContext": "open-passage-handoff",
+      "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -21184,7 +21184,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.317,
+        "DurationSeconds": 0.316,
         "CurrentZoneAtResult": "kitchen_ronald",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -21469,7 +21469,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.95,
+        "DurationSeconds": 1.0,
         "CurrentZoneAtResult": "piano_room11",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -21753,7 +21753,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.217,
+        "DurationSeconds": 0.239,
         "CurrentZoneAtResult": "laundry_room2",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -22035,7 +22035,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.333,
+        "DurationSeconds": 0.332,
         "CurrentZoneAtResult": "laundry_room",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -22313,7 +22313,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.117,
         "CurrentZoneAtResult": "dorian_laundry2",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -22879,7 +22879,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.117,
+        "DurationSeconds": 0.1,
         "CurrentZoneAtResult": "laundry_room_closet",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -23173,7 +23173,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 1.183,
+        "DurationSeconds": 1.217,
         "CurrentZoneAtResult": "piano_room11",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -23467,7 +23467,7 @@
         "Status": "failed",
         "StatusDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=EntryWaypoint targetPosition=(6.72, 4.35, -6.06) rawContext=open-passage-guided localContext=<null> step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(6.72, 4.35, -6.06)",
         "FailureReason": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=EntryWaypoint targetPosition=(6.72, 4.35, -6.06) rawContext=open-passage-guided localContext=<null> step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60)",
-        "DurationSeconds": 2.217,
+        "DurationSeconds": 2.638,
         "CurrentZoneAtResult": "living_room2",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -23750,7 +23750,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.117,
         "CurrentZoneAtResult": "living_room",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -24027,7 +24027,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.867,
+        "DurationSeconds": 0.883,
         "CurrentZoneAtResult": "living_room10",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -24876,7 +24876,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.217,
+        "DurationSeconds": 0.433,
         "CurrentZoneAtResult": "office6",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -25165,19 +25165,19 @@
         "FailureReason": null,
         "DurationSeconds": 0.217,
         "CurrentZoneAtResult": "office5",
-        "LastTargetKind": "ZoneFallback",
+        "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
-          "x": 5.64,
-          "y": -0.6,
-          "z": 25.5
+          "x": 5.659,
+          "y": 4.37,
+          "z": 25.144
         },
-        "LastLocalNavigationContext": null
+        "LastLocalNavigationContext": "open-passage-handoff"
       },
-      "FailureSignature": "lastTargetKind=ZoneFallback",
+      "FailureSignature": "localContext=open-passage-handoff lastTargetKind=LocalWaypoint",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": null,
-      "FailureTargetKind": "ZoneFallback",
+      "FailureLocalContext": "open-passage-handoff",
+      "FailureTargetKind": "LocalWaypoint",
       "Issues": [],
       "Contradictions": []
     },
@@ -25448,21 +25448,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.2,
+        "DurationSeconds": 0.238,
         "CurrentZoneAtResult": "office6",
-        "LastTargetKind": "LocalWaypoint",
+        "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
-          "x": 6.159,
-          "y": 4.623,
-          "z": 8.644
+          "x": 6.86,
+          "y": -0.6,
+          "z": 7.58
         },
-        "LastLocalNavigationContext": "open-passage-handoff"
+        "LastLocalNavigationContext": null
       },
-      "FailureSignature": "localContext=open-passage-handoff lastTargetKind=LocalWaypoint",
+      "FailureSignature": "lastTargetKind=ZoneFallback",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": "open-passage-handoff",
-      "FailureTargetKind": "LocalWaypoint",
+      "FailureLocalContext": null,
+      "FailureTargetKind": "ZoneFallback",
       "Issues": [],
       "Contradictions": []
     },
@@ -25729,21 +25729,21 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.117,
-        "CurrentZoneAtResult": "office6",
-        "LastTargetKind": "LocalWaypoint",
+        "DurationSeconds": 0.1,
+        "CurrentZoneAtResult": "dorian_office1",
+        "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
-          "x": 6.659,
+          "x": 6.814,
           "y": 4.623,
-          "z": 11.144
+          "z": 11.034
         },
-        "LastLocalNavigationContext": "open-passage-handoff"
+        "LastLocalNavigationContext": null
       },
-      "FailureSignature": "localContext=open-passage-handoff lastTargetKind=LocalWaypoint",
+      "FailureSignature": "lastTargetKind=ZoneFallback",
       "FailureStage": null,
       "FailureContext": null,
-      "FailureLocalContext": "open-passage-handoff",
-      "FailureTargetKind": "LocalWaypoint",
+      "FailureLocalContext": null,
+      "FailureTargetKind": "ZoneFallback",
       "Issues": [],
       "Contradictions": []
     },
@@ -26010,7 +26010,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.2,
+        "DurationSeconds": 0.239,
         "CurrentZoneAtResult": "office2",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -26295,7 +26295,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.109,
         "CurrentZoneAtResult": "hallway6",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -26576,7 +26576,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.114,
         "CurrentZoneAtResult": "dorian_office1",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -27134,7 +27134,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.433,
+        "DurationSeconds": 0.424,
         "CurrentZoneAtResult": "office_closet",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -27407,7 +27407,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.117,
+        "DurationSeconds": 0.116,
         "CurrentZoneAtResult": "office_closet",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -27680,7 +27680,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.317,
+        "DurationSeconds": 0.338,
         "CurrentZoneAtResult": "office_closet",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -27970,7 +27970,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.567,
+        "DurationSeconds": 0.554,
         "CurrentZoneAtResult": "piano_room11",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -28254,7 +28254,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.2,
+        "DurationSeconds": 0.229,
         "CurrentZoneAtResult": "upper_hallway2",
         "LastTargetKind": "LocalWaypoint",
         "LastTargetPosition": {
@@ -28534,7 +28534,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.217,
+        "DurationSeconds": 0.216,
         "CurrentZoneAtResult": "upper_hallway2",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -28827,7 +28827,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.3,
+        "DurationSeconds": 0.323,
         "CurrentZoneAtResult": "upper_hallway5",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -29111,7 +29111,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.117,
         "CurrentZoneAtResult": "gym_closet3",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -29395,7 +29395,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.1,
+        "DurationSeconds": 0.101,
         "CurrentZoneAtResult": "gym_closet3",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -29680,8 +29680,8 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.2,
-        "CurrentZoneAtResult": "stairsup",
+        "DurationSeconds": 0.45,
+        "CurrentZoneAtResult": "hallway4",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
           "x": 5.837,
@@ -29974,7 +29974,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 2.067,
+        "DurationSeconds": 2.074,
         "CurrentZoneAtResult": "upper_hallway8",
         "LastTargetKind": "EntryWaypoint",
         "LastTargetPosition": {
@@ -30267,7 +30267,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.2,
+        "DurationSeconds": 0.328,
         "CurrentZoneAtResult": "stairsup",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {
@@ -30561,7 +30561,7 @@
         "Status": "passed",
         "StatusDetail": "passed",
         "FailureReason": null,
-        "DurationSeconds": 0.767,
+        "DurationSeconds": 0.807,
         "CurrentZoneAtResult": "stairsdown",
         "LastTargetKind": "ZoneFallback",
         "LastTargetPosition": {

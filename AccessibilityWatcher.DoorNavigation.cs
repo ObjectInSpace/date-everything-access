@@ -155,13 +155,30 @@ namespace DateEverythingAccess
             bool pushThroughLocalReached = IsDoorSourceLocalGoalCompleted(
                 step,
                 "door-push-through-local");
-            bool entryAdvanceExtendedLocalReached = IsDoorSourceLocalGoalCompleted(
+            bool entryAdvanceExtendedLocalCompleted = IsDoorSourceLocalGoalCompleted(
                 step,
                 "door-entry-advance-extended-local");
+            bool entryAdvanceExtendedProofSatisfied = IsDoorEntryAdvanceExtendedProofSatisfied(
+                step,
+                currentZone,
+                playerPosition,
+                pushThroughPosition,
+                entryAdvanceExtendedLocalCompleted);
             bool sourceThresholdReached = sourceTarget != Vector3.zero &&
                 sourceThresholdDistance <= thresholdAdvanceArrivalDistance;
             bool sourceThresholdLocalProxyReached = sourceTarget != Vector3.zero &&
-                thresholdAdvanceLocalReached;
+                thresholdAdvanceLocalReached &&
+                ShouldAcceptDoorThresholdAdvanceLocalProxyAsSatisfied(
+                    step,
+                    currentZone,
+                    playerPosition,
+                    sourceTarget,
+                    pushThroughPosition,
+                    sourceThresholdDistance,
+                    thresholdAdvanceArrivalDistance,
+                    hasValidHandoffTarget,
+                    handoffDistance,
+                    handoffArrivalDistance);
             bool sourceThresholdSatisfied =
                 sourceThresholdReached ||
                 sourceThresholdLocalProxyReached;
@@ -390,21 +407,25 @@ namespace DateEverythingAccess
                 return true;
             }
 
+            Vector3 sourceZoneEntryTarget = Vector3.zero;
+            Vector3 extendedEntryAdvanceTarget = Vector3.zero;
             bool shouldHoldSourceZoneExtendedEntryAdvance =
                 shouldCommitPostThreshold &&
                 isStillInSourceZone &&
                 pushThroughLocalReached &&
-                (!entryAdvanceExtendedLocalReached ||
-                 ShouldHoldDoorEntryAdvanceExtendedInSourceZone(step, currentZone));
-
-            if (shouldHoldSourceZoneExtendedEntryAdvance &&
-                TryGetDoorTraversalDestinationTarget(step, out Vector3 sourceZoneEntryTarget, out _) &&
-                TryBuildDoorSourceZoneEntryAdvanceTarget(
-                    sourceTarget,
+                TryGetDoorTraversalDestinationTarget(step, out sourceZoneEntryTarget, out _) &&
+                TryBuildDoorSourceZoneExtendedEntryAdvanceTarget(
+                    step,
+                    currentZone,
                     pushThroughPosition,
                     sourceZoneEntryTarget,
-                    out Vector3 extendedEntryAdvanceTarget) &&
-                GetPlanarDistanceToTarget(playerPosition, extendedEntryAdvanceTarget) >
+                    out extendedEntryAdvanceTarget);
+            float extendedEntryAdvanceDistance = shouldHoldSourceZoneExtendedEntryAdvance
+                ? GetPlanarDistanceToTarget(playerPosition, extendedEntryAdvanceTarget)
+                : float.PositiveInfinity;
+
+            if (shouldHoldSourceZoneExtendedEntryAdvance &&
+                extendedEntryAdvanceDistance >
                 GetRawNavigationGoalReachedDistance("door-entry-advance-extended"))
             {
                 position = extendedEntryAdvanceTarget;
@@ -413,9 +434,39 @@ namespace DateEverythingAccess
                 LogNavigationTrackerDebug(
                     "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
                     " pushThroughDistance=" + pushThroughDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " extendedEntryAdvanceDistance=" + extendedEntryAdvanceDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " entryAdvanceExtendedProofSatisfied=" + entryAdvanceExtendedProofSatisfied +
                     " stage=DoorEntryAdvanceExtended" +
-                    " sourceZoneHold=" + ShouldHoldDoorEntryAdvanceExtendedInSourceZone(step, currentZone) +
+                    " sourceZoneHold=True" +
                     " destinationTarget=" + FormatVector3(sourceZoneEntryTarget) +
+                    " step=" + DescribeNavigationStep(step));
+                return true;
+            }
+
+            Vector3 blockedSourceZoneEntryTarget = Vector3.zero;
+            Vector3 blockedExtendedEntryAdvanceTarget = Vector3.zero;
+            bool shouldBlockRawFinalDoorEntryAdvanceInSourceZone =
+                shouldCommitPostThreshold &&
+                isStillInSourceZone &&
+                !entryAdvanceExtendedProofSatisfied &&
+                TryGetDoorTraversalDestinationTarget(step, out blockedSourceZoneEntryTarget, out _) &&
+                TryBuildDoorSourceZoneExtendedEntryAdvanceTarget(
+                    step,
+                    currentZone,
+                    pushThroughPosition,
+                    blockedSourceZoneEntryTarget,
+                    out blockedExtendedEntryAdvanceTarget);
+            if (shouldBlockRawFinalDoorEntryAdvanceInSourceZone)
+            {
+                position = blockedExtendedEntryAdvanceTarget;
+                targetKind = NavigationTargetKind.ZoneFallback;
+                _rawNavigationTargetContext = "door-entry-advance-extended";
+                LogNavigationTrackerDebug(
+                    "Blocked raw final door entry advance until extended local bridge completes" +
+                    " position=" + FormatVector3(position) +
+                    " destinationTarget=" + FormatVector3(blockedSourceZoneEntryTarget) +
+                    " entryAdvanceExtendedProofSatisfied=" + entryAdvanceExtendedProofSatisfied +
+                    " stage=DoorEntryAdvanceExtended" +
                     " step=" + DescribeNavigationStep(step));
                 return true;
             }
@@ -424,11 +475,19 @@ namespace DateEverythingAccess
             {
                 position = destinationTarget;
                 targetKind = destinationTargetKind;
-                _rawNavigationTargetContext = "door-entry-advance";
+                _rawNavigationTargetContext = GetDoorEntryAdvanceRawContextForFinalTarget(
+                    step,
+                    currentZone,
+                    shouldCommitPostThreshold,
+                    isStillInSourceZone,
+                    entryAdvanceExtendedProofSatisfied,
+                    pushThroughPosition,
+                    destinationTarget);
                 LogNavigationTrackerDebug(
                     "Next navigation target kind=" + targetKind +
                     " position=" + FormatVector3(position) +
                     " stage=DoorEntryAdvance" +
+                    " rawContext=" + _rawNavigationTargetContext +
                     " step=" + DescribeNavigationStep(step));
                 return true;
             }
@@ -436,10 +495,18 @@ namespace DateEverythingAccess
             if (TryGetZonePosition(step.ToZone, out position))
             {
                 targetKind = NavigationTargetKind.ZoneFallback;
-                _rawNavigationTargetContext = "door-entry-advance";
+                _rawNavigationTargetContext = GetDoorEntryAdvanceRawContextForFinalTarget(
+                    step,
+                    currentZone,
+                    shouldCommitPostThreshold,
+                    isStillInSourceZone,
+                    entryAdvanceExtendedProofSatisfied,
+                    pushThroughPosition,
+                    position);
                 LogNavigationTrackerDebug(
                     "Next navigation target kind=ZoneFallback position=" + FormatVector3(position) +
                     " stage=DoorEntryAdvance" +
+                    " rawContext=" + _rawNavigationTargetContext +
                     " step=" + DescribeNavigationStep(step));
                 return true;
             }
@@ -447,16 +514,298 @@ namespace DateEverythingAccess
             return false;
         }
 
-        private bool ShouldHoldDoorEntryAdvanceExtendedInSourceZone(
+        private string GetDoorEntryAdvanceRawContextForFinalTarget(
             NavigationGraph.PathStep step,
-            string currentZone)
+            string currentZone,
+            bool shouldCommitPostThreshold,
+            bool isStillInSourceZone,
+            bool entryAdvanceExtendedProofSatisfied,
+            Vector3 pushThroughPosition,
+            Vector3 destinationTarget)
         {
-            return step != null &&
-                step.Kind == NavigationGraph.StepKind.Door &&
-                string.Equals(step.FromZone, "office", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(step.ToZone, "office_closet", StringComparison.OrdinalIgnoreCase) &&
+            if (!shouldCommitPostThreshold ||
+                !isStillInSourceZone ||
+                destinationTarget == Vector3.zero)
+            {
+                return "door-entry-advance";
+            }
+
+            if (TryBuildDoorSourceZoneExtendedEntryAdvanceTarget(
+                    step,
+                    currentZone,
+                    pushThroughPosition,
+                    destinationTarget,
+                    out _))
+            {
+                if (entryAdvanceExtendedProofSatisfied)
+                {
+                    LogNavigationTrackerDebug(
+                        "Reclassified final door entry advance to extended context after bridge proof success" +
+                        " destinationTarget=" + FormatVector3(destinationTarget) +
+                        " step=" + DescribeNavigationStep(step));
+                }
+
+                return "door-entry-advance-extended";
+            }
+
+            LogNavigationTrackerDebug(
+                "No source-zone door entry bridge constructible; allowing final entry advance" +
+                " destinationTarget=" + FormatVector3(destinationTarget) +
+                " step=" + DescribeNavigationStep(step));
+            return "door-entry-advance-no-source-bridge";
+        }
+
+        private bool IsDoorEntryAdvanceExtendedProofSatisfied(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 playerPosition,
+            Vector3 pushThroughPosition,
+            bool entryAdvanceExtendedLocalCompleted)
+        {
+            if (!entryAdvanceExtendedLocalCompleted ||
+                step == null ||
+                step.Kind != NavigationGraph.StepKind.Door ||
+                playerPosition == Vector3.zero ||
+                pushThroughPosition == Vector3.zero ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                string.IsNullOrWhiteSpace(step.FromZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                !TryGetDoorTraversalDestinationTarget(step, out Vector3 destinationTarget, out _) ||
+                destinationTarget == Vector3.zero ||
+                !TryBuildDoorSourceZoneExtendedEntryAdvanceTarget(
+                    step,
+                    currentZone,
+                    pushThroughPosition,
+                    destinationTarget,
+                    out Vector3 extendedEntryAdvanceTarget) ||
+                extendedEntryAdvanceTarget == Vector3.zero)
+            {
+                return false;
+            }
+
+            float extendedEntryAdvanceDistance = GetPlanarDistanceToTarget(
+                playerPosition,
+                extendedEntryAdvanceTarget);
+            if (extendedEntryAdvanceDistance >
+                GetRawNavigationGoalReachedDistance("door-entry-advance-extended"))
+            {
+                if (TryGetDoorSourceLocalPlanningGoal(
+                        step,
+                        currentZone,
+                        playerPosition,
+                        extendedEntryAdvanceTarget,
+                        "door-entry-advance-extended-local",
+                        out Vector3 localProofPlanningGoal) &&
+                    localProofPlanningGoal != Vector3.zero)
+                {
+                    float localProofDistance = GetFlatDistance(playerPosition, localProofPlanningGoal);
+                    float localProofArrivalDistance = GetLocalNavigationGoalReachedDistance("door-entry-advance-extended-local");
+                    if (localProofDistance <= localProofArrivalDistance)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Accepted door entry advance extended proof from resolved local bridge goal" +
+                            " playerPosition=" + FormatVector3(playerPosition) +
+                            " rawExtendedTarget=" + FormatVector3(extendedEntryAdvanceTarget) +
+                            " localProofGoal=" + FormatVector3(localProofPlanningGoal) +
+                            " localProofDistance=" + localProofDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " localProofArrivalDistance=" + localProofArrivalDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " step=" + DescribeNavigationStep(step));
+                        return true;
+                    }
+                }
+
+                if (TryGetDoorSourceLocalCompletedGoal(
+                        step,
+                        "door-entry-advance-extended-local",
+                        out Vector3 completedLocalProofGoal) &&
+                    completedLocalProofGoal != Vector3.zero)
+                {
+                    float completedLocalGoalOffset = GetFlatDistance(
+                        completedLocalProofGoal,
+                        extendedEntryAdvanceTarget);
+                    float completedLocalGoalOffsetAcceptanceDistance = Mathf.Max(
+                        GetLocalNavigationGoalReachedDistance("door-entry-advance-extended-local"),
+                        GetRawNavigationGoalReachedDistance("door-entry-advance-extended"));
+                    if (completedLocalGoalOffset <= completedLocalGoalOffsetAcceptanceDistance)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Accepted door entry advance extended proof from completed local bridge goal identity" +
+                            " rawExtendedTarget=" + FormatVector3(extendedEntryAdvanceTarget) +
+                            " completedLocalGoal=" + FormatVector3(completedLocalProofGoal) +
+                            " completedLocalGoalOffset=" + completedLocalGoalOffset.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " completedLocalGoalOffsetAcceptanceDistance=" + completedLocalGoalOffsetAcceptanceDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " step=" + DescribeNavigationStep(step));
+                        return true;
+                    }
+
+                    float completedLocalProofDistance = GetFlatDistance(playerPosition, completedLocalProofGoal);
+                    float completedLocalProofArrivalDistance = GetLocalNavigationGoalReachedDistance("door-entry-advance-extended-local");
+                    if (completedLocalProofDistance <= completedLocalProofArrivalDistance)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Accepted door entry advance extended proof from completed local bridge goal" +
+                            " playerPosition=" + FormatVector3(playerPosition) +
+                            " rawExtendedTarget=" + FormatVector3(extendedEntryAdvanceTarget) +
+                            " completedLocalGoal=" + FormatVector3(completedLocalProofGoal) +
+                            " completedLocalGoalDistance=" + completedLocalProofDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " completedLocalGoalArrivalDistance=" + completedLocalProofArrivalDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " step=" + DescribeNavigationStep(step));
+                        return true;
+                    }
+                }
+
+                LogNavigationTrackerDebug(
+                    "Door entry advance extended local completion did not satisfy raw bridge proof" +
+                    " playerPosition=" + FormatVector3(playerPosition) +
+                    " extendedTarget=" + FormatVector3(extendedEntryAdvanceTarget) +
+                    " distance=" + extendedEntryAdvanceDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " arrivalDistance=" + GetRawNavigationGoalReachedDistance("door-entry-advance-extended").ToString("0.00", CultureInfo.InvariantCulture) +
+                    " step=" + DescribeNavigationStep(step));
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool ShouldAcceptDoorThresholdAdvanceLocalProxyAsSatisfied(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 playerPosition,
+            Vector3 sourceTarget,
+            Vector3 pushThroughPosition,
+            float sourceThresholdDistance,
+            float thresholdArrivalDistance,
+            bool hasValidHandoffTarget,
+            float handoffDistance,
+            float handoffArrivalDistance)
+        {
+            if (step == null)
+            {
+                return false;
+            }
+
+            if (sourceThresholdDistance <= thresholdArrivalDistance)
+            {
+                return true;
+            }
+
+            if (hasValidHandoffTarget)
+            {
+                Vector3 handoffLocalProofGoal = Vector3.zero;
+                bool hasResolvedHandoffLocalProofGoal = false;
+                if (handoffDistance <= handoffArrivalDistance)
+                {
+                    return true;
+                }
+
+                if (playerPosition != Vector3.zero &&
+                    pushThroughPosition != Vector3.zero &&
+                    !string.IsNullOrWhiteSpace(currentZone) &&
+                    TryGetDoorSourceLocalPlanningGoal(
+                        step,
+                        currentZone,
+                        playerPosition,
+                        pushThroughPosition,
+                        "door-threshold-handoff-local",
+                        out handoffLocalProofGoal) &&
+                    handoffLocalProofGoal != Vector3.zero)
+                {
+                    hasResolvedHandoffLocalProofGoal = true;
+                    float handoffLocalProofDistance = GetFlatDistance(playerPosition, handoffLocalProofGoal);
+                    float handoffLocalProofArrivalDistance = GetLocalNavigationGoalReachedDistance("door-threshold-handoff-local");
+                    if (handoffLocalProofDistance <= handoffLocalProofArrivalDistance)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Accepted door threshold advance local proxy from resolved handoff-local proof goal" +
+                            " playerPosition=" + FormatVector3(playerPosition) +
+                            " handoffLocalProofGoal=" + FormatVector3(handoffLocalProofGoal) +
+                            " handoffLocalProofDistance=" + handoffLocalProofDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " handoffLocalProofArrivalDistance=" + handoffLocalProofArrivalDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " step=" + DescribeNavigationStep(step));
+                        return true;
+                    }
+                }
+
+                if (TryGetDoorSourceLocalCompletedGoal(
+                        step,
+                        "door-threshold-handoff-local",
+                        out Vector3 completedHandoffLocalGoal) &&
+                    completedHandoffLocalGoal != Vector3.zero &&
+                    hasResolvedHandoffLocalProofGoal)
+                {
+                    float completedHandoffGoalOffset = GetFlatDistance(
+                        completedHandoffLocalGoal,
+                        handoffLocalProofGoal);
+                    float completedHandoffGoalOffsetAcceptanceDistance = Mathf.Max(
+                        GetLocalNavigationGoalReachedDistance("door-threshold-handoff-local"),
+                        handoffArrivalDistance);
+                    if (completedHandoffGoalOffset <= completedHandoffGoalOffsetAcceptanceDistance)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Accepted door threshold advance local proxy from completed handoff-local goal identity" +
+                            " completedHandoffLocalGoal=" + FormatVector3(completedHandoffLocalGoal) +
+                            " handoffLocalProofGoal=" + FormatVector3(handoffLocalProofGoal) +
+                            " completedHandoffGoalOffset=" + completedHandoffGoalOffset.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " completedHandoffGoalOffsetAcceptanceDistance=" + completedHandoffGoalOffsetAcceptanceDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                            " step=" + DescribeNavigationStep(step));
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            if (playerPosition != Vector3.zero &&
+                sourceTarget != Vector3.zero &&
+                pushThroughPosition != Vector3.zero &&
                 !string.IsNullOrWhiteSpace(currentZone) &&
-                IsZoneEquivalentToNavigationZone(currentZone, step.FromZone);
+                TryGetDoorSourceLocalPlanningGoal(
+                    step,
+                    currentZone,
+                    playerPosition,
+                    sourceTarget,
+                    "door-threshold-advance-local",
+                    out Vector3 thresholdLocalProofGoal) &&
+                thresholdLocalProofGoal != Vector3.zero)
+            {
+                float thresholdLocalProofGoalOffset = GetFlatDistance(thresholdLocalProofGoal, sourceTarget);
+                if (thresholdLocalProofGoalOffset <= 0.05f)
+                {
+                    LogNavigationTrackerDebug(
+                        "Rejected door threshold advance local proxy proof because resolved goal collapses to source threshold" +
+                        " playerPosition=" + FormatVector3(playerPosition) +
+                        " sourceTarget=" + FormatVector3(sourceTarget) +
+                        " localProofGoal=" + FormatVector3(thresholdLocalProofGoal) +
+                        " localProofGoalOffset=" + thresholdLocalProofGoalOffset.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " sourceThresholdDistance=" + sourceThresholdDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " thresholdArrivalDistance=" + thresholdArrivalDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " hasValidHandoffTarget=" + hasValidHandoffTarget +
+                        " handoffDistance=" + handoffDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " handoffArrivalDistance=" + handoffArrivalDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " step=" + DescribeNavigationStep(step));
+                }
+                else
+                {
+                float thresholdLocalProofDistance = GetFlatDistance(playerPosition, thresholdLocalProofGoal);
+                float thresholdLocalProofArrivalDistance = Mathf.Max(
+                    GetLocalNavigationGoalReachedDistance("door-threshold-advance-local"),
+                    DoorThresholdAdvanceProxyCompletionDistance);
+                if (thresholdLocalProofDistance <= thresholdLocalProofArrivalDistance)
+                {
+                    LogNavigationTrackerDebug(
+                        "Accepted door threshold advance local proxy from resolved local proof goal" +
+                        " playerPosition=" + FormatVector3(playerPosition) +
+                        " sourceTarget=" + FormatVector3(sourceTarget) +
+                        " localProofGoal=" + FormatVector3(thresholdLocalProofGoal) +
+                        " localProofDistance=" + thresholdLocalProofDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " localProofArrivalDistance=" + thresholdLocalProofArrivalDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " step=" + DescribeNavigationStep(step));
+                    return true;
+                }
+                }
+            }
+
+            return sourceThresholdDistance <= DoorThresholdAdvanceBypassDistance;
         }
 
         private bool TryGetDoorCommittedSourceRecoveryTarget(
@@ -614,6 +963,30 @@ namespace DateEverythingAccess
                 DoorPushThroughSourceAdvanceDistance;
         }
 
+        private bool TryBuildDoorSourceZoneExtendedEntryAdvanceTarget(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 pushThroughPosition,
+            Vector3 destinationTarget,
+            out Vector3 entryAdvanceTarget)
+        {
+            entryAdvanceTarget = Vector3.zero;
+            if (step == null ||
+                step.Kind != NavigationGraph.StepKind.Door ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                !TryGetDoorThresholdAdvanceTarget(step, currentZone, out Vector3 sourceTarget))
+            {
+                return false;
+            }
+
+            return TryBuildDoorSourceZoneEntryAdvanceTarget(
+                sourceTarget,
+                pushThroughPosition,
+                destinationTarget,
+                out entryAdvanceTarget);
+        }
+
         private bool IsDoorCommittedSourceRecoveryActiveForStep(
             NavigationGraph.PathStep step,
             string currentZone,
@@ -700,6 +1073,43 @@ namespace DateEverythingAccess
                 sourceThresholdTarget != Vector3.zero &&
                 GetFlatDistance(sourceThresholdTarget, desiredPosition) <= DoorPushThroughSourceAdvanceDistance)
             {
+                Vector3 playerPosition = BetterPlayerControl.Instance != null
+                    ? BetterPlayerControl.Instance.transform.position
+                    : Vector3.zero;
+                float sourceThresholdDistance = playerPosition != Vector3.zero
+                    ? GetPlanarDistanceToTarget(playerPosition, sourceThresholdTarget)
+                    : float.PositiveInfinity;
+                bool hasValidHandoffTarget = TryGetDoorThresholdHandoffTarget(
+                    step,
+                    currentZone,
+                    sourceThresholdTarget,
+                    pushThroughPosition,
+                    out Vector3 fallbackHandoffTarget);
+                float handoffDistance = hasValidHandoffTarget && playerPosition != Vector3.zero
+                    ? GetPlanarDistanceToTarget(playerPosition, fallbackHandoffTarget)
+                    : float.PositiveInfinity;
+                if (!ShouldAcceptDoorThresholdAdvanceLocalProxyAsSatisfied(
+                        step,
+                        currentZone,
+                        playerPosition,
+                        sourceThresholdTarget,
+                        pushThroughPosition,
+                        sourceThresholdDistance,
+                        GetRawNavigationGoalReachedDistance("door-threshold-advance"),
+                        hasValidHandoffTarget,
+                        handoffDistance,
+                        GetLocalNavigationGoalReachedDistance("door-threshold-handoff")))
+                {
+                    LogNavigationTrackerDebug(
+                        "Allowed generic door threshold fallback after local proxy without release evidence" +
+                        " desiredPosition=" + FormatVector3(desiredPosition) +
+                        " sourceThresholdDistance=" + sourceThresholdDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " hasValidHandoffTarget=" + hasValidHandoffTarget +
+                        " handoffDistance=" + handoffDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " step=" + DescribeNavigationStep(step));
+                    return false;
+                }
+
                 LogNavigationTrackerDebug(
                     "Suppressed generic door local fallback stage=DoorThresholdAdvance after local proxy" +
                     " desiredPosition=" + FormatVector3(desiredPosition) +
@@ -724,6 +1134,16 @@ namespace DateEverythingAccess
                 GetFlatDistance(destinationTarget, desiredPosition) <=
                 GetRawNavigationGoalReachedDistance("door-entry-advance"))
             {
+                if (string.Equals(_rawNavigationTargetContext, "door-entry-advance-no-source-bridge", StringComparison.Ordinal))
+                {
+                    LogNavigationTrackerDebug(
+                        "Allowed generic door local fallback stage=DoorEntryAdvance because source-zone bridge is unavailable" +
+                        " desiredPosition=" + FormatVector3(desiredPosition) +
+                        " destinationTarget=" + FormatVector3(destinationTarget) +
+                        " step=" + DescribeNavigationStep(step));
+                    return false;
+                }
+
                 Vector3 playerPosition = BetterPlayerControl.Instance != null
                     ? BetterPlayerControl.Instance.transform.position
                     : Vector3.zero;
@@ -888,6 +1308,10 @@ namespace DateEverythingAccess
                 _rawNavigationTargetContext,
                 "door-entry-advance",
                 StringComparison.Ordinal);
+            bool isRawDoorEntryAdvanceWithoutSourceBridge = string.Equals(
+                _rawNavigationTargetContext,
+                "door-entry-advance-no-source-bridge",
+                StringComparison.Ordinal);
             bool isRawDoorEntryAdvanceExtended = string.Equals(
                 _rawNavigationTargetContext,
                 "door-entry-advance-extended",
@@ -920,6 +1344,7 @@ namespace DateEverythingAccess
                 if ((isThresholdAdvanceGoal || isThresholdHandoffGoal) &&
                     !isRawDoorPushThrough)
                 {
+                    Vector3 thresholdPlanningDesiredPosition = desiredPosition;
                     bool shouldUseThresholdAdvanceLocal =
                         isThresholdAdvanceGoal &&
                         (!isThresholdHandoffGoal ||
@@ -930,18 +1355,60 @@ namespace DateEverythingAccess
                     if (shouldUseThresholdAdvanceLocal &&
                         IsDoorSourceLocalGoalCompleted(step, "door-threshold-advance-local"))
                     {
+                        Vector3 completedThresholdHandoffTarget = Vector3.zero;
+                        bool hasValidHandoffTarget = hasActiveDoorPushThroughPosition &&
+                            activeDoorPushThroughPosition != Vector3.zero &&
+                            TryGetDoorThresholdHandoffTarget(
+                                step,
+                                currentZone,
+                                doorThresholdTarget,
+                                activeDoorPushThroughPosition,
+                                out completedThresholdHandoffTarget);
+                        float handoffDistance = hasValidHandoffTarget
+                            ? GetPlanarDistanceToTarget(playerPosition, completedThresholdHandoffTarget)
+                            : float.PositiveInfinity;
+                        if (ShouldAcceptDoorThresholdAdvanceLocalProxyAsSatisfied(
+                                step,
+                                currentZone,
+                                playerPosition,
+                                doorThresholdTarget,
+                                activeDoorPushThroughPosition,
+                                GetPlanarDistanceToTarget(playerPosition, doorThresholdTarget),
+                                GetRawNavigationGoalReachedDistance("door-threshold-advance"),
+                                hasValidHandoffTarget,
+                                handoffDistance,
+                                GetLocalNavigationGoalReachedDistance("door-threshold-handoff")))
+                        {
+                            LogNavigationTrackerDebug(
+                                "Skipped completed door threshold advance local proxy; preserving raw threshold advance" +
+                                " desiredPosition=" + FormatVector3(desiredPosition) +
+                                " step=" + DescribeNavigationStep(step));
+                            return false;
+                        }
+
                         LogNavigationTrackerDebug(
-                            "Skipped completed door threshold advance local proxy; preserving raw threshold advance" +
+                            "Reused completed door threshold advance local proxy because release proof is still incomplete" +
                             " desiredPosition=" + FormatVector3(desiredPosition) +
                             " step=" + DescribeNavigationStep(step));
-                        return false;
+
+                        if (hasValidHandoffTarget &&
+                            completedThresholdHandoffTarget != Vector3.zero)
+                        {
+                            shouldUseThresholdAdvanceLocal = false;
+                            doorThresholdPlanningContext = "door-threshold-handoff-local";
+                            thresholdPlanningDesiredPosition = completedThresholdHandoffTarget;
+                            LogNavigationTrackerDebug(
+                                "Promoted completed door threshold advance local proxy to handoff-local planning" +
+                                " handoffTarget=" + FormatVector3(thresholdPlanningDesiredPosition) +
+                                " step=" + DescribeNavigationStep(step));
+                        }
                     }
 
                     if (!TryGetDoorSourceLocalPlanningGoal(
                         step,
                         currentZone,
                         playerPosition,
-                        desiredPosition,
+                        thresholdPlanningDesiredPosition,
                         doorThresholdPlanningContext,
                         out Vector3 doorThresholdPlanningGoal))
                     {
@@ -1032,24 +1499,40 @@ namespace DateEverythingAccess
                 return true;
             }
 
-            if (isPostThresholdCommitted &&
+            bool shouldAllowDoorEntryAdvanceSourceLocalPlanning =
                 hasActiveDoorPushThroughPosition &&
                 activeDoorPushThroughPosition != Vector3.zero &&
                 !string.IsNullOrEmpty(step.FromZone) &&
-                IsZoneEquivalentToNavigationZone(currentZone, step.FromZone))
+                IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) &&
+                (isPostThresholdCommitted ||
+                 isRawDoorEntryAdvance ||
+                 isRawDoorEntryAdvanceWithoutSourceBridge ||
+                 isRawDoorEntryAdvanceExtended);
+            if (shouldAllowDoorEntryAdvanceSourceLocalPlanning)
             {
+                if (isRawDoorEntryAdvanceWithoutSourceBridge)
+                {
+                    LogNavigationTrackerDebug(
+                        "Skipped door entry source-local planning because no source-zone bridge is constructible" +
+                        " desiredPosition=" + FormatVector3(desiredPosition) +
+                        " step=" + DescribeNavigationStep(step));
+                    return false;
+                }
+
                 string doorEntryAdvancePlanningContext;
                 Vector3 doorEntryAdvanceDesiredPosition;
+                Vector3 promotedExtendedEntryAdvanceTarget = Vector3.zero;
 
-                if (isRawDoorEntryAdvance &&
-                    IsDoorSourceLocalGoalCompleted(step, "door-push-through-local") &&
+                bool shouldPreferExtendedEntryAdvanceBridge =
+                    isRawDoorEntryAdvance &&
                     !IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local") &&
-                    TryGetDoorThresholdAdvanceTarget(step, currentZone, out Vector3 promotedSourceThresholdTarget) &&
-                    TryBuildDoorSourceZoneEntryAdvanceTarget(
-                        promotedSourceThresholdTarget,
+                    TryBuildDoorSourceZoneExtendedEntryAdvanceTarget(
+                        step,
+                        currentZone,
                         activeDoorPushThroughPosition,
                         desiredPosition,
-                        out Vector3 promotedExtendedEntryAdvanceTarget))
+                        out promotedExtendedEntryAdvanceTarget);
+                if (shouldPreferExtendedEntryAdvanceBridge)
                 {
                     doorEntryAdvancePlanningContext = "door-entry-advance-extended-local";
                     doorEntryAdvanceDesiredPosition = promotedExtendedEntryAdvanceTarget;
@@ -1060,12 +1543,45 @@ namespace DateEverythingAccess
                 }
                 else
                 {
-                    doorEntryAdvancePlanningContext = isRawDoorEntryAdvanceExtended
-                        ? "door-entry-advance-extended-local"
-                        : "door-entry-advance-local";
-                    doorEntryAdvanceDesiredPosition = isRawDoorEntryAdvanceExtended
+                    bool shouldAdvanceTowardDestinationAfterExtendedBridge =
+                        (isRawDoorEntryAdvance || isRawDoorEntryAdvanceExtended) &&
+                        IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local");
+                    bool shouldUseFinalEntryAdvanceLocalContext =
+                        isRawDoorEntryAdvanceExtended &&
+                        shouldAdvanceTowardDestinationAfterExtendedBridge;
+                    doorEntryAdvancePlanningContext = shouldUseFinalEntryAdvanceLocalContext
+                        ? "door-entry-advance-local"
+                        : (isRawDoorEntryAdvanceExtended
+                            ? "door-entry-advance-extended-local"
+                            : "door-entry-advance-local");
+                    doorEntryAdvanceDesiredPosition = (isRawDoorEntryAdvanceExtended ||
+                            shouldAdvanceTowardDestinationAfterExtendedBridge)
                         ? desiredPosition
                         : activeDoorPushThroughPosition;
+                    if (shouldUseFinalEntryAdvanceLocalContext)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Preserved completed extended bridge proof while advancing final door entry locally" +
+                            " planningGoal=" + FormatVector3(doorEntryAdvanceDesiredPosition) +
+                            " planningContext=" + doorEntryAdvancePlanningContext +
+                            " step=" + DescribeNavigationStep(step));
+                    }
+                    else if (shouldAdvanceTowardDestinationAfterExtendedBridge)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Advanced raw door entry planning toward destination after extended bridge completion" +
+                            " planningGoal=" + FormatVector3(doorEntryAdvanceDesiredPosition) +
+                            " step=" + DescribeNavigationStep(step));
+                    }
+                    else if (isRawDoorEntryAdvance &&
+                        IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-local"))
+                    {
+                        LogNavigationTrackerDebug(
+                            "Skipped completed door entry advance local proxy; preserving raw entry advance" +
+                            " desiredPosition=" + FormatVector3(desiredPosition) +
+                            " step=" + DescribeNavigationStep(step));
+                        return false;
+                    }
                 }
 
                 if (doorEntryAdvanceDesiredPosition == Vector3.zero ||
@@ -1089,7 +1605,10 @@ namespace DateEverythingAccess
                         doorEntryAdvancePlanningGoal);
                     if (forwardProgress <= 0.08f)
                     {
-                        if ((isRawDoorPushThrough || isRawDoorEntryAdvance) &&
+                        if ((isRawDoorPushThrough ||
+                             isRawDoorEntryAdvance ||
+                             isRawDoorEntryAdvanceExtended) &&
+                            !IsDoorSourceLocalGoalCompleted(step, "door-push-through-local") &&
                             TryGetDoorSourceLocalPlanningGoal(
                                 step,
                                 currentZone,
@@ -1131,6 +1650,17 @@ namespace DateEverythingAccess
                             return false;
                         }
 
+                        if (IsDoorSourceLocalGoalCompleted(step, "door-push-through-local"))
+                        {
+                            LogNavigationTrackerDebug(
+                                "Skipped completed door push-through local recovery after entry-advance discard" +
+                                " sourceThresholdTarget=" + FormatVector3(sourceThresholdTarget) +
+                                " rawContext=" + (_rawNavigationTargetContext ?? "<null>") +
+                                " forwardProgress=" + forwardProgress.ToString("0.00", CultureInfo.InvariantCulture) +
+                                " step=" + DescribeNavigationStep(step));
+                            return false;
+                        }
+
                         LogNavigationTrackerDebug(
                             "Discarded door entry advance local planning goal due to insufficient source-side progress" +
                             " sourceThresholdTarget=" + FormatVector3(sourceThresholdTarget) +
@@ -1147,6 +1677,11 @@ namespace DateEverythingAccess
                         doorEntryAdvancePlanningGoal,
                         GetLocalNavigationGoalReachedDistance(doorEntryAdvancePlanningContext)))
                 {
+                    MarkDoorSourceLocalGoalReached(
+                        BuildNavigationStepKey(step),
+                        doorEntryAdvancePlanningContext,
+                        doorEntryAdvancePlanningGoal,
+                        GetFlatDistance(playerPosition, doorEntryAdvancePlanningGoal));
                     return false;
                 }
 
@@ -1332,6 +1867,36 @@ namespace DateEverythingAccess
                 proxyGoal == Vector3.zero)
             {
                 return planningGoal;
+            }
+
+            Vector3 originalPlanningGoal = planningGoal;
+
+            if ((string.Equals(planningContext, "door-entry-advance-extended-local", StringComparison.Ordinal) ||
+                 string.Equals(planningContext, "door-entry-advance-local", StringComparison.Ordinal)) &&
+                TryGetDoorThresholdAdvanceTarget(step, currentZone, out Vector3 sourceTarget) &&
+                TryGetActiveDoorPushThroughPosition(step, currentZone, out Vector3 pushThroughPosition))
+            {
+                float proxyForwardProgress = GetDoorThresholdForwardProgress(
+                    sourceTarget,
+                    pushThroughPosition,
+                    proxyGoal);
+                float originalForwardProgress = GetDoorThresholdForwardProgress(
+                    sourceTarget,
+                    pushThroughPosition,
+                    originalPlanningGoal);
+                if (proxyForwardProgress <= 0.08f &&
+                    originalForwardProgress > proxyForwardProgress + 0.25f)
+                {
+                    LogNavigationTrackerDebug(
+                        "Restored original door entry planning goal after reachable-proxy progress collapse" +
+                        " context=" + (planningContext ?? "<null>") +
+                        " originalGoal=" + FormatVector3(originalPlanningGoal) +
+                        " proxyGoal=" + FormatVector3(proxyGoal) +
+                        " originalForwardProgress=" + originalForwardProgress.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " proxyForwardProgress=" + proxyForwardProgress.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " step=" + DescribeNavigationStep(step));
+                    return originalPlanningGoal;
+                }
             }
 
             LogNavigationTrackerDebug(
