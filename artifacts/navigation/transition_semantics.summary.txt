@@ -1,12 +1,12 @@
 Transition semantic audit summary
-Generated at: 2026-05-05T19:58:16.7113996Z
+Generated at: 2026-05-06T22:38:37.0354382Z
 Total transitions: 112
 Classification counts:
-- complete: 103
+- complete: 98
 - incomplete: 4
 - contradictory: 0
 - locked/unavailable: 0
-- execution-only failure: 5
+- execution-only failure: 10
 - unknown: 0
 Transition kind counts:
 - Door: 22
@@ -14,17 +14,27 @@ Transition kind counts:
 - Stairs: 4
 - Teleporter: 2
 Sweep evidence:
-- OpenPassage: total=88 passed=85 failed=3 runtime=0.1.1|utc=2026-05-05T19:44:12.0000000Z|sha256=2DC22B7A042FAD77A66C0794216F90CDD999977A31C1D37E51622B378545CD64
-- Door: total=22 passed=20 failed=2 runtime=0.1.1|utc=2026-05-05T19:44:12.0000000Z|sha256=2DC22B7A042FAD77A66C0794216F90CDD999977A31C1D37E51622B378545CD64
+- OpenPassage: total=88 passed=85 failed=3 runtime=0.1.1|utc=2026-05-06T21:35:08.0000000Z|sha256=9FA70BB9FF09430F3434D696FC0BF490FF6C8014B54E4250D6A35FBE4C0611DB
+- Door: total=22 passed=15 failed=7 runtime=0.1.1|utc=2026-05-06T22:31:44.0000000Z|sha256=CB39B26A8F5963E751009C4124F59F9BB0DB7185BE96E8F1C62D575CAD7A992B
 Current runtime failures:
-- transition:bathroom1->hallway [Door] classification=execution-only failure sweep=failed signature=localContext=door-push-through-local lastTargetKind=LocalWaypoint issues=none
-- transition:office->office_closet [Door] classification=execution-only failure sweep=failed signature=stage=DoorEntryAdvance localContext=<null> lastTargetKind=EntryWaypoint issues=none
+- transition:bathroom2->bedroom [Door] classification=execution-only failure sweep=failed signature=stage=DoorEntryAdvanceExtended localContext=<null> lastTargetKind=EntryWaypoint issues=BeaconSnapsFar:sourceApproach, BeaconSnapsFar:fromWaypoint
+- transition:bathroom2->dorian_bathroom2_2 [Door] classification=execution-only failure sweep=failed signature=stage=DoorEntryAdvanceExtended localContext=<null> lastTargetKind=EntryWaypoint issues=BeaconSnapsFar:destinationClear
+- transition:gym_closet->gym [Door] classification=execution-only failure sweep=failed signature=stage=DoorEntryAdvanceExtended localContext=<null> lastTargetKind=EntryWaypoint issues=none
+- transition:gym->gym_closet [Door] classification=execution-only failure sweep=failed signature=localContext=door-entry-advance-local lastTargetKind=LocalWaypoint issues=none
+- transition:hallway->office [Door] classification=execution-only failure sweep=failed signature=localContext=current-zone lastTargetKind=LocalWaypoint issues=none
+- transition:office->hallway [Door] classification=execution-only failure sweep=failed signature=localContext=<null> lastTargetKind=EntryWaypoint issues=none
+- transition:office->office_closet [Door] classification=execution-only failure sweep=failed signature=stage=DoorEntryAdvanceExtended localContext=<null> lastTargetKind=EntryWaypoint issues=none
 - transition:dining_room->piano_room [OpenPassage] classification=execution-only failure sweep=failed signature=localContext=<null> lastTargetKind=EntryWaypoint issues=none
 - transition:hallway->living_room [OpenPassage] classification=execution-only failure sweep=failed signature=localContext=<null> lastTargetKind=EntryWaypoint issues=none
 - transition:living_room->hallway [OpenPassage] classification=execution-only failure sweep=failed signature=localContext=<null> lastTargetKind=EntryWaypoint issues=none
 Top non-complete semantic rows:
-- transition:bathroom1->hallway [Door] classification=execution-only failure sweep=failed signature=localContext=door-push-through-local lastTargetKind=LocalWaypoint issues=none
-- transition:office->office_closet [Door] classification=execution-only failure sweep=failed signature=stage=DoorEntryAdvance localContext=<null> lastTargetKind=EntryWaypoint issues=none
+- transition:bathroom2->bedroom [Door] classification=execution-only failure sweep=failed signature=stage=DoorEntryAdvanceExtended localContext=<null> lastTargetKind=EntryWaypoint issues=BeaconSnapsFar:sourceApproach, BeaconSnapsFar:fromWaypoint
+- transition:bathroom2->dorian_bathroom2_2 [Door] classification=execution-only failure sweep=failed signature=stage=DoorEntryAdvanceExtended localContext=<null> lastTargetKind=EntryWaypoint issues=BeaconSnapsFar:destinationClear
+- transition:gym_closet->gym [Door] classification=execution-only failure sweep=failed signature=stage=DoorEntryAdvanceExtended localContext=<null> lastTargetKind=EntryWaypoint issues=none
+- transition:gym->gym_closet [Door] classification=execution-only failure sweep=failed signature=localContext=door-entry-advance-local lastTargetKind=LocalWaypoint issues=none
+- transition:hallway->office [Door] classification=execution-only failure sweep=failed signature=localContext=current-zone lastTargetKind=LocalWaypoint issues=none
+- transition:office->hallway [Door] classification=execution-only failure sweep=failed signature=localContext=<null> lastTargetKind=EntryWaypoint issues=none
+- transition:office->office_closet [Door] classification=execution-only failure sweep=failed signature=stage=DoorEntryAdvanceExtended localContext=<null> lastTargetKind=EntryWaypoint issues=none
 - transition:dining_room->piano_room [OpenPassage] classification=execution-only failure sweep=failed signature=localContext=<null> lastTargetKind=EntryWaypoint issues=none
 - transition:hallway->living_room [OpenPassage] classification=execution-only failure sweep=failed signature=localContext=<null> lastTargetKind=EntryWaypoint issues=none
 - transition:living_room->hallway [OpenPassage] classification=execution-only failure sweep=failed signature=localContext=<null> lastTargetKind=EntryWaypoint issues=none

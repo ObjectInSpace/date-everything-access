@@ -1,19 +1,19 @@
 {
   "SchemaVersion": 1,
-  "GeneratedAtUtc": "2026-04-24T21:31:53.2788063Z",
+  "GeneratedAtUtc": "2026-04-25T01:54:39.4202293Z",
   "ActiveScene": "ThirdPersonGreybox",
   "ReportKind": "SelectedObjectCoverage",
   "PluginVersion": "0.1.1",
-  "RuntimeBuildStamp": "0.1.1|utc=2026-04-24T21:03:42.0000000Z|sha256=D03A7E6A91E68B8C10DB739537781A7914E9EAB3849DA53C21C005684F62821C",
+  "RuntimeBuildStamp": "0.1.1|utc=2026-04-25T01:39:12.0000000Z|sha256=FCFC84280778F208769AC8BEAAC60B36533C4DE9DFFEA7DCC7A74CDA58213E79",
   "RuntimeAssemblyPath": "D:\\SteamLibrary\\steamapps\\common\\Date Everything\\BepInEx\\plugins\\DateEverythingAccess.dll",
-  "RuntimeAssemblySha256": "D03A7E6A91E68B8C10DB739537781A7914E9EAB3849DA53C21C005684F62821C",
+  "RuntimeAssemblySha256": "FCFC84280778F208769AC8BEAAC60B36533C4DE9DFFEA7DCC7A74CDA58213E79",
   "OpenPassageOverrideStatus": "loaded",
   "OpenPassageOverrideDetail": "Entries=37 normalizedScalarArrays=False",
   "OpenPassageOverrideEntryCount": 37,
   "OpenPassageOverrideNormalizedScalarArrays": false,
   "OpenPassageOverridePath": "D:\\SteamLibrary\\steamapps\\common\\Date Everything\\BepInEx\\plugins\\navigation_transition_overrides.json",
-  "OpenPassageOverrideFileSha256": "AC945AE003A24ABA6AB0C6691A54B7C9F6883D3E306A034153399D468C1247FF",
-  "OpenPassageOverrideFileLastWriteUtc": "2026-04-24T19:30:48.0000000Z",
+  "OpenPassageOverrideFileSha256": "C35066C214243BEC730A1A808552F6E36A98776E5F4DFEE99D0DE41F3211656D",
+  "OpenPassageOverrideFileLastWriteUtc": "2026-04-24T21:19:54.0000000Z",
   "OverallStatus": "failed",
   "FailureReason": "One or more start-zone components failed route, transition, or arrival proof.",
   "Limitations": [
@@ -32,11 +32,11 @@
     "ApproachReferenceSource": "bounds",
     "ApproachTarget": {
       "x": -7.595914,
-      "y": 13.11119,
+      "y": 9.289057,
       "z": 0.108368
     },
     "ApproachSnapStatus": "passed",
-    "ApproachSnapDetail": "mode=exact snappedCell=(7,11) approxCell=(7,11) distance=0.00 original=(-7.60, 13.11, 0.11) snapped=(-7.60, 13.11, 0.11) radius=0"
+    "ApproachSnapDetail": "mode=exact snappedCell=(7,11) approxCell=(7,11) distance=0.00 original=(-7.60, 9.29, 0.11) snapped=(-7.60, 9.29, 0.11) radius=0"
   },
   "Summary": {
     "StartZoneCount": 57,
@@ -48,19 +48,19 @@
     "UnverifiedComponentCount": 0
   },
   "TrackerAlignment": {
-    "NavigationActive": true,
-    "TrackerActive": true,
-    "CurrentStepKey": "transition:bedroom_closet->bedroom",
-    "TargetKind": "TransitionInteractable",
+    "NavigationActive": false,
+    "TrackerActive": false,
+    "CurrentStepKey": null,
+    "TargetKind": null,
     "MovementTarget": {
-      "x": -4.349268,
-      "y": 12.82481,
-      "z": -21.41232
+      "x": 0,
+      "y": 0,
+      "z": 0
     },
     "TrackerTarget": {
-      "x": -4.349268,
-      "y": 12.82481,
-      "z": -21.41232
+      "x": -1.344202,
+      "y": 15.167,
+      "z": 1.656372
     },
     "TargetDelta": 0,
     "LocalNavigationContext": null
@@ -75,7 +75,7 @@
         "z": -4.874165
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:attic->upper_hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=radius snappedCell=(42,5) approxCell=(35,5) distance=3.42 original=(6.49, 9.69, -3.09) snapped=(9.90, 9.69, -2.89) radius=7} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=14 pathDistance=10.24",
       "DestinationLocalLegStatus": "failed",
@@ -95,8 +95,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "Door",
           "ConnectorName": "AtticDoors",
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=attic detail=transition interaction timed out step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=TransitionInteractable lastTarget=(5.03, 12.82, 2.13)",
+          "ValidationStatus": "passed",
+          "ValidationDetail": "passed",
           "RequiresInteraction": true
         },
         {
@@ -106,8 +106,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -121,7 +121,7 @@
         "z": 10.62584
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:attic->upper_hallway.",
+      "FailureReason": "NoPath zone=attic start={mode=exact snappedCell=(5,31) approxCell=(5,31) distance=0.00 original=(7.53, 0.00, 10.63) snapped=(7.53, 0.00, 10.63) radius=0} target={mode=exact snappedCell=(14,18) approxCell=(14,18) distance=0.25 original=(12.11, 18.26, 3.89) snapped=(12.03, 18.26, 4.13) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=attic start={mode=exact snappedCell=(5,31) approxCell=(5,31) distance=0.00 original=(7.53, 0.00, 10.63) snapped=(7.53, 0.00, 10.63) radius=0} target={mode=exact snappedCell=(14,18) approxCell=(14,18) distance=0.25 original=(12.11, 18.26, 3.89) snapped=(12.03, 18.26, 4.13) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -141,8 +141,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "Door",
           "ConnectorName": "AtticDoors",
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=attic detail=transition interaction timed out step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=TransitionInteractable lastTarget=(5.03, 12.82, 2.13)",
+          "ValidationStatus": "passed",
+          "ValidationDetail": "passed",
           "RequiresInteraction": true
         },
         {
@@ -152,8 +152,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -167,7 +167,7 @@
         "z": 7.154414
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:attic->upper_hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=radius snappedCell=(42,5) approxCell=(35,5) distance=3.42 original=(6.49, 9.69, -3.09) snapped=(9.90, 9.69, -2.89) radius=7} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=1 pathDistance=0.00",
       "DestinationLocalLegStatus": "failed",
@@ -198,8 +198,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "Door",
           "ConnectorName": "AtticDoors",
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=attic detail=transition interaction timed out step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=TransitionInteractable lastTarget=(5.03, 12.82, 2.13)",
+          "ValidationStatus": "passed",
+          "ValidationDetail": "passed",
           "RequiresInteraction": true
         },
         {
@@ -209,8 +209,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -280,7 +280,7 @@
           "StepKind": "Door",
           "ConnectorName": "Doors_Bedroom_Bathroom",
           "ValidationStatus": "failed",
-          "ValidationDetail": "step timeout currentZone=bathroom2 player=(-23.41, 12.81, -4.97) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-23.67, 12.82, -7.12)",
+          "ValidationDetail": "step timeout currentZone=bathroom2 player=(-23.82, 12.82, -4.83) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-23.81, 12.82, -4.82)",
           "RequiresInteraction": true
         },
         {
@@ -301,8 +301,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -347,8 +347,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -393,8 +393,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -439,8 +439,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -485,8 +485,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -531,8 +531,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -577,8 +577,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -623,8 +623,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -669,8 +669,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -726,8 +726,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -879,7 +879,7 @@
         "z": -9.88085
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=exact snappedCell=(46,10) approxCell=(46,10) distance=0.17 original=(12.06, 4.35, -0.44) snapped=(11.90, 4.35, -0.39) radius=0} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=4 pathDistance=5.04",
       "DestinationLocalLegStatus": "failed",
@@ -899,8 +899,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -910,8 +910,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -925,7 +925,7 @@
         "z": -9.38085
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=dining_room start={mode=exact snappedCell=(0,1) approxCell=(0,1) distance=0.00 original=(-31.40, 0.00, -9.38) snapped=(-31.40, 0.00, -9.38) radius=0} target={mode=full-zone snappedCell=(27,5) approxCell=(29,16) distance=5.76 original=(-17.05, 4.68, -1.69) snapped=(-17.90, 4.68, -7.38)}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=dining_room start={mode=exact snappedCell=(0,1) approxCell=(0,1) distance=0.00 original=(-31.40, 0.00, -9.38) snapped=(-31.40, 0.00, -9.38) radius=0} target={mode=full-zone snappedCell=(27,5) approxCell=(29,16) distance=5.76 original=(-17.05, 4.68, -1.69) snapped=(-17.90, 4.68, -7.38)}",
       "DestinationLocalLegStatus": "failed",
@@ -945,8 +945,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -956,8 +956,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -971,7 +971,7 @@
         "z": 4.61915
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=dining_room start={mode=exact snappedCell=(0,29) approxCell=(0,29) distance=0.00 original=(-31.40, 0.00, 4.62) snapped=(-31.40, 0.00, 4.62) radius=0} target={mode=full-zone snappedCell=(27,5) approxCell=(29,16) distance=5.76 original=(-17.05, 4.68, -1.69) snapped=(-17.90, 4.68, -7.38)}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=dining_room start={mode=exact snappedCell=(0,29) approxCell=(0,29) distance=0.00 original=(-31.40, 0.00, 4.62) snapped=(-31.40, 0.00, 4.62) radius=0} target={mode=full-zone snappedCell=(27,5) approxCell=(29,16) distance=5.76 original=(-17.05, 4.68, -1.69) snapped=(-17.90, 4.68, -7.38)}",
       "DestinationLocalLegStatus": "failed",
@@ -991,8 +991,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1002,8 +1002,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1017,7 +1017,7 @@
         "z": 4.61915
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=dining_room start={mode=exact snappedCell=(16,29) approxCell=(16,29) distance=0.00 original=(-23.40, 0.00, 4.62) snapped=(-23.40, 0.00, 4.62) radius=0} target={mode=full-zone snappedCell=(27,5) approxCell=(29,16) distance=5.76 original=(-17.05, 4.68, -1.69) snapped=(-17.90, 4.68, -7.38)}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=dining_room start={mode=exact snappedCell=(16,29) approxCell=(16,29) distance=0.00 original=(-23.40, 0.00, 4.62) snapped=(-23.40, 0.00, 4.62) radius=0} target={mode=full-zone snappedCell=(27,5) approxCell=(29,16) distance=5.76 original=(-17.05, 4.68, -1.69) snapped=(-17.90, 4.68, -7.38)}",
       "DestinationLocalLegStatus": "failed",
@@ -1037,8 +1037,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1048,8 +1048,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1063,7 +1063,7 @@
         "z": 3.885414
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:attic->upper_hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=radius snappedCell=(42,5) approxCell=(35,5) distance=3.42 original=(6.49, 9.69, -3.09) snapped=(9.90, 9.69, -2.89) radius=7} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=1 pathDistance=0.00",
       "DestinationLocalLegStatus": "failed",
@@ -1094,8 +1094,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "Door",
           "ConnectorName": "AtticDoors",
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=attic detail=transition interaction timed out step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=TransitionInteractable lastTarget=(5.03, 12.82, 2.13)",
+          "ValidationStatus": "passed",
+          "ValidationDetail": "passed",
           "RequiresInteraction": true
         },
         {
@@ -1105,8 +1105,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1120,7 +1120,7 @@
         "z": 3.885414
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:attic->upper_hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=radius snappedCell=(42,5) approxCell=(35,5) distance=3.42 original=(6.49, 9.69, -3.09) snapped=(9.90, 9.69, -2.89) radius=7} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=1 pathDistance=0.00",
       "DestinationLocalLegStatus": "failed",
@@ -1151,8 +1151,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "Door",
           "ConnectorName": "AtticDoors",
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=attic detail=transition interaction timed out step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=attic->upper_hallway kind=Door interaction=True connector=AtticDoors from=(12.11, 18.26, 3.89) to=(-4.25, 18.26, 3.89) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=TransitionInteractable lastTarget=(5.03, 12.82, 2.13)",
+          "ValidationStatus": "passed",
+          "ValidationDetail": "passed",
           "RequiresInteraction": true
         },
         {
@@ -1162,8 +1162,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1197,8 +1197,8 @@
           "ToZone": "laundry_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1208,8 +1208,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1219,8 +1219,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1254,8 +1254,8 @@
           "ToZone": "bathroom1",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1300,8 +1300,8 @@
           "ToZone": "bathroom2",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1312,7 +1312,7 @@
           "StepKind": "Door",
           "ConnectorName": "Doors_Bedroom_Bathroom",
           "ValidationStatus": "failed",
-          "ValidationDetail": "step timeout currentZone=bathroom2 player=(-23.41, 12.81, -4.97) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-23.67, 12.82, -7.12)",
+          "ValidationDetail": "step timeout currentZone=bathroom2 player=(-23.82, 12.82, -4.83) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-23.81, 12.82, -4.82)",
           "RequiresInteraction": true
         },
         {
@@ -1333,8 +1333,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1368,8 +1368,8 @@
           "ToZone": "bathroom2",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1380,7 +1380,7 @@
           "StepKind": "Door",
           "ConnectorName": "Doors_Bedroom_Bathroom",
           "ValidationStatus": "failed",
-          "ValidationDetail": "step timeout currentZone=bathroom2 player=(-23.41, 12.81, -4.97) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-23.67, 12.82, -7.12)",
+          "ValidationDetail": "step timeout currentZone=bathroom2 player=(-23.82, 12.82, -4.83) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-23.81, 12.82, -4.82)",
           "RequiresInteraction": true
         },
         {
@@ -1401,8 +1401,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1448,7 +1448,7 @@
           "StepKind": "Door",
           "ConnectorName": "Doors_Bedroom_Bathroom",
           "ValidationStatus": "failed",
-          "ValidationDetail": "step timeout currentZone=bathroom2 player=(-23.41, 12.81, -4.97) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-23.67, 12.82, -7.12)",
+          "ValidationDetail": "step timeout currentZone=bathroom2 player=(-23.82, 12.82, -4.83) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-23.81, 12.82, -4.82)",
           "RequiresInteraction": true
         },
         {
@@ -1469,8 +1469,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1504,8 +1504,8 @@
           "ToZone": "bedroom",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1526,8 +1526,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1561,8 +1561,8 @@
           "ToZone": "bedroom",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1583,8 +1583,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1618,8 +1618,8 @@
           "ToZone": "bedroom_closet",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1651,8 +1651,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1686,8 +1686,8 @@
           "ToZone": "bedroom_closet",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1719,8 +1719,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1754,8 +1754,8 @@
           "ToZone": "gym",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1776,8 +1776,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1811,8 +1811,8 @@
           "ToZone": "gym",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1833,8 +1833,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1868,8 +1868,8 @@
           "ToZone": "gym",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1890,8 +1890,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1925,8 +1925,8 @@
           "ToZone": "gym",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1947,8 +1947,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -1962,7 +1962,7 @@
         "z": 20.66441
       },
       "Status": "failed",
-      "FailureReason": "NoPath zone=hallway start={mode=radius snappedCell=(42,5) approxCell=(35,5) distance=3.42 original=(6.49, 9.69, -3.09) snapped=(9.90, 9.69, -2.89) radius=7} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
+      "FailureReason": "Transition validation failed for step transition:gym_closet->gym.",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=1 pathDistance=0.00",
       "DestinationLocalLegStatus": "failed",
@@ -1982,8 +1982,8 @@
           "ToZone": "gym_closet",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -1993,8 +1993,8 @@
           "ToZone": "gym",
           "StepKind": "Door",
           "ConnectorName": "Doors_Gym_ClosetOuter",
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "failed",
+          "ValidationDetail": "step timeout currentZone=gym_closet2 player=(-2.74, 14.28, 23.92) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-3.14, 12.82, 23.99)",
           "RequiresInteraction": true
         },
         {
@@ -2015,8 +2015,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -2030,7 +2030,7 @@
         "z": 20.08441
       },
       "Status": "failed",
-      "FailureReason": "NoPath zone=hallway start={mode=radius snappedCell=(42,5) approxCell=(35,5) distance=3.42 original=(6.49, 9.69, -3.09) snapped=(9.90, 9.69, -2.89) radius=7} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
+      "FailureReason": "Transition validation failed for step transition:gym_closet->gym.",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=1 pathDistance=0.00",
       "DestinationLocalLegStatus": "failed",
@@ -2050,8 +2050,8 @@
           "ToZone": "gym_closet",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2061,8 +2061,8 @@
           "ToZone": "gym",
           "StepKind": "Door",
           "ConnectorName": "Doors_Gym_ClosetOuter",
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "failed",
+          "ValidationDetail": "step timeout currentZone=gym_closet2 player=(-2.74, 14.28, 23.92) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-3.14, 12.82, 23.99)",
           "RequiresInteraction": true
         },
         {
@@ -2083,8 +2083,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -2118,8 +2118,8 @@
           "ToZone": "bedroom_closet",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2151,8 +2151,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -2186,8 +2186,8 @@
           "ToZone": "laundry_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2197,8 +2197,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2208,8 +2208,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -2243,8 +2243,8 @@
           "ToZone": "laundry_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2254,8 +2254,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2265,8 +2265,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -2280,7 +2280,7 @@
         "z": 30.98441
       },
       "Status": "failed",
-      "FailureReason": "NoPath zone=hallway start={mode=radius snappedCell=(42,5) approxCell=(35,5) distance=3.42 original=(6.49, 9.69, -3.09) snapped=(9.90, 9.69, -2.89) radius=7} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
+      "FailureReason": "Transition validation failed for step transition:laundry_room_closet->laundry_room.",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=1 pathDistance=0.00",
       "DestinationLocalLegStatus": "failed",
@@ -2300,8 +2300,8 @@
           "ToZone": "laundry_room_closet",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2311,8 +2311,8 @@
           "ToZone": "laundry_room",
           "StepKind": "Door",
           "ConnectorName": "Doors_Laundry_Closet",
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "failed",
+          "ValidationDetail": "step timeout currentZone=laundry_room_closet player=(-11.47, -0.60, 35.79) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-11.40, -0.62, 35.79)",
           "RequiresInteraction": true
         },
         {
@@ -2322,8 +2322,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2333,8 +2333,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -2368,8 +2368,8 @@
           "ToZone": "office",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2414,8 +2414,8 @@
           "ToZone": "office",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2440,7 +2440,7 @@
         "z": 24.47441
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:office->hallway.",
+      "FailureReason": "Transition validation failed for step transition:office_closet->office.",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=1 pathDistance=0.00",
       "DestinationLocalLegStatus": "failed",
@@ -2460,8 +2460,8 @@
           "ToZone": "office_closet",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2471,8 +2471,8 @@
           "ToZone": "office",
           "StepKind": "Door",
           "ConnectorName": "Doors_Office_Closet",
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "failed",
+          "ValidationDetail": "step timeout currentZone=office_closet player=(2.51, -0.60, 25.80) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(2.61, -0.62, 25.79)",
           "RequiresInteraction": true
         },
         {
@@ -2497,7 +2497,7 @@
         "z": 23.96441
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:office->hallway.",
+      "FailureReason": "Transition validation failed for step transition:office_closet->office.",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=1 pathDistance=0.00",
       "DestinationLocalLegStatus": "failed",
@@ -2517,8 +2517,8 @@
           "ToZone": "office_closet",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2528,8 +2528,8 @@
           "ToZone": "office",
           "StepKind": "Door",
           "ConnectorName": "Doors_Office_Closet",
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "failed",
+          "ValidationDetail": "step timeout currentZone=office_closet player=(2.51, -0.60, 25.80) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(2.61, -0.62, 25.79)",
           "RequiresInteraction": true
         },
         {
@@ -2554,7 +2554,7 @@
         "z": 25.34441
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:dorian_trapdoor1->office.",
+      "FailureReason": "Transition validation failed for step transition:office->hallway.",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=1 pathDistance=0.00",
       "DestinationLocalLegStatus": "failed",
@@ -2574,8 +2574,8 @@
           "ToZone": "office",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "step timeout currentZone=dorian_trapdoor1 player=(3.20, -0.01, 25.08) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(5.65, 4.37, 25.34)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2620,8 +2620,8 @@
           "ToZone": "office",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2666,8 +2666,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2677,8 +2677,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -2692,7 +2692,7 @@
         "z": -0.129586
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=exact snappedCell=(46,10) approxCell=(46,10) distance=0.17 original=(12.06, 4.35, -0.44) snapped=(11.90, 4.35, -0.39) radius=0} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=1 pathDistance=0.00",
       "DestinationLocalLegStatus": "failed",
@@ -2712,8 +2712,8 @@
           "ToZone": "living_room_tutorial",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2723,8 +2723,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -2734,8 +2734,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -2780,8 +2780,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -2826,8 +2826,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -2872,8 +2872,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -2887,7 +2887,7 @@
         "z": 8.491413
       },
       "Status": "failed",
-      "FailureReason": "NoPath zone=gym_closet start={mode=exact snappedCell=(6,0) approxCell=(6,0) distance=0.00 original=(-0.14, 0.00, 8.49) snapped=(-0.14, 0.00, 8.49) radius=0} target={mode=exact snappedCell=(10,23) approxCell=(10,23) distance=0.10 original=(1.83, 18.02, 20.08) snapped=(1.86, 18.02, 19.99) radius=0}",
+      "FailureReason": "Transition validation failed for step transition:gym_closet->gym.",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=gym_closet start={mode=exact snappedCell=(6,0) approxCell=(6,0) distance=0.00 original=(-0.14, 0.00, 8.49) snapped=(-0.14, 0.00, 8.49) radius=0} target={mode=exact snappedCell=(10,23) approxCell=(10,23) distance=0.10 original=(1.83, 18.02, 20.08) snapped=(1.86, 18.02, 19.99) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -2907,8 +2907,8 @@
           "ToZone": "gym",
           "StepKind": "Door",
           "ConnectorName": "Doors_Gym_ClosetOuter",
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "failed",
+          "ValidationDetail": "step timeout currentZone=gym_closet2 player=(-2.74, 14.28, 23.92) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-3.14, 12.82, 23.99)",
           "RequiresInteraction": true
         },
         {
@@ -2929,8 +2929,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -2944,7 +2944,7 @@
         "z": 13.99141
       },
       "Status": "failed",
-      "FailureReason": "NoPath zone=gym_closet start={mode=exact snappedCell=(0,11) approxCell=(0,11) distance=0.00 original=(-3.14, 0.00, 13.99) snapped=(-3.14, 0.00, 13.99) radius=0} target={mode=exact snappedCell=(10,23) approxCell=(10,23) distance=0.10 original=(1.83, 18.02, 20.08) snapped=(1.86, 18.02, 19.99) radius=0}",
+      "FailureReason": "Transition validation failed for step transition:gym_closet->gym.",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=gym_closet start={mode=exact snappedCell=(0,11) approxCell=(0,11) distance=0.00 original=(-3.14, 0.00, 13.99) snapped=(-3.14, 0.00, 13.99) radius=0} target={mode=exact snappedCell=(10,23) approxCell=(10,23) distance=0.10 original=(1.83, 18.02, 20.08) snapped=(1.86, 18.02, 19.99) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -2964,8 +2964,8 @@
           "ToZone": "gym",
           "StepKind": "Door",
           "ConnectorName": "Doors_Gym_ClosetOuter",
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "failed",
+          "ValidationDetail": "step timeout currentZone=gym_closet2 player=(-2.74, 14.28, 23.92) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-3.14, 12.82, 23.99)",
           "RequiresInteraction": true
         },
         {
@@ -2986,8 +2986,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3001,7 +3001,7 @@
         "z": 19.99141
       },
       "Status": "failed",
-      "FailureReason": "NoPath zone=hallway start={mode=radius snappedCell=(42,5) approxCell=(35,5) distance=3.42 original=(6.49, 9.69, -3.09) snapped=(9.90, 9.69, -2.89) radius=7} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
+      "FailureReason": "Transition validation failed for step transition:gym_closet->gym.",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=2 pathDistance=5.00",
       "DestinationLocalLegStatus": "failed",
@@ -3021,8 +3021,8 @@
           "ToZone": "gym",
           "StepKind": "Door",
           "ConnectorName": "Doors_Gym_ClosetOuter",
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "failed",
+          "ValidationDetail": "step timeout currentZone=gym_closet2 player=(-2.74, 14.28, 23.92) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-3.14, 12.82, 23.99)",
           "RequiresInteraction": true
         },
         {
@@ -3043,8 +3043,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3150,8 +3150,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3165,7 +3165,7 @@
         "z": 0.447612
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=exact snappedCell=(46,10) approxCell=(46,10) distance=0.17 original=(12.06, 4.35, -0.44) snapped=(11.90, 4.35, -0.39) radius=0} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=6 pathDistance=10.86",
       "DestinationLocalLegStatus": "failed",
@@ -3185,8 +3185,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3196,8 +3196,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3207,8 +3207,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3222,7 +3222,7 @@
         "z": 15.94761
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=kitchen start={mode=exact snappedCell=(0,31) approxCell=(0,31) distance=0.00 original=(-28.23, 0.00, 15.95) snapped=(-28.23, 0.00, 15.95) radius=0} target={mode=exact snappedCell=(32,18) approxCell=(32,18) distance=0.24 original=(-12.30, 3.37, 9.68) snapped=(-12.23, 3.37, 9.45) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=kitchen start={mode=exact snappedCell=(0,31) approxCell=(0,31) distance=0.00 original=(-28.23, 0.00, 15.95) snapped=(-28.23, 0.00, 15.95) radius=0} target={mode=exact snappedCell=(32,18) approxCell=(32,18) distance=0.24 original=(-12.30, 3.37, 9.68) snapped=(-12.23, 3.37, 9.45) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -3242,8 +3242,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3253,8 +3253,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3264,8 +3264,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3279,7 +3279,7 @@
         "z": 20.44761
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=kitchen start={mode=exact snappedCell=(20,40) approxCell=(20,40) distance=0.00 original=(-18.23, 0.00, 20.45) snapped=(-18.23, 0.00, 20.45) radius=0} target={mode=exact snappedCell=(32,18) approxCell=(32,18) distance=0.24 original=(-12.30, 3.37, 9.68) snapped=(-12.23, 3.37, 9.45) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=kitchen start={mode=exact snappedCell=(20,40) approxCell=(20,40) distance=0.00 original=(-18.23, 0.00, 20.45) snapped=(-18.23, 0.00, 20.45) radius=0} target={mode=exact snappedCell=(32,18) approxCell=(32,18) distance=0.24 original=(-12.30, 3.37, 9.68) snapped=(-12.23, 3.37, 9.45) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -3299,8 +3299,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3310,8 +3310,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3321,8 +3321,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3336,7 +3336,7 @@
         "z": 21.44761
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=kitchen start={mode=exact snappedCell=(11,42) approxCell=(11,42) distance=0.00 original=(-22.73, 0.00, 21.45) snapped=(-22.73, 0.00, 21.45) radius=0} target={mode=exact snappedCell=(32,18) approxCell=(32,18) distance=0.24 original=(-12.30, 3.37, 9.68) snapped=(-12.23, 3.37, 9.45) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=kitchen start={mode=exact snappedCell=(11,42) approxCell=(11,42) distance=0.00 original=(-22.73, 0.00, 21.45) snapped=(-22.73, 0.00, 21.45) radius=0} target={mode=exact snappedCell=(32,18) approxCell=(32,18) distance=0.24 original=(-12.30, 3.37, 9.68) snapped=(-12.23, 3.37, 9.45) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -3356,8 +3356,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3367,8 +3367,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3378,8 +3378,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3393,7 +3393,7 @@
         "z": 25.16341
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=exact snappedCell=(46,10) approxCell=(46,10) distance=0.17 original=(12.06, 4.35, -0.44) snapped=(11.90, 4.35, -0.39) radius=0} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=1 pathDistance=0.00",
       "DestinationLocalLegStatus": "failed",
@@ -3413,8 +3413,8 @@
           "ToZone": "kitchen",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3424,8 +3424,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3435,8 +3435,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3446,8 +3446,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3461,7 +3461,7 @@
         "z": 10.09898
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=exact snappedCell=(46,10) approxCell=(46,10) distance=0.17 original=(12.06, 4.35, -0.44) snapped=(11.90, 4.35, -0.39) radius=0} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=2 pathDistance=4.24",
       "DestinationLocalLegStatus": "failed",
@@ -3481,8 +3481,8 @@
           "ToZone": "kitchen",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3492,8 +3492,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3503,8 +3503,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3514,8 +3514,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3529,7 +3529,7 @@
         "z": -20.50559
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=exact snappedCell=(46,10) approxCell=(46,10) distance=0.17 original=(12.06, 4.35, -0.44) snapped=(11.90, 4.35, -0.39) radius=0} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=1 pathDistance=0.00",
       "DestinationLocalLegStatus": "failed",
@@ -3549,8 +3549,8 @@
           "ToZone": "kitchen",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3560,8 +3560,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3571,8 +3571,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3582,8 +3582,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3617,8 +3617,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3628,8 +3628,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3663,8 +3663,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3674,8 +3674,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3689,7 +3689,7 @@
         "z": 29.79078
       },
       "Status": "failed",
-      "FailureReason": "NoPath zone=hallway start={mode=radius snappedCell=(42,5) approxCell=(35,5) distance=3.42 original=(6.49, 9.69, -3.09) snapped=(9.90, 9.69, -2.89) radius=7} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
+      "FailureReason": "Transition validation failed for step transition:laundry_room_closet->laundry_room.",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=2 pathDistance=1.00",
       "DestinationLocalLegStatus": "failed",
@@ -3709,8 +3709,8 @@
           "ToZone": "laundry_room",
           "StepKind": "Door",
           "ConnectorName": "Doors_Laundry_Closet",
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "failed",
+          "ValidationDetail": "step timeout currentZone=laundry_room_closet player=(-11.47, -0.60, 35.79) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(-11.40, -0.62, 35.79)",
           "RequiresInteraction": true
         },
         {
@@ -3720,8 +3720,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3731,8 +3731,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3746,7 +3746,7 @@
         "z": -29.20355
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=living_room start={mode=exact snappedCell=(41,0) approxCell=(41,0) distance=0.00 original=(14.60, 0.00, -29.20) snapped=(14.60, 0.00, -29.20) radius=0} target={mode=exact snappedCell=(22,32) approxCell=(22,32) distance=0.18 original=(5.28, 4.67, -13.19) snapped=(5.10, 4.67, -13.20) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=living_room start={mode=exact snappedCell=(41,0) approxCell=(41,0) distance=0.00 original=(14.60, 0.00, -29.20) snapped=(14.60, 0.00, -29.20) radius=0} target={mode=exact snappedCell=(22,32) approxCell=(22,32) distance=0.18 original=(5.28, 4.67, -13.19) snapped=(5.10, 4.67, -13.20) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -3766,8 +3766,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3781,7 +3781,7 @@
         "z": -27.70355
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=exact snappedCell=(46,10) approxCell=(46,10) distance=0.17 original=(12.06, 4.35, -0.44) snapped=(11.90, 4.35, -0.39) radius=0} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=21 pathDistance=16.57",
       "DestinationLocalLegStatus": "failed",
@@ -3801,8 +3801,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3816,7 +3816,7 @@
         "z": -27.70355
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=living_room start={mode=exact snappedCell=(41,3) approxCell=(41,3) distance=0.00 original=(14.60, 0.00, -27.70) snapped=(14.60, 0.00, -27.70) radius=0} target={mode=exact snappedCell=(22,32) approxCell=(22,32) distance=0.18 original=(5.28, 4.67, -13.19) snapped=(5.10, 4.67, -13.20) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=living_room start={mode=exact snappedCell=(41,3) approxCell=(41,3) distance=0.00 original=(14.60, 0.00, -27.70) snapped=(14.60, 0.00, -27.70) radius=0} target={mode=exact snappedCell=(22,32) approxCell=(22,32) distance=0.18 original=(5.28, 4.67, -13.19) snapped=(5.10, 4.67, -13.20) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -3836,8 +3836,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3851,7 +3851,7 @@
         "z": -19.70355
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=living_room start={mode=exact snappedCell=(46,19) approxCell=(46,19) distance=0.00 original=(17.10, 0.00, -19.70) snapped=(17.10, 0.00, -19.70) radius=0} target={mode=exact snappedCell=(22,32) approxCell=(22,32) distance=0.18 original=(5.28, 4.67, -13.19) snapped=(5.10, 4.67, -13.20) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=living_room start={mode=exact snappedCell=(46,19) approxCell=(46,19) distance=0.00 original=(17.10, 0.00, -19.70) snapped=(17.10, 0.00, -19.70) radius=0} target={mode=exact snappedCell=(22,32) approxCell=(22,32) distance=0.18 original=(5.28, 4.67, -13.19) snapped=(5.10, 4.67, -13.20) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -3871,8 +3871,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3886,7 +3886,7 @@
         "z": -17.20355
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=living_room start={mode=exact snappedCell=(0,24) approxCell=(0,24) distance=0.00 original=(-5.90, 0.00, -17.20) snapped=(-5.90, 0.00, -17.20) radius=0} target={mode=exact snappedCell=(22,32) approxCell=(22,32) distance=0.18 original=(5.28, 4.67, -13.19) snapped=(5.10, 4.67, -13.20) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=living_room start={mode=exact snappedCell=(0,24) approxCell=(0,24) distance=0.00 original=(-5.90, 0.00, -17.20) snapped=(-5.90, 0.00, -17.20) radius=0} target={mode=exact snappedCell=(22,32) approxCell=(22,32) distance=0.18 original=(5.28, 4.67, -13.19) snapped=(5.10, 4.67, -13.20) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -3906,8 +3906,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -3921,7 +3921,7 @@
         "z": -16.76859
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=exact snappedCell=(46,10) approxCell=(46,10) distance=0.17 original=(12.06, 4.35, -0.44) snapped=(11.90, 4.35, -0.39) radius=0} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=2 pathDistance=5.00",
       "DestinationLocalLegStatus": "failed",
@@ -3941,8 +3941,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -3952,8 +3952,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4057,8 +4057,8 @@
           "ToZone": "office",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4103,8 +4103,8 @@
           "ToZone": "office",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4149,8 +4149,8 @@
           "ToZone": "office",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4175,7 +4175,7 @@
         "z": 21.29408
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:office->hallway.",
+      "FailureReason": "Transition validation failed for step transition:office_closet->office.",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=8 pathDistance=5.54",
       "DestinationLocalLegStatus": "failed",
@@ -4195,8 +4195,8 @@
           "ToZone": "office",
           "StepKind": "Door",
           "ConnectorName": "Doors_Office_Closet",
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "failed",
+          "ValidationDetail": "step timeout currentZone=office_closet player=(2.51, -0.60, 25.80) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(2.61, -0.62, 25.79)",
           "RequiresInteraction": true
         },
         {
@@ -4221,7 +4221,7 @@
         "z": -31.47359
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=piano_room start={mode=exact snappedCell=(32,0) approxCell=(32,0) distance=0.00 original=(-15.03, 0.00, -31.47) snapped=(-15.03, 0.00, -31.47) radius=0} target={mode=exact snappedCell=(39,37) approxCell=(39,37) distance=0.07 original=(-11.56, 4.84, -13.03) snapped=(-11.53, 4.84, -12.97) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=piano_room start={mode=exact snappedCell=(32,0) approxCell=(32,0) distance=0.00 original=(-15.03, 0.00, -31.47) snapped=(-15.03, 0.00, -31.47) radius=0} target={mode=exact snappedCell=(39,37) approxCell=(39,37) distance=0.07 original=(-11.56, 4.84, -13.03) snapped=(-11.53, 4.84, -12.97) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -4241,8 +4241,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4252,8 +4252,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4263,8 +4263,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4278,7 +4278,7 @@
         "z": -28.47359
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=piano_room start={mode=exact snappedCell=(12,6) approxCell=(12,6) distance=0.00 original=(-25.03, 0.00, -28.47) snapped=(-25.03, 0.00, -28.47) radius=0} target={mode=exact snappedCell=(39,37) approxCell=(39,37) distance=0.07 original=(-11.56, 4.84, -13.03) snapped=(-11.53, 4.84, -12.97) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=piano_room start={mode=exact snappedCell=(12,6) approxCell=(12,6) distance=0.00 original=(-25.03, 0.00, -28.47) snapped=(-25.03, 0.00, -28.47) radius=0} target={mode=exact snappedCell=(39,37) approxCell=(39,37) distance=0.07 original=(-11.56, 4.84, -13.03) snapped=(-11.53, 4.84, -12.97) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -4298,8 +4298,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4309,8 +4309,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4320,8 +4320,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4335,7 +4335,7 @@
         "z": -26.97359
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=piano_room start={mode=exact snappedCell=(38,9) approxCell=(38,9) distance=0.00 original=(-12.03, 0.00, -26.97) snapped=(-12.03, 0.00, -26.97) radius=0} target={mode=exact snappedCell=(39,37) approxCell=(39,37) distance=0.07 original=(-11.56, 4.84, -13.03) snapped=(-11.53, 4.84, -12.97) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=piano_room start={mode=exact snappedCell=(38,9) approxCell=(38,9) distance=0.00 original=(-12.03, 0.00, -26.97) snapped=(-12.03, 0.00, -26.97) radius=0} target={mode=exact snappedCell=(39,37) approxCell=(39,37) distance=0.07 original=(-11.56, 4.84, -13.03) snapped=(-11.53, 4.84, -12.97) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -4355,8 +4355,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4366,8 +4366,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4377,8 +4377,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4392,7 +4392,7 @@
         "z": -22.97359
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=piano_room start={mode=exact snappedCell=(24,17) approxCell=(24,17) distance=0.00 original=(-19.03, 0.00, -22.97) snapped=(-19.03, 0.00, -22.97) radius=0} target={mode=exact snappedCell=(39,37) approxCell=(39,37) distance=0.07 original=(-11.56, 4.84, -13.03) snapped=(-11.53, 4.84, -12.97) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=piano_room start={mode=exact snappedCell=(24,17) approxCell=(24,17) distance=0.00 original=(-19.03, 0.00, -22.97) snapped=(-19.03, 0.00, -22.97) radius=0} target={mode=exact snappedCell=(39,37) approxCell=(39,37) distance=0.07 original=(-11.56, 4.84, -13.03) snapped=(-11.53, 4.84, -12.97) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -4412,8 +4412,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4423,8 +4423,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4434,8 +4434,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4449,7 +4449,7 @@
         "z": -18.97359
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=piano_room start={mode=exact snappedCell=(0,25) approxCell=(0,25) distance=0.00 original=(-31.03, 0.00, -18.97) snapped=(-31.03, 0.00, -18.97) radius=0} target={mode=exact snappedCell=(39,37) approxCell=(39,37) distance=0.07 original=(-11.56, 4.84, -13.03) snapped=(-11.53, 4.84, -12.97) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=piano_room start={mode=exact snappedCell=(0,25) approxCell=(0,25) distance=0.00 original=(-31.03, 0.00, -18.97) snapped=(-31.03, 0.00, -18.97) radius=0} target={mode=exact snappedCell=(39,37) approxCell=(39,37) distance=0.07 original=(-11.56, 4.84, -13.03) snapped=(-11.53, 4.84, -12.97) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -4469,8 +4469,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4480,8 +4480,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4491,8 +4491,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4506,7 +4506,7 @@
         "z": -18.97359
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=hallway start={mode=exact snappedCell=(46,10) approxCell=(46,10) distance=0.17 original=(12.06, 4.35, -0.44) snapped=(11.90, 4.35, -0.39) radius=0} target={mode=exact snappedCell=(5,11) approxCell=(5,11) distance=0.00 original=(-8.60, 4.10, 0.11) snapped=(-8.60, 4.10, 0.11) radius=0}",
       "StartLocalLegStatus": "passed",
       "StartLocalLegDetail": "pathPoints=4 pathDistance=8.07",
       "DestinationLocalLegStatus": "failed",
@@ -4526,8 +4526,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4537,8 +4537,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4548,8 +4548,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4563,7 +4563,7 @@
         "z": -14.97359
       },
       "Status": "failed",
-      "FailureReason": "Transition validation failed for step transition:living_room->hallway.",
+      "FailureReason": "NoPath zone=piano_room start={mode=exact snappedCell=(0,33) approxCell=(0,33) distance=0.00 original=(-31.03, 0.00, -14.97) snapped=(-31.03, 0.00, -14.97) radius=0} target={mode=exact snappedCell=(39,37) approxCell=(39,37) distance=0.07 original=(-11.56, 4.84, -13.03) snapped=(-11.53, 4.84, -12.97) radius=0}",
       "StartLocalLegStatus": "failed",
       "StartLocalLegDetail": "NoPath zone=piano_room start={mode=exact snappedCell=(0,33) approxCell=(0,33) distance=0.00 original=(-31.03, 0.00, -14.97) snapped=(-31.03, 0.00, -14.97) radius=0} target={mode=exact snappedCell=(39,37) approxCell=(39,37) distance=0.07 original=(-11.56, 4.84, -13.03) snapped=(-11.53, 4.84, -12.97) radius=0}",
       "DestinationLocalLegStatus": "failed",
@@ -4583,8 +4583,8 @@
           "ToZone": "dining_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4594,8 +4594,8 @@
           "ToZone": "living_room",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4605,8 +4605,8 @@
           "ToZone": "hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "failed",
-          "ValidationDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=LocalWaypoint targetPosition=(5.10, 4.67, -6.70) rawContext=open-passage-guided localContext=open-passage-handoff step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(9.37, 4.67, -6.63) toCross=(9.56, 4.35, -5.60) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(5.10, 4.67, -6.70)",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4640,8 +4640,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4675,8 +4675,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4710,8 +4710,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4745,8 +4745,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4780,8 +4780,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
@@ -4815,8 +4815,8 @@
           "ToZone": "upper_hallway",
           "StepKind": "OpenPassage",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         },
         {
@@ -4826,8 +4826,8 @@
           "ToZone": "hallway",
           "StepKind": "Stairs",
           "ConnectorName": null,
-          "ValidationStatus": "passed",
-          "ValidationDetail": "passed",
+          "ValidationStatus": "unverified",
+          "ValidationDetail": "No transition sweep evidence matched this step.",
           "RequiresInteraction": false
         }
       ]
