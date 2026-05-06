@@ -1,22 +1,22 @@
 {
   "Summary": {
-    "GeneratedAtUtc": "2026-05-06T23:21:05.5926505Z",
+    "GeneratedAtUtc": "2026-05-06T23:30:27.7831553Z",
     "DoorSweepPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\door_transition_sweep.live.json",
-    "RuntimeBuildStamp": "0.1.1|utc=2026-05-06T23:12:28.0000000Z|sha256=158CBF1A63BCAA89B52653DAFF23A960514D7D1E478C47D1265AB5F582AA5881",
+    "RuntimeBuildStamp": "0.1.1|utc=2026-05-06T23:23:22.0000000Z|sha256=E821D548C242C0CF2888F1F38B0B40180B03DA920200460BB64DC0DDF264124A",
     "TotalCount": 22,
-    "PassedCount": 15,
-    "FailedCount": 7,
+    "PassedCount": 19,
+    "FailedCount": 3,
     "ViolationCount": 1,
     "WarningCount": 0
   },
   "Violations": [
     {
       "Rule": "PassingControlStillPassed",
-      "Key": "transition:bathroom1->hallway",
-      "FromZone": "bathroom1",
+      "Key": "transition:office->hallway",
+      "FromZone": "office",
       "ToZone": "hallway",
       "Status": "failed",
-      "CurrentZoneAtResult": "bathroom1",
+      "CurrentZoneAtResult": "office6",
       "LastTargetKind": "LocalWaypoint",
       "LastLocalNavigationContext": "door-entry-advance-local",
       "Detail": "Passing control is no longer passed."

@@ -1,6 +1,6 @@
 Sweep report import summary
 Kind: OpenPassage
-Imported at: 2026-05-06T23:08:12.3457098Z
+Imported at: 2026-05-06T23:29:47.8015254Z
 Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\transition_sweep.live.json
 Output: .\artifacts\navigation\transition_sweep.live.json
 Report generated at: 05/06/2026 21:41:30
