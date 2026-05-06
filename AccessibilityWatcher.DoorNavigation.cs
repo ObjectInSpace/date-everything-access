@@ -1118,7 +1118,8 @@ namespace DateEverythingAccess
             }
 
             if (IsDoorTraversalPostThresholdCommitted(step) &&
-                string.Equals(_rawNavigationTargetContext, "door-entry-advance-extended", StringComparison.Ordinal))
+                string.Equals(_rawNavigationTargetContext, "door-entry-advance-extended", StringComparison.Ordinal) &&
+                IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local"))
             {
                 LogNavigationTrackerDebug(
                     "Suppressed generic door local fallback stage=DoorEntryAdvanceExtended" +
@@ -1870,6 +1871,16 @@ namespace DateEverythingAccess
             }
 
             Vector3 originalPlanningGoal = planningGoal;
+
+            if (string.Equals(planningContext, "door-entry-advance-local", StringComparison.Ordinal) &&
+                IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local"))
+            {
+                LogNavigationTrackerDebug(
+                    "Preserved original final door entry planning goal after extended bridge completion" +
+                    " originalGoal=" + FormatVector3(originalPlanningGoal) +
+                    " step=" + DescribeNavigationStep(step));
+                return originalPlanningGoal;
+            }
 
             if ((string.Equals(planningContext, "door-entry-advance-extended-local", StringComparison.Ordinal) ||
                  string.Equals(planningContext, "door-entry-advance-local", StringComparison.Ordinal)) &&
