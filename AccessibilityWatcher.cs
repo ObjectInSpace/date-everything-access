@@ -513,6 +513,7 @@ namespace DateEverythingAccess
         private string _doorPostInteractionFallbackFailureSignature;
         private string _doorPostInteractionFallbackExhaustedDetail;
         private string _doorPostInteractionLoopSignature;
+        private string _doorRetainedExtendedNoProgressReleaseStepKey;
         private string _doorPushThroughBridgeLocalCompletedStepKey;
         private readonly HashSet<string> _doorSourceLocalCompletedKeys = new HashSet<string>(StringComparer.Ordinal);
         private readonly Dictionary<string, Vector3> _doorSourceLocalCompletedGoals = new Dictionary<string, Vector3>(StringComparer.Ordinal);
@@ -7645,22 +7646,6 @@ namespace DateEverythingAccess
             Vector3 rawTargetPosition = position;
             if (!LocalNavigationMaps.IsAvailable || position == Vector3.zero)
             {
-                if (position != Vector3.zero &&
-                    TryApplyUnityNavMeshFallbackTarget(
-                        currentZone,
-                        step,
-                        playerPosition,
-                        rawTargetPosition,
-                        "local-maps-unavailable",
-                        ref position,
-                        ref targetKind))
-                {
-                    ClearLocalNavigationPathState();
-                    ResetLocalNavigationStallTracking();
-                    ResetDoorPostInteractionFallbackExhaustion();
-                    return true;
-                }
-
                 RecordDoorPostInteractionFallbackFailure(
                     currentZone,
                     step,
@@ -7689,21 +7674,6 @@ namespace DateEverythingAccess
                     " rawTargetKind=" + targetKind +
                     " rawTargetPosition=" + FormatVector3(position) +
                     " step=" + DescribeNavigationStep(step));
-                if (TryApplyUnityNavMeshFallbackTarget(
-                        currentZone,
-                        step,
-                        playerPosition,
-                        rawTargetPosition,
-                        "local-goal-unresolved",
-                        ref position,
-                        ref targetKind))
-                {
-                    ClearLocalNavigationPathState();
-                    ResetLocalNavigationStallTracking();
-                    ResetDoorPostInteractionFallbackExhaustion();
-                    return true;
-                }
-
                 RecordDoorPostInteractionFallbackFailure(
                     currentZone,
                     step,
@@ -7732,21 +7702,6 @@ namespace DateEverythingAccess
                     ResetDoorPostInteractionFallbackExhaustion();
                     ResetLocalNavigationStallTracking();
                     return false;
-                }
-
-                if (TryApplyUnityNavMeshFallbackTarget(
-                        currentZone,
-                        step,
-                        playerPosition,
-                        rawTargetPosition,
-                        "local-lookahead-unavailable",
-                        ref position,
-                        ref targetKind))
-                {
-                    ClearLocalNavigationPathState();
-                    ResetLocalNavigationStallTracking();
-                    ResetDoorPostInteractionFallbackExhaustion();
-                    return true;
                 }
 
                 RecordDoorPostInteractionFallbackFailure(
@@ -8179,6 +8134,15 @@ namespace DateEverythingAccess
                 string.Equals(_localNavigationPathContext, "door-entry-advance-local", StringComparison.Ordinal) &&
                 string.Equals(_rawNavigationTargetContext, "door-entry-advance-extended", StringComparison.Ordinal) &&
                 IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local");
+            bool isFocusedClosetRetainedExtendedReuseLoopReleaseContext =
+                step.Kind == NavigationGraph.StepKind.Door &&
+                !string.IsNullOrWhiteSpace(currentZone) &&
+                IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) &&
+                string.Equals(_localNavigationPathContext, "door-entry-advance-extended-local", StringComparison.Ordinal) &&
+                string.Equals(_rawNavigationTargetContext, "door-entry-advance-extended", StringComparison.Ordinal) &&
+                IsFocusedClosetDeadlockStep(step) &&
+                IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local") &&
+                IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-local");
             bool isDoorSourceLocalProxyReleaseContext =
                 string.Equals(_localNavigationPathContext, "door-threshold-advance-local", StringComparison.Ordinal) ||
                 string.Equals(_localNavigationPathContext, "door-push-through-local", StringComparison.Ordinal) ||
@@ -8214,6 +8178,16 @@ namespace DateEverythingAccess
                         playerPosition,
                         _localNavigationPathGoal,
                         remainingDistance);
+                if (isFocusedClosetRetainedExtendedReuseLoopReleaseContext)
+                {
+                    _doorRetainedExtendedNoProgressReleaseStepKey = stepKey;
+                    LogNavigationTrackerDebug(
+                        "Marked retained extended bridge for no-progress release" +
+                        " stepKey=" + stepKey +
+                        " target=" + FormatVector3(targetPosition) +
+                        " remainingDistance=" + remainingDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " loopDetail=" + (loopDetail ?? "<null>"));
+                }
 
                 LogNavigationAutoWalkDebug(
                     "Released stalled door source local proxy" +
@@ -8326,6 +8300,21 @@ namespace DateEverythingAccess
             _doorPostInteractionLoopSignature = null;
             _doorPostInteractionLoopStartPosition = Vector3.zero;
             _doorPostInteractionLoopDetectionCount = 0;
+        }
+
+        private bool HasDoorRetainedExtendedNoProgressReleaseRequest(NavigationGraph.PathStep step)
+        {
+            if (step == null || string.IsNullOrWhiteSpace(_doorRetainedExtendedNoProgressReleaseStepKey))
+                return false;
+
+            string stepKey = BuildNavigationStepKey(step);
+            return !string.IsNullOrWhiteSpace(stepKey) &&
+                string.Equals(_doorRetainedExtendedNoProgressReleaseStepKey, stepKey, StringComparison.Ordinal);
+        }
+
+        private void ResetDoorRetainedExtendedNoProgressReleaseRequest()
+        {
+            _doorRetainedExtendedNoProgressReleaseStepKey = null;
         }
 
         private bool TryResolveLocalNavigationGoal(
@@ -9326,6 +9315,7 @@ namespace DateEverythingAccess
             ResetDoorCommittedSourceRecoveryState();
             ResetDoorCommittedSourceWatchdogState();
             ResetDoorPostInteractionLoopExhaustion();
+            ResetDoorRetainedExtendedNoProgressReleaseRequest();
             ResetDoorPushThroughBridgeLocalCompletion();
             ResetDoorSourceLocalGoalCompletion();
         }
@@ -9354,6 +9344,7 @@ namespace DateEverythingAccess
                 ResetDoorCommittedSourceRecoveryState();
                 ResetDoorCommittedSourceWatchdogState();
                 ResetDoorPostInteractionLoopExhaustion();
+                ResetDoorRetainedExtendedNoProgressReleaseRequest();
                 ResetDoorPushThroughBridgeLocalCompletion();
                 ResetDoorSourceLocalGoalCompletion();
             }

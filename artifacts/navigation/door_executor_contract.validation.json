@@ -1,11 +1,11 @@
 {
   "Summary": {
-    "GeneratedAtUtc": "2026-05-07T03:42:09.9233122Z",
+    "GeneratedAtUtc": "2026-05-07T19:31:25.2306662Z",
     "DoorSweepPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\door_transition_sweep.live.json",
-    "RuntimeBuildStamp": "0.1.1|utc=2026-05-07T03:33:32.0000000Z|sha256=35A62153CE08F82BF8E6616FAEEE74C6AB98C0D2F02FB2E1C0214F0221E3AFA5",
+    "RuntimeBuildStamp": "0.1.1|utc=2026-05-07T19:19:36.0000000Z|sha256=871342531B36C69057959443B0FFD3A194C25F3452A053994A5444155EB6B7D1",
     "TotalCount": 22,
-    "PassedCount": 19,
-    "FailedCount": 3,
+    "PassedCount": 20,
+    "FailedCount": 2,
     "ViolationCount": 0,
     "WarningCount": 0
   },
