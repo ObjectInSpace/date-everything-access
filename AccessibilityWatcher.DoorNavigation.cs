@@ -704,6 +704,16 @@ namespace DateEverythingAccess
             return "door-entry-advance-no-source-bridge";
         }
 
+        private bool IsFocusedClosetDeadlockStep(NavigationGraph.PathStep step)
+        {
+            if (step == null)
+                return false;
+
+            string stepKey = BuildNavigationStepKey(step);
+            return string.Equals(stepKey, "transition:gym_closet->gym", StringComparison.Ordinal) ||
+                string.Equals(stepKey, "transition:office->office_closet", StringComparison.Ordinal);
+        }
+
         private bool ShouldReleaseDoorSourceZoneExtendedBridgeToExplicitFinalFallback(
             NavigationGraph.PathStep step,
             string currentZone,
@@ -747,6 +757,20 @@ namespace DateEverythingAccess
                     " step=" + DescribeNavigationStep(step));
             }
 
+            bool isFocusedClosetDeadlockStep = IsFocusedClosetDeadlockStep(step);
+            if (isFocusedClosetDeadlockStep &&
+                finalEntryLocalCompleted &&
+                HasDoorRetainedExtendedNoProgressReleaseRequest(step))
+            {
+                LogNavigationTrackerDebug(
+                    "Releasing retained source-zone extended bridge after no-progress reused local loop" +
+                    " destinationTarget=" + FormatVector3(destinationTarget) +
+                    " extendedEntryAdvanceTarget=" + FormatVector3(extendedEntryAdvanceTarget) +
+                    " playerPosition=" + FormatVector3(playerPosition) +
+                    " step=" + DescribeNavigationStep(step));
+                return true;
+            }
+
             if (TryGetDoorSourceLocalPlanningGoal(
                     step,
                     currentZone,
@@ -760,6 +784,19 @@ namespace DateEverythingAccess
                     extendedBridgePlanningGoal,
                     GetLocalNavigationGoalReachedDistance("door-entry-advance-extended-local")))
             {
+                if (isFocusedClosetDeadlockStep)
+                {
+                    LogNavigationTrackerDebug(
+                        "Focused closet deadlock trace: retained source-zone extended bridge after proof" +
+                        " currentZone=" + currentZone +
+                        " playerPosition=" + FormatVector3(playerPosition) +
+                        " destinationTarget=" + FormatVector3(destinationTarget) +
+                        " extendedEntryAdvanceTarget=" + FormatVector3(extendedEntryAdvanceTarget) +
+                        " extendedBridgePlanningGoal=" + FormatVector3(extendedBridgePlanningGoal) +
+                        " finalEntryLocalCompleted=" + finalEntryLocalCompleted +
+                        " rawContext=" + (_rawNavigationTargetContext ?? "<null>") +
+                        " step=" + DescribeNavigationStep(step));
+                }
                 return false;
             }
 
@@ -1366,6 +1403,15 @@ namespace DateEverythingAccess
                 string.Equals(_rawNavigationTargetContext, "door-entry-advance-extended", StringComparison.Ordinal) &&
                 IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local"))
             {
+                if (IsFocusedClosetDeadlockStep(step))
+                {
+                    LogNavigationTrackerDebug(
+                        "Focused closet deadlock trace: suppressed generic fallback for raw extended bridge" +
+                        " desiredPosition=" + FormatVector3(desiredPosition) +
+                        " targetKind=" + targetKind +
+                        " rawContext=" + (_rawNavigationTargetContext ?? "<null>") +
+                        " step=" + DescribeNavigationStep(step));
+                }
                 LogNavigationTrackerDebug(
                     "Suppressed generic door local fallback stage=DoorEntryAdvanceExtended" +
                     " desiredPosition=" + FormatVector3(desiredPosition) +
@@ -1540,6 +1586,8 @@ namespace DateEverythingAccess
             planningContext = null;
             if (step == null || step.Kind != NavigationGraph.StepKind.Door)
                 return false;
+
+            bool isFocusedClosetDeadlockStep = IsFocusedClosetDeadlockStep(step);
 
             bool hasActiveDoorPushThroughPosition = TryGetActiveDoorPushThroughPosition(
                 step,
@@ -1775,6 +1823,19 @@ namespace DateEverythingAccess
                         out string doorEntryAdvancePlanningContext,
                         out Vector3 doorEntryAdvanceDesiredPosition))
                 {
+                    if (isFocusedClosetDeadlockStep)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Focused closet deadlock trace: source-local entry-advance branch returned false" +
+                            " reason=final-entry-target-selection-false" +
+                            " currentZone=" + currentZone +
+                            " desiredPosition=" + FormatVector3(desiredPosition) +
+                            " rawContext=" + (_rawNavigationTargetContext ?? "<null>") +
+                            " isPostThresholdCommitted=" + isPostThresholdCommitted +
+                            " isStillInSourceZone=" + isStillInSourceZone +
+                            " activeDoorPushThroughPosition=" + FormatVector3(activeDoorPushThroughPosition) +
+                            " step=" + DescribeNavigationStep(step));
+                    }
                     return false;
                 }
 
@@ -1787,6 +1848,20 @@ namespace DateEverythingAccess
                         doorEntryAdvancePlanningContext,
                         out Vector3 doorEntryAdvancePlanningGoal))
                 {
+                    if (isFocusedClosetDeadlockStep)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Focused closet deadlock trace: source-local entry-advance branch returned false" +
+                            " reason=" + (doorEntryAdvanceDesiredPosition == Vector3.zero
+                                ? "entry-advance-desired-position-zero"
+                                : "source-local-planning-goal-false") +
+                            " currentZone=" + currentZone +
+                            " desiredPosition=" + FormatVector3(desiredPosition) +
+                            " doorEntryAdvanceDesiredPosition=" + FormatVector3(doorEntryAdvanceDesiredPosition) +
+                            " doorEntryAdvancePlanningContext=" + (doorEntryAdvancePlanningContext ?? "<null>") +
+                            " rawContext=" + (_rawNavigationTargetContext ?? "<null>") +
+                            " step=" + DescribeNavigationStep(step));
+                    }
                     return false;
                 }
 
@@ -1862,6 +1937,18 @@ namespace DateEverythingAccess
                             " rawContext=" + (_rawNavigationTargetContext ?? "<null>") +
                             " forwardProgress=" + forwardProgress.ToString("0.00", CultureInfo.InvariantCulture) +
                             " step=" + DescribeNavigationStep(step));
+                        if (IsFocusedClosetDeadlockStep(step))
+                        {
+                            LogNavigationTrackerDebug(
+                                "Focused closet deadlock trace: source-side progress discard" +
+                                " sourceThresholdTarget=" + FormatVector3(sourceThresholdTarget) +
+                                " activeDoorPushThroughPosition=" + FormatVector3(activeDoorPushThroughPosition) +
+                                " planningGoal=" + FormatVector3(doorEntryAdvancePlanningGoal) +
+                                " rawContext=" + (_rawNavigationTargetContext ?? "<null>") +
+                                " planningContext=" + (doorEntryAdvancePlanningContext ?? "<null>") +
+                                " forwardProgress=" + forwardProgress.ToString("0.00", CultureInfo.InvariantCulture) +
+                                " step=" + DescribeNavigationStep(step));
+                        }
                         return false;
                     }
                 }
@@ -1871,6 +1958,18 @@ namespace DateEverythingAccess
                         doorEntryAdvancePlanningGoal,
                         GetLocalNavigationGoalReachedDistance(doorEntryAdvancePlanningContext)))
                 {
+                    if (isFocusedClosetDeadlockStep)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Focused closet deadlock trace: source-local entry-advance branch returned false" +
+                            " reason=planning-goal-already-reached" +
+                            " currentZone=" + currentZone +
+                            " playerPosition=" + FormatVector3(playerPosition) +
+                            " doorEntryAdvancePlanningGoal=" + FormatVector3(doorEntryAdvancePlanningGoal) +
+                            " doorEntryAdvancePlanningContext=" + (doorEntryAdvancePlanningContext ?? "<null>") +
+                            " rawContext=" + (_rawNavigationTargetContext ?? "<null>") +
+                            " step=" + DescribeNavigationStep(step));
+                    }
                     MarkDoorSourceLocalGoalReached(
                         BuildNavigationStepKey(step),
                         doorEntryAdvancePlanningContext,
@@ -1882,6 +1981,16 @@ namespace DateEverythingAccess
                 planningZone = ResolveLocalPlanningZone(currentZone, step.FromZone, playerPosition, doorEntryAdvancePlanningGoal);
                 planningGoal = doorEntryAdvancePlanningGoal;
                 planningContext = doorEntryAdvancePlanningContext;
+                if (isFocusedClosetDeadlockStep)
+                {
+                    LogNavigationTrackerDebug(
+                        "Focused closet deadlock trace: source-local entry-advance branch succeeded" +
+                        " planningZone=" + (planningZone ?? "<null>") +
+                        " planningGoal=" + FormatVector3(planningGoal) +
+                        " planningContext=" + (planningContext ?? "<null>") +
+                        " rawContext=" + (_rawNavigationTargetContext ?? "<null>") +
+                        " step=" + DescribeNavigationStep(step));
+                }
                 return true;
             }
 
@@ -1900,10 +2009,19 @@ namespace DateEverythingAccess
         {
             planningContext = null;
             planningGoal = Vector3.zero;
+            bool isFocusedClosetDeadlockStep = IsFocusedClosetDeadlockStep(step);
             if (step == null ||
                 activeDoorPushThroughPosition == Vector3.zero ||
                 desiredPosition == Vector3.zero)
             {
+                if (isFocusedClosetDeadlockStep)
+                {
+                    LogNavigationTrackerDebug(
+                        "Focused closet deadlock trace: final-entry target selection aborted before evaluation" +
+                        " stepNull=" + (step == null) +
+                        " activeDoorPushThroughPosition=" + FormatVector3(activeDoorPushThroughPosition) +
+                        " desiredPosition=" + FormatVector3(desiredPosition));
+                }
                 return false;
             }
 
@@ -1950,6 +2068,39 @@ namespace DateEverythingAccess
             {
                 if (isFinalEntryAdvanceLocalCompleted)
                 {
+                    if (isFocusedClosetDeadlockStep)
+                    {
+                        planningContext = "door-entry-advance-extended-local";
+                        planningGoal = desiredPosition;
+                        LogNavigationTrackerDebug(
+                            "Focused closet deadlock trace: reusing retained extended bridge local planning after completed final-entry-local" +
+                            " desiredPosition=" + FormatVector3(desiredPosition) +
+                            " planningContext=" + planningContext +
+                            " step=" + DescribeNavigationStep(step));
+                        LogNavigationTrackerDebug(
+                            "Selected door final-entry local state=" + DoorPostInteractionState.ExtendedBridge +
+                            " planningContext=" + planningContext +
+                            " proof=extended-bridge-local-complete-final-entry-local-already-complete" +
+                            " release=raw-extended-arrival-or-source-zone-exit" +
+                            " planningGoal=" + FormatVector3(planningGoal) +
+                            " step=" + DescribeNavigationStep(step));
+                        return true;
+                    }
+
+                    if (isFocusedClosetDeadlockStep)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Focused closet deadlock trace: final-entry target selection returned false" +
+                            " reason=completed-post-proof-final-entry-local" +
+                            " currentZone=" + currentZone +
+                            " desiredPosition=" + FormatVector3(desiredPosition) +
+                            " planningContext=door-entry-advance-local" +
+                            " rawDoorEntryAdvance=" + isRawDoorEntryAdvance +
+                            " rawDoorEntryAdvanceExtended=" + isRawDoorEntryAdvanceExtended +
+                            " extendedLocalCompleted=" + IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local") +
+                            " finalEntryLocalCompleted=" + isFinalEntryAdvanceLocalCompleted +
+                            " step=" + DescribeNavigationStep(step));
+                    }
                     LogNavigationTrackerDebug(
                         "Skipped completed post-proof final door entry local proxy; preserving raw entry advance" +
                         " desiredPosition=" + FormatVector3(desiredPosition) +
@@ -1971,6 +2122,20 @@ namespace DateEverythingAccess
             {
                 if (isFinalEntryAdvanceLocalCompleted)
                 {
+                    if (isFocusedClosetDeadlockStep)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Focused closet deadlock trace: final-entry target selection returned false" +
+                            " reason=completed-post-proof-door-entry-local" +
+                            " currentZone=" + currentZone +
+                            " desiredPosition=" + FormatVector3(desiredPosition) +
+                            " planningContext=" + (planningContext ?? "<null>") +
+                            " rawDoorEntryAdvance=" + isRawDoorEntryAdvance +
+                            " rawDoorEntryAdvanceExtended=" + isRawDoorEntryAdvanceExtended +
+                            " extendedLocalCompleted=" + IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local") +
+                            " finalEntryLocalCompleted=" + isFinalEntryAdvanceLocalCompleted +
+                            " step=" + DescribeNavigationStep(step));
+                    }
                     LogNavigationTrackerDebug(
                         "Skipped completed post-proof door entry local proxy; preserving raw entry advance" +
                         " desiredPosition=" + FormatVector3(desiredPosition) +
@@ -1991,6 +2156,20 @@ namespace DateEverythingAccess
             if (isRawDoorEntryAdvance &&
                 IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-local"))
             {
+                if (isFocusedClosetDeadlockStep)
+                {
+                    LogNavigationTrackerDebug(
+                        "Focused closet deadlock trace: final-entry target selection returned false" +
+                        " reason=completed-raw-door-entry-local" +
+                        " currentZone=" + currentZone +
+                        " desiredPosition=" + FormatVector3(desiredPosition) +
+                        " planningContext=" + (planningContext ?? "<null>") +
+                        " rawDoorEntryAdvance=" + isRawDoorEntryAdvance +
+                        " rawDoorEntryAdvanceExtended=" + isRawDoorEntryAdvanceExtended +
+                        " extendedLocalCompleted=" + IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local") +
+                        " finalEntryLocalCompleted=" + IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-local") +
+                        " step=" + DescribeNavigationStep(step));
+                }
                 LogNavigationTrackerDebug(
                     "Skipped completed door entry advance local proxy; preserving raw entry advance" +
                     " desiredPosition=" + FormatVector3(desiredPosition) +
@@ -2055,6 +2234,17 @@ namespace DateEverythingAccess
             bool shouldSkipSnapForPostProofFinalDoorEntry =
                 string.Equals(planningContext, "door-entry-advance-local", StringComparison.Ordinal) &&
                 IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local");
+            bool isFocusedClosetDeadlockStep = IsFocusedClosetDeadlockStep(step);
+            if (isFocusedClosetDeadlockStep)
+            {
+                LogNavigationTrackerDebug(
+                    "Focused closet deadlock trace: entering door source local planning goal" +
+                    " currentZone=" + currentZone +
+                    " planningContext=" + (planningContext ?? "<null>") +
+                    " desiredPosition=" + FormatVector3(desiredPosition) +
+                    " shouldSkipSnapForPostProofFinalDoorEntry=" + shouldSkipSnapForPostProofFinalDoorEntry +
+                    " step=" + DescribeNavigationStep(step));
+            }
             if (!shouldSkipSnapForPostProofFinalDoorEntry &&
                 TrySnapDoorSourceNavigationTarget(
                     step,
@@ -2166,6 +2356,15 @@ namespace DateEverythingAccess
                 }
                 else
                 {
+                    if (isFocusedClosetDeadlockStep)
+                    {
+                        LogNavigationTrackerDebug(
+                            "Focused closet deadlock trace: discarded source local planning goal before reachable-proxy resolution" +
+                            " position=" + FormatVector3(planningGoal) +
+                            " unsnappedPlanningGoal=" + FormatVector3(unsnappedPlanningGoal) +
+                            " context=" + (planningContext ?? "<null>") +
+                            " step=" + DescribeNavigationStep(step));
+                    }
                     LogNavigationTrackerDebug(
                         "Discarded door source local planning goal position=" + FormatVector3(planningGoal) +
                         " context=" + planningContext +
@@ -2180,6 +2379,14 @@ namespace DateEverythingAccess
                 playerPosition,
                 planningGoal,
                 planningContext);
+            if (isFocusedClosetDeadlockStep)
+            {
+                LogNavigationTrackerDebug(
+                    "Focused closet deadlock trace: exiting door source local planning goal" +
+                    " planningContext=" + (planningContext ?? "<null>") +
+                    " resolvedPlanningGoal=" + FormatVector3(planningGoal) +
+                    " step=" + DescribeNavigationStep(step));
+            }
             return planningGoal != Vector3.zero;
         }
 
