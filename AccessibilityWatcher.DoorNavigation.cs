@@ -1806,6 +1806,19 @@ namespace DateEverythingAccess
             {
                 if (isRawDoorEntryAdvanceWithoutSourceBridge)
                 {
+                    if (HasDoorRetainedExtendedNoProgressReleaseRequest(step) &&
+                        TryResolveReleasedDoorFinalEntryLocalNavigationGoal(
+                            currentZone,
+                            step,
+                            playerPosition,
+                            desiredPosition,
+                            out planningZone,
+                            out planningGoal,
+                            out planningContext))
+                    {
+                        return true;
+                    }
+
                     LogNavigationTrackerDebug(
                         "Skipped door entry source-local planning because no source-zone bridge is constructible" +
                         " desiredPosition=" + FormatVector3(desiredPosition) +
@@ -1995,6 +2008,75 @@ namespace DateEverythingAccess
             }
 
             return false;
+        }
+
+        private bool TryResolveReleasedDoorFinalEntryLocalNavigationGoal(
+            string currentZone,
+            NavigationGraph.PathStep step,
+            Vector3 playerPosition,
+            Vector3 desiredPosition,
+            out string planningZone,
+            out Vector3 planningGoal,
+            out string planningContext)
+        {
+            planningZone = null;
+            planningGoal = Vector3.zero;
+            planningContext = null;
+            if (step == null ||
+                desiredPosition == Vector3.zero ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                string.IsNullOrWhiteSpace(step.FromZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                !HasDoorRetainedExtendedNoProgressReleaseRequest(step) ||
+                !IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local") ||
+                !IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-local"))
+            {
+                return false;
+            }
+
+            planningContext = "door-entry-advance-local";
+            if (!TryGetDoorSourceLocalPlanningGoal(
+                    step,
+                    currentZone,
+                    playerPosition,
+                    desiredPosition,
+                    planningContext,
+                    out planningGoal) ||
+                planningGoal == Vector3.zero)
+            {
+                LogNavigationTrackerDebug(
+                    "Released no-source-bridge final entry local planning unavailable after retained extended no-progress release" +
+                    " desiredPosition=" + FormatVector3(desiredPosition) +
+                    " planningContext=" + planningContext +
+                    " step=" + DescribeNavigationStep(step));
+                planningContext = null;
+                return false;
+            }
+
+            planningZone = ResolveLocalPlanningZone(
+                currentZone,
+                step.FromZone,
+                playerPosition,
+                planningGoal);
+            if (string.IsNullOrWhiteSpace(planningZone))
+            {
+                LogNavigationTrackerDebug(
+                    "Released no-source-bridge final entry local planning lacked planning zone after retained extended no-progress release" +
+                    " desiredPosition=" + FormatVector3(desiredPosition) +
+                    " planningGoal=" + FormatVector3(planningGoal) +
+                    " step=" + DescribeNavigationStep(step));
+                planningGoal = Vector3.zero;
+                planningContext = null;
+                return false;
+            }
+
+            LogNavigationTrackerDebug(
+                "Selected released no-source-bridge final entry local planning after retained extended no-progress release" +
+                " desiredPosition=" + FormatVector3(desiredPosition) +
+                " planningGoal=" + FormatVector3(planningGoal) +
+                " planningZone=" + planningZone +
+                " step=" + DescribeNavigationStep(step));
+            return true;
         }
 
         private bool TrySelectDoorFinalEntryLocalPlanningTarget(
