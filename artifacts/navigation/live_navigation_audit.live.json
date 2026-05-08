@@ -1,0 +1,344 @@
+{
+  "GeneratedAtUtc": "2026-05-07T20:46:49.6612185Z",
+  "Inputs": {
+    "DoorSweepPath": "D:\\SteamLibrary\\steamapps\\Common\\Date Everything\\BepInEx\\plugins\\door_transition_sweep.live.json",
+    "OpenSweepPath": "D:\\SteamLibrary\\steamapps\\Common\\Date Everything\\BepInEx\\plugins\\transition_sweep.live.json",
+    "GraphPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\navigation_graph.generated.json",
+    "LocalMapsPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\local_navigation_maps.generated.json"
+  },
+  "Runtime": {
+    "DoorBuildStamp": "0.1.1|utc=2026-05-07T19:52:10.0000000Z|sha256=6708D715F2276EF94774E2774ACC27390BBF039830B6C6DC2537516C4A8A0277",
+    "OpenBuildStamp": "0.1.1|utc=2026-05-07T03:42:12.0000000Z|sha256=6C26AC0BF422B26FF162E97FC20FB7577561B1AE8CADF07173A4A6EFA4F94F86",
+    "DoorGeneratedAtUtc": "05/07/2026 19:57:27",
+    "OpenGeneratedAtUtc": "05/07/2026 03:48:52"
+  },
+  "Summary": {
+    "TotalZones": 56,
+    "TotalEdges": 110,
+    "PassedEdges": 105,
+    "FailedEdges": 5,
+    "DoorFailedEdges": 2,
+    "OpenFailedEdges": 3,
+    "BaselineOrderedReachablePairs": 1934,
+    "WeaklyConnectedComponentCount": 2
+  },
+  "Recommendation": {
+    "TargetKey": "transition:living_room->hallway",
+    "TargetKind": "OpenPassage",
+    "Recommendation": "Inspect and fix navigation data source or zone-family coverage before runtime heuristics.",
+    "Reason": "LastTargetPosition outside living_room bounds by 0.57 on z: (6.72, 4.35, -6.06); impact=hard-blocker; orderedReachabilityDelta=387; derivation=CameraSpaceBoundaryGeometry"
+  },
+  "FailedEdges": [
+    {
+      "Key": "transition:living_room->hallway",
+      "StepKind": "OpenPassage",
+      "FromZone": "living_room",
+      "ToZone": "hallway",
+      "StatusDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=EntryWaypoint targetPosition=(6.72, 4.35, -6.06) rawContext=open-passage-guided localContext=<null> step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(6.72, 4.35, -6.06)",
+      "FailureReason": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=EntryWaypoint targetPosition=(6.72, 4.35, -6.06) rawContext=open-passage-guided localContext=<null> step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60)",
+      "ImpactTier": "hard-blocker",
+      "AlternativePassedPathExists": false,
+      "OrderedReachabilityDelta": 387,
+      "UndirectedComponentDelta": 1,
+      "NewReachableFromSource": [
+        "attic",
+        "atticWindow",
+        "bathroom1",
+        "bathroom2",
+        "bedroom",
+        "bedroom_closet",
+        "dorian_attic1",
+        "dorian_attic2",
+        "dorian_backdoor",
+        "dorian_bathroom1",
+        "dorian_bathroom2",
+        "dorian_bathroom2_1",
+        "dorian_bathroom2_2",
+        "dorian_bedroom1",
+        "dorian_bedroom2",
+        "dorian_bedroomcloset1",
+        "dorian_bedroomcloset2",
+        "dorian_gym1",
+        "dorian_gym2",
+        "dorian_gym3",
+        "dorian_gym4",
+        "dorian_gymcloset1",
+        "dorian_gymcloset2",
+        "dorian_irondoor",
+        "dorian_laundry1",
+        "dorian_laundry2",
+        "dorian_laundrycloset1",
+        "dorian_office1",
+        "dorian_office2",
+        "dorian_trapdoor2",
+        "dorian_upperhallcloset1",
+        "gym",
+        "gym_closet",
+        "hallway",
+        "hallway_arma",
+        "laundry_room",
+        "laundry_room_closet",
+        "office",
+        "office_1love",
+        "office_2friend",
+        "office_3hate",
+        "upper_hallway",
+        "upper_hallway3_shelley"
+      ],
+      "LastTargetKind": "EntryWaypoint",
+      "LastLocalNavigationContext": "",
+      "CurrentZoneAtResult": "living_room2",
+      "AssetDerivationSource": "CameraSpaceBoundaryGeometry",
+      "StaticIssues": [],
+      "SuspectedFailureFamily": "coverage gap",
+      "Confidence": "medium",
+      "FailureFamilyReason": "LastTargetPosition outside living_room bounds by 0.57 on z: (6.72, 4.35, -6.06)",
+      "CoverageMismatchCount": 1,
+      "CoverageMismatches": [
+        {
+          "PointName": "LastTargetPosition",
+          "Zone": "living_room",
+          "Side": "source-active",
+          "Axis": "z",
+          "Margin": 0.566,
+          "Point": {
+            "x": 6.722,
+            "y": 4.352,
+            "z": -6.061
+          },
+          "Text": "LastTargetPosition outside living_room bounds by 0.57 on z: (6.72, 4.35, -6.06)"
+        }
+      ]
+    },
+    {
+      "Key": "transition:hallway->living_room",
+      "StepKind": "OpenPassage",
+      "FromZone": "hallway",
+      "ToZone": "living_room",
+      "StatusDetail": "navigation blocked currentZone=hallway4 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.04 zone=hallway4 targetKind=EntryWaypoint targetPosition=(7.55, 4.67, -7.13) rawContext=open-passage-guided localContext=<null> step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(7.55, 4.67, -7.13)",
+      "FailureReason": "navigation blocked currentZone=hallway4 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.04 zone=hallway4 targetKind=EntryWaypoint targetPosition=(7.55, 4.67, -7.13) rawContext=open-passage-guided localContext=<null> step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70)",
+      "ImpactTier": "hard-blocker",
+      "AlternativePassedPathExists": false,
+      "OrderedReachabilityDelta": 352,
+      "UndirectedComponentDelta": 1,
+      "NewReachableFromSource": [
+        "dining_room",
+        "frontdoor",
+        "kitchen",
+        "kitchen_cake",
+        "kitchen_ronald",
+        "kitchen_tutorial",
+        "living_room",
+        "living_room_tutorial"
+      ],
+      "LastTargetKind": "EntryWaypoint",
+      "LastLocalNavigationContext": "",
+      "CurrentZoneAtResult": "hallway4",
+      "AssetDerivationSource": "CameraSpaceBoundaryGeometry",
+      "StaticIssues": [],
+      "SuspectedFailureFamily": "coverage gap",
+      "Confidence": "high",
+      "FailureFamilyReason": "LastTargetPosition outside hallway bounds by 1.49 on z: (7.55, 4.67, -7.13)",
+      "CoverageMismatchCount": 1,
+      "CoverageMismatches": [
+        {
+          "PointName": "LastTargetPosition",
+          "Zone": "hallway",
+          "Side": "source-active",
+          "Axis": "z",
+          "Margin": 1.493,
+          "Point": {
+            "x": 7.546,
+            "y": 4.67,
+            "z": -7.135
+          },
+          "Text": "LastTargetPosition outside hallway bounds by 1.49 on z: (7.55, 4.67, -7.13)"
+        }
+      ]
+    },
+    {
+      "Key": "transition:office->office_closet",
+      "StepKind": "Door",
+      "FromZone": "office",
+      "ToZone": "office_closet",
+      "StatusDetail": "navigation blocked currentZone=office5 detail=door post-interaction loop exhausted loopDetections=4 movement=0.07 stage=DoorEntryAdvance currentZone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.02 zone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) rawContext=door-entry-advance-no-source-bridge localContext=<null> step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-1.07, 4.17, 23.96)",
+      "FailureReason": "navigation blocked currentZone=office5 detail=door post-interaction loop exhausted loopDetections=4 movement=0.07 stage=DoorEntryAdvance currentZone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.02 zone=office5 targetKind=EntryWaypoint targetPosition=(-1.07, 4.17, 23.96) rawContext=door-entry-advance-no-source-bridge localContext=<null> step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=office->office_closet kind=Door interaction=True connector=Doors_Office_Closet from=(9.36, 4.17, 24.47) to=(-1.07, 4.17, 23.96) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00)",
+      "ImpactTier": "hard-blocker",
+      "AlternativePassedPathExists": false,
+      "OrderedReachabilityDelta": 160,
+      "UndirectedComponentDelta": 0,
+      "NewReachableFromSource": [
+        "dorian_office_closet1",
+        "dorian_office_closet2",
+        "dorian_trapdoor1",
+        "office_closet"
+      ],
+      "LastTargetKind": "EntryWaypoint",
+      "LastLocalNavigationContext": "",
+      "CurrentZoneAtResult": "office5",
+      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "StaticIssues": [],
+      "SuspectedFailureFamily": "coverage gap",
+      "Confidence": "high",
+      "FailureFamilyReason": "LastTargetPosition outside office bounds by 6.48 on x: (-1.07, 4.17, 23.96)",
+      "CoverageMismatchCount": 3,
+      "CoverageMismatches": [
+        {
+          "PointName": "SourceClearPoint",
+          "Zone": "office",
+          "Side": "source",
+          "Axis": "x",
+          "Margin": 0.574,
+          "Point": {
+            "x": 4.835,
+            "y": -0.617,
+            "z": 25.978
+          },
+          "Text": "SourceClearPoint outside office bounds by 0.57 on x: (4.83, -0.62, 25.98)"
+        },
+        {
+          "PointName": "LastTargetPosition",
+          "Zone": "office",
+          "Side": "source-active",
+          "Axis": "x",
+          "Margin": 6.48,
+          "Point": {
+            "x": -1.071,
+            "y": 4.17,
+            "z": 23.964
+          },
+          "Text": "LastTargetPosition outside office bounds by 6.48 on x: (-1.07, 4.17, 23.96)"
+        },
+        {
+          "PointName": "DestinationClearPoint",
+          "Zone": "office_closet",
+          "Side": "destination",
+          "Axis": "x",
+          "Margin": 0.557,
+          "Point": {
+            "x": 3.237,
+            "y": -0.617,
+            "z": 25.899
+          },
+          "Text": "DestinationClearPoint outside office_closet bounds by 0.56 on x: (3.24, -0.62, 25.90)"
+        }
+      ]
+    },
+    {
+      "Key": "transition:gym_closet->gym",
+      "StepKind": "Door",
+      "FromZone": "gym_closet",
+      "ToZone": "gym",
+      "StatusDetail": "navigation blocked currentZone=gym_closet2 detail=door post-interaction loop exhausted loopDetections=4 movement=0.24 stage=DoorEntryAdvance currentZone=gym_closet2 targetKind=EntryWaypoint targetPosition=(-10.54, 18.02, 20.66) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.01 zone=gym_closet2 targetKind=EntryWaypoint targetPosition=(-10.54, 18.02, 20.66) rawContext=door-entry-advance-no-source-bridge localContext=<null> step=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-10.54, 18.02, 20.66)",
+      "FailureReason": "navigation blocked currentZone=gym_closet2 detail=door post-interaction loop exhausted loopDetections=4 movement=0.24 stage=DoorEntryAdvance currentZone=gym_closet2 targetKind=EntryWaypoint targetPosition=(-10.54, 18.02, 20.66) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.01 zone=gym_closet2 targetKind=EntryWaypoint targetPosition=(-10.54, 18.02, 20.66) rawContext=door-entry-advance-no-source-bridge localContext=<null> step=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=gym_closet->gym kind=Door interaction=True connector=Doors_Gym_ClosetOuter from=(1.83, 18.02, 20.08) to=(-10.54, 18.02, 20.66) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00)",
+      "ImpactTier": "hard-blocker",
+      "AlternativePassedPathExists": false,
+      "OrderedReachabilityDelta": 120,
+      "UndirectedComponentDelta": 0,
+      "NewReachableFromSource": [
+        "attic",
+        "atticWindow",
+        "bathroom1",
+        "bathroom2",
+        "bedroom",
+        "bedroom_closet",
+        "dorian_attic1",
+        "dorian_attic2",
+        "dorian_backdoor",
+        "dorian_bathroom1",
+        "dorian_bathroom2",
+        "dorian_bathroom2_1",
+        "dorian_bathroom2_2",
+        "dorian_bedroom1",
+        "dorian_bedroom2",
+        "dorian_bedroomcloset1",
+        "dorian_bedroomcloset2",
+        "dorian_gym1",
+        "dorian_gym2",
+        "dorian_gym3",
+        "dorian_gym4",
+        "dorian_irondoor",
+        "dorian_laundry1",
+        "dorian_laundry2",
+        "dorian_laundrycloset1",
+        "dorian_office1",
+        "dorian_office2",
+        "dorian_trapdoor2",
+        "dorian_upperhallcloset1",
+        "gym",
+        "hallway",
+        "hallway_arma",
+        "laundry_room",
+        "laundry_room_closet",
+        "office",
+        "office_1love",
+        "office_2friend",
+        "office_3hate",
+        "upper_hallway",
+        "upper_hallway3_shelley"
+      ],
+      "LastTargetKind": "EntryWaypoint",
+      "LastLocalNavigationContext": "",
+      "CurrentZoneAtResult": "gym_closet2",
+      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "StaticIssues": [],
+      "SuspectedFailureFamily": "coverage gap",
+      "Confidence": "high",
+      "FailureFamilyReason": "LastTargetPosition outside gym_closet bounds by 7.14 on x: (-10.54, 18.02, 20.66)",
+      "CoverageMismatchCount": 2,
+      "CoverageMismatches": [
+        {
+          "PointName": "SourceClearPoint",
+          "Zone": "gym_closet",
+          "Side": "source",
+          "Axis": "x",
+          "Margin": 0.335,
+          "Point": {
+            "x": -3.727,
+            "y": 12.825,
+            "z": 23.895
+          },
+          "Text": "SourceClearPoint outside gym_closet bounds by 0.34 on x: (-3.73, 12.82, 23.89)"
+        },
+        {
+          "PointName": "LastTargetPosition",
+          "Zone": "gym_closet",
+          "Side": "source-active",
+          "Axis": "x",
+          "Margin": 7.143,
+          "Point": {
+            "x": -10.535,
+            "y": 18.02,
+            "z": 20.664
+          },
+          "Text": "LastTargetPosition outside gym_closet bounds by 7.14 on x: (-10.54, 18.02, 20.66)"
+        }
+      ]
+    },
+    {
+      "Key": "transition:dining_room->piano_room",
+      "StepKind": "OpenPassage",
+      "FromZone": "dining_room",
+      "ToZone": "piano_room",
+      "StatusDetail": "navigation blocked currentZone=dining_room detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=dining_room targetKind=LocalWaypoint targetPosition=(-17.90, 4.84, -9.88) rawContext=open-passage-guided localContext=open-passage-override-destination step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) localContext=open-passage-override-destination lastTargetKind=LocalWaypoint lastTarget=(-17.90, 4.84, -9.88)",
+      "FailureReason": "navigation blocked currentZone=dining_room detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=dining_room targetKind=LocalWaypoint targetPosition=(-17.90, 4.84, -9.88) rawContext=open-passage-guided localContext=open-passage-override-destination step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13)",
+      "ImpactTier": "likely-blocker",
+      "AlternativePassedPathExists": false,
+      "OrderedReachabilityDelta": 8,
+      "UndirectedComponentDelta": 0,
+      "NewReachableFromSource": [
+        "piano_room"
+      ],
+      "LastTargetKind": "LocalWaypoint",
+      "LastLocalNavigationContext": "open-passage-override-destination",
+      "CurrentZoneAtResult": "dining_room",
+      "AssetDerivationSource": "CameraSpaceBoundaryGeometry",
+      "StaticIssues": [],
+      "SuspectedFailureFamily": "runtime loop/no progress",
+      "Confidence": "high",
+      "FailureFamilyReason": "Failure loops after CameraSpaceBoundaryGeometry handling path.",
+      "CoverageMismatchCount": 0,
+      "CoverageMismatches": []
+    }
+  ]
+}

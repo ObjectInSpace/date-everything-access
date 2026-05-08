@@ -8280,6 +8280,18 @@ namespace DateEverythingAccess
             if (_doorPostInteractionLoopDetectionCount < DoorPostInteractionLoopExhaustionDetections)
                 return false;
 
+            if (TryArmDoorRetainedExtendedNoProgressReleaseFromRawLoop(
+                    step,
+                    currentZone,
+                    targetKind,
+                    targetPosition,
+                    playerPosition,
+                    loopDetail))
+            {
+                ResetDoorPostInteractionLoopExhaustion();
+                return false;
+            }
+
             exhaustedDetail =
                 "door post-interaction loop exhausted" +
                 " loopDetections=" + _doorPostInteractionLoopDetectionCount +
@@ -8292,6 +8304,46 @@ namespace DateEverythingAccess
                 " step=" + DescribeNavigationStep(step);
             SetNavigationBlockedDetail(exhaustedDetail);
             Main.Log.LogWarning("Door post-interaction loop exhausted: " + exhaustedDetail);
+            return true;
+        }
+
+        private bool TryArmDoorRetainedExtendedNoProgressReleaseFromRawLoop(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            NavigationTargetKind targetKind,
+            Vector3 targetPosition,
+            Vector3 playerPosition,
+            string loopDetail)
+        {
+            if (step == null ||
+                step.Kind != NavigationGraph.StepKind.Door ||
+                targetKind != NavigationTargetKind.ZoneFallback ||
+                targetPosition == Vector3.zero ||
+                playerPosition == Vector3.zero ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                string.IsNullOrWhiteSpace(step.FromZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                !string.Equals(_rawNavigationTargetContext, "door-entry-advance-extended", StringComparison.Ordinal) ||
+                !IsFocusedClosetDeadlockStep(step) ||
+                !IsDoorTraversalPostThresholdCommitted(step) ||
+                !IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local") ||
+                !IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-local"))
+            {
+                return false;
+            }
+
+            string stepKey = BuildNavigationStepKey(step);
+            if (string.IsNullOrWhiteSpace(stepKey))
+                return false;
+
+            _doorRetainedExtendedNoProgressReleaseStepKey = stepKey;
+            LogNavigationTrackerDebug(
+                "Marked retained extended bridge for no-progress release from raw loop exhaustion" +
+                " stepKey=" + stepKey +
+                " currentZone=" + currentZone +
+                " playerPosition=" + FormatVector3(playerPosition) +
+                " targetPosition=" + FormatVector3(targetPosition) +
+                " loopDetail=" + (loopDetail ?? "<null>"));
             return true;
         }
 
