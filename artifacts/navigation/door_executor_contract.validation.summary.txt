@@ -1,5 +1,5 @@
 Door executor contract validation
-GeneratedAtUtc: 2026-05-12T22:50:01.0603332Z
+GeneratedAtUtc: 2026-05-13T03:41:34.4129101Z
 Runtime build: 0.1.1|utc=2026-05-07T19:52:10.0000000Z|sha256=6708D715F2276EF94774E2774ACC27390BBF039830B6C6DC2537516C4A8A0277
 Door totals: total=22 passed=20 failed=2
 Violations: 0
