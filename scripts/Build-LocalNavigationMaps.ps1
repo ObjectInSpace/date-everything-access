@@ -132,6 +132,71 @@ function Get-ZoneUnionBounds {
     }
 }
 
+function Get-AuthoredZoneEnvelopeExtensions {
+    param([string]$ZoneName)
+
+    switch ($ZoneName) {
+        "living_room" {
+            return @(
+                [ordered]@{ MinX = 4.50; MaxX = 10.10; MinZ = -6.90; MaxZ = -5.55; Reason = "living_room_hallway_threshold" }
+            )
+        }
+        "hallway" {
+            return @(
+                [ordered]@{ MinX = 4.50; MaxX = 10.10; MinZ = -7.20; MaxZ = -5.35; Reason = "hallway_living_room_threshold" },
+                [ordered]@{ MinX = 1.50; MaxX = 2.80; MinZ = 5.20; MaxZ = 5.80; Reason = "bathroom1_hallway_threshold" }
+            )
+        }
+        "dining_room" {
+            return @(
+                [ordered]@{ MinX = -18.10; MaxX = -16.20; MinZ = -10.55; MaxZ = -9.70; Reason = "dining_room_piano_room_threshold" }
+            )
+        }
+        "upper_hallway" {
+            return @(
+                [ordered]@{ MinX = 0.40; MaxX = 3.10; MinZ = 3.10; MaxZ = 4.20; Reason = "upper_hallway_attic_threshold" }
+            )
+        }
+        "bathroom1" {
+            return @(
+                [ordered]@{ MinX = -0.60; MaxX = 2.50; MinZ = 9.80; MaxZ = 11.60; Reason = "bathroom1_hallway_threshold" }
+            )
+        }
+        "gym_closet" {
+            return @(
+                [ordered]@{ MinX = -4.00; MaxX = -2.40; MinZ = 13.50; MaxZ = 20.20; Reason = "gym_closet_gym_threshold" }
+            )
+        }
+        default {
+            return @()
+        }
+    }
+}
+
+function Add-Bounds2DExtensions {
+    param(
+        [object]$Bounds,
+        [AllowNull()][object[]]$Extensions
+    )
+
+    if ($null -eq $Bounds) { return $null }
+    foreach ($extension in @($Extensions)) {
+        if ($null -eq $extension) { continue }
+        $Bounds.MinX = [Math]::Min([double]$Bounds.MinX, [double]$extension.MinX)
+        $Bounds.MaxX = [Math]::Max([double]$Bounds.MaxX, [double]$extension.MaxX)
+        $Bounds.MinZ = [Math]::Min([double]$Bounds.MinZ, [double]$extension.MinZ)
+        $Bounds.MaxZ = [Math]::Max([double]$Bounds.MaxZ, [double]$extension.MaxZ)
+    }
+
+    $Bounds.MinX = [Math]::Round([double]$Bounds.MinX, 6)
+    $Bounds.MaxX = [Math]::Round([double]$Bounds.MaxX, 6)
+    $Bounds.MinZ = [Math]::Round([double]$Bounds.MinZ, 6)
+    $Bounds.MaxZ = [Math]::Round([double]$Bounds.MaxZ, 6)
+    $Bounds.Width = [Math]::Round([double]$Bounds.MaxX - [double]$Bounds.MinX, 6)
+    $Bounds.Depth = [Math]::Round([double]$Bounds.MaxZ - [double]$Bounds.MinZ, 6)
+    return $Bounds
+}
+
 function Distance-ToSegment2D {
     param([double]$PointX, [double]$PointZ, [double]$StartX, [double]$StartZ, [double]$EndX, [double]$EndZ)
 
@@ -223,9 +288,15 @@ foreach ($zoneName in (Get-UniqueStrings -Values $graphZoneNames)) {
     }
 
     $minimumHorizontalHalfExtent = [double]$CellSize / 2.0
-    $sceneZoneBounds2D = @($sceneZones | ForEach-Object { Get-CameraSpaceBounds2D -CameraSpace $_ -MinimumHalfExtent $minimumHorizontalHalfExtent })
+    $authoredEnvelopeExtensions = @(Get-AuthoredZoneEnvelopeExtensions -ZoneName $zoneName)
+    $sceneZoneBounds2D = @(
+        @($sceneZones | ForEach-Object { Get-CameraSpaceBounds2D -CameraSpace $_ -MinimumHalfExtent $minimumHorizontalHalfExtent }) +
+        @($authoredEnvelopeExtensions)
+    )
     $sceneZoneBounds3D = @($sceneZones | ForEach-Object { Get-CameraSpaceBounds3D -CameraSpace $_ -MinimumHorizontalHalfExtent $minimumHorizontalHalfExtent })
-    $unionBounds = Get-ZoneUnionBounds -CameraSpaces $sceneZones -MinimumHalfExtent $minimumHorizontalHalfExtent
+    $unionBounds = Add-Bounds2DExtensions `
+        -Bounds (Get-ZoneUnionBounds -CameraSpaces $sceneZones -MinimumHalfExtent $minimumHorizontalHalfExtent) `
+        -Extensions $authoredEnvelopeExtensions
     $intersectingBlockers = @(
         $navigationBlockers | Where-Object {
             if ($_.Bounds2D -eq $null -or $_.Bounds3D -eq $null) { return $false }
@@ -284,7 +355,10 @@ foreach ($zoneName in (Get-UniqueStrings -Values $graphZoneNames)) {
         EnvelopeIndices = @(Convert-IndicesToIntArray -Indices $envelopeIndices)
         BlockedIndices = @(Convert-IndicesToIntArray -Indices $blockedIndices)
         SampleBlockers = @($intersectingBlockers | Select-Object -First 12 | ForEach-Object { [ordered]@{ ComponentId = $_.ComponentId; Name = $_.Name; ColliderType = $_.ColliderType } })
-        Notes = @("PrimitiveBlockersOnly")
+        Notes = @(
+            "PrimitiveBlockersOnly"
+            @($authoredEnvelopeExtensions | ForEach-Object { "AuthoredEnvelopeExtension:" + $_.Reason })
+        )
     })
 }
 

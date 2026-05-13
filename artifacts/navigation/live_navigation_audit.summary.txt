@@ -1,41 +1,46 @@
 Live navigation audit
-Door build: 0.1.1|utc=2026-05-07T19:52:10.0000000Z|sha256=6708D715F2276EF94774E2774ACC27390BBF039830B6C6DC2537516C4A8A0277
-Open build: 0.1.1|utc=2026-05-07T03:42:12.0000000Z|sha256=6C26AC0BF422B26FF162E97FC20FB7577561B1AE8CADF07173A4A6EFA4F94F86
-Zones=56 edges=110 passed=105 failed=5 weakComponents=2 orderedReachablePairs=1934
+Door build: 0.1.1|utc=2026-05-12T22:34:48.0000000Z|sha256=A39B287CABEB04571ADD131CFFACC969CA547E97E0952F649253C0CB16CD516A
+Open build: 0.1.1|utc=2026-05-12T22:34:48.0000000Z|sha256=A39B287CABEB04571ADD131CFFACC969CA547E97E0952F649253C0CB16CD516A
+Zones=56 edges=110 passed=104 failed=6 weakComponents=2 orderedReachablePairs=1887
  
 Recommended next target: transition:living_room->hallway
 Inspect and fix navigation data source or zone-family coverage before runtime heuristics.
-Why: LastTargetPosition outside living_room bounds by 0.57 on z: (6.72, 4.35, -6.06); impact=hard-blocker; orderedReachabilityDelta=387; derivation=CameraSpaceBoundaryGeometry
+Why: LastTargetPosition outside living_room bounds by 0.57 on z: (6.72, 4.35, -6.06); impact=hard-blocker; orderedReachabilityDelta=396; derivation=CameraSpaceBoundaryGeometry
  
-transition:living_room->hallway [OpenPassage] impact=hard-blocker altPath=False pairDelta=387 compDelta=1
+transition:living_room->hallway [OpenPassage] impact=hard-blocker altPath=False pairDelta=396 compDelta=1
   family=coverage gap confidence=medium derivation=CameraSpaceBoundaryGeometry
   reason=LastTargetPosition outside living_room bounds by 0.57 on z: (6.72, 4.35, -6.06)
-  restores source reachability to: attic, atticWindow, bathroom1, bathroom2, bedroom, bedroom_closet, dorian_attic1, dorian_attic2, dorian_backdoor, dorian_bathroom1, dorian_bathroom2, dorian_bathroom2_1, dorian_bathroom2_2, dorian_bedroom1, dorian_bedroom2, dorian_bedroomcloset1, dorian_bedroomcloset2, dorian_gym1, dorian_gym2, dorian_gym3, dorian_gym4, dorian_gymcloset1, dorian_gymcloset2, dorian_irondoor, dorian_laundry1, dorian_laundry2, dorian_laundrycloset1, dorian_office1, dorian_office2, dorian_trapdoor2, dorian_upperhallcloset1, gym, gym_closet, hallway, hallway_arma, laundry_room, laundry_room_closet, office, office_1love, office_2friend, office_3hate, upper_hallway, upper_hallway3_shelley
+  restores source reachability to: bathroom1, bathroom2, bedroom, bedroom_closet, dorian_attic1, dorian_backdoor, dorian_bathroom1, dorian_bathroom2, dorian_bathroom2_1, dorian_bathroom2_2, dorian_bedroom1, dorian_bedroom2, dorian_bedroomcloset1, dorian_bedroomcloset2, dorian_gym1, dorian_gym2, dorian_gym3, dorian_gym4, dorian_gymcloset1, dorian_gymcloset2, dorian_irondoor, dorian_laundry1, dorian_laundry2, dorian_laundrycloset1, dorian_office_closet1, dorian_office_closet2, dorian_office1, dorian_office2, dorian_trapdoor1, dorian_trapdoor2, dorian_upperhallcloset1, gym, gym_closet, hallway, hallway_arma, laundry_room, laundry_room_closet, office, office_1love, office_2friend, office_3hate, office_closet, upper_hallway, upper_hallway3_shelley
   coverage: LastTargetPosition outside living_room bounds by 0.57 on z: (6.72, 4.35, -6.06)
  
-transition:hallway->living_room [OpenPassage] impact=hard-blocker altPath=False pairDelta=352 compDelta=1
+transition:hallway->living_room [OpenPassage] impact=hard-blocker altPath=False pairDelta=336 compDelta=1
   family=coverage gap confidence=high derivation=CameraSpaceBoundaryGeometry
-  reason=LastTargetPosition outside hallway bounds by 1.49 on z: (7.55, 4.67, -7.13)
+  reason=LastTargetPosition outside hallway bounds by 1.49 on z: (7.61, 4.67, -7.13)
   restores source reachability to: dining_room, frontdoor, kitchen, kitchen_cake, kitchen_ronald, kitchen_tutorial, living_room, living_room_tutorial
-  coverage: LastTargetPosition outside hallway bounds by 1.49 on z: (7.55, 4.67, -7.13)
+  coverage: LastTargetPosition outside hallway bounds by 1.49 on z: (7.61, 4.67, -7.13)
  
-transition:office->office_closet [Door] impact=hard-blocker altPath=False pairDelta=160 compDelta=0
-  family=coverage gap confidence=high derivation=DoorObjectAndCameraWaypoints
-  reason=LastTargetPosition outside office bounds by 6.48 on x: (-1.07, 4.17, 23.96)
-  restores source reachability to: dorian_office_closet1, dorian_office_closet2, dorian_trapdoor1, office_closet
-  coverage: SourceClearPoint outside office bounds by 0.57 on x: (4.83, -0.62, 25.98)
-  coverage: LastTargetPosition outside office bounds by 6.48 on x: (-1.07, 4.17, 23.96)
-  coverage: DestinationClearPoint outside office_closet bounds by 0.56 on x: (3.24, -0.62, 25.90)
+transition:gym_closet->gym [Door] impact=hard-blocker altPath=False pairDelta=123 compDelta=0
+  family=runtime loop/no progress confidence=high derivation=DoorObjectCameraAndClearOverrides
+  reason=Failure loops after DoorObjectCameraAndClearOverrides handling path.
+  restores source reachability to: bathroom1, bathroom2, bedroom, bedroom_closet, dorian_attic1, dorian_backdoor, dorian_bathroom1, dorian_bathroom2, dorian_bathroom2_1, dorian_bathroom2_2, dorian_bedroom1, dorian_bedroom2, dorian_bedroomcloset1, dorian_bedroomcloset2, dorian_gym1, dorian_gym2, dorian_gym3, dorian_gym4, dorian_irondoor, dorian_laundry1, dorian_laundry2, dorian_laundrycloset1, dorian_office_closet1, dorian_office_closet2, dorian_office1, dorian_office2, dorian_trapdoor1, dorian_trapdoor2, dorian_upperhallcloset1, gym, hallway, hallway_arma, laundry_room, laundry_room_closet, office, office_1love, office_2friend, office_3hate, office_closet, upper_hallway, upper_hallway3_shelley
  
-transition:gym_closet->gym [Door] impact=hard-blocker altPath=False pairDelta=120 compDelta=0
+transition:upper_hallway->attic [Door] impact=hard-blocker altPath=False pairDelta=117 compDelta=0
+  family=coverage gap confidence=high derivation=DoorObjectCameraAndClearOverrides
+  reason=LastTargetPosition outside upper_hallway bounds by 9.61 on x: (12.11, 18.26, 3.88)
+  restores source reachability to: attic, atticWindow, dorian_attic2
+  coverage: LastTargetPosition outside upper_hallway bounds by 9.61 on x: (12.11, 18.26, 3.88)
+ 
+transition:bathroom1->hallway [Door] impact=hard-blocker altPath=False pairDelta=84 compDelta=0
   family=coverage gap confidence=high derivation=DoorObjectAndCameraWaypoints
-  reason=LastTargetPosition outside gym_closet bounds by 7.14 on x: (-10.54, 18.02, 20.66)
-  restores source reachability to: attic, atticWindow, bathroom1, bathroom2, bedroom, bedroom_closet, dorian_attic1, dorian_attic2, dorian_backdoor, dorian_bathroom1, dorian_bathroom2, dorian_bathroom2_1, dorian_bathroom2_2, dorian_bedroom1, dorian_bedroom2, dorian_bedroomcloset1, dorian_bedroomcloset2, dorian_gym1, dorian_gym2, dorian_gym3, dorian_gym4, dorian_irondoor, dorian_laundry1, dorian_laundry2, dorian_laundrycloset1, dorian_office1, dorian_office2, dorian_trapdoor2, dorian_upperhallcloset1, gym, hallway, hallway_arma, laundry_room, laundry_room_closet, office, office_1love, office_2friend, office_3hate, upper_hallway, upper_hallway3_shelley
-  coverage: SourceClearPoint outside gym_closet bounds by 0.34 on x: (-3.73, 12.82, 23.89)
-  coverage: LastTargetPosition outside gym_closet bounds by 7.14 on x: (-10.54, 18.02, 20.66)
+  reason=FromWaypoint outside bathroom1 bounds by 1.24 on z: (-0.03, 4.17, 11.49)
+  restores source reachability to: bathroom2, bedroom, bedroom_closet, dorian_attic1, dorian_backdoor, dorian_bathroom2, dorian_bathroom2_1, dorian_bathroom2_2, dorian_bedroom1, dorian_bedroom2, dorian_bedroomcloset1, dorian_bedroomcloset2, dorian_gym1, dorian_gym2, dorian_gym3, dorian_gym4, dorian_gymcloset1, dorian_gymcloset2, dorian_irondoor, dorian_laundry1, dorian_laundry2, dorian_laundrycloset1, dorian_office_closet1, dorian_office_closet2, dorian_office1, dorian_office2, dorian_trapdoor1, dorian_trapdoor2, dorian_upperhallcloset1, gym, gym_closet, hallway, hallway_arma, laundry_room, laundry_room_closet, office, office_1love, office_2friend, office_3hate, office_closet, upper_hallway, upper_hallway3_shelley
+  coverage: FromWaypoint outside bathroom1 bounds by 1.24 on z: (-0.03, 4.17, 11.49)
+  coverage: SourceApproachPoint outside bathroom1 bounds by 1.24 on z: (-0.03, 4.17, 11.49)
+  coverage: DestinationClearPoint outside hallway bounds by 0.14 on z: (2.15, -0.62, 5.62)
  
 transition:dining_room->piano_room [OpenPassage] impact=likely-blocker altPath=False pairDelta=8 compDelta=0
-  family=runtime loop/no progress confidence=high derivation=CameraSpaceBoundaryGeometry
-  reason=Failure loops after CameraSpaceBoundaryGeometry handling path.
+  family=coverage gap confidence=medium derivation=CameraSpaceBoundaryGeometry
+  reason=LastTargetPosition outside dining_room bounds by 0.24 on z: (-16.60, 4.84, -10.38)
   restores source reachability to: piano_room
+  coverage: LastTargetPosition outside dining_room bounds by 0.24 on z: (-16.60, 4.84, -10.38)
  

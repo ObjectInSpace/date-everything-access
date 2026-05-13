@@ -15,6 +15,8 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "SweepReportTools.ps1")
 
+Write-Warning "Import-DoorTransitionSweepReport.ps1 is a legacy artifact-import helper. For normal blocker triage, use .\scripts\Invoke-LiveNavigationAudit.ps1."
+
 if (-not (Test-Path -LiteralPath $SourcePath)) {
     throw "Door transition sweep report not found: $SourcePath"
 }

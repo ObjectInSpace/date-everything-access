@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 2,
-  "GeneratedAtUtc": "2026-05-05T19:43:46.4157065Z",
+  "GeneratedAtUtc": "2026-05-12T22:49:44.7361038Z",
   "SceneName": "Date Everything House",
   "SourceSceneDataPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\thirdpersongreybox-navigation-data.json",
   "SourceGraphPath": "D:\\SteamLibrary\\steamapps\\Common\\Date Everything\\BepInEx\\plugins\\navigation_graph.json",
@@ -3376,6 +3376,16 @@
         },
         {
           "x": 19.539158,
+          "y": 4.67,
+          "z": -12.990782
+        },
+        {
+          "x": 19.539158,
+          "y": 5.573,
+          "z": -12.990782
+        },
+        {
+          "x": 19.539158,
           "y": 5.573,
           "z": -12.018587
         }
@@ -3424,6 +3434,16 @@
             "x": 19.692667,
             "y": 4.67,
             "z": -13.962976
+          },
+          {
+            "x": 19.539158,
+            "y": 4.67,
+            "z": -12.990782
+          },
+          {
+            "x": 19.539158,
+            "y": 5.573,
+            "z": -12.990782
           },
           {
             "x": 19.539158,
@@ -3655,6 +3675,11 @@
           "z": -12.018587
         },
         {
+          "x": 19.539158,
+          "y": 5.573,
+          "z": -7.018587
+        },
+        {
           "x": 13.894039,
           "y": 4.352,
           "z": -0.129586
@@ -3704,6 +3729,11 @@
             "x": 19.539158,
             "y": 5.573,
             "z": -12.018587
+          },
+          {
+            "x": 19.539158,
+            "y": 5.573,
+            "z": -7.018587
           },
           {
             "x": 13.894039,
@@ -3765,9 +3795,9 @@
         "z": -0.439635
       },
       "SourceClearPoint": {
-        "x": 9.563061,
-        "y": 4.352,
-        "z": -5.600156
+        "x": 5.28,
+        "y": 4.67,
+        "z": -5.641632
       },
       "DestinationClearPoint": {
         "x": 5.103968,
@@ -3786,9 +3816,9 @@
           "z": -0.439635
         },
         {
-          "x": 9.563061,
-          "y": 4.352,
-          "z": -5.600156
+          "x": 5.28,
+          "y": 4.67,
+          "z": -5.641632
         },
         {
           "x": 5.103968,
@@ -3826,9 +3856,9 @@
           "z": -0.439635
         },
         "SourceClearPoint": {
-          "x": 9.563061,
-          "y": 4.352,
-          "z": -5.600156
+          "x": 5.28,
+          "y": 4.67,
+          "z": -5.641632
         },
         "DestinationClearPoint": {
           "x": 5.103968,
@@ -3847,9 +3877,9 @@
             "z": -0.439635
           },
           {
-            "x": 9.563061,
-            "y": 4.352,
-            "z": -5.600156
+            "x": 5.28,
+            "y": 4.67,
+            "z": -5.641632
           },
           {
             "x": 5.103968,
@@ -3930,9 +3960,9 @@
         "z": -13.189749
       },
       "SourceClearPoint": {
-        "x": 5.103968,
+        "x": 9.370822,
         "y": 4.67,
-        "z": -6.703552
+        "z": -6.75
       },
       "DestinationClearPoint": {
         "x": 9.563061,
@@ -3949,6 +3979,16 @@
           "x": 5.280338,
           "y": 4.67,
           "z": -13.189749
+        },
+        {
+          "x": 9.370822,
+          "y": 4.67,
+          "z": -6.75
+        },
+        {
+          "x": 9.563061,
+          "y": 4.352,
+          "z": -5.600156
         },
         {
           "x": 12.063061,
@@ -3981,9 +4021,9 @@
           "z": -13.189749
         },
         "SourceClearPoint": {
-          "x": 5.103968,
+          "x": 9.370822,
           "y": 4.67,
-          "z": -6.703552
+          "z": -6.75
         },
         "DestinationClearPoint": {
           "x": 9.563061,
@@ -4000,6 +4040,16 @@
             "x": 5.280338,
             "y": 4.67,
             "z": -13.189749
+          },
+          {
+            "x": 9.370822,
+            "y": 4.67,
+            "z": -6.75
+          },
+          {
+            "x": 9.563061,
+            "y": 4.352,
+            "z": -5.600156
           },
           {
             "x": 12.063061,
@@ -4264,6 +4314,16 @@
           "z": -1.686586
         },
         {
+          "x": -12.877396,
+          "y": 4.68,
+          "z": -5.67384
+        },
+        {
+          "x": -6.146032,
+          "y": 5.67,
+          "z": -8.258282
+        },
+        {
           "x": -3.217151,
           "y": 5.67,
           "z": -12.813282
@@ -4313,6 +4373,16 @@
             "x": -17.046043,
             "y": 4.68,
             "z": -1.686586
+          },
+          {
+            "x": -12.877396,
+            "y": 4.68,
+            "z": -5.67384
+          },
+          {
+            "x": -6.146032,
+            "y": 5.67,
+            "z": -8.258282
           },
           {
             "x": -3.217151,
@@ -4391,9 +4461,9 @@
         "z": -8.101789
       },
       "SourceClearPoint": {
-        "x": -17.593108,
+        "x": -17.9,
         "y": 4.196,
-        "z": -10.13085
+        "z": -9.88
       },
       "DestinationClearPoint": {
         "x": -16.954394,
@@ -4412,9 +4482,9 @@
           "z": -8.101789
         },
         {
-          "x": -17.593108,
+          "x": -17.9,
           "y": 4.196,
-          "z": -10.13085
+          "z": -9.88
         },
         {
           "x": -16.954394,
@@ -4452,9 +4522,9 @@
           "z": -8.101789
         },
         "SourceClearPoint": {
-          "x": -17.593108,
+          "x": -17.9,
           "y": 4.196,
-          "z": -10.13085
+          "z": -9.88
         },
         "DestinationClearPoint": {
           "x": -16.954394,
@@ -4473,9 +4543,9 @@
             "z": -8.101789
           },
           {
-            "x": -17.593108,
+            "x": -17.9,
             "y": 4.196,
-            "z": -10.13085
+            "z": -9.88
           },
           {
             "x": -16.954394,
@@ -4562,9 +4632,9 @@
         "z": -10.13085
       },
       "DestinationClearPoint": {
-        "x": -17.593108,
+        "x": -17.9,
         "y": 4.196,
-        "z": -10.13085
+        "z": -9.88
       },
       "DestinationApproachPoint": {
         "x": -19.958641,
@@ -4576,6 +4646,16 @@
           "x": -11.559673,
           "y": 4.842866,
           "z": -13.034458
+        },
+        {
+          "x": -16.954394,
+          "y": 4.842866,
+          "z": -10.13085
+        },
+        {
+          "x": -17.9,
+          "y": 4.196,
+          "z": -9.88
         },
         {
           "x": -19.958641,
@@ -4613,9 +4693,9 @@
           "z": -10.13085
         },
         "DestinationClearPoint": {
-          "x": -17.593108,
+          "x": -17.9,
           "y": 4.196,
-          "z": -10.13085
+          "z": -9.88
         },
         "DestinationApproachPoint": {
           "x": -19.958641,
@@ -4627,6 +4707,16 @@
             "x": -11.559673,
             "y": 4.842866,
             "z": -13.034458
+          },
+          {
+            "x": -16.954394,
+            "y": 4.842866,
+            "z": -10.13085
+          },
+          {
+            "x": -17.9,
+            "y": 4.196,
+            "z": -9.88
           },
           {
             "x": -19.958641,
@@ -4884,6 +4974,16 @@
           "z": 9.675211
         },
         {
+          "x": -14.673045,
+          "y": 3.367,
+          "z": 2.300668
+        },
+        {
+          "x": -14.673045,
+          "y": 4.68,
+          "z": 2.300668
+        },
+        {
           "x": -17.046043,
           "y": 4.68,
           "z": -1.686586
@@ -4933,6 +5033,16 @@
             "x": -12.300047,
             "y": 3.367,
             "z": 9.675211
+          },
+          {
+            "x": -14.673045,
+            "y": 3.367,
+            "z": 2.300668
+          },
+          {
+            "x": -14.673045,
+            "y": 4.68,
+            "z": 2.300668
           },
           {
             "x": -17.046043,
@@ -5171,6 +5281,16 @@
           "z": 11.494413
         },
         {
+          "x": 9.80429,
+          "y": -0.617448,
+          "z": 7.088964
+        },
+        {
+          "x": 9.88571,
+          "y": -0.617448,
+          "z": 5.491036
+        },
+        {
           "x": 8.309622,
           "y": 4.17,
           "z": 0.664414
@@ -5222,16 +5342,26 @@
             "z": 11.494413
           },
           {
+            "x": 9.80429,
+            "y": -0.617448,
+            "z": 7.088964
+          },
+          {
+            "x": 9.88571,
+            "y": -0.617448,
+            "z": 5.491036
+          },
+          {
             "x": 8.309622,
             "y": 4.17,
             "z": 0.664414
           }
         ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides"
       },
       "SourceSceneZoneName": "office6",
       "DestinationSceneZoneName": "hallway6",
-      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
       "Validation": {
         "AcceptedSourceZones": [
           "office6",
@@ -5256,7 +5386,7 @@
         "StepTimeoutSeconds": 8.0,
         "StaticSuspicionScore": 0,
         "StaticIssues": [],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
         "SourceSceneZoneName": "office6",
         "DestinationSceneZoneName": "hallway6"
       }
@@ -5285,14 +5415,14 @@
         "z": 24.474413
       },
       "SourceClearPoint": {
-        "x": 4.835045,
-        "y": -0.617448,
-        "z": 25.977593
+        "x": 7.608068,
+        "y": 4.217,
+        "z": 25.93852
       },
       "DestinationClearPoint": {
-        "x": 3.236955,
-        "y": -0.617448,
-        "z": 25.899447
+        "x": 2.679611,
+        "y": 5.01,
+        "z": 25.93852
       },
       "DestinationApproachPoint": {
         "x": -1.07132,
@@ -5306,14 +5436,14 @@
           "z": 24.474413
         },
         {
-          "x": 4.835045,
-          "y": -0.617448,
-          "z": 25.977593
+          "x": 7.608068,
+          "y": 4.217,
+          "z": 25.93852
         },
         {
-          "x": 3.236955,
-          "y": -0.617448,
-          "z": 25.899447
+          "x": 2.679611,
+          "y": 5.01,
+          "z": 25.93852
         },
         {
           "x": -1.07132,
@@ -5346,14 +5476,14 @@
           "z": 24.474413
         },
         "SourceClearPoint": {
-          "x": 4.835045,
-          "y": -0.617448,
-          "z": 25.977593
+          "x": 7.608068,
+          "y": 4.217,
+          "z": 25.93852
         },
         "DestinationClearPoint": {
-          "x": 3.236955,
-          "y": -0.617448,
-          "z": 25.899447
+          "x": 2.679611,
+          "y": 5.01,
+          "z": 25.93852
         },
         "DestinationApproachPoint": {
           "x": -1.07132,
@@ -5367,14 +5497,14 @@
             "z": 24.474413
           },
           {
-            "x": 4.835045,
-            "y": -0.617448,
-            "z": 25.977593
+            "x": 7.608068,
+            "y": 4.217,
+            "z": 25.93852
           },
           {
-            "x": 3.236955,
-            "y": -0.617448,
-            "z": 25.899447
+            "x": 2.679611,
+            "y": 5.01,
+            "z": 25.93852
           },
           {
             "x": -1.07132,
@@ -5382,11 +5512,11 @@
             "z": 23.964413
           }
         ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides"
       },
       "SourceSceneZoneName": "office5",
       "DestinationSceneZoneName": "office_closet",
-      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
       "Validation": {
         "AcceptedSourceZones": [
           "office5",
@@ -5405,7 +5535,7 @@
         "StepTimeoutSeconds": 8.0,
         "StaticSuspicionScore": 0,
         "StaticIssues": [],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
         "SourceSceneZoneName": "office5",
         "DestinationSceneZoneName": "office_closet"
       }
@@ -5434,14 +5564,14 @@
         "z": 23.964413
       },
       "SourceClearPoint": {
-        "x": 3.236955,
-        "y": -0.617448,
-        "z": 25.899447
+        "x": 2.679611,
+        "y": 5.01,
+        "z": 25.93852
       },
       "DestinationClearPoint": {
-        "x": 4.835045,
-        "y": -0.617448,
-        "z": 25.977593
+        "x": 7.608068,
+        "y": 4.217,
+        "z": 25.93852
       },
       "DestinationApproachPoint": {
         "x": 9.35808,
@@ -5453,6 +5583,16 @@
           "x": -1.07132,
           "y": 4.17,
           "z": 23.964413
+        },
+        {
+          "x": 2.679611,
+          "y": 5.01,
+          "z": 25.93852
+        },
+        {
+          "x": 7.608068,
+          "y": 4.217,
+          "z": 25.93852
         },
         {
           "x": 9.35808,
@@ -5485,14 +5625,14 @@
           "z": 23.964413
         },
         "SourceClearPoint": {
-          "x": 3.236955,
-          "y": -0.617448,
-          "z": 25.899447
+          "x": 2.679611,
+          "y": 5.01,
+          "z": 25.93852
         },
         "DestinationClearPoint": {
-          "x": 4.835045,
-          "y": -0.617448,
-          "z": 25.977593
+          "x": 7.608068,
+          "y": 4.217,
+          "z": 25.93852
         },
         "DestinationApproachPoint": {
           "x": 9.35808,
@@ -5506,16 +5646,26 @@
             "z": 23.964413
           },
           {
+            "x": 2.679611,
+            "y": 5.01,
+            "z": 25.93852
+          },
+          {
+            "x": 7.608068,
+            "y": 4.217,
+            "z": 25.93852
+          },
+          {
             "x": 9.35808,
             "y": 4.17,
             "z": 24.474413
           }
         ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides"
       },
       "SourceSceneZoneName": "office_closet",
       "DestinationSceneZoneName": "office5",
-      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
       "Validation": {
         "AcceptedSourceZones": [
           "office_closet"
@@ -5534,7 +5684,7 @@
         "StepTimeoutSeconds": 8.0,
         "StaticSuspicionScore": 0,
         "StaticIssues": [],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
         "SourceSceneZoneName": "office_closet",
         "DestinationSceneZoneName": "office5"
       }
@@ -6007,6 +6157,16 @@
           "z": -12.635586
         },
         {
+          "x": -10.685717,
+          "y": 12.824811,
+          "z": -7.261083
+        },
+        {
+          "x": -10.762283,
+          "y": 12.824811,
+          "z": -5.662917
+        },
+        {
           "x": -12.604355,
           "y": 17.84,
           "z": 0.034413
@@ -6058,16 +6218,26 @@
             "z": -12.635586
           },
           {
+            "x": -10.685717,
+            "y": 12.824811,
+            "z": -7.261083
+          },
+          {
+            "x": -10.762283,
+            "y": 12.824811,
+            "z": -5.662917
+          },
+          {
             "x": -12.604355,
             "y": 17.84,
             "z": 0.034413
           }
         ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides"
       },
       "SourceSceneZoneName": "bedroom",
       "DestinationSceneZoneName": "upper_hallway7",
-      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
       "Validation": {
         "AcceptedSourceZones": [
           "bedroom",
@@ -6094,7 +6264,7 @@
         "StepTimeoutSeconds": 8.0,
         "StaticSuspicionScore": 0,
         "StaticIssues": [],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
         "SourceSceneZoneName": "bedroom",
         "DestinationSceneZoneName": "upper_hallway7"
       }
@@ -6300,6 +6470,16 @@
           "z": -23.995586
         },
         {
+          "x": -4.526314,
+          "y": 18.85,
+          "z": -20.603844
+        },
+        {
+          "x": -10.075526,
+          "y": 16.73,
+          "z": -13.94941
+        },
+        {
           "x": -10.53503,
           "y": 18.02,
           "z": -11.725586
@@ -6355,6 +6535,16 @@
             "x": -10.53503,
             "y": 18.02,
             "z": -23.995586
+          },
+          {
+            "x": -4.526314,
+            "y": 18.85,
+            "z": -20.603844
+          },
+          {
+            "x": -10.075526,
+            "y": 16.73,
+            "z": -13.94941
           },
           {
             "x": -10.53503,
@@ -6586,6 +6776,16 @@
           "z": 0.034413
         },
         {
+          "x": -23.659516,
+          "y": 12.824811,
+          "z": -5.524008
+        },
+        {
+          "x": -23.666484,
+          "y": 12.824811,
+          "z": -7.123992
+        },
+        {
           "x": -25.461765,
           "y": 17.84,
           "z": -12.635586
@@ -6637,16 +6837,26 @@
             "z": 0.034413
           },
           {
+            "x": -23.659516,
+            "y": 12.824811,
+            "z": -5.524008
+          },
+          {
+            "x": -23.666484,
+            "y": 12.824811,
+            "z": -7.123992
+          },
+          {
             "x": -25.461765,
             "y": 17.84,
             "z": -12.635586
           }
         ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides"
       },
       "SourceSceneZoneName": "bathroom2",
       "DestinationSceneZoneName": "bedroom4",
-      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
       "Validation": {
         "AcceptedSourceZones": [
           "bathroom2"
@@ -6666,7 +6876,7 @@
         "StepTimeoutSeconds": 8.0,
         "StaticSuspicionScore": 0,
         "StaticIssues": [],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
         "SourceSceneZoneName": "bathroom2",
         "DestinationSceneZoneName": "bedroom4"
       }
@@ -6825,9 +7035,9 @@
       "FromNodeId": "zone:bathroom1|scene:bathroom1",
       "ToNodeId": "zone:hallway|scene:hallway6",
       "FromWaypoint": {
-        "x": -0.028381,
+        "x": 2.06929,
         "y": 4.17,
-        "z": 11.494413
+        "z": 7.220769
       },
       "ToWaypoint": {
         "x": 0.523441,
@@ -6837,9 +7047,9 @@
       "FromCrossingAnchor": null,
       "ToCrossingAnchor": null,
       "SourceApproachPoint": {
-        "x": -0.028381,
+        "x": 2.06929,
         "y": 4.17,
-        "z": 11.494413
+        "z": 7.220769
       },
       "SourceClearPoint": {
         "x": 2.06929,
@@ -6849,7 +7059,7 @@
       "DestinationClearPoint": {
         "x": 2.15071,
         "y": -0.617448,
-        "z": 5.622841
+        "z": 5.35
       },
       "DestinationApproachPoint": {
         "x": 0.523441,
@@ -6858,9 +7068,19 @@
       },
       "NavigationPoints": [
         {
-          "x": -0.028381,
+          "x": 2.06929,
           "y": 4.17,
-          "z": 11.494413
+          "z": 7.220769
+        },
+        {
+          "x": 2.06929,
+          "y": -0.617448,
+          "z": 7.220769
+        },
+        {
+          "x": 2.15071,
+          "y": -0.617448,
+          "z": 5.35
         },
         {
           "x": 0.523441,
@@ -6873,7 +7093,7 @@
         "y": -0.617448,
         "z": 6.421805
       },
-      "Cost": 10.844,
+      "Cost": 6.7361,
       "StepKind": "Door",
       "ConnectorName": "Doors_Bathroom1",
       "ConnectorNames": [],
@@ -6888,9 +7108,9 @@
           "z": 6.421805
         },
         "SourceApproachPoint": {
-          "x": -0.028381,
+          "x": 2.06929,
           "y": 4.17,
-          "z": 11.494413
+          "z": 7.220769
         },
         "SourceClearPoint": {
           "x": 2.06929,
@@ -6900,7 +7120,7 @@
         "DestinationClearPoint": {
           "x": 2.15071,
           "y": -0.617448,
-          "z": 5.622841
+          "z": 5.35
         },
         "DestinationApproachPoint": {
           "x": 0.523441,
@@ -6909,9 +7129,19 @@
         },
         "NavigationPoints": [
           {
-            "x": -0.028381,
+            "x": 2.06929,
             "y": 4.17,
-            "z": 11.494413
+            "z": 7.220769
+          },
+          {
+            "x": 2.06929,
+            "y": -0.617448,
+            "z": 7.220769
+          },
+          {
+            "x": 2.15071,
+            "y": -0.617448,
+            "z": 5.35
           },
           {
             "x": 0.523441,
@@ -6919,11 +7149,11 @@
             "z": 0.664414
           }
         ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides"
       },
       "SourceSceneZoneName": "bathroom1",
       "DestinationSceneZoneName": "hallway6",
-      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
       "Validation": {
         "AcceptedSourceZones": [
           "bathroom1"
@@ -6940,7 +7170,7 @@
         "StepTimeoutSeconds": 8.0,
         "StaticSuspicionScore": 0,
         "StaticIssues": [],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
         "SourceSceneZoneName": "bathroom1",
         "DestinationSceneZoneName": "hallway6"
       }
@@ -7162,6 +7392,16 @@
           "z": -3.085587
         },
         {
+          "x": 3.451399,
+          "y": 11.880199,
+          "z": -3.197587
+        },
+        {
+          "x": 1.932791,
+          "y": 12.9758,
+          "z": -3.253586
+        },
+        {
           "x": -1.104427,
           "y": 15.167,
           "z": -3.365586
@@ -7211,6 +7451,16 @@
             "x": 6.488617,
             "y": 9.688999,
             "z": -3.085587
+          },
+          {
+            "x": 3.451399,
+            "y": 11.880199,
+            "z": -3.197587
+          },
+          {
+            "x": 1.932791,
+            "y": 12.9758,
+            "z": -3.253586
           },
           {
             "x": -1.104427,
@@ -7471,6 +7721,16 @@
           "z": 33.884659
         },
         {
+          "x": -15.974672,
+          "y": 4.98,
+          "z": 29.419168
+        },
+        {
+          "x": -15.974672,
+          "y": 18.17,
+          "z": 6.760952
+        },
+        {
           "x": -13.566796,
           "y": 18.17,
           "z": 3.55603
@@ -7520,6 +7780,16 @@
             "x": -18.382547,
             "y": 4.98,
             "z": 33.884659
+          },
+          {
+            "x": -15.974672,
+            "y": 4.98,
+            "z": 29.419168
+          },
+          {
+            "x": -15.974672,
+            "y": 18.17,
+            "z": 6.760952
           },
           {
             "x": -13.566796,
@@ -7754,6 +8024,16 @@
           "z": 30.984411
         },
         {
+          "x": -11.424,
+          "y": 4.98,
+          "z": 36.130107
+        },
+        {
+          "x": -15.173267,
+          "y": 4.98,
+          "z": 37.237
+        },
+        {
           "x": -17.123764,
           "y": 3.92,
           "z": 35.194416
@@ -7803,6 +8083,16 @@
             "x": -13.564522,
             "y": 3.92,
             "z": 30.984411
+          },
+          {
+            "x": -11.424,
+            "y": 4.98,
+            "z": 36.130107
+          },
+          {
+            "x": -15.173267,
+            "y": 4.98,
+            "z": 37.237
           },
           {
             "x": -17.123764,
@@ -8035,6 +8325,16 @@
           "z": 13.564413
         },
         {
+          "x": -6.166,
+          "y": 12.824811,
+          "z": 8.842243
+        },
+        {
+          "x": -6.166,
+          "y": 12.824811,
+          "z": 7.242243
+        },
+        {
           "x": -7.748341,
           "y": 17.84,
           "z": 1.714413
@@ -8086,16 +8386,26 @@
             "z": 13.564413
           },
           {
+            "x": -6.166,
+            "y": 12.824811,
+            "z": 8.842243
+          },
+          {
+            "x": -6.166,
+            "y": 12.824811,
+            "z": 7.242243
+          },
+          {
             "x": -7.748341,
             "y": 17.84,
             "z": 1.714413
           }
         ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides"
       },
       "SourceSceneZoneName": "gym7",
       "DestinationSceneZoneName": "upper_hallway",
-      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
       "Validation": {
         "AcceptedSourceZones": [
           "gym7",
@@ -8120,7 +8430,7 @@
         "StepTimeoutSeconds": 8.0,
         "StaticSuspicionScore": 0,
         "StaticIssues": [],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
         "SourceSceneZoneName": "gym7",
         "DestinationSceneZoneName": "upper_hallway"
       }
@@ -8149,14 +8459,14 @@
         "z": 20.664413
       },
       "SourceClearPoint": {
-        "x": -5.325436,
-        "y": 12.824811,
-        "z": 23.969733
+        "x": -14.238859,
+        "y": 17.449999,
+        "z": 14.190958
       },
       "DestinationClearPoint": {
-        "x": -3.727192,
-        "y": 12.824811,
-        "z": 23.894773
+        "x": -3.392284,
+        "y": 18.042,
+        "z": 19.308887
       },
       "DestinationApproachPoint": {
         "x": 1.831253,
@@ -8170,14 +8480,14 @@
           "z": 20.664413
         },
         {
-          "x": -5.325436,
-          "y": 12.824811,
-          "z": 23.969733
+          "x": -14.238859,
+          "y": 17.449999,
+          "z": 14.190958
         },
         {
-          "x": -3.727192,
-          "y": 12.824811,
-          "z": 23.894773
+          "x": -3.392284,
+          "y": 18.042,
+          "z": 19.308887
         },
         {
           "x": 1.831253,
@@ -8216,14 +8526,14 @@
           "z": 20.664413
         },
         "SourceClearPoint": {
-          "x": -5.325436,
-          "y": 12.824811,
-          "z": 23.969733
+          "x": -14.238859,
+          "y": 17.449999,
+          "z": 14.190958
         },
         "DestinationClearPoint": {
-          "x": -3.727192,
-          "y": 12.824811,
-          "z": 23.894773
+          "x": -3.392284,
+          "y": 18.042,
+          "z": 19.308887
         },
         "DestinationApproachPoint": {
           "x": 1.831253,
@@ -8237,14 +8547,14 @@
             "z": 20.664413
           },
           {
-            "x": -5.325436,
-            "y": 12.824811,
-            "z": 23.969733
+            "x": -14.238859,
+            "y": 17.449999,
+            "z": 14.190958
           },
           {
-            "x": -3.727192,
-            "y": 12.824811,
-            "z": 23.894773
+            "x": -3.392284,
+            "y": 18.042,
+            "z": 19.308887
           },
           {
             "x": 1.831253,
@@ -8252,11 +8562,11 @@
             "z": 20.084414
           }
         ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides"
       },
       "SourceSceneZoneName": "gym4",
       "DestinationSceneZoneName": "gym_closet",
-      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
       "Validation": {
         "AcceptedSourceZones": [
           "gym4",
@@ -8274,12 +8584,9 @@
           "gym_closet3"
         ],
         "StepTimeoutSeconds": 8.0,
-        "StaticSuspicionScore": 2,
-        "StaticIssues": [
-          "FarFromConnectorSourceApproach",
-          "FarFromConnectorDestinationApproach"
-        ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+        "StaticSuspicionScore": 0,
+        "StaticIssues": [],
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
         "SourceSceneZoneName": "gym4",
         "DestinationSceneZoneName": "gym_closet"
       }
@@ -8308,14 +8615,14 @@
         "z": 20.084414
       },
       "SourceClearPoint": {
-        "x": -3.727192,
-        "y": 12.824811,
-        "z": 23.894773
+        "x": -2.9,
+        "y": 18.042,
+        "z": 19.308887
       },
       "DestinationClearPoint": {
-        "x": -5.325436,
-        "y": 12.824811,
-        "z": 23.969733
+        "x": -14.238859,
+        "y": 17.449999,
+        "z": 14.190958
       },
       "DestinationApproachPoint": {
         "x": -10.53503,
@@ -8327,6 +8634,16 @@
           "x": 1.831253,
           "y": 18.02,
           "z": 20.084414
+        },
+        {
+          "x": -2.9,
+          "y": 18.042,
+          "z": 19.308887
+        },
+        {
+          "x": -14.238859,
+          "y": 17.449999,
+          "z": 14.190958
         },
         {
           "x": -10.53503,
@@ -8365,14 +8682,14 @@
           "z": 20.084414
         },
         "SourceClearPoint": {
-          "x": -3.727192,
-          "y": 12.824811,
-          "z": 23.894773
+          "x": -2.9,
+          "y": 18.042,
+          "z": 19.308887
         },
         "DestinationClearPoint": {
-          "x": -5.325436,
-          "y": 12.824811,
-          "z": 23.969733
+          "x": -14.238859,
+          "y": 17.449999,
+          "z": 14.190958
         },
         "DestinationApproachPoint": {
           "x": -10.53503,
@@ -8386,16 +8703,26 @@
             "z": 20.084414
           },
           {
+            "x": -2.9,
+            "y": 18.042,
+            "z": 19.308887
+          },
+          {
+            "x": -14.238859,
+            "y": 17.449999,
+            "z": 14.190958
+          },
+          {
             "x": -10.53503,
             "y": 18.02,
             "z": 20.664413
           }
         ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides"
       },
       "SourceSceneZoneName": "gym_closet",
       "DestinationSceneZoneName": "gym4",
-      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
       "Validation": {
         "AcceptedSourceZones": [
           "gym_closet",
@@ -8413,12 +8740,9 @@
           "gym8"
         ],
         "StepTimeoutSeconds": 8.0,
-        "StaticSuspicionScore": 2,
-        "StaticIssues": [
-          "FarFromConnectorSourceApproach",
-          "FarFromConnectorDestinationApproach"
-        ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+        "StaticSuspicionScore": 0,
+        "StaticIssues": [],
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
         "SourceSceneZoneName": "gym_closet",
         "DestinationSceneZoneName": "gym4"
       }
@@ -8447,12 +8771,12 @@
         "z": 3.885414
       },
       "SourceClearPoint": {
-        "x": 2.504,
+        "x": 0.8,
         "y": 18.262,
         "z": 3.435
       },
       "DestinationClearPoint": {
-        "x": 4.777,
+        "x": 5.85,
         "y": 18.099,
         "z": 3.435
       },
@@ -8468,12 +8792,12 @@
           "z": 3.885414
         },
         {
-          "x": 2.504,
+          "x": 0.8,
           "y": 18.262,
           "z": 3.435
         },
         {
-          "x": 4.777,
+          "x": 5.85,
           "y": 18.099,
           "z": 3.435
         },
@@ -8508,12 +8832,12 @@
           "z": 3.885414
         },
         "SourceClearPoint": {
-          "x": 2.504,
+          "x": 0.8,
           "y": 18.262,
           "z": 3.435
         },
         "DestinationClearPoint": {
-          "x": 4.777,
+          "x": 5.85,
           "y": 18.099,
           "z": 3.435
         },
@@ -8529,12 +8853,12 @@
             "z": 3.885414
           },
           {
-            "x": 2.504,
+            "x": 0.8,
             "y": 18.262,
             "z": 3.435
           },
           {
-            "x": 4.777,
+            "x": 5.85,
             "y": 18.099,
             "z": 3.435
           },
@@ -8600,12 +8924,12 @@
         "z": 3.885414
       },
       "SourceClearPoint": {
-        "x": 4.777,
+        "x": 5.85,
         "y": 18.099,
         "z": 3.435
       },
       "DestinationClearPoint": {
-        "x": 2.504,
+        "x": 0.8,
         "y": 18.262,
         "z": 3.435
       },
@@ -8619,6 +8943,16 @@
           "x": 12.111662,
           "y": 18.261999,
           "z": 3.885414
+        },
+        {
+          "x": 5.85,
+          "y": 18.099,
+          "z": 3.435
+        },
+        {
+          "x": 0.8,
+          "y": 18.262,
+          "z": 3.435
         },
         {
           "x": -4.249802,
@@ -8651,12 +8985,12 @@
           "z": 3.885414
         },
         "SourceClearPoint": {
-          "x": 4.777,
+          "x": 5.85,
           "y": 18.099,
           "z": 3.435
         },
         "DestinationClearPoint": {
-          "x": 2.504,
+          "x": 0.8,
           "y": 18.262,
           "z": 3.435
         },
@@ -8670,6 +9004,16 @@
             "x": 12.111662,
             "y": 18.261999,
             "z": 3.885414
+          },
+          {
+            "x": 5.85,
+            "y": 18.099,
+            "z": 3.435
+          },
+          {
+            "x": 0.8,
+            "y": 18.262,
+            "z": 3.435
           },
           {
             "x": -4.249802,
@@ -8910,6 +9254,11 @@
         },
         {
           "x": -25.539013,
+          "y": 4.98,
+          "z": 29.193374
+        },
+        {
+          "x": -25.539013,
           "y": 3.92,
           "z": -23.635588
         }
@@ -8958,6 +9307,11 @@
             "x": -24.545549,
             "y": 4.98,
             "z": 33.058807
+          },
+          {
+            "x": -25.539013,
+            "y": 4.98,
+            "z": 29.193374
           },
           {
             "x": -25.539013,
@@ -9186,6 +9540,11 @@
         },
         {
           "x": -0.028381,
+          "y": 4.894,
+          "z": 10.25434
+        },
+        {
+          "x": -0.028381,
           "y": 4.17,
           "z": 11.494413
         }
@@ -9234,6 +9593,11 @@
             "x": 0.647248,
             "y": 4.894,
             "z": 8.549414
+          },
+          {
+            "x": -0.028381,
+            "y": 4.894,
+            "z": 10.25434
           },
           {
             "x": -0.028381,
@@ -9457,6 +9821,11 @@
           "z": -4.284243
         },
         {
+          "x": -18.548107,
+          "y": 18.23,
+          "z": -3.498277
+        },
+        {
           "x": 0.523441,
           "y": 4.17,
           "z": 0.664414
@@ -9506,6 +9875,11 @@
             "x": -24.804977,
             "y": 18.23,
             "z": -4.284243
+          },
+          {
+            "x": -18.548107,
+            "y": 18.23,
+            "z": -3.498277
           },
           {
             "x": 0.523441,
@@ -9730,6 +10104,11 @@
         },
         {
           "x": -25.406582,
+          "y": 18.23,
+          "z": -3.498277
+        },
+        {
+          "x": -25.406582,
           "y": 17.84,
           "z": 0.034413
         }
@@ -9778,6 +10157,11 @@
             "x": -24.804977,
             "y": 18.23,
             "z": -4.284243
+          },
+          {
+            "x": -25.406582,
+            "y": 18.23,
+            "z": -3.498277
           },
           {
             "x": -25.406582,
@@ -9991,6 +10375,16 @@
           "z": -4.284243
         },
         {
+          "x": -23.600278,
+          "y": 12.824811,
+          "z": -5.526463
+        },
+        {
+          "x": -23.725722,
+          "y": 12.824811,
+          "z": -7.121537
+        },
+        {
           "x": -25.461765,
           "y": 17.84,
           "z": -12.635586
@@ -10042,16 +10436,26 @@
             "z": -4.284243
           },
           {
+            "x": -23.600278,
+            "y": 12.824811,
+            "z": -5.526463
+          },
+          {
+            "x": -23.725722,
+            "y": 12.824811,
+            "z": -7.121537
+          },
+          {
             "x": -25.461765,
             "y": 17.84,
             "z": -12.635586
           }
         ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides"
       },
       "SourceSceneZoneName": "bathroom2",
       "DestinationSceneZoneName": "dorian_bathroom2_2",
-      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
       "Validation": {
         "AcceptedSourceZones": [
           "bathroom2"
@@ -10062,7 +10466,7 @@
         "StepTimeoutSeconds": 8.0,
         "StaticSuspicionScore": 0,
         "StaticIssues": [],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
         "SourceSceneZoneName": "bathroom2",
         "DestinationSceneZoneName": "dorian_bathroom2_2"
       }
@@ -10271,6 +10675,11 @@
         },
         {
           "x": -12.604355,
+          "y": 16.73,
+          "z": -7.237823
+        },
+        {
+          "x": -12.604355,
           "y": 17.84,
           "z": 0.034413
         }
@@ -10319,6 +10728,11 @@
             "x": -13.547646,
             "y": 16.73,
             "z": -10.593616
+          },
+          {
+            "x": -12.604355,
+            "y": 16.73,
+            "z": -7.237823
           },
           {
             "x": -12.604355,
@@ -10559,6 +10973,11 @@
         },
         {
           "x": -11.997356,
+          "y": 16.73,
+          "z": -12.635586
+        },
+        {
+          "x": -11.997356,
           "y": 17.84,
           "z": -12.635586
         }
@@ -10607,6 +11026,11 @@
             "x": -13.547646,
             "y": 16.73,
             "z": -10.593616
+          },
+          {
+            "x": -11.997356,
+            "y": 16.73,
+            "z": -12.635586
           },
           {
             "x": -11.997356,
@@ -10835,6 +11259,11 @@
           "z": -18.005587
         },
         {
+          "x": -10.099268,
+          "y": 18.85,
+          "z": -11.725586
+        },
+        {
           "x": -10.53503,
           "y": 18.02,
           "z": -11.725586
@@ -10884,6 +11313,11 @@
             "x": -5.531917,
             "y": 18.85,
             "z": -18.005587
+          },
+          {
+            "x": -10.099268,
+            "y": 18.85,
+            "z": -11.725586
           },
           {
             "x": -10.53503,
@@ -11103,6 +11537,11 @@
           "z": -18.005587
         },
         {
+          "x": -10.099268,
+          "y": 18.85,
+          "z": -23.995586
+        },
+        {
           "x": -10.53503,
           "y": 18.02,
           "z": -23.995586
@@ -11152,6 +11591,11 @@
             "x": -5.531917,
             "y": 18.85,
             "z": -18.005587
+          },
+          {
+            "x": -10.099268,
+            "y": 18.85,
+            "z": -23.995586
           },
           {
             "x": -10.53503,
@@ -11380,6 +11824,11 @@
         },
         {
           "x": 7.757801,
+          "y": 4.622776,
+          "z": 11.494413
+        },
+        {
+          "x": 7.757801,
           "y": 4.17,
           "z": 11.494413
         }
@@ -11428,6 +11877,11 @@
             "x": 8.537694,
             "y": 4.622776,
             "z": 10.8675
+          },
+          {
+            "x": 7.757801,
+            "y": 4.622776,
+            "z": 11.494413
           },
           {
             "x": 7.757801,
@@ -11666,6 +12120,11 @@
         },
         {
           "x": 8.309622,
+          "y": 4.622776,
+          "z": 8.363896
+        },
+        {
+          "x": 8.309622,
           "y": 4.17,
           "z": 0.664414
         }
@@ -11714,6 +12173,11 @@
             "x": 8.537694,
             "y": 4.622776,
             "z": 10.8675
+          },
+          {
+            "x": 8.309622,
+            "y": 4.622776,
+            "z": 8.363896
           },
           {
             "x": 8.309622,
@@ -11945,6 +12409,11 @@
           "z": 26.707882
         },
         {
+          "x": 2.679611,
+          "y": 5.01,
+          "z": 24.474413
+        },
+        {
           "x": 9.35808,
           "y": 4.17,
           "z": 24.474413
@@ -11994,6 +12463,11 @@
             "x": -1.481937,
             "y": 5.01,
             "z": 26.707882
+          },
+          {
+            "x": 2.679611,
+            "y": 5.01,
+            "z": 24.474413
           },
           {
             "x": 9.35808,
@@ -12216,6 +12690,11 @@
         },
         {
           "x": -1.07132,
+          "y": 5.01,
+          "z": 23.964413
+        },
+        {
+          "x": -1.07132,
           "y": 4.17,
           "z": 23.964413
         }
@@ -12264,6 +12743,11 @@
             "x": -1.481937,
             "y": 5.01,
             "z": 26.707882
+          },
+          {
+            "x": -1.07132,
+            "y": 5.01,
+            "z": 23.964413
           },
           {
             "x": -1.07132,
@@ -12483,6 +12967,11 @@
           "z": 26.707882
         },
         {
+          "x": 2.679611,
+          "y": 5.01,
+          "z": 25.344412
+        },
+        {
           "x": 3.288059,
           "y": 4.17,
           "z": 25.344412
@@ -12532,6 +13021,11 @@
             "x": -1.481937,
             "y": 5.01,
             "z": 26.707882
+          },
+          {
+            "x": 2.679611,
+            "y": 5.01,
+            "z": 25.344412
           },
           {
             "x": 3.288059,
@@ -12762,6 +13256,11 @@
           "z": 23.264553
         },
         {
+          "x": 5.651917,
+          "y": 4.37,
+          "z": 25.344412
+        },
+        {
           "x": 3.288059,
           "y": -7.03,
           "z": 25.344412
@@ -12811,6 +13310,11 @@
             "x": 8.151783,
             "y": 4.37,
             "z": 23.264553
+          },
+          {
+            "x": 5.651917,
+            "y": 4.37,
+            "z": 25.344412
           },
           {
             "x": 3.288059,
@@ -13049,6 +13553,11 @@
         },
         {
           "x": -17.686623,
+          "y": 4.98,
+          "z": 29.419168
+        },
+        {
+          "x": -17.686623,
           "y": 3.92,
           "z": 22.004414
         }
@@ -13097,6 +13606,11 @@
             "x": -18.382547,
             "y": 4.98,
             "z": 33.884659
+          },
+          {
+            "x": -17.686623,
+            "y": 4.98,
+            "z": 29.419168
           },
           {
             "x": -17.686623,
@@ -13329,6 +13843,11 @@
         },
         {
           "x": -17.123764,
+          "y": 4.98,
+          "z": 35.194416
+        },
+        {
+          "x": -17.123764,
           "y": 3.92,
           "z": 35.194416
         }
@@ -13377,6 +13896,11 @@
             "x": -18.382547,
             "y": 4.98,
             "z": 33.884659
+          },
+          {
+            "x": -17.123764,
+            "y": 4.98,
+            "z": 35.194416
           },
           {
             "x": -17.123764,
@@ -13602,6 +14126,11 @@
         },
         {
           "x": -13.564522,
+          "y": 4.98,
+          "z": 30.984411
+        },
+        {
+          "x": -13.564522,
           "y": 3.92,
           "z": 30.984411
         }
@@ -13650,6 +14179,11 @@
             "x": -12.574163,
             "y": 4.98,
             "z": 32.835442
+          },
+          {
+            "x": -13.564522,
+            "y": 4.98,
+            "z": 30.984411
           },
           {
             "x": -13.564522,
@@ -13878,6 +14412,11 @@
         {
           "x": -0.64642,
           "y": 18.261999,
+          "z": 1.393295
+        },
+        {
+          "x": -0.64642,
+          "y": 18.261999,
           "z": 0.158413
         }
       ],
@@ -13925,6 +14464,11 @@
             "x": -0.997404,
             "y": 18.261999,
             "z": 3.647734
+          },
+          {
+            "x": -0.64642,
+            "y": 18.261999,
+            "z": 1.393295
           },
           {
             "x": -0.64642,
@@ -14435,6 +14979,11 @@
           "z": 10.8675
         },
         {
+          "x": 6.037495,
+          "y": 4.622776,
+          "z": 8.363896
+        },
+        {
           "x": 5.324958,
           "y": 7.47,
           "z": 2.526427
@@ -14484,6 +15033,11 @@
             "x": 8.537694,
             "y": 4.622776,
             "z": 10.8675
+          },
+          {
+            "x": 6.037495,
+            "y": 4.622776,
+            "z": 8.363896
           },
           {
             "x": 5.324958,
@@ -14722,6 +15276,11 @@
         },
         {
           "x": 6.81419,
+          "y": 4.622776,
+          "z": 11.034412
+        },
+        {
+          "x": 6.81419,
           "y": 7.47,
           "z": 11.034412
         }
@@ -14770,6 +15329,11 @@
             "x": 8.537694,
             "y": 4.622776,
             "z": 10.8675
+          },
+          {
+            "x": 6.81419,
+            "y": 4.622776,
+            "z": 11.034412
           },
           {
             "x": 6.81419,
@@ -15006,6 +15570,11 @@
         },
         {
           "x": 6.81419,
+          "y": 4.37,
+          "z": 18.123413
+        },
+        {
+          "x": 6.81419,
           "y": 3.124,
           "z": 18.123413
         }
@@ -15054,6 +15623,11 @@
             "x": 8.292202,
             "y": 4.37,
             "z": 15.507165
+          },
+          {
+            "x": 6.81419,
+            "y": 4.37,
+            "z": 18.123413
           },
           {
             "x": 6.81419,
@@ -15289,6 +15863,11 @@
         },
         {
           "x": 14.705214,
+          "y": 18.098972,
+          "z": 7.154414
+        },
+        {
+          "x": 14.705214,
           "y": 18.0,
           "z": 7.154414
         }
@@ -15337,6 +15916,11 @@
             "x": 14.363929,
             "y": 18.098972,
             "z": 3.739966
+          },
+          {
+            "x": 14.705214,
+            "y": 18.098972,
+            "z": 7.154414
           },
           {
             "x": 14.705214,
@@ -15571,6 +16155,11 @@
         },
         {
           "x": -11.004078,
+          "y": 3.367,
+          "z": 0.197612
+        },
+        {
+          "x": -11.004078,
           "y": 5.48,
           "z": -20.505587
         }
@@ -15619,6 +16208,11 @@
             "x": -12.300047,
             "y": 3.367,
             "z": 9.675211
+          },
+          {
+            "x": -11.004078,
+            "y": 3.367,
+            "z": 0.197612
           },
           {
             "x": -11.004078,
@@ -15851,6 +16445,11 @@
           "z": 18.212091
         },
         {
+          "x": -23.213122,
+          "y": 4.15,
+          "z": 15.873601
+        },
+        {
           "x": -20.689219,
           "y": 4.15,
           "z": 13.134907
@@ -15900,6 +16499,11 @@
             "x": -25.737026,
             "y": 4.15,
             "z": 18.212091
+          },
+          {
+            "x": -23.213122,
+            "y": 4.15,
+            "z": 15.873601
           },
           {
             "x": -20.689219,
@@ -16659,6 +17263,11 @@
         },
         {
           "x": -7.748341,
+          "y": 18.139999,
+          "z": 13.564413
+        },
+        {
+          "x": -7.748341,
           "y": 17.84,
           "z": 13.564413
         }
@@ -16707,6 +17316,11 @@
             "x": -10.674067,
             "y": 18.139999,
             "z": 13.578363
+          },
+          {
+            "x": -7.748341,
+            "y": 18.139999,
+            "z": 13.564413
           },
           {
             "x": -7.748341,
@@ -16943,6 +17557,11 @@
         },
         {
           "x": -7.748341,
+          "y": 18.139999,
+          "z": 9.161174
+        },
+        {
+          "x": -7.748341,
           "y": 17.84,
           "z": 1.714413
         }
@@ -16991,6 +17610,11 @@
             "x": -10.674067,
             "y": 18.139999,
             "z": 13.578363
+          },
+          {
+            "x": -7.748341,
+            "y": 18.139999,
+            "z": 9.161174
           },
           {
             "x": -7.748341,
@@ -17227,6 +17851,11 @@
         },
         {
           "x": -25.406582,
+          "y": 18.139999,
+          "z": 13.564413
+        },
+        {
+          "x": -25.406582,
           "y": 17.84,
           "z": 13.564413
         }
@@ -17275,6 +17904,11 @@
             "x": -26.36091,
             "y": 18.139999,
             "z": 14.032388
+          },
+          {
+            "x": -25.406582,
+            "y": 18.139999,
+            "z": 13.564413
           },
           {
             "x": -25.406582,
@@ -17511,6 +18145,11 @@
         },
         {
           "x": -24.58437,
+          "y": 18.139999,
+          "z": 8.72267
+        },
+        {
+          "x": -24.58437,
           "y": 17.84,
           "z": 1.714413
         }
@@ -17559,6 +18198,11 @@
             "x": -26.36091,
             "y": 18.139999,
             "z": 14.032388
+          },
+          {
+            "x": -24.58437,
+            "y": 18.139999,
+            "z": 8.72267
           },
           {
             "x": -24.58437,
@@ -17791,6 +18435,11 @@
           "z": 23.698233
         },
         {
+          "x": -3.308133,
+          "y": 18.042,
+          "z": 20.664413
+        },
+        {
           "x": -10.53503,
           "y": 18.02,
           "z": 20.664413
@@ -17840,6 +18489,11 @@
             "x": -0.170223,
             "y": 18.042,
             "z": 23.698233
+          },
+          {
+            "x": -3.308133,
+            "y": 18.042,
+            "z": 20.664413
           },
           {
             "x": -10.53503,
@@ -18058,7 +18712,7 @@
         },
         {
           "x": 1.831253,
-          "y": 18.02,
+          "y": 18.042,
           "z": 20.084414
         }
       ],
@@ -18109,7 +18763,7 @@
           },
           {
             "x": 1.831253,
-            "y": 18.02,
+            "y": 18.042,
             "z": 20.084414
           }
         ],
@@ -18613,6 +19267,11 @@
         },
         {
           "x": 12.111662,
+          "y": 18.098972,
+          "z": 3.885414
+        },
+        {
+          "x": 12.111662,
           "y": 18.261999,
           "z": 3.885414
         }
@@ -18661,6 +19320,11 @@
             "x": 14.363929,
             "y": 18.098972,
             "z": 3.739966
+          },
+          {
+            "x": 12.111662,
+            "y": 18.098972,
+            "z": 3.885414
           },
           {
             "x": 12.111662,
@@ -18891,6 +19555,11 @@
           "z": -18.005587
         },
         {
+          "x": -10.099268,
+          "y": 18.85,
+          "z": -7.348853
+        },
+        {
           "x": -24.319492,
           "y": 5.13,
           "z": 22.004414
@@ -18899,7 +19568,7 @@
       "ConnectorObjectPosition": {
         "x": -14.925704,
         "y": 11.99,
-        "z": 1.999413
+        "z": 1.999414
       },
       "Cost": 46.2819,
       "StepKind": "OpenPassage",
@@ -18913,7 +19582,7 @@
         "ObjectPosition": {
           "x": -14.925704,
           "y": 11.99,
-          "z": 1.999413
+          "z": 1.999414
         },
         "SourceApproachPoint": {
           "x": -5.531917,
@@ -18940,6 +19609,11 @@
             "x": -5.531917,
             "y": 18.85,
             "z": -18.005587
+          },
+          {
+            "x": -10.099268,
+            "y": 18.85,
+            "z": -7.348853
           },
           {
             "x": -24.319492,
