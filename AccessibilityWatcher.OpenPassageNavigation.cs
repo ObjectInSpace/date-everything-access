@@ -432,6 +432,7 @@ namespace DateEverythingAccess
             }
 
             Vector3 originalBridgeGoal = bridgeGoal;
+            bridgeGoal.y = playerPosition.y;
             bridgeGoal = ResolveOpenPassageReachablePlanningGoal(
                 resolvedPlanningZone,
                 step,
@@ -503,7 +504,7 @@ namespace DateEverythingAccess
             if (!LocalNavigationMaps.TryResolveReachableProxyInStartComponent(
                     planningZone,
                     playerPosition,
-                    planningGoal,
+                    NormalizeOpenPassageLocalPlanningGoalY(playerPosition, planningContext, planningGoal),
                     out Vector3 proxyGoal,
                     out string proxyDetail) ||
                 proxyGoal == Vector3.zero)
@@ -520,6 +521,23 @@ namespace DateEverythingAccess
                 " detail=" + (proxyDetail ?? "<null>") +
                 " step=" + DescribeNavigationStep(step));
             return proxyGoal;
+        }
+
+        private static Vector3 NormalizeOpenPassageLocalPlanningGoalY(
+            Vector3 playerPosition,
+            string planningContext,
+            Vector3 planningGoal)
+        {
+            if (planningGoal == Vector3.zero ||
+                playerPosition == Vector3.zero ||
+                (!string.Equals(planningContext, "open-passage-override-source", System.StringComparison.Ordinal) &&
+                 !string.Equals(planningContext, "open-passage-override-destination", System.StringComparison.Ordinal)))
+            {
+                return planningGoal;
+            }
+
+            planningGoal.y = playerPosition.y;
+            return planningGoal;
         }
 
         private bool HasReachedOpenPassageReachableSourceProxy(

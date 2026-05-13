@@ -286,6 +286,9 @@ namespace DateEverythingAccess
         private const float AutoWalkLoopMovementAllowance = 0.6f;
         private const float AutoWalkLoopTargetSignatureResolution = 0.25f;
         private const float AutoWalkZoneBoundaryFallbackDistance = 5f;
+        private const float AutoWalkMovementProbeMinimumCommand = 0.2f;
+        private const float AutoWalkMovementProbeCancelledVelocity = 0.1f;
+        private const float AutoWalkMovementProbeCancelledDisplacement = 0.08f;
         private const float AutoWalkOpenPassageCommitDistance = 2.5f;
         private const float AutoWalkOpenPassageHandoffDistance = 2.5f;
         private const float OpenPassageGuidedWaypointAdvanceDistance = 1.25f;
@@ -465,6 +468,7 @@ namespace DateEverythingAccess
         private string _lastNavigationTrackerDebugSnapshot;
         private string _lastNavigationAutoWalkDebugSnapshot;
         private string _lastNavigationTransitionDebugSnapshot;
+        private string _lastRuntimeMovementProbeSnapshot;
         private string _lastNavigationBlockedDetail;
         private string _doorCollisionRetryStepKey;
         private bool? _lastDateviatorsEquipped;
@@ -533,6 +537,10 @@ namespace DateEverythingAccess
         private Vector3 _trackedInteractableApproachTarget;
         private Vector3 _localNavigationPathGoal;
         private Vector3 _openPassageDestinationBridgeCompletedGoal;
+        private Vector3 _lastNavigationInputMove;
+        private Vector3 _lastNavigationInputLook;
+        private Vector3 _lastNavigationInputTarget;
+        private Vector3 _lastNavigationInputPosition;
         private readonly string[] _autoWalkLoopSignatureWindow = new string[AutoWalkLoopSampleWindowSize];
         private List<NavigationGraph.PathStep> _navigationPath;
         private List<Vector3> _localNavigationPathPoints;
@@ -548,7 +556,11 @@ namespace DateEverythingAccess
         private float _doorPostInteractionFallbackFailureStartedAt;
         private float _localNavigationStallStartedAt;
         private float _localNavigationBypassUntil;
+        private float _lastNavigationInputAppliedAt;
         private bool _hasLastTrackerTarget;
+        private bool _hasLastNavigationInput;
+        private NavigationTargetKind _lastNavigationInputTargetKind;
+        private string _lastNavigationInputStepKey;
         private int _openPassageSourceHandoffRecoveryFloor;
         private int _openPassageDestinationHandoffRecoveryFloor;
         private float _openPassageSourceHandoffProgressFloor;
@@ -873,10 +885,39 @@ namespace DateEverythingAccess
                         (selectedCoverageFailureReason ?? "<null>"));
                 }
 
+                bool physicsOccupancyExported = RuntimeLocalOccupancyExporter.TryExport(
+                    out string physicsOccupancyOutputPath,
+                    out int physicsOccupancyZoneCount,
+                    out int physicsOccupancyBlockedCellCount,
+                    out RuntimeLocalOccupancyExporter.ExportFailure physicsOccupancyFailure);
+                if (physicsOccupancyExported)
+                {
+                    Main.Log.LogInfo(
+                        "Runtime physics-sampled local occupancy export completed: " +
+                        physicsOccupancyOutputPath +
+                        " zones=" + physicsOccupancyZoneCount +
+                        " blockedCells=" + physicsOccupancyBlockedCellCount);
+                }
+                else
+                {
+                    Main.Log.LogWarning(
+                        "Runtime physics-sampled local occupancy export failed: " +
+                        physicsOccupancyFailure);
+                }
+
                 ScreenReader.Say(
-                    hasActiveNavMesh
-                        ? Loc.Get("navmesh_export_success", triangleCount, transitionCount)
-                        : Loc.Get("navmesh_export_diagnostic", transitionCount),
+                    physicsOccupancyExported
+                        ? Loc.Get(
+                            hasActiveNavMesh
+                                ? "navmesh_export_success_with_runtime_occupancy"
+                                : "navmesh_export_diagnostic_with_runtime_occupancy",
+                            triangleCount,
+                            transitionCount,
+                            physicsOccupancyZoneCount,
+                            physicsOccupancyBlockedCellCount)
+                        : hasActiveNavMesh
+                            ? Loc.Get("navmesh_export_success", triangleCount, transitionCount)
+                            : Loc.Get("navmesh_export_diagnostic", transitionCount),
                     remember: false);
                 return;
             }
@@ -5589,6 +5630,14 @@ namespace DateEverythingAccess
                     "Auto-walk loop detector triggered targetKind=" + targetKind +
                     " detail=" + loopDetail +
                     " step=" + DescribeNavigationStep(currentStep));
+                LogRuntimeMovementProbe(
+                    "loop-detector",
+                    currentStep,
+                    currentZone,
+                    targetKind,
+                    nextPosition,
+                    playerTransform.position,
+                    loopDetail);
                 if (TryReleaseLocalNavigationGoalFromLoop(
                         currentStep,
                         currentZone,
@@ -5781,11 +5830,395 @@ namespace DateEverythingAccess
                     " nextPosition=" + FormatVector3(nextPosition) +
                     " player=" + FormatVector3(playerTransform.position) +
                     " step=" + DescribeNavigationStep(currentStep));
+                LogRuntimeMovementProbe(
+                    "progress-timeout",
+                    currentStep,
+                    currentZone,
+                    targetKind,
+                    nextPosition,
+                    playerTransform.position,
+                    "no-progress");
                 if (!TryRecoverAutoWalk(currentStep, targetKind))
                     StopNavigationBlocked(
                         "auto-walk progress timeout targetKind=" + targetKind +
                         " step=" + DescribeNavigationStep(currentStep));
             }
+
+            RecordNavigationMovementCommand(
+                currentStep,
+                targetKind,
+                nextPosition,
+                moveInput,
+                lookInput,
+                playerTransform.position);
+        }
+
+        private void RecordNavigationMovementCommand(
+            NavigationGraph.PathStep step,
+            NavigationTargetKind targetKind,
+            Vector3 targetPosition,
+            Vector3 moveInput,
+            Vector3 lookInput,
+            Vector3 playerPosition)
+        {
+            _hasLastNavigationInput = true;
+            _lastNavigationInputStepKey = BuildNavigationStepKey(step);
+            _lastNavigationInputTargetKind = targetKind;
+            _lastNavigationInputTarget = targetPosition;
+            _lastNavigationInputMove = moveInput;
+            _lastNavigationInputLook = lookInput;
+            _lastNavigationInputPosition = playerPosition;
+            _lastNavigationInputAppliedAt = Time.unscaledTime;
+        }
+
+        private void LogRuntimeMovementProbe(
+            string reason,
+            NavigationGraph.PathStep step,
+            string currentZone,
+            NavigationTargetKind targetKind,
+            Vector3 targetPosition,
+            Vector3 playerPosition,
+            string failureDetail)
+        {
+            if (BetterPlayerControl.Instance == null)
+                return;
+
+            Rigidbody rigidbody = BetterPlayerControl.Instance.GetComponent<Rigidbody>();
+            Collider playerCollider = BetterPlayerControl.Instance.GetComponent<Collider>();
+            Vector3 toTarget = targetPosition - playerPosition;
+            toTarget.y = 0f;
+
+            string blockerDetail = ProbeMovementBlocker(playerCollider, playerPosition, targetPosition, requireTrigger: false);
+            string triggerDetail = ProbeMovementBlocker(playerCollider, playerPosition, targetPosition, requireTrigger: true);
+            string inputDetail = BuildMovementInputProbeDetail(rigidbody, playerPosition);
+            string message =
+                "Runtime movement probe reason=" + (reason ?? "<null>") +
+                " failureDetail=" + (failureDetail ?? "<null>") +
+                " step=" + DescribeNavigationStep(step) +
+                " currentZone=" + (currentZone ?? "<null>") +
+                " targetKind=" + targetKind +
+                " player=" + FormatVector3(playerPosition) +
+                " target=" + FormatVector3(targetPosition) +
+                " flatDistance=" + toTarget.magnitude.ToString("0.00", CultureInfo.InvariantCulture) +
+                " playerState=" + BetterPlayerControl.Instance.STATE +
+                " canUseNavigation=" + CanUseNavigationNow() +
+                " playerCollider=" + DescribeCollider(playerCollider) +
+                " input=" + inputDetail +
+                " firstBlockingHit=" + blockerDetail +
+                " firstTriggerHit=" + triggerDetail;
+
+            if (string.Equals(message, _lastRuntimeMovementProbeSnapshot, StringComparison.Ordinal))
+                return;
+
+            _lastRuntimeMovementProbeSnapshot = message;
+            Main.Log.LogWarning(message);
+        }
+
+        private string BuildMovementInputProbeDetail(Rigidbody rigidbody, Vector3 playerPosition)
+        {
+            Vector3 currentMove = Vector3.zero;
+            bool hasCurrentMove = TryReadBetterPlayerControlMove(out currentMove);
+            float currentMoveMagnitude = GetFlatMagnitude(currentMove);
+            float commandAge = _hasLastNavigationInput
+                ? Time.unscaledTime - _lastNavigationInputAppliedAt
+                : -1f;
+            float commandMoveMagnitude = _hasLastNavigationInput
+                ? GetFlatMagnitude(_lastNavigationInputMove)
+                : -1f;
+            float movementSinceCommand = _hasLastNavigationInput
+                ? GetFlatDistance(_lastNavigationInputPosition, playerPosition)
+                : -1f;
+            float velocityMagnitude = rigidbody != null
+                ? GetFlatMagnitude(rigidbody.velocity)
+                : -1f;
+            bool inputAppliedButCancelled =
+                commandMoveMagnitude >= AutoWalkMovementProbeMinimumCommand &&
+                movementSinceCommand >= 0f &&
+                movementSinceCommand <= AutoWalkMovementProbeCancelledDisplacement &&
+                velocityMagnitude >= 0f &&
+                velocityMagnitude <= AutoWalkMovementProbeCancelledVelocity;
+
+            return
+                "hasLastCommand=" + _hasLastNavigationInput +
+                " lastStepKey=" + (_lastNavigationInputStepKey ?? "<null>") +
+                " lastTargetKind=" + (_hasLastNavigationInput ? _lastNavigationInputTargetKind.ToString() : "<null>") +
+                " lastTarget=" + (_hasLastNavigationInput ? FormatVector3(_lastNavigationInputTarget) : "<null>") +
+                " lastMove=" + (_hasLastNavigationInput ? FormatVector3(_lastNavigationInputMove) : "<null>") +
+                " lastLook=" + (_hasLastNavigationInput ? FormatVector3(_lastNavigationInputLook) : "<null>") +
+                " commandAge=" + commandAge.ToString("0.00", CultureInfo.InvariantCulture) +
+                " movementSinceCommand=" + movementSinceCommand.ToString("0.00", CultureInfo.InvariantCulture) +
+                " velocity=" + velocityMagnitude.ToString("0.00", CultureInfo.InvariantCulture) +
+                " currentMoveAvailable=" + hasCurrentMove +
+                " currentMove=" + (hasCurrentMove ? FormatVector3(currentMove) : "<null>") +
+                " currentMoveMagnitude=" + currentMoveMagnitude.ToString("0.00", CultureInfo.InvariantCulture) +
+                " inputAppliedButCancelled=" + inputAppliedButCancelled;
+        }
+
+        private static bool TryReadBetterPlayerControlMove(out Vector3 moveInput)
+        {
+            moveInput = Vector3.zero;
+            if (BetterPlayerControl.Instance == null)
+                return false;
+
+            EnsureReflectionCache();
+            if (_betterPlayerControlMoveField == null)
+                return false;
+
+            try
+            {
+                object value = _betterPlayerControlMoveField.GetValue(BetterPlayerControl.Instance);
+                if (value is Vector3 vector)
+                {
+                    moveInput = vector;
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.Log(
+                    LogCategory.State,
+                    "AccessibilityWatcher",
+                    "Movement probe failed to read BetterPlayerControl.move: " + ex.GetType().Name + ": " + ex.Message);
+            }
+
+            return false;
+        }
+
+        private static string ProbeMovementBlocker(
+            Collider playerCollider,
+            Vector3 fromPosition,
+            Vector3 targetPosition,
+            bool requireTrigger)
+        {
+            if (playerCollider == null)
+                return "player-collider-null";
+
+            Vector3 direction = targetPosition - fromPosition;
+            direction.y = 0f;
+            float distance = direction.magnitude;
+            if (distance <= 0.05f)
+                return "target-too-close";
+
+            direction /= distance;
+            QueryTriggerInteraction queryMode = requireTrigger
+                ? QueryTriggerInteraction.Collide
+                : QueryTriggerInteraction.Ignore;
+
+            RaycastHit[] hits;
+            CapsuleCollider capsule = playerCollider as CapsuleCollider;
+            if (capsule != null && TryGetCapsuleWorldGeometry(capsule, out Vector3 capsulePointA, out Vector3 capsulePointB, out float capsuleRadius))
+            {
+                hits = Physics.CapsuleCastAll(
+                    capsulePointA,
+                    capsulePointB,
+                    capsuleRadius,
+                    direction,
+                    distance,
+                    Physics.DefaultRaycastLayers,
+                    queryMode);
+            }
+            else
+            {
+                BoxCollider box = playerCollider as BoxCollider;
+                if (box != null)
+                {
+                    Vector3 center = box.transform.TransformPoint(box.center);
+                    Vector3 halfExtents = Vector3.Scale(box.size * 0.5f, AbsVector3(box.transform.lossyScale));
+                    hits = Physics.BoxCastAll(
+                        center,
+                        halfExtents,
+                        direction,
+                        box.transform.rotation,
+                        distance,
+                        Physics.DefaultRaycastLayers,
+                        queryMode);
+                }
+                else
+                {
+                    SphereCollider sphere = playerCollider as SphereCollider;
+                    if (sphere != null)
+                    {
+                        Vector3 center = sphere.transform.TransformPoint(sphere.center);
+                        float radius = sphere.radius * MaxAbsComponent(sphere.transform.lossyScale);
+                        hits = Physics.SphereCastAll(
+                            center,
+                            radius,
+                            direction,
+                            distance,
+                            Physics.DefaultRaycastLayers,
+                            queryMode);
+                    }
+                    else
+                    {
+                        hits = Physics.RaycastAll(
+                            playerCollider.bounds.center,
+                            direction,
+                            distance,
+                            Physics.DefaultRaycastLayers,
+                            queryMode);
+                    }
+                }
+            }
+
+            RaycastHit hit;
+            if (TryFindFirstRelevantMovementHit(hits, playerCollider.transform, requireTrigger, out hit))
+                return DescribeMovementHit(hit);
+
+            return requireTrigger ? "none" : "none";
+        }
+
+        private static bool TryFindFirstRelevantMovementHit(
+            RaycastHit[] hits,
+            Transform playerTransform,
+            bool requireTrigger,
+            out RaycastHit selectedHit)
+        {
+            selectedHit = default;
+            if (hits == null || hits.Length == 0)
+                return false;
+
+            Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+            for (int i = 0; i < hits.Length; i++)
+            {
+                Collider collider = hits[i].collider;
+                if (collider == null)
+                    continue;
+
+                if (playerTransform != null &&
+                    (collider.transform == playerTransform || collider.transform.IsChildOf(playerTransform)))
+                {
+                    continue;
+                }
+
+                if (requireTrigger != collider.isTrigger)
+                    continue;
+
+                selectedHit = hits[i];
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryGetCapsuleWorldGeometry(
+            CapsuleCollider capsule,
+            out Vector3 pointA,
+            out Vector3 pointB,
+            out float radius)
+        {
+            pointA = Vector3.zero;
+            pointB = Vector3.zero;
+            radius = 0f;
+            if (capsule == null)
+                return false;
+
+            Transform transform = capsule.transform;
+            Vector3 scale = AbsVector3(transform.lossyScale);
+            Vector3 localAxis;
+            float heightScale;
+            float radiusScale;
+            switch (capsule.direction)
+            {
+                case 0:
+                    localAxis = Vector3.right;
+                    heightScale = scale.x;
+                    radiusScale = Mathf.Max(scale.y, scale.z);
+                    break;
+                case 2:
+                    localAxis = Vector3.forward;
+                    heightScale = scale.z;
+                    radiusScale = Mathf.Max(scale.x, scale.y);
+                    break;
+                case 1:
+                default:
+                    localAxis = Vector3.up;
+                    heightScale = scale.y;
+                    radiusScale = Mathf.Max(scale.x, scale.z);
+                    break;
+            }
+
+            radius = Mathf.Max(0.01f, capsule.radius * radiusScale);
+            float height = Mathf.Max(radius * 2f, capsule.height * heightScale);
+            Vector3 center = transform.TransformPoint(capsule.center);
+            Vector3 axis = transform.TransformDirection(localAxis).normalized;
+            float segmentHalfLength = Mathf.Max(0f, (height * 0.5f) - radius);
+            pointA = center + axis * segmentHalfLength;
+            pointB = center - axis * segmentHalfLength;
+            return true;
+        }
+
+        private static string DescribeMovementHit(RaycastHit hit)
+        {
+            Collider collider = hit.collider;
+            if (collider == null)
+                return "<null>";
+
+            return
+                "object=" + GetGameObjectPath(collider.gameObject) +
+                " colliderType=" + collider.GetType().Name +
+                " isTrigger=" + collider.isTrigger +
+                " layer=" + collider.gameObject.layer +
+                " layerName=" + (LayerMask.LayerToName(collider.gameObject.layer) ?? "") +
+                " distance=" + hit.distance.ToString("0.00", CultureInfo.InvariantCulture) +
+                " point=" + FormatVector3(hit.point) +
+                " bounds=" + FormatBounds(collider.bounds);
+        }
+
+        private static string DescribeCollider(Collider collider)
+        {
+            if (collider == null)
+                return "<null>";
+
+            return
+                collider.GetType().Name +
+                " isTrigger=" + collider.isTrigger +
+                " layer=" + collider.gameObject.layer +
+                " layerName=" + (LayerMask.LayerToName(collider.gameObject.layer) ?? "") +
+                " bounds=" + FormatBounds(collider.bounds);
+        }
+
+        private static string GetGameObjectPath(GameObject gameObject)
+        {
+            if (gameObject == null)
+                return "<null>";
+
+            const int maxSegments = 6;
+            string path = gameObject.name;
+            Transform current = gameObject.transform.parent;
+            int segmentCount = 1;
+            while (current != null && segmentCount < maxSegments)
+            {
+                path = current.name + "/" + path;
+                current = current.parent;
+                segmentCount++;
+            }
+
+            if (current != null)
+                path = ".../" + path;
+
+            return path;
+        }
+
+        private static string FormatBounds(Bounds bounds)
+        {
+            return "min=" + FormatVector3(bounds.min) + " max=" + FormatVector3(bounds.max);
+        }
+
+        private static Vector3 AbsVector3(Vector3 value)
+        {
+            return new Vector3(Mathf.Abs(value.x), Mathf.Abs(value.y), Mathf.Abs(value.z));
+        }
+
+        private static float MaxAbsComponent(Vector3 value)
+        {
+            value = AbsVector3(value);
+            return Mathf.Max(value.x, Mathf.Max(value.y, value.z));
+        }
+
+        private static float GetFlatMagnitude(Vector3 value)
+        {
+            value.y = 0f;
+            return value.magnitude;
         }
 
         private bool BeginNavigation(string targetZone, string targetLabel, bool announceFailure = true)
@@ -7659,6 +8092,18 @@ namespace DateEverythingAccess
                 return false;
             }
 
+            if (ShouldAllowRawDoorFinalEntryAfterSourceLocalRelease(
+                    currentZone,
+                    step,
+                    targetKind,
+                    position))
+            {
+                ClearLocalNavigationPathState();
+                ResetLocalNavigationStallTracking();
+                ResetDoorPostInteractionFallbackExhaustion();
+                return false;
+            }
+
             if (!TryResolveLocalNavigationGoal(
                     currentZone,
                     step,
@@ -7669,6 +8114,18 @@ namespace DateEverythingAccess
                     out Vector3 planningGoal,
                     out string planningContext))
             {
+                if (ShouldAllowRawDoorFinalEntryAfterSourceLocalRelease(
+                        currentZone,
+                        step,
+                        targetKind,
+                        position))
+                {
+                    ClearLocalNavigationPathState();
+                    ResetLocalNavigationStallTracking();
+                    ResetDoorPostInteractionFallbackExhaustion();
+                    return false;
+                }
+
                 LogNavigationTrackerDebug(
                     "Local navigation skipped currentZone=" + (currentZone ?? "<null>") +
                     " rawTargetKind=" + targetKind +
@@ -8005,6 +8462,18 @@ namespace DateEverythingAccess
                 return false;
             }
 
+            if (TryArmDoorRetainedExtendedNoProgressReleaseFromRawLoop(
+                    step,
+                    currentZone,
+                    rawTargetKind,
+                    rawTargetPosition,
+                    playerPosition,
+                    failureContext))
+            {
+                ResetDoorPostInteractionFallbackExhaustion();
+                return false;
+            }
+
             string detail =
                 "door post-interaction fallback exhausted" +
                 " stage=" + GetDoorPostInteractionStageName(rawContext) +
@@ -8134,6 +8603,10 @@ namespace DateEverythingAccess
                 string.Equals(_localNavigationPathContext, "door-entry-advance-local", StringComparison.Ordinal) &&
                 string.Equals(_rawNavigationTargetContext, "door-entry-advance-extended", StringComparison.Ordinal) &&
                 IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local");
+            bool isNoSourceBridgeDoorEntryAdvanceLocalContext =
+                string.Equals(_localNavigationPathContext, "door-entry-advance-local", StringComparison.Ordinal) &&
+                string.Equals(_rawNavigationTargetContext, "door-entry-advance-no-source-bridge", StringComparison.Ordinal) &&
+                IsFocusedBathroom1NoSourceBridgeStep(step);
             bool isRetainedExtendedReuseLoopReleaseContext =
                 step.Kind == NavigationGraph.StepKind.Door &&
                 !string.IsNullOrWhiteSpace(currentZone) &&
@@ -8147,7 +8620,8 @@ namespace DateEverythingAccess
                 string.Equals(_localNavigationPathContext, "door-threshold-advance-local", StringComparison.Ordinal) ||
                 string.Equals(_localNavigationPathContext, "door-push-through-local", StringComparison.Ordinal) ||
                 string.Equals(_localNavigationPathContext, "door-entry-advance-extended-local", StringComparison.Ordinal) ||
-                isDoorEntryAdvanceLocalAfterExtendedBridgeContext;
+                isDoorEntryAdvanceLocalAfterExtendedBridgeContext ||
+                isNoSourceBridgeDoorEntryAdvanceLocalContext;
             bool isTerminalLocalPathIndex = _localNavigationPathIndex >= _localNavigationPathPoints.Count - 1;
             if (isDoorSourceLocalProxyReleaseContext &&
                 step.Kind == NavigationGraph.StepKind.Door &&
@@ -8158,6 +8632,7 @@ namespace DateEverythingAccess
                     string.Equals(_localNavigationPathContext, "door-threshold-advance-local", StringComparison.Ordinal) ||
                     string.Equals(_localNavigationPathContext, "door-entry-advance-extended-local", StringComparison.Ordinal) ||
                     isDoorEntryAdvanceLocalAfterExtendedBridgeContext ||
+                    isNoSourceBridgeDoorEntryAdvanceLocalContext ||
                     (string.Equals(_localNavigationPathContext, "door-push-through-local", StringComparison.Ordinal) &&
                      (string.Equals(_rawNavigationTargetContext, "door-entry-advance", StringComparison.Ordinal) ||
                       string.Equals(_rawNavigationTargetContext, "door-entry-advance-extended", StringComparison.Ordinal)));
