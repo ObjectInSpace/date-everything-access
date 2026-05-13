@@ -2313,9 +2313,15 @@ namespace DateEverythingAccess
             }
 
             float maxSnapDistance = DoorTraversalClearanceDistance + DoorPushThroughArrivalDistance;
+            bool shouldForceSnapForReleasedOfficeClosetFinalEntry =
+                string.Equals(planningContext, "door-entry-advance-local", StringComparison.Ordinal) &&
+                string.Equals(_rawNavigationTargetContext, "door-entry-advance-no-source-bridge", StringComparison.Ordinal) &&
+                HasDoorRetainedExtendedNoProgressReleaseRequest(step) &&
+                string.Equals(BuildNavigationStepKey(step), "transition:office->office_closet", StringComparison.Ordinal);
             bool shouldSkipSnapForPostProofFinalDoorEntry =
                 string.Equals(planningContext, "door-entry-advance-local", StringComparison.Ordinal) &&
-                IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local");
+                IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local") &&
+                !shouldForceSnapForReleasedOfficeClosetFinalEntry;
             bool isFocusedClosetDeadlockStep = IsFocusedClosetDeadlockStep(step);
             if (isFocusedClosetDeadlockStep)
             {
@@ -2324,6 +2330,7 @@ namespace DateEverythingAccess
                     " currentZone=" + currentZone +
                     " planningContext=" + (planningContext ?? "<null>") +
                     " desiredPosition=" + FormatVector3(desiredPosition) +
+                    " shouldForceSnapForReleasedOfficeClosetFinalEntry=" + shouldForceSnapForReleasedOfficeClosetFinalEntry +
                     " shouldSkipSnapForPostProofFinalDoorEntry=" + shouldSkipSnapForPostProofFinalDoorEntry +
                     " step=" + DescribeNavigationStep(step));
             }

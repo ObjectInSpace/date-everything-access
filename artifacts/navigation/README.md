@@ -48,13 +48,19 @@ This folder contains asset-mined navigation inputs from the ripped `ThirdPersonG
 
 ## Regeneration
 
-Normal iteration should start with the wrapper. By default it uses existing artifacts and only refreshes the semantic overlay:
+Normal blocker triage should start with the live audit script. It reads the current game-side open and door sweep files directly from `BepInEx\plugins`, ranks failures by traversal impact, and writes blind-friendly summary output:
+
+```powershell
+.\scripts\Invoke-LiveNavigationAudit.ps1
+```
+
+Use the wrapper when you want repo-side artifact maintenance. By default it uses existing artifacts and only refreshes the semantic overlay:
 
 ```powershell
 .\scripts\Update-NavigationArtifacts.ps1
 ```
 
-After a runtime open and door sweep, import both reports and refresh the semantic overlay:
+Legacy import path: after a runtime open and door sweep, import both reports into repo artifacts and refresh the semantic overlay:
 
 ```powershell
 .\scripts\Update-NavigationArtifacts.ps1 -ImportRuntimeSweeps
@@ -96,7 +102,7 @@ For live navmesh data:
 .\scripts\Import-NavMeshExport.ps1
 ```
 
-For live open-passage sweep data:
+Legacy direct import for live open-passage sweep data:
 
 1. Launch the game with the current mod build.
 2. While the house scene is active, press `Ctrl+Alt+Shift+F9`.
@@ -106,7 +112,7 @@ For live open-passage sweep data:
 .\scripts\Import-TransitionSweepReport.ps1
 ```
 
-For live door sweep data:
+Legacy direct import for live door sweep data:
 
 1. Launch the game with the current mod build.
 2. While the house scene is active, press `Ctrl+Alt+Shift+F6`.
@@ -129,6 +135,7 @@ For live door sweep data:
 - Repo-side sweep import steps that now merge rerun fragments, preserve earlier passes, and emit text summaries for blind-friendly failure review
 - An open-passage import step that can refresh `navigation_transition_overrides.json` directly from failed sweep entries with recorded stalled positions
 - A single navigation artifact wrapper, `.\scripts\Update-NavigationArtifacts.ps1`, that defines the normal order for importing runtime sweeps, regenerating static artifacts, and refreshing the semantic overlay
+- A newer live-audit entrypoint, `.\scripts\Invoke-LiveNavigationAudit.ps1`, that supersedes the old import-first review loop for normal blocker debugging while keeping legacy imports available for archival repo artifacts and override refreshes
 - A semantic overlay, `transition_semantics.generated.json`, that audits all `112` generated transitions and separates missing or contradictory metadata from execution-only runtime failures. Latest imported `BB49ECF...` totals are `97 complete`, `15 execution-only failure`, `0 incomplete`, `0 contradictory`, `0 unknown`, and `0 locked/unavailable`
 - Generated stair links now carry crossing anchors derived from their clear points, and the semantic overlay records stair transit zones such as `stairsup` and `stairsdown` as accepted intermediate zones
 - The generic runtime sweep now includes attic-family open passages; the remaining unknown semantic rows are expected to get real sweep evidence on the next full open sweep

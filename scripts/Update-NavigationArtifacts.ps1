@@ -1,12 +1,15 @@
 [CmdletBinding()]
 param(
     [Parameter()]
+    # Legacy helper: imports both runtime sweep files into repo artifacts.
     [switch]$ImportRuntimeSweeps,
 
     [Parameter()]
+    # Legacy helper: imports only the open-passage runtime sweep into repo artifacts.
     [switch]$ImportOpenSweep,
 
     [Parameter()]
+    # Legacy helper: imports only the door runtime sweep into repo artifacts.
     [switch]$ImportDoorSweep,
 
     [Parameter()]
@@ -111,6 +114,10 @@ if ($ImportRuntimeSweeps) {
     $ImportDoorSweep = $true
 }
 
+if ($ImportRuntimeSweeps -or $ImportOpenSweep -or $ImportDoorSweep) {
+    Write-Warning "Runtime sweep import switches are legacy artifact-sync helpers. For normal blocker triage, use .\scripts\Invoke-LiveNavigationAudit.ps1."
+}
+
 if ($RegenerateSceneData) {
     $RegenerateStaticArtifacts = $true
 }
@@ -207,7 +214,7 @@ if (-not $SkipSemanticAudit) {
 }
 
 if ($completedSteps.Count -eq 0) {
-    Write-Host "No artifact steps ran. Use -ImportRuntimeSweeps, -RegenerateStaticArtifacts, or omit -SkipSemanticAudit."
+    Write-Host "No artifact steps ran. Use .\scripts\Invoke-LiveNavigationAudit.ps1 for blocker triage, use -RegenerateStaticArtifacts for static rebuilds, or omit -SkipSemanticAudit."
 } else {
     Write-Host "Navigation artifact update complete."
     Write-Host "Completed steps:"
