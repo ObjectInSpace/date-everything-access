@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 
@@ -722,6 +723,124 @@ namespace DateEverythingAccess
             string stepKey = BuildNavigationStepKey(step);
             return IsFocusedClosetDeadlockStep(step) ||
                 string.Equals(stepKey, "transition:bathroom1->hallway", StringComparison.Ordinal);
+        }
+
+        private bool IsFocusedBathroom1NoSourceBridgeStep(NavigationGraph.PathStep step)
+        {
+            if (step == null)
+                return false;
+
+            string stepKey = BuildNavigationStepKey(step);
+            return string.Equals(stepKey, "transition:bathroom1->hallway", StringComparison.Ordinal) ||
+                string.Equals(stepKey, "transition:hallway->bathroom1", StringComparison.Ordinal);
+        }
+
+        private bool ShouldAllowRawDoorFinalEntryAfterSourceLocalProxy(
+            string currentZone,
+            NavigationGraph.PathStep step,
+            NavigationTargetKind targetKind,
+            Vector3 desiredPosition)
+        {
+            if (step == null ||
+                step.Kind != NavigationGraph.StepKind.Door ||
+                desiredPosition == Vector3.zero ||
+                !IsFocusedBathroom1NoSourceBridgeStep(step) ||
+                !string.Equals(_rawNavigationTargetContext, "door-entry-advance-no-source-bridge", StringComparison.Ordinal) ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                string.IsNullOrWhiteSpace(step.FromZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                !IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-local") ||
+                targetKind == NavigationTargetKind.TransitionInteractable)
+            {
+                return false;
+            }
+
+            LogNavigationTrackerDebug(
+                "Allowed raw door final entry after source local proxy completion" +
+                " currentZone=" + currentZone +
+                " targetKind=" + targetKind +
+                " desiredPosition=" + FormatVector3(desiredPosition) +
+                " step=" + DescribeNavigationStep(step));
+            return true;
+        }
+
+        private bool ShouldAllowRawDoorFinalEntryAfterSourceLocalRelease(
+            string currentZone,
+            NavigationGraph.PathStep step,
+            NavigationTargetKind targetKind,
+            Vector3 desiredPosition)
+        {
+            if (ShouldAllowRawDoorFinalEntryAfterSourceLocalProxy(
+                    currentZone,
+                    step,
+                    targetKind,
+                    desiredPosition))
+            {
+                return true;
+            }
+
+            if (!IsRawNoSourceDoorFinalEntryTarget(
+                    currentZone,
+                    step,
+                    targetKind,
+                    desiredPosition))
+            {
+                return false;
+            }
+
+            if (IsRetainedExtendedBridgeRecoveryStep(step) &&
+                HasDoorRetainedExtendedNoProgressReleaseRequest(step) &&
+                IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local") &&
+                IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-local"))
+            {
+                LogNavigationTrackerDebug(
+                    "Allowed raw door final entry after retained extended no-progress release" +
+                    " currentZone=" + currentZone +
+                    " targetKind=" + targetKind +
+                    " desiredPosition=" + FormatVector3(desiredPosition) +
+                    " step=" + DescribeNavigationStep(step));
+                return true;
+            }
+
+            string stepKey = BuildNavigationStepKey(step);
+            if (string.Equals(stepKey, "transition:hallway->office", StringComparison.Ordinal) &&
+                IsDoorTraversalPostThresholdCommitted(step))
+            {
+                LogNavigationTrackerDebug(
+                    "Allowed raw door final entry because no source-zone bridge is constructible" +
+                    " currentZone=" + currentZone +
+                    " targetKind=" + targetKind +
+                    " desiredPosition=" + FormatVector3(desiredPosition) +
+                    " step=" + DescribeNavigationStep(step));
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool IsRawNoSourceDoorFinalEntryTarget(
+            string currentZone,
+            NavigationGraph.PathStep step,
+            NavigationTargetKind targetKind,
+            Vector3 desiredPosition)
+        {
+            if (step == null ||
+                step.Kind != NavigationGraph.StepKind.Door ||
+                desiredPosition == Vector3.zero ||
+                targetKind == NavigationTargetKind.TransitionInteractable ||
+                !string.Equals(_rawNavigationTargetContext, "door-entry-advance-no-source-bridge", StringComparison.Ordinal) ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                string.IsNullOrWhiteSpace(step.FromZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                !TryGetDoorTraversalDestinationTarget(step, out Vector3 destinationTarget, out NavigationTargetKind destinationTargetKind) ||
+                destinationTarget == Vector3.zero ||
+                destinationTargetKind != targetKind)
+            {
+                return false;
+            }
+
+            return GetFlatDistance(destinationTarget, desiredPosition) <=
+                GetRawNavigationGoalReachedDistance("door-entry-advance-no-source-bridge");
         }
 
         private bool ShouldReleaseDoorSourceZoneExtendedBridgeToExplicitFinalFallback(
@@ -1830,6 +1949,19 @@ namespace DateEverythingAccess
                         return true;
                     }
 
+                    if (IsFocusedBathroom1NoSourceBridgeStep(step) &&
+                        TryResolveNoSourceBridgeDoorFinalEntryLocalNavigationGoal(
+                            currentZone,
+                            step,
+                            playerPosition,
+                            desiredPosition,
+                            out planningZone,
+                            out planningGoal,
+                            out planningContext))
+                    {
+                        return true;
+                    }
+
                     LogNavigationTrackerDebug(
                         "Skipped door entry source-local planning because no source-zone bridge is constructible" +
                         " desiredPosition=" + FormatVector3(desiredPosition) +
@@ -2064,6 +2196,41 @@ namespace DateEverythingAccess
                 return false;
             }
 
+            if (TryGetDoorSourceLocalCompletedGoal(step, planningContext, out Vector3 completedFinalEntryLocalGoal))
+            {
+                bool hasForwardProgressPastCompletedGoal = false;
+                if (TryGetDoorThresholdAdvanceTarget(step, currentZone, out Vector3 sourceTarget) &&
+                    TryGetActiveDoorPushThroughPosition(step, currentZone, out Vector3 pushThroughPosition) &&
+                    sourceTarget != Vector3.zero &&
+                    pushThroughPosition != Vector3.zero)
+                {
+                    float completedForwardProgress = GetDoorThresholdForwardProgress(
+                        sourceTarget,
+                        pushThroughPosition,
+                        completedFinalEntryLocalGoal);
+                    float planningForwardProgress = GetDoorThresholdForwardProgress(
+                        sourceTarget,
+                        pushThroughPosition,
+                        planningGoal);
+                    hasForwardProgressPastCompletedGoal =
+                        planningForwardProgress > completedForwardProgress + 0.25f;
+                }
+
+                if (!hasForwardProgressPastCompletedGoal)
+                {
+                    LogNavigationTrackerDebug(
+                        "Skipped released no-source-bridge final entry local planning because completed proxy has no new forward progress" +
+                        " desiredPosition=" + FormatVector3(desiredPosition) +
+                        " completedGoal=" + FormatVector3(completedFinalEntryLocalGoal) +
+                        " planningGoal=" + FormatVector3(planningGoal) +
+                        " planningContext=" + planningContext +
+                        " step=" + DescribeNavigationStep(step));
+                    planningGoal = Vector3.zero;
+                    planningContext = null;
+                    return false;
+                }
+            }
+
             planningZone = ResolveLocalPlanningZone(
                 currentZone,
                 step.FromZone,
@@ -2083,6 +2250,78 @@ namespace DateEverythingAccess
 
             LogNavigationTrackerDebug(
                 "Selected released no-source-bridge final entry local planning after retained extended no-progress release" +
+                " desiredPosition=" + FormatVector3(desiredPosition) +
+                " planningGoal=" + FormatVector3(planningGoal) +
+                " planningZone=" + planningZone +
+                " step=" + DescribeNavigationStep(step));
+            return true;
+        }
+
+        private bool TryResolveNoSourceBridgeDoorFinalEntryLocalNavigationGoal(
+            string currentZone,
+            NavigationGraph.PathStep step,
+            Vector3 playerPosition,
+            Vector3 desiredPosition,
+            out string planningZone,
+            out Vector3 planningGoal,
+            out string planningContext)
+        {
+            planningZone = null;
+            planningGoal = Vector3.zero;
+            planningContext = null;
+            if (step == null ||
+                desiredPosition == Vector3.zero ||
+                playerPosition == Vector3.zero ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                string.IsNullOrWhiteSpace(step.FromZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                !IsFocusedBathroom1NoSourceBridgeStep(step) ||
+                IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-local"))
+            {
+                return false;
+            }
+
+            planningContext = "door-entry-advance-local";
+            if (!TryGetDoorSourceLocalPlanningGoal(
+                    step,
+                    currentZone,
+                    playerPosition,
+                    desiredPosition,
+                    planningContext,
+                    out planningGoal) ||
+                planningGoal == Vector3.zero)
+            {
+                planningContext = null;
+                return false;
+            }
+
+            if (!ShouldUseLocalNavigationGoal(
+                    playerPosition,
+                    planningGoal,
+                    GetLocalNavigationGoalReachedDistance(planningContext)))
+            {
+                MarkDoorSourceLocalGoalReached(
+                    BuildNavigationStepKey(step),
+                    planningContext,
+                    planningGoal,
+                    GetFlatDistance(playerPosition, planningGoal));
+                planningContext = null;
+                planningGoal = Vector3.zero;
+                return false;
+            }
+
+            planningZone = ResolveLocalPlanningZone(currentZone, step.FromZone, playerPosition, planningGoal);
+            if (!HasUsableLocalPlanningResult(planningZone, planningGoal))
+            {
+                planningZone = null;
+                planningContext = null;
+                planningGoal = Vector3.zero;
+                return false;
+            }
+
+            LogNavigationTrackerDebug(
+                "Selected no-source-bridge door final entry local proxy" +
+                " currentZone=" + currentZone +
                 " desiredPosition=" + FormatVector3(desiredPosition) +
                 " planningGoal=" + FormatVector3(planningGoal) +
                 " planningZone=" + planningZone +
@@ -2534,6 +2773,25 @@ namespace DateEverythingAccess
             if (string.Equals(planningContext, "door-entry-advance-local", StringComparison.Ordinal) &&
                 IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local"))
             {
+                if (!LocalNavigationMaps.TryFindPath(
+                        planningZone,
+                        playerPosition,
+                        originalPlanningGoal,
+                        out List<Vector3> originalPathPoints,
+                        out string originalPathFailure) ||
+                    originalPathPoints == null ||
+                    originalPathPoints.Count < 1)
+                {
+                    LogNavigationTrackerDebug(
+                        "Using reachable final door entry proxy because original post-extended goal is disconnected" +
+                        " planningZone=" + planningZone +
+                        " originalGoal=" + FormatVector3(originalPlanningGoal) +
+                        " proxyGoal=" + FormatVector3(proxyGoal) +
+                        " reason=" + (originalPathFailure ?? "<null>") +
+                        " step=" + DescribeNavigationStep(step));
+                    return proxyGoal;
+                }
+
                 LogNavigationTrackerDebug(
                     "Preserved original final door entry planning goal after extended bridge completion" +
                     " originalGoal=" + FormatVector3(originalPlanningGoal) +
@@ -2546,6 +2804,27 @@ namespace DateEverythingAccess
                 TryGetDoorThresholdAdvanceTarget(step, currentZone, out Vector3 sourceTarget) &&
                 TryGetActiveDoorPushThroughPosition(step, currentZone, out Vector3 pushThroughPosition))
             {
+                bool originalGoalHasPath = LocalNavigationMaps.TryFindPath(
+                    planningZone,
+                    playerPosition,
+                    originalPlanningGoal,
+                    out List<Vector3> originalGoalPathPoints,
+                    out string originalGoalPathFailure) &&
+                    originalGoalPathPoints != null &&
+                    originalGoalPathPoints.Count > 0;
+                if (!originalGoalHasPath)
+                {
+                    LogNavigationTrackerDebug(
+                        "Using reachable door entry proxy because original progress goal is disconnected" +
+                        " planningZone=" + planningZone +
+                        " context=" + (planningContext ?? "<null>") +
+                        " originalGoal=" + FormatVector3(originalPlanningGoal) +
+                        " proxyGoal=" + FormatVector3(proxyGoal) +
+                        " reason=" + (originalGoalPathFailure ?? "<null>") +
+                        " step=" + DescribeNavigationStep(step));
+                    return proxyGoal;
+                }
+
                 float proxyForwardProgress = GetDoorThresholdForwardProgress(
                     sourceTarget,
                     pushThroughPosition,

@@ -90,6 +90,7 @@ namespace DateEverythingAccess
             public float MaxZ;
             public int GridWidth;
             public int GridHeight;
+            public bool[] Envelope;
             public bool[] Walkable;
             public int[] ComponentIds;
             public WalkableComponentSummary[] ComponentSummaries;
@@ -102,6 +103,19 @@ namespace DateEverythingAccess
             public int ComponentId;
             public int CellCount;
             public Vector3 RepresentativeWorldPosition;
+        }
+
+        internal sealed class SamplingZoneDefinition
+        {
+            public string Zone;
+            public float CellSize;
+            public float MinX;
+            public float MaxX;
+            public float MinZ;
+            public float MaxZ;
+            public int GridWidth;
+            public int GridHeight;
+            public int[] EnvelopeIndices;
         }
 
         /// <summary>
@@ -719,41 +733,30 @@ namespace DateEverythingAccess
 
                 try
                 {
-                    string jsonPath = Path.Combine(Paths.PluginPath, "local_navigation_maps.generated.json");
-                    if (!File.Exists(jsonPath))
+                    string generatedJsonPath = Path.Combine(Paths.PluginPath, "local_navigation_maps.generated.json");
+                    string runtimePhysicsJsonPath = Path.Combine(Paths.PluginPath, "local_navigation_maps.physics_sampled.live.json");
+                    string loadedPath = null;
+
+                    if (File.Exists(runtimePhysicsJsonPath) &&
+                        TryLoadMapDocument(runtimePhysicsJsonPath, allowInvalidWarning: true, out Document runtimeDocument))
                     {
-                        Main.Log?.LogWarning("Local navigation maps file not found: " + jsonPath);
-                        return;
+                        loadedPath = runtimePhysicsJsonPath;
+                        AddDocumentZones(runtimeDocument);
                     }
 
-                    int normalizedScalarArrayCount = 0;
-                    string json = NormalizeScalarIndexArrays(File.ReadAllText(jsonPath), out normalizedScalarArrayCount);
-                    if (normalizedScalarArrayCount > 0)
+                    if (ZonesByName.Count == 0)
                     {
-                        Main.Log?.LogWarning(
-                            "Normalized malformed local navigation map index arrays count=" +
-                            normalizedScalarArrayCount +
-                            " path=" + jsonPath);
-                    }
-
-                    using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(json)))
-                    {
-                        var serializer = new DataContractJsonSerializer(typeof(Document));
-                        Document document = serializer.ReadObject(stream) as Document;
-                        if (document == null || document.Zones == null || document.Zones.Length == 0)
+                        if (!File.Exists(generatedJsonPath))
                         {
-                            Main.Log?.LogWarning("Local navigation maps file did not contain any zones: " + jsonPath);
+                            Main.Log?.LogWarning("Local navigation maps file not found: " + generatedJsonPath);
                             return;
                         }
 
-                        for (int i = 0; i < document.Zones.Length; i++)
-                        {
-                            ZoneMap zone = BuildZoneMap(document.Zones[i]);
-                            if (zone == null || string.IsNullOrWhiteSpace(zone.Zone))
-                                continue;
+                        if (!TryLoadMapDocument(generatedJsonPath, allowInvalidWarning: true, out Document generatedDocument))
+                            return;
 
-                            ZonesByName[zone.Zone] = zone;
-                        }
+                        loadedPath = generatedJsonPath;
+                        AddDocumentZones(generatedDocument);
                     }
 
                     foreach (ZoneMap zone in ZonesByName.Values)
@@ -762,7 +765,7 @@ namespace DateEverythingAccess
                     _isAvailable = ZonesByName.Count > 0;
                     Main.Log?.LogInfo(
                         "Loaded local navigation maps zones=" + ZonesByName.Count +
-                        " path=" + Path.Combine(Paths.PluginPath, "local_navigation_maps.generated.json"));
+                        " path=" + (loadedPath ?? "<null>"));
                     if (_isAvailable)
                         _lastFailedLoadAttemptUtc = DateTime.MinValue;
                 }
@@ -772,6 +775,61 @@ namespace DateEverythingAccess
                     ZonesByName.Clear();
                     _isAvailable = false;
                 }
+            }
+        }
+
+        private static bool TryLoadMapDocument(string jsonPath, bool allowInvalidWarning, out Document document)
+        {
+            document = null;
+            try
+            {
+                int normalizedScalarArrayCount = 0;
+                string json = NormalizeScalarIndexArrays(File.ReadAllText(jsonPath), out normalizedScalarArrayCount);
+                if (normalizedScalarArrayCount > 0)
+                {
+                    Main.Log?.LogWarning(
+                        "Normalized malformed local navigation map index arrays count=" +
+                        normalizedScalarArrayCount +
+                        " path=" + jsonPath);
+                }
+
+                using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(json)))
+                {
+                    var serializer = new DataContractJsonSerializer(typeof(Document));
+                    document = serializer.ReadObject(stream) as Document;
+                }
+
+                if (document == null || document.Zones == null || document.Zones.Length == 0)
+                {
+                    if (allowInvalidWarning)
+                        Main.Log?.LogWarning("Local navigation maps file did not contain any zones: " + jsonPath);
+                    document = null;
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (allowInvalidWarning)
+                    Main.Log?.LogWarning("Failed to load local navigation maps file path=" + jsonPath + " error=" + ex);
+                document = null;
+                return false;
+            }
+        }
+
+        private static void AddDocumentZones(Document document)
+        {
+            if (document == null || document.Zones == null)
+                return;
+
+            for (int i = 0; i < document.Zones.Length; i++)
+            {
+                ZoneMap zone = BuildZoneMap(document.Zones[i]);
+                if (zone == null || string.IsNullOrWhiteSpace(zone.Zone))
+                    continue;
+
+                ZonesByName[zone.Zone] = zone;
             }
         }
 
@@ -811,6 +869,7 @@ namespace DateEverythingAccess
             if (cellCount <= 0)
                 return null;
 
+            var envelope = new bool[cellCount];
             var walkable = new bool[cellCount];
             if (record.EnvelopeIndices != null)
             {
@@ -818,7 +877,10 @@ namespace DateEverythingAccess
                 {
                     int index = record.EnvelopeIndices[i];
                     if (index >= 0 && index < cellCount)
+                    {
+                        envelope[index] = true;
                         walkable[index] = true;
+                    }
                 }
             }
 
@@ -842,11 +904,48 @@ namespace DateEverythingAccess
                 MaxZ = record.Bounds2D.MaxZ,
                 GridWidth = record.GridWidth,
                 GridHeight = record.GridHeight,
+                Envelope = envelope,
                 Walkable = walkable,
                 ComponentIds = null,
                 ComponentSummaries = null,
                 ComponentsComputed = false
             };
+        }
+
+        internal static List<SamplingZoneDefinition> GetSamplingZoneDefinitions()
+        {
+            Initialize();
+            var definitions = new List<SamplingZoneDefinition>();
+            if (!_isAvailable)
+                return definitions;
+
+            foreach (ZoneMap zone in ZonesByName.Values)
+            {
+                if (zone == null || zone.Envelope == null || zone.Envelope.Length == 0)
+                    continue;
+
+                var envelopeIndices = new List<int>();
+                for (int i = 0; i < zone.Envelope.Length; i++)
+                {
+                    if (zone.Envelope[i])
+                        envelopeIndices.Add(i);
+                }
+
+                definitions.Add(new SamplingZoneDefinition
+                {
+                    Zone = zone.Zone,
+                    CellSize = zone.CellSize,
+                    MinX = zone.MinX,
+                    MaxX = zone.MaxX,
+                    MinZ = zone.MinZ,
+                    MaxZ = zone.MaxZ,
+                    GridWidth = zone.GridWidth,
+                    GridHeight = zone.GridHeight,
+                    EnvelopeIndices = envelopeIndices.ToArray()
+                });
+            }
+
+            return definitions;
         }
 
         private static void EnsureComponentCache(ZoneMap zone)

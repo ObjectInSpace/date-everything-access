@@ -72,6 +72,7 @@ obj/Debug/net472/
  .NETFramework,Version=v4.7.2.AssemblyAttributes.cs
  DateEverythingAccess.AssemblyInfo.cs
 ObjectTracker.cs
+RuntimeLocalOccupancyExporter.cs
 ScreenReader.cs
 SelectedObjectCoverageReporter.cs
 TransitionSweepReporter.cs

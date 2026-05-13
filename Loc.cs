@@ -109,9 +109,15 @@ namespace DateEverythingAccess
             Add("navmesh_export_success",
                 "Navmesh exportiert. {0} Dreiecke. {1} Uebergangspruefungen.",
                 "Navmesh exported. {0} triangles. {1} transition checks.");
+            Add("navmesh_export_success_with_runtime_occupancy",
+                "Navmesh exportiert. {0} Dreiecke. {1} Uebergangspruefungen. Laufzeit-Kollisionskarte exportiert. {2} Zonen, {3} blockierte Zellen. Bitte Spiel neu starten, damit sie geladen wird.",
+                "Navmesh exported. {0} triangles. {1} transition checks. Runtime collision map exported. {2} zones, {3} blocked cells. Restart the game to load it.");
             Add("navmesh_export_diagnostic",
                 "Navmesh-Diagnose exportiert. In dieser Szene ist kein aktives Navmesh verfuegbar. {0} Uebergangspruefungen wurden trotzdem geschrieben.",
                 "Navmesh diagnostic exported. No active navmesh is available in this scene. {0} transition checks were still written.");
+            Add("navmesh_export_diagnostic_with_runtime_occupancy",
+                "Navmesh-Diagnose exportiert. In dieser Szene ist kein aktives Navmesh verfuegbar. {1} Uebergangspruefungen wurden trotzdem geschrieben. Laufzeit-Kollisionskarte exportiert. {2} Zonen, {3} blockierte Zellen. Bitte Spiel neu starten, damit sie geladen wird.",
+                "Navmesh diagnostic exported. No active navmesh is available in this scene. {1} transition checks were still written. Runtime collision map exported. {2} zones, {3} blocked cells. Restart the game to load it.");
             Add("navmesh_export_no_navmesh",
                 "In der aktuellen Szene ist kein aktives Navmesh verfuegbar.",
                 "No active navmesh is available in the current scene.");
