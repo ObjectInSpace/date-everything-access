@@ -225,7 +225,7 @@ function Get-OrderedReachabilityCount {
 
     $count = 0
     foreach ($zone in $Zones) {
-        $reachable = Get-ReachableZones -Adjacency $Adjacency -StartZone $zone
+        $reachable = @(Get-ReachableZones -Adjacency $Adjacency -StartZone $zone)
         $count += [Math]::Max(0, $reachable.Count - 1)
     }
 

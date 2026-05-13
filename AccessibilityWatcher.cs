@@ -8134,13 +8134,13 @@ namespace DateEverythingAccess
                 string.Equals(_localNavigationPathContext, "door-entry-advance-local", StringComparison.Ordinal) &&
                 string.Equals(_rawNavigationTargetContext, "door-entry-advance-extended", StringComparison.Ordinal) &&
                 IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local");
-            bool isFocusedClosetRetainedExtendedReuseLoopReleaseContext =
+            bool isRetainedExtendedReuseLoopReleaseContext =
                 step.Kind == NavigationGraph.StepKind.Door &&
                 !string.IsNullOrWhiteSpace(currentZone) &&
                 IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) &&
                 string.Equals(_localNavigationPathContext, "door-entry-advance-extended-local", StringComparison.Ordinal) &&
                 string.Equals(_rawNavigationTargetContext, "door-entry-advance-extended", StringComparison.Ordinal) &&
-                IsFocusedClosetDeadlockStep(step) &&
+                IsRetainedExtendedBridgeRecoveryStep(step) &&
                 IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local") &&
                 IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-local");
             bool isDoorSourceLocalProxyReleaseContext =
@@ -8178,7 +8178,7 @@ namespace DateEverythingAccess
                         playerPosition,
                         _localNavigationPathGoal,
                         remainingDistance);
-                if (isFocusedClosetRetainedExtendedReuseLoopReleaseContext)
+                if (isRetainedExtendedReuseLoopReleaseContext)
                 {
                     _doorRetainedExtendedNoProgressReleaseStepKey = stepKey;
                     LogNavigationTrackerDebug(
@@ -8324,7 +8324,7 @@ namespace DateEverythingAccess
                 string.IsNullOrWhiteSpace(step.FromZone) ||
                 !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
                 !string.Equals(_rawNavigationTargetContext, "door-entry-advance-extended", StringComparison.Ordinal) ||
-                !IsFocusedClosetDeadlockStep(step) ||
+                !IsRetainedExtendedBridgeRecoveryStep(step) ||
                 !IsDoorTraversalPostThresholdCommitted(step) ||
                 !IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local") ||
                 !IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-local"))
@@ -9994,13 +9994,21 @@ namespace DateEverythingAccess
             bool isFinalWaypoint = currentIndex >= navigationPoints.Count - 1;
             bool advancedWaypoint = false;
             bool advancedStage = false;
+            bool acceptedForcedDestinationCompletion =
+                forceProxyRelease &&
+                string.Equals(planningContext, "open-passage-override-destination", StringComparison.Ordinal) &&
+                remainingDistance <= OpenPassageOverrideLocalNavigationGoalReachedDistance;
+            bool blockForcedDestinationCompletion =
+                forceProxyRelease &&
+                string.Equals(planningContext, "open-passage-override-destination", StringComparison.Ordinal) &&
+                !acceptedForcedDestinationCompletion;
             if (!isFinalWaypoint)
             {
                 _openPassageOverrideWaypointIndex = currentIndex + 1;
                 advancedWaypoint = _openPassageOverrideWaypointIndex != previousIndex;
             }
-            else if (!forceProxyRelease ||
-                step.Kind != NavigationGraph.StepKind.Stairs)
+            else if (!blockForcedDestinationCompletion &&
+                (!forceProxyRelease || acceptedForcedDestinationCompletion || step.Kind != NavigationGraph.StepKind.Stairs))
             {
                 _openPassageOverrideWaypointIndex = currentIndex;
                 if (string.Equals(planningContext, "open-passage-override-source", StringComparison.Ordinal) &&
@@ -10020,7 +10028,8 @@ namespace DateEverythingAccess
             }
 
             bool acceptedFinalCompletion = isFinalWaypoint &&
-                (!forceProxyRelease || step.Kind != NavigationGraph.StepKind.Stairs);
+                !blockForcedDestinationCompletion &&
+                (!forceProxyRelease || acceptedForcedDestinationCompletion || step.Kind != NavigationGraph.StepKind.Stairs);
             completed = advancedWaypoint || advancedStage || acceptedFinalCompletion;
             detail =
                 "previousIndex=" + previousIndex +

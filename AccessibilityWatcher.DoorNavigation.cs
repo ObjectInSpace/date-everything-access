@@ -714,6 +714,16 @@ namespace DateEverythingAccess
                 string.Equals(stepKey, "transition:office->office_closet", StringComparison.Ordinal);
         }
 
+        private bool IsRetainedExtendedBridgeRecoveryStep(NavigationGraph.PathStep step)
+        {
+            if (step == null)
+                return false;
+
+            string stepKey = BuildNavigationStepKey(step);
+            return IsFocusedClosetDeadlockStep(step) ||
+                string.Equals(stepKey, "transition:bathroom1->hallway", StringComparison.Ordinal);
+        }
+
         private bool ShouldReleaseDoorSourceZoneExtendedBridgeToExplicitFinalFallback(
             NavigationGraph.PathStep step,
             string currentZone,
@@ -757,8 +767,9 @@ namespace DateEverythingAccess
                     " step=" + DescribeNavigationStep(step));
             }
 
+            bool isRetainedExtendedBridgeRecoveryStep = IsRetainedExtendedBridgeRecoveryStep(step);
             bool isFocusedClosetDeadlockStep = IsFocusedClosetDeadlockStep(step);
-            if (isFocusedClosetDeadlockStep &&
+            if (isRetainedExtendedBridgeRecoveryStep &&
                 finalEntryLocalCompleted &&
                 HasDoorRetainedExtendedNoProgressReleaseRequest(step))
             {
@@ -2150,12 +2161,12 @@ namespace DateEverythingAccess
             {
                 if (isFinalEntryAdvanceLocalCompleted)
                 {
-                    if (isFocusedClosetDeadlockStep)
+                    if (IsRetainedExtendedBridgeRecoveryStep(step))
                     {
                         planningContext = "door-entry-advance-extended-local";
                         planningGoal = desiredPosition;
                         LogNavigationTrackerDebug(
-                            "Focused closet deadlock trace: reusing retained extended bridge local planning after completed final-entry-local" +
+                            "Retained extended bridge recovery: reusing extended bridge local planning after completed final-entry-local" +
                             " desiredPosition=" + FormatVector3(desiredPosition) +
                             " planningContext=" + planningContext +
                             " step=" + DescribeNavigationStep(step));
@@ -2317,7 +2328,8 @@ namespace DateEverythingAccess
                 string.Equals(planningContext, "door-entry-advance-local", StringComparison.Ordinal) &&
                 string.Equals(_rawNavigationTargetContext, "door-entry-advance-no-source-bridge", StringComparison.Ordinal) &&
                 HasDoorRetainedExtendedNoProgressReleaseRequest(step) &&
-                string.Equals(BuildNavigationStepKey(step), "transition:office->office_closet", StringComparison.Ordinal);
+                (string.Equals(BuildNavigationStepKey(step), "transition:office->office_closet", StringComparison.Ordinal) ||
+                 string.Equals(BuildNavigationStepKey(step), "transition:gym_closet->gym", StringComparison.Ordinal));
             bool shouldSkipSnapForPostProofFinalDoorEntry =
                 string.Equals(planningContext, "door-entry-advance-local", StringComparison.Ordinal) &&
                 IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-extended-local") &&
