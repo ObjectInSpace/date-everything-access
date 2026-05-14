@@ -1,19 +1,19 @@
 {
-  "GeneratedAtUtc": "2026-05-14T17:29:26.1687302Z",
-  "ImportedAtUtc": "2026-05-14T17:34:13.2565224Z",
+  "GeneratedAtUtc": "2026-05-14T23:33:04.2744363Z",
+  "ImportedAtUtc": "2026-05-14T23:33:37.0224555Z",
   "ActiveScene": "ThirdPersonGreybox",
   "SweepKind": "OpenPassage",
   "PluginVersion": "0.1.1",
-  "RuntimeBuildStamp": "0.1.1|utc=2026-05-14T17:23:44.0000000Z|sha256=5D7783DAF3FB285B127743F4BDA82023C68106B9C8340D2BC02A8C003CBDD059",
+  "RuntimeBuildStamp": "0.1.1|utc=2026-05-14T23:05:24.0000000Z|sha256=6B72AD6717A530242E5F42D2C6496D1910336B41D3C49E1F5B8921C677702666",
   "RuntimeAssemblyPath": "D:\\SteamLibrary\\steamapps\\common\\Date Everything\\BepInEx\\plugins\\DateEverythingAccess.dll",
-  "RuntimeAssemblySha256": "5D7783DAF3FB285B127743F4BDA82023C68106B9C8340D2BC02A8C003CBDD059",
+  "RuntimeAssemblySha256": "6B72AD6717A530242E5F42D2C6496D1910336B41D3C49E1F5B8921C677702666",
   "OpenPassageOverrideStatus": "loaded",
   "OpenPassageOverrideDetail": "Entries=40 normalizedScalarArrays=False",
   "OpenPassageOverrideEntryCount": 40,
   "OpenPassageOverrideNormalizedScalarArrays": false,
   "OpenPassageOverridePath": "D:\\SteamLibrary\\steamapps\\common\\Date Everything\\BepInEx\\plugins\\navigation_transition_overrides.json",
-  "OpenPassageOverrideFileSha256": "EDF006076AFAAF1252347B6D33CE0D9095460761D05778D995FF02F8BD04B0F3",
-  "OpenPassageOverrideFileLastWriteUtc": "2026-05-14T16:56:14Z",
+  "OpenPassageOverrideFileSha256": "61692F82482B8CF7F5A616B9FF48F38974771F110641CAE9900CA22202B7866D",
+  "OpenPassageOverrideFileLastWriteUtc": "2026-05-14T23:03:20Z",
   "IsComplete": true,
   "TotalCount": 88,
   "PassedCount": 84,
@@ -33,7 +33,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.217,
+      "DurationSeconds": 0.201,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 14.364,
@@ -82,11 +82,11 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 2,
-      "CurrentZoneAtResult": "attic",
+      "CurrentZoneAtResult": "attic6",
       "PlayerPositionAtResult": {
-        "x": 14.473,
-        "y": 12.944,
-        "z": 5.796
+        "x": 14.452,
+        "y": 12.966,
+        "z": 5.592
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -109,7 +109,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.117,
+      "DurationSeconds": 0.1,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 14.364,
@@ -160,9 +160,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "attic",
       "PlayerPositionAtResult": {
-        "x": 13.476,
-        "y": 13.14,
-        "z": 3.827
+        "x": 13.482,
+        "y": 13.141,
+        "z": 3.846
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -237,7 +237,7 @@
       "CurrentZoneAtResult": "attic",
       "PlayerPositionAtResult": {
         "x": 14.705,
-        "y": 13.484,
+        "y": 13.464,
         "z": 7.154
       },
       "LastTargetKind": "LocalWaypoint",
@@ -261,7 +261,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.233,
+      "DurationSeconds": 0.211,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 0.647,
@@ -310,17 +310,17 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 0,
-      "CurrentZoneAtResult": "bathroom1_2",
+      "CurrentZoneAtResult": "bathroom1",
       "PlayerPositionAtResult": {
-        "x": -0.291,
-        "y": -0.468,
-        "z": 10.067
+        "x": -0.493,
+        "y": -0.433,
+        "z": 9.57
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
         "x": -0.028,
-        "y": 4.17,
-        "z": 11.494
+        "y": 4.894,
+        "z": 10.254
       },
       "LastLocalNavigationContext": null
     },
@@ -337,7 +337,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.55,
+      "DurationSeconds": 0.566,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -24.805,
@@ -388,9 +388,9 @@
       "StaticSuspicionScore": 6,
       "CurrentZoneAtResult": "bathroom2",
       "PlayerPositionAtResult": {
-        "x": -19.98,
-        "y": 12.827,
-        "z": -4.523
+        "x": -19.921,
+        "y": 12.825,
+        "z": -4.495
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -410,10 +410,10 @@
       "TransitionKind": "OpenPassage",
       "ConnectorName": null,
       "RequiresInteraction": false,
-      "Status": "failed",
-      "StatusDetail": "step timeout currentZone=bathroom2_5 player=(-25.32, 12.82, -2.95) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-25.39, 17.84, -0.62)",
-      "FailureReason": "step timeout currentZone=bathroom2_5 player=(-25.32, 12.82, -2.95)",
-      "DurationSeconds": 10.066,
+      "Status": "passed",
+      "StatusDetail": "passed",
+      "FailureReason": null,
+      "DurationSeconds": 0.101,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -24.805,
@@ -464,15 +464,15 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "bathroom2_5",
       "PlayerPositionAtResult": {
-        "x": -25.322,
-        "y": 12.818,
-        "z": -2.954
+        "x": -24.973,
+        "y": 13.145,
+        "z": -3.34
       },
       "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
-        "x": -25.392,
+        "x": -25.268,
         "y": 17.84,
-        "z": -0.62
+        "z": -1.025
       },
       "LastLocalNavigationContext": null
     },
@@ -489,7 +489,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.967,
+      "DurationSeconds": 0.966,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -13.548,
@@ -540,9 +540,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "upper_hallway4",
       "PlayerPositionAtResult": {
-        "x": -12.74,
+        "x": -12.77,
         "y": 12.818,
-        "z": -1.405
+        "z": -1.368
       },
       "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
@@ -565,7 +565,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.107,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -13.548,
@@ -616,9 +616,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "bedroom",
       "PlayerPositionAtResult": {
-        "x": -13.045,
-        "y": 13.034,
-        "z": -11.404
+        "x": -13.023,
+        "y": 13.03,
+        "z": -11.462
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -641,7 +641,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.8,
+      "DurationSeconds": 0.767,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -5.532,
@@ -690,11 +690,11 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 0,
-      "CurrentZoneAtResult": "bedroom_closet",
+      "CurrentZoneAtResult": "dorian_bedroomcloset1",
       "PlayerPositionAtResult": {
-        "x": -9.564,
+        "x": -9.746,
         "y": 12.82,
-        "z": -12.372
+        "z": -12.212
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -717,7 +717,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.7,
+      "DurationSeconds": 0.667,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -5.532,
@@ -768,9 +768,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "bedroom_closet",
       "PlayerPositionAtResult": {
-        "x": -9.287,
-        "y": 12.821,
-        "z": -23.18
+        "x": -9.081,
+        "y": 12.823,
+        "z": -22.863
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -793,7 +793,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.983,
+      "DurationSeconds": 1.012,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -5.532,
@@ -844,9 +844,9 @@
       "StaticSuspicionScore": 6,
       "CurrentZoneAtResult": "bedroom_closet",
       "PlayerPositionAtResult": {
-        "x": -9.391,
+        "x": -9.378,
         "y": 12.818,
-        "z": -9.31
+        "z": -9.178
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -869,7 +869,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.567,
+      "DurationSeconds": 0.55,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -17.046,
@@ -921,8 +921,8 @@
       "CurrentZoneAtResult": "kitchen",
       "PlayerPositionAtResult": {
         "x": -17.199,
-        "y": 5.491,
-        "z": -0.58
+        "y": 5.492,
+        "z": -0.619
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -942,10 +942,10 @@
       "TransitionKind": "OpenPassage",
       "ConnectorName": null,
       "RequiresInteraction": false,
-      "Status": "passed",
-      "StatusDetail": "passed",
-      "FailureReason": null,
-      "DurationSeconds": 1.317,
+      "Status": "failed",
+      "StatusDetail": "navigation blocked currentZone=dining_room4 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.02 zone=dining_room4 targetKind=LocalWaypoint targetPosition=(-13.90, 4.68, -2.80) rawContext=open-passage-guided localContext=open-passage-handoff step=dining_room->living_room kind=OpenPassage interaction=False connector=<null> from=(-17.05, 4.68, -1.69) to=(-3.22, 5.67, -12.81) fromCross=(-12.88, 4.68, -5.67) toCross=(-6.15, 5.67, -8.26) step=dining_room->living_room kind=OpenPassage interaction=False connector=<null> from=(-17.05, 4.68, -1.69) to=(-3.22, 5.67, -12.81) fromCross=(-12.88, 4.68, -5.67) toCross=(-6.15, 5.67, -8.26) localContext=open-passage-handoff lastTargetKind=LocalWaypoint lastTarget=(-13.90, 4.68, -2.80)",
+      "FailureReason": "navigation blocked currentZone=dining_room4 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.02 zone=dining_room4 targetKind=LocalWaypoint targetPosition=(-13.90, 4.68, -2.80) rawContext=open-passage-guided localContext=open-passage-handoff step=dining_room->living_room kind=OpenPassage interaction=False connector=<null> from=(-17.05, 4.68, -1.69) to=(-3.22, 5.67, -12.81) fromCross=(-12.88, 4.68, -5.67) toCross=(-6.15, 5.67, -8.26) step=dining_room->living_room kind=OpenPassage interaction=False connector=<null> from=(-17.05, 4.68, -1.69) to=(-3.22, 5.67, -12.81) fromCross=(-12.88, 4.68, -5.67) toCross=(-6.15, 5.67, -8.26)",
+      "DurationSeconds": 1.667,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -17.046,
@@ -996,17 +996,17 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "dining_room4",
       "PlayerPositionAtResult": {
-        "x": -17.225,
-        "y": 6.021,
-        "z": -4.208
+        "x": -17.199,
+        "y": 6.175,
+        "z": -2.499
       },
-      "LastTargetKind": "ZoneFallback",
+      "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
-        "x": -17.35,
-        "y": 6.1,
-        "z": -5.65
+        "x": -13.899,
+        "y": 4.68,
+        "z": -2.8
       },
-      "LastLocalNavigationContext": null
+      "LastLocalNavigationContext": "open-passage-handoff"
     },
     {
       "Index": 13,
@@ -1021,7 +1021,7 @@
       "Status": "failed",
       "StatusDetail": "navigation blocked currentZone=dining_room detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=dining_room targetKind=EntryWaypoint targetPosition=(-16.60, 4.84, -10.37) rawContext=open-passage-guided localContext=<null> step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(-16.60, 4.84, -10.37)",
       "FailureReason": "navigation blocked currentZone=dining_room detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=dining_room targetKind=EntryWaypoint targetPosition=(-16.60, 4.84, -10.37) rawContext=open-passage-guided localContext=<null> step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13) step=dining_room->piano_room kind=OpenPassage interaction=False connector=<null> from=(-19.96, 4.20, -8.10) to=(-11.56, 4.84, -13.03) fromCross=(-17.59, 4.20, -10.13) toCross=(-16.95, 4.84, -10.13)",
-      "DurationSeconds": 1.683,
+      "DurationSeconds": 1.707,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -19.959,
@@ -1148,17 +1148,17 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "upper_hallway2",
       "PlayerPositionAtResult": {
-        "x": -3.251,
-        "y": 13.134,
-        "z": 3.845
+        "x": -3.193,
+        "y": 13.125,
+        "z": 3.833
       },
-      "LastTargetKind": "ZoneFallback",
+      "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
-        "x": -1.073,
+        "x": -0.844,
         "y": 18.262,
-        "z": 3.654
+        "z": 3.656
       },
-      "LastLocalNavigationContext": null
+      "LastLocalNavigationContext": "open-passage-destination"
     },
     {
       "Index": 15,
@@ -1173,7 +1173,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.117,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 12.112,
@@ -1222,11 +1222,11 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 2,
-      "CurrentZoneAtResult": "attic",
+      "CurrentZoneAtResult": "dorian_attic2",
       "PlayerPositionAtResult": {
-        "x": 12.963,
-        "y": 13.124,
-        "z": 3.846
+        "x": 12.8,
+        "y": 13.168,
+        "z": 3.841
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -1249,7 +1249,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 1.85,
+      "DurationSeconds": 2.067,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -25.539,
@@ -1300,9 +1300,9 @@
       "StaticSuspicionScore": 4,
       "CurrentZoneAtResult": "dining_room7",
       "PlayerPositionAtResult": {
-        "x": -27.634,
-        "y": -0.576,
-        "z": -7.199
+        "x": -27.48,
+        "y": -0.592,
+        "z": -7.336
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -1376,9 +1376,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "bathroom1_2",
       "PlayerPositionAtResult": {
-        "x": 0.147,
-        "y": -0.359,
-        "z": 10.472
+        "x": 0.145,
+        "y": -0.357,
+        "z": 10.479
       },
       "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
@@ -1401,7 +1401,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.317,
+      "DurationSeconds": 0.301,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 0.523,
@@ -1452,9 +1452,9 @@
       "StaticSuspicionScore": 6,
       "CurrentZoneAtResult": "upper_hallway4",
       "PlayerPositionAtResult": {
-        "x": -2.518,
-        "y": -0.551,
-        "z": 1.344
+        "x": -2.377,
+        "y": -0.545,
+        "z": 1.175
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -1477,7 +1477,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.217,
+      "DurationSeconds": 0.117,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -25.407,
@@ -1528,17 +1528,17 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "bathroom2_3",
       "PlayerPositionAtResult": {
-        "x": -25.381,
-        "y": 12.95,
-        "z": -1.114
+        "x": -25.387,
+        "y": 13.093,
+        "z": -0.809
       },
-      "LastTargetKind": "LocalWaypoint",
+      "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
-        "x": -24.812,
+        "x": -25.406,
         "y": 18.23,
-        "z": -4.32
+        "z": -3.143
       },
-      "LastLocalNavigationContext": "open-passage-destination"
+      "LastLocalNavigationContext": null
     },
     {
       "Index": 20,
@@ -1553,7 +1553,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.7,
+      "DurationSeconds": 0.767,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -12.604,
@@ -1604,9 +1604,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "upper_hallway4",
       "PlayerPositionAtResult": {
-        "x": -12.634,
-        "y": 12.82,
-        "z": -5.975
+        "x": -12.617,
+        "y": 12.819,
+        "z": -6.139
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -1629,7 +1629,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.097,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -11.997,
@@ -1678,11 +1678,11 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 0,
-      "CurrentZoneAtResult": "dorian_bedroom2",
+      "CurrentZoneAtResult": "bedroom",
       "PlayerPositionAtResult": {
-        "x": -12.455,
-        "y": 13.231,
-        "z": -11.979
+        "x": -12.439,
+        "y": 13.201,
+        "z": -11.956
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -1705,7 +1705,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.117,
+      "DurationSeconds": 0.102,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -10.535,
@@ -1756,17 +1756,17 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "dorian_bedroomcloset1",
       "PlayerPositionAtResult": {
-        "x": -9.931,
-        "y": 13.081,
-        "z": -12.414
+        "x": -10.02,
+        "y": 13.142,
+        "z": -12.367
       },
-      "LastTargetKind": "LocalWaypoint",
+      "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
-        "x": -10.535,
-        "y": 18.02,
-        "z": -11.726
+        "x": -8.58,
+        "y": 18.85,
+        "z": -14.177
       },
-      "LastLocalNavigationContext": "open-passage-handoff"
+      "LastLocalNavigationContext": null
     },
     {
       "Index": 23,
@@ -1781,7 +1781,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.117,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -10.535,
@@ -1830,19 +1830,19 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 0,
-      "CurrentZoneAtResult": "bedroom_closet",
+      "CurrentZoneAtResult": "dorian_bedroomcloset2",
       "PlayerPositionAtResult": {
-        "x": -9.991,
-        "y": 13.119,
-        "z": -23.259
+        "x": -9.961,
+        "y": 13.088,
+        "z": -23.236
       },
-      "LastTargetKind": "ZoneFallback",
+      "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
-        "x": -8.474,
-        "y": 18.85,
-        "z": -21.486
+        "x": -10.535,
+        "y": 18.02,
+        "z": -23.996
       },
-      "LastLocalNavigationContext": null
+      "LastLocalNavigationContext": "open-passage-handoff"
     },
     {
       "Index": 24,
@@ -1857,7 +1857,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.117,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -7.748,
@@ -1908,17 +1908,17 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "gym8",
       "PlayerPositionAtResult": {
-        "x": -8.729,
-        "y": 13.107,
-        "z": 13.51
+        "x": -8.827,
+        "y": 13.085,
+        "z": 13.633
       },
-      "LastTargetKind": "LocalWaypoint",
+      "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
-        "x": -10.592,
+        "x": -10.674,
         "y": 18.14,
-        "z": 13.803
+        "z": 13.578
       },
-      "LastLocalNavigationContext": "open-passage-destination"
+      "LastLocalNavigationContext": null
     },
     {
       "Index": 25,
@@ -1933,7 +1933,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.433,
+      "DurationSeconds": 0.323,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -7.748,
@@ -1984,17 +1984,17 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "upper_hallway",
       "PlayerPositionAtResult": {
-        "x": -9.335,
-        "y": 12.836,
-        "z": 5.353
+        "x": -8.98,
+        "y": 12.867,
+        "z": 4.634
       },
-      "LastTargetKind": "ZoneFallback",
+      "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
-        "x": -9.64,
+        "x": -9.844,
         "y": 12.81,
-        "z": 6.45
+        "z": 6.156
       },
-      "LastLocalNavigationContext": null
+      "LastLocalNavigationContext": "current-zone"
     },
     {
       "Index": 26,
@@ -2009,7 +2009,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.117,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -25.407,
@@ -2060,9 +2060,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "gym3",
       "PlayerPositionAtResult": {
-        "x": -26.155,
-        "y": 13.099,
-        "z": 13.887
+        "x": -26.402,
+        "y": 13.079,
+        "z": 14.043
       },
       "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
@@ -2085,7 +2085,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.333,
+      "DurationSeconds": 0.233,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -24.584,
@@ -2136,17 +2136,17 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "bathroom2_3",
       "PlayerPositionAtResult": {
-        "x": -24.589,
-        "y": 12.865,
-        "z": -1.094
+        "x": -24.553,
+        "y": 12.924,
+        "z": -0.294
       },
-      "LastTargetKind": "LocalWaypoint",
+      "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
-        "x": -24.812,
-        "y": 18.14,
-        "z": -3.82
+        "x": -24.79,
+        "y": 12.82,
+        "z": -2.1
       },
-      "LastLocalNavigationContext": "current-zone"
+      "LastLocalNavigationContext": null
     },
     {
       "Index": 28,
@@ -2161,7 +2161,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.433,
+      "DurationSeconds": 0.451,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -10.535,
@@ -2212,9 +2212,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "gym4",
       "PlayerPositionAtResult": {
-        "x": -6.966,
-        "y": 12.836,
-        "z": 22.401
+        "x": -6.66,
+        "y": 12.837,
+        "z": 22.567
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -2237,7 +2237,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.117,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 1.831,
@@ -2286,17 +2286,17 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 2,
-      "CurrentZoneAtResult": "gym_closet2",
+      "CurrentZoneAtResult": "dorian_gymcloset2",
       "PlayerPositionAtResult": {
-        "x": 1.397,
-        "y": 14.048,
-        "z": 20.774
+        "x": 1.463,
+        "y": 13.805,
+        "z": 20.706
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
-        "x": 0.298,
+        "x": 0.302,
         "y": 18.042,
-        "z": 22.833
+        "z": 22.83
       },
       "LastLocalNavigationContext": null
     },
@@ -2313,7 +2313,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.533,
+      "DurationSeconds": 0.483,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -24.319,
@@ -2364,9 +2364,9 @@
       "StaticSuspicionScore": 6,
       "CurrentZoneAtResult": "kitchen3",
       "PlayerPositionAtResult": {
-        "x": -24.273,
-        "y": -0.586,
-        "z": 17.609
+        "x": -24.242,
+        "y": -0.582,
+        "z": 17.636
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -2389,7 +2389,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.667,
+      "DurationSeconds": 0.655,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -17.687,
@@ -2440,8 +2440,8 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "kitchen2",
       "PlayerPositionAtResult": {
-        "x": -17.777,
-        "y": -0.595,
+        "x": -17.713,
+        "y": -0.594,
         "z": 27.511
       },
       "LastTargetKind": "ZoneFallback",
@@ -2465,7 +2465,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.117,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -17.124,
@@ -2516,9 +2516,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "dorian_laundry2",
       "PlayerPositionAtResult": {
-        "x": -17.762,
-        "y": -0.351,
-        "z": 34.45
+        "x": -17.742,
+        "y": -0.363,
+        "z": 34.466
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -2541,7 +2541,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.12,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -13.565,
@@ -2592,9 +2592,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "laundry_room_closet",
       "PlayerPositionAtResult": {
-        "x": -13.117,
+        "x": -13.04,
         "y": -0.364,
-        "z": 31.704
+        "z": 31.835
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -2617,7 +2617,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.35,
+      "DurationSeconds": 0.326,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 9.358,
@@ -2668,9 +2668,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "office5",
       "PlayerPositionAtResult": {
-        "x": 6.407,
-        "y": -0.561,
-        "z": 24.87
+        "x": 6.314,
+        "y": -0.558,
+        "z": 24.861
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -2693,7 +2693,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.117,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -1.071,
@@ -2742,11 +2742,11 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 0,
-      "CurrentZoneAtResult": "office_closet",
+      "CurrentZoneAtResult": "dorian_office_closet2",
       "PlayerPositionAtResult": {
-        "x": -1.146,
-        "y": -0.182,
-        "z": 24.774
+        "x": -1.157,
+        "y": -0.197,
+        "z": 24.664
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -2818,11 +2818,11 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 0,
-      "CurrentZoneAtResult": "office6",
+      "CurrentZoneAtResult": "dorian_office1",
       "PlayerPositionAtResult": {
-        "x": 8.554,
-        "y": -0.358,
-        "z": 10.821
+        "x": 8.516,
+        "y": -0.329,
+        "z": 10.846
       },
       "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
@@ -2845,7 +2845,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.35,
+      "DurationSeconds": 0.333,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 8.31,
@@ -2896,9 +2896,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "hallway6",
       "PlayerPositionAtResult": {
-        "x": 8.91,
-        "y": -0.562,
-        "z": 3.754
+        "x": 8.889,
+        "y": -0.553,
+        "z": 3.684
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -2973,7 +2973,7 @@
       "CurrentZoneAtResult": "office_closet",
       "PlayerPositionAtResult": {
         "x": 2.48,
-        "y": 0.021,
+        "y": -0.012,
         "z": 25.187
       },
       "LastTargetKind": "LocalWaypoint",
@@ -2997,7 +2997,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.117,
+      "DurationSeconds": 0.111,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 3.288,
@@ -3046,11 +3046,11 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 4,
-      "CurrentZoneAtResult": "crawlspace2",
+      "CurrentZoneAtResult": "dorian_trapdoor2",
       "PlayerPositionAtResult": {
-        "x": 4.201,
+        "x": 4.007,
         "y": -9.792,
-        "z": 25.319
+        "z": 25.353
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -3124,9 +3124,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "upper_hallway2",
       "PlayerPositionAtResult": {
-        "x": -0.819,
-        "y": 13.163,
-        "z": 2.334
+        "x": -0.765,
+        "y": 13.165,
+        "z": 2.25
       },
       "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
@@ -3149,7 +3149,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.733,
+      "DurationSeconds": 3.617,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 13.894,
@@ -3200,9 +3200,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "hallway2",
       "PlayerPositionAtResult": {
-        "x": 18.613,
-        "y": -0.595,
-        "z": -5.749
+        "x": 19.431,
+        "y": -0.597,
+        "z": -5.982
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -3225,7 +3225,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.233,
+      "DurationSeconds": 0.115,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -10.674,
@@ -3276,9 +3276,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "gym8",
       "PlayerPositionAtResult": {
-        "x": -8.672,
-        "y": 12.925,
-        "z": 14.128
+        "x": -9.617,
+        "y": 13.143,
+        "z": 13.907
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -3301,7 +3301,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.567,
+      "DurationSeconds": 0.51,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -10.674,
@@ -3352,9 +3352,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "gym8",
       "PlayerPositionAtResult": {
-        "x": -7.46,
-        "y": 12.826,
-        "z": 9.77
+        "x": -7.626,
+        "y": 12.83,
+        "z": 9.968
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -3377,7 +3377,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.017,
+      "DurationSeconds": 0.034,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -26.361,
@@ -3428,9 +3428,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "dorian_gym3",
       "PlayerPositionAtResult": {
-        "x": -26.349,
-        "y": 13.388,
-        "z": 14.029
+        "x": -26.219,
+        "y": 13.42,
+        "z": 13.99
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -3453,7 +3453,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.45,
+      "DurationSeconds": 0.466,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -26.361,
@@ -3504,9 +3504,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "gym2",
       "PlayerPositionAtResult": {
-        "x": -24.909,
-        "y": 12.835,
-        "z": 10.375
+        "x": -24.827,
+        "y": 12.836,
+        "z": 9.841
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -3529,7 +3529,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.333,
+      "DurationSeconds": 0.32,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -0.17,
@@ -3580,9 +3580,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "gym_closet2",
       "PlayerPositionAtResult": {
-        "x": -2.134,
-        "y": 13.744,
-        "z": 21.342
+        "x": -2.094,
+        "y": 13.551,
+        "z": 21.34
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -3605,7 +3605,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.317,
+      "DurationSeconds": 0.318,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -0.17,
@@ -3654,11 +3654,11 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 2,
-      "CurrentZoneAtResult": "gym_closet2",
+      "CurrentZoneAtResult": "dorian_gymcloset2",
       "PlayerPositionAtResult": {
-        "x": 1.135,
-        "y": 13.042,
-        "z": 21.024
+        "x": 1.226,
+        "y": 13.029,
+        "z": 20.956
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -3732,9 +3732,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "hallway4",
       "PlayerPositionAtResult": {
-        "x": 7.325,
-        "y": 3.335,
-        "z": -3.541
+        "x": 7.254,
+        "y": 3.357,
+        "z": -3.569
       },
       "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
@@ -3755,9 +3755,9 @@
       "ConnectorName": null,
       "RequiresInteraction": false,
       "Status": "failed",
-      "StatusDetail": "step timeout currentZone=hallway4 player=(9.31, 2.78, -4.85) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(8.26, 4.67, -6.99)",
-      "FailureReason": "step timeout currentZone=hallway4 player=(9.31, 2.78, -4.85)",
-      "DurationSeconds": 10.066,
+      "StatusDetail": "navigation blocked currentZone=hallway4 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.05 zone=hallway4 targetKind=LocalWaypoint targetPosition=(9.90, 2.82, -4.45) rawContext=open-passage-guided localContext=open-passage-override-destination step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) localContext=open-passage-override-destination lastTargetKind=LocalWaypoint lastTarget=(9.90, 2.82, -4.45)",
+      "FailureReason": "navigation blocked currentZone=hallway4 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.05 zone=hallway4 targetKind=LocalWaypoint targetPosition=(9.90, 2.82, -4.45) rawContext=open-passage-guided localContext=open-passage-override-destination step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70) step=hallway->living_room kind=OpenPassage interaction=False connector=<null> from=(12.06, 4.35, -0.44) to=(5.28, 4.67, -13.19) fromCross=(9.56, 4.35, -5.60) toCross=(5.10, 4.67, -6.70)",
+      "DurationSeconds": 5.043,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 12.063,
@@ -3808,17 +3808,17 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "hallway4",
       "PlayerPositionAtResult": {
-        "x": 9.312,
-        "y": 2.781,
-        "z": -4.852
+        "x": 9.235,
+        "y": 2.831,
+        "z": -4.796
       },
-      "LastTargetKind": "EntryWaypoint",
+      "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
-        "x": 8.257,
-        "y": 4.67,
-        "z": -6.985
+        "x": 9.904,
+        "y": 2.822,
+        "z": -4.45
       },
-      "LastLocalNavigationContext": null
+      "LastLocalNavigationContext": "open-passage-override-destination"
     },
     {
       "Index": 50,
@@ -3833,7 +3833,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 1.95,
+      "DurationSeconds": 1.85,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 6.489,
@@ -3884,15 +3884,15 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "upper_hallway8",
       "PlayerPositionAtResult": {
-        "x": -5.165,
-        "y": 11.509,
-        "z": -1.69
+        "x": -5.974,
+        "y": 11.47,
+        "z": -1.268
       },
-      "LastTargetKind": "EntryWaypoint",
+      "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
-        "x": -1.104,
-        "y": 15.167,
-        "z": -3.366
+        "x": -7.573,
+        "y": 17.97,
+        "z": 3.853
       },
       "LastLocalNavigationContext": null
     },
@@ -3909,7 +3909,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.217,
+      "DurationSeconds": 0.205,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 5.837,
@@ -3960,9 +3960,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "stairsup",
       "PlayerPositionAtResult": {
-        "x": 7.69,
-        "y": 4.208,
-        "z": -2.961
+        "x": 7.68,
+        "y": 4.246,
+        "z": -3.048
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -4036,9 +4036,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "kitchen",
       "PlayerPositionAtResult": {
-        "x": -14.234,
-        "y": -0.595,
-        "z": 3.945
+        "x": -14.265,
+        "y": -0.594,
+        "z": 3.853
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -4112,9 +4112,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "kitchen_cake",
       "PlayerPositionAtResult": {
-        "x": -19.973,
-        "y": -0.339,
-        "z": 24.597
+        "x": -20.009,
+        "y": -0.371,
+        "z": 24.583
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -4137,7 +4137,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.183,
+      "DurationSeconds": 0.2,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -25.737,
@@ -4188,9 +4188,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "kitchen_ronald",
       "PlayerPositionAtResult": {
-        "x": -24.693,
-        "y": -0.47,
-        "z": 17.27
+        "x": -24.549,
+        "y": -0.49,
+        "z": 17.14
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -4213,7 +4213,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 2.733,
+      "DurationSeconds": 2.566,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -12.3,
@@ -4264,17 +4264,17 @@
       "StaticSuspicionScore": 4,
       "CurrentZoneAtResult": "piano_room11",
       "PlayerPositionAtResult": {
-        "x": -11.521,
-        "y": -0.54,
-        "z": -14.63
+        "x": -11.534,
+        "y": -0.557,
+        "z": -14.337
       },
-      "LastTargetKind": "ZoneFallback",
+      "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
-        "x": -11.41,
+        "x": -11.534,
         "y": -0.53,
-        "z": -16.23
+        "z": -16.474
       },
-      "LastLocalNavigationContext": null
+      "LastLocalNavigationContext": "current-zone"
     },
     {
       "Index": 56,
@@ -4340,9 +4340,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "kitchen5",
       "PlayerPositionAtResult": {
-        "x": -20.116,
-        "y": -0.39,
-        "z": 24.633
+        "x": -20.229,
+        "y": -0.379,
+        "z": 24.546
       },
       "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
@@ -4365,7 +4365,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.333,
+      "DurationSeconds": 0.45,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -20.689,
@@ -4416,9 +4416,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "kitchen_ronald",
       "PlayerPositionAtResult": {
-        "x": -22.466,
-        "y": -0.55,
-        "z": 14.106
+        "x": -22.981,
+        "y": -0.58,
+        "z": 14.294
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -4441,7 +4441,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.983,
+      "DurationSeconds": 0.972,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -11.004,
@@ -4492,9 +4492,9 @@
       "StaticSuspicionScore": 4,
       "CurrentZoneAtResult": "piano_room11",
       "PlayerPositionAtResult": {
-        "x": -11.028,
+        "x": -11.025,
         "y": -0.597,
-        "z": -11.534
+        "z": -11.605
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -4517,7 +4517,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.233,
+      "DurationSeconds": 0.211,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -24.546,
@@ -4568,9 +4568,9 @@
       "StaticSuspicionScore": 4,
       "CurrentZoneAtResult": "laundry_room2",
       "PlayerPositionAtResult": {
-        "x": -25.105,
-        "y": -0.507,
-        "z": 30.932
+        "x": -24.973,
+        "y": -0.462,
+        "z": 31.103
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -4593,7 +4593,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.333,
+      "DurationSeconds": 0.324,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -18.383,
@@ -4644,9 +4644,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "laundry_room",
       "PlayerPositionAtResult": {
-        "x": -17.858,
-        "y": -0.549,
-        "z": 30.861
+        "x": -17.855,
+        "y": -0.545,
+        "z": 30.968
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -4669,7 +4669,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.083,
+      "DurationSeconds": 0.1,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -18.383,
@@ -4720,9 +4720,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "dorian_laundry2",
       "PlayerPositionAtResult": {
-        "x": -17.962,
-        "y": -0.177,
-        "z": 34.57
+        "x": -17.868,
+        "y": -0.228,
+        "z": 34.7
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -4745,7 +4745,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.317,
+      "DurationSeconds": 0.351,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -18.383,
@@ -4796,17 +4796,17 @@
       "StaticSuspicionScore": 6,
       "CurrentZoneAtResult": "laundry_room",
       "PlayerPositionAtResult": {
-        "x": -16.668,
-        "y": -0.546,
-        "z": 31.431
+        "x": -16.447,
+        "y": -0.551,
+        "z": 31.185
       },
-      "LastTargetKind": "LocalWaypoint",
+      "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
-        "x": -15.805,
+        "x": -15.975,
         "y": 4.98,
-        "z": 30.443
+        "z": 29.419
       },
-      "LastLocalNavigationContext": "open-passage-handoff"
+      "LastLocalNavigationContext": null
     },
     {
       "Index": 63,
@@ -4821,7 +4821,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.107,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -12.574,
@@ -4872,9 +4872,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "laundry_room_closet",
       "PlayerPositionAtResult": {
-        "x": -12.937,
-        "y": -0.301,
-        "z": 32.082
+        "x": -12.925,
+        "y": -0.257,
+        "z": 32.043
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -4897,7 +4897,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 1.2,
+      "DurationSeconds": 1.273,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -3.217,
@@ -4946,11 +4946,11 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 2,
-      "CurrentZoneAtResult": "piano_room11",
+      "CurrentZoneAtResult": "dining_room4",
       "PlayerPositionAtResult": {
-        "x": -11.919,
+        "x": -11.983,
         "y": -0.597,
-        "z": -6.751
+        "z": -6.606
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -4971,9 +4971,9 @@
       "ConnectorName": null,
       "RequiresInteraction": false,
       "Status": "failed",
-      "StatusDetail": "navigation blocked currentZone=living_room3 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.09 zone=living_room3 targetKind=EntryWaypoint targetPosition=(11.93, 4.35, -7.37) rawContext=open-passage-guided localContext=<null> step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) localContext=<null> lastTargetKind=EntryWaypoint lastTarget=(11.93, 4.35, -7.37)",
-      "FailureReason": "navigation blocked currentZone=living_room3 detail=auto-walk loop detected samples=24 uniqueSignatures=2 elapsed=5.00 movement=0.09 zone=living_room3 targetKind=EntryWaypoint targetPosition=(11.93, 4.35, -7.37) rawContext=open-passage-guided localContext=<null> step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60)",
-      "DurationSeconds": 3.833,
+      "StatusDetail": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=ZoneFallback targetPosition=(6.72, 4.67, -6.75) rawContext=open-passage-guided localContext=<null> step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(6.72, 4.67, -6.75)",
+      "FailureReason": "navigation blocked currentZone=living_room2 detail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=living_room2 targetKind=ZoneFallback targetPosition=(6.72, 4.67, -6.75) rawContext=open-passage-guided localContext=<null> step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60) step=living_room->hallway kind=OpenPassage interaction=False connector=<null> from=(5.28, 4.67, -13.19) to=(12.06, 4.35, -0.44) fromCross=(5.10, 4.67, -6.70) toCross=(9.56, 4.35, -5.60)",
+      "DurationSeconds": 2.065,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 5.28,
@@ -5022,17 +5022,17 @@
       },
       "ValidationTimeoutSeconds": 5.0,
       "StaticSuspicionScore": 0,
-      "CurrentZoneAtResult": "living_room3",
+      "CurrentZoneAtResult": "living_room2",
       "PlayerPositionAtResult": {
-        "x": 11.878,
+        "x": 5.0,
         "y": -0.597,
-        "z": -9.873
+        "z": -7.874
       },
-      "LastTargetKind": "EntryWaypoint",
+      "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
-        "x": 11.927,
-        "y": 4.352,
-        "z": -7.374
+        "x": 6.72,
+        "y": 4.67,
+        "z": -6.75
       },
       "LastLocalNavigationContext": null
     },
@@ -5049,7 +5049,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.117,
+      "DurationSeconds": 0.101,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 19.693,
@@ -5100,9 +5100,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "living_room",
       "PlayerPositionAtResult": {
-        "x": 19.594,
-        "y": -0.321,
-        "z": -12.899
+        "x": 19.567,
+        "y": -0.282,
+        "z": -13.067
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -5125,7 +5125,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.833,
+      "DurationSeconds": 0.978,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 19.539,
@@ -5176,9 +5176,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "living_room10",
       "PlayerPositionAtResult": {
-        "x": 16.177,
-        "y": -0.596,
-        "z": -8.182
+        "x": 15.641,
+        "y": -0.597,
+        "z": -8.085
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -5253,7 +5253,7 @@
       "CurrentZoneAtResult": "living_room",
       "PlayerPositionAtResult": {
         "x": 19.539,
-        "y": 0.33,
+        "y": 0.24,
         "z": -12.019
       },
       "LastTargetKind": "EntryWaypoint",
@@ -5329,7 +5329,7 @@
       "CurrentZoneAtResult": "dorian_office1",
       "PlayerPositionAtResult": {
         "x": 8.538,
-        "y": 0.078,
+        "y": 0.098,
         "z": 10.868
       },
       "LastTargetKind": "EntryWaypoint",
@@ -5353,7 +5353,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.45,
+      "DurationSeconds": 0.35,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 8.538,
@@ -5404,9 +5404,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "office6",
       "PlayerPositionAtResult": {
-        "x": 8.04,
-        "y": -0.58,
-        "z": 8.155
+        "x": 7.891,
+        "y": -0.552,
+        "z": 8.598
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -5429,7 +5429,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.217,
+      "DurationSeconds": 0.206,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 8.152,
@@ -5480,9 +5480,9 @@
       "StaticSuspicionScore": 4,
       "CurrentZoneAtResult": "office5",
       "PlayerPositionAtResult": {
-        "x": 6.667,
-        "y": -0.467,
-        "z": 24.794
+        "x": 6.763,
+        "y": -0.474,
+        "z": 24.7
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -5505,7 +5505,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.35,
+      "DurationSeconds": 0.317,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 8.538,
@@ -5556,9 +5556,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "office6",
       "PlayerPositionAtResult": {
-        "x": 6.937,
-        "y": -0.559,
-        "z": 8.708
+        "x": 6.918,
+        "y": -0.547,
+        "z": 8.839
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -5632,9 +5632,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "dorian_office1",
       "PlayerPositionAtResult": {
-        "x": 7.614,
-        "y": -0.298,
-        "z": 11.006
+        "x": 7.649,
+        "y": -0.288,
+        "z": 10.991
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -5657,7 +5657,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.2,
+      "DurationSeconds": 0.217,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 8.292,
@@ -5708,9 +5708,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "office2",
       "PlayerPositionAtResult": {
-        "x": 7.347,
-        "y": -0.471,
-        "z": 17.232
+        "x": 7.412,
+        "y": -0.477,
+        "z": 17.112
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -5733,7 +5733,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.117,
+      "DurationSeconds": 0.1,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 5.325,
@@ -5784,9 +5784,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "hallway6",
       "PlayerPositionAtResult": {
-        "x": 5.381,
-        "y": 0.145,
-        "z": 3.559
+        "x": 5.342,
+        "y": 0.189,
+        "z": 3.29
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -5809,7 +5809,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.117,
+      "DurationSeconds": 0.101,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 6.814,
@@ -5860,9 +5860,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "dorian_office1",
       "PlayerPositionAtResult": {
-        "x": 7.837,
-        "y": 0.145,
-        "z": 10.885
+        "x": 7.782,
+        "y": 0.178,
+        "z": 10.884
       },
       "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
@@ -5885,7 +5885,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.1,
+      "DurationSeconds": 0.106,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": 6.814,
@@ -5936,9 +5936,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "office2",
       "PlayerPositionAtResult": {
-        "x": 7.197,
+        "x": 7.185,
         "y": -0.406,
-        "z": 17.309
+        "z": 17.307
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -5961,7 +5961,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.45,
+      "DurationSeconds": 0.451,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -1.482,
@@ -6012,15 +6012,15 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "office_closet",
       "PlayerPositionAtResult": {
-        "x": 2.187,
-        "y": -0.495,
-        "z": 24.725
+        "x": 2.281,
+        "y": -0.502,
+        "z": 24.667
       },
       "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
-        "x": 4.52,
+        "x": 4.614,
         "y": 4.17,
-        "z": 24.65
+        "z": 24.612
       },
       "LastLocalNavigationContext": null
     },
@@ -6088,9 +6088,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "office_closet",
       "PlayerPositionAtResult": {
-        "x": -1.327,
-        "y": -0.066,
-        "z": 25.586
+        "x": -1.321,
+        "y": -0.087,
+        "z": 25.71
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -6113,7 +6113,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.317,
+      "DurationSeconds": 0.333,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -1.482,
@@ -6164,9 +6164,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "office_closet",
       "PlayerPositionAtResult": {
-        "x": 1.488,
-        "y": -0.396,
-        "z": 25.634
+        "x": 1.336,
+        "y": -0.402,
+        "z": 25.683
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -6240,9 +6240,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "piano_room11",
       "PlayerPositionAtResult": {
-        "x": -15.604,
-        "y": -0.589,
-        "z": -10.226
+        "x": -15.869,
+        "y": -0.588,
+        "z": -10.329
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -6265,7 +6265,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.2,
+      "DurationSeconds": 0.218,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -0.997,
@@ -6316,9 +6316,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "upper_hallway2",
       "PlayerPositionAtResult": {
-        "x": -2.929,
-        "y": 12.969,
-        "z": 3.607
+        "x": -2.974,
+        "y": 12.941,
+        "z": 3.606
       },
       "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
@@ -6341,7 +6341,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.2,
+      "DurationSeconds": 0.21,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -0.997,
@@ -6392,9 +6392,9 @@
       "StaticSuspicionScore": 0,
       "CurrentZoneAtResult": "upper_hallway2",
       "PlayerPositionAtResult": {
-        "x": -0.754,
-        "y": 12.96,
-        "z": 1.87
+        "x": -0.747,
+        "y": 12.969,
+        "z": 1.939
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -6417,7 +6417,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.75,
+      "DurationSeconds": 0.784,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -1.104,
@@ -6468,9 +6468,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "stairsdown",
       "PlayerPositionAtResult": {
-        "x": 5.594,
-        "y": 5.31,
-        "z": -1.354
+        "x": 6.091,
+        "y": 5.116,
+        "z": -1.169
       },
       "LastTargetKind": "ZoneFallback",
       "LastTargetPosition": {
@@ -6493,7 +6493,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.317,
+      "DurationSeconds": 0.217,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -13.567,
@@ -6544,17 +6544,17 @@
       "StaticSuspicionScore": 6,
       "CurrentZoneAtResult": "upper_hallway5",
       "PlayerPositionAtResult": {
-        "x": -15.429,
-        "y": 12.88,
-        "z": 5.768
+        "x": -14.832,
+        "y": 12.957,
+        "z": 4.985
       },
-      "LastTargetKind": "ZoneFallback",
+      "LastTargetKind": "LocalWaypoint",
       "LastTargetPosition": {
-        "x": -15.975,
+        "x": -15.844,
         "y": 18.17,
-        "z": 6.761
+        "z": 6.156
       },
-      "LastLocalNavigationContext": null
+      "LastLocalNavigationContext": "open-passage-handoff"
     },
     {
       "Index": 86,
@@ -6569,7 +6569,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.117,
+      "DurationSeconds": 0.118,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -0.006,
@@ -6620,9 +6620,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "gym_closet3",
       "PlayerPositionAtResult": {
-        "x": 0.004,
-        "y": 13.036,
-        "z": 8.423
+        "x": 0.014,
+        "y": 13.032,
+        "z": 8.436
       },
       "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {
@@ -6645,7 +6645,7 @@
       "Status": "passed",
       "StatusDetail": "passed",
       "FailureReason": null,
-      "DurationSeconds": 0.117,
+      "DurationSeconds": 0.1,
       "SpawnSource": "from_waypoint",
       "SpawnPosition": {
         "x": -0.006,
@@ -6696,9 +6696,9 @@
       "StaticSuspicionScore": 2,
       "CurrentZoneAtResult": "gym_closet3",
       "PlayerPositionAtResult": {
-        "x": -0.002,
-        "y": 13.061,
-        "z": 8.425
+        "x": 0.065,
+        "y": 13.104,
+        "z": 8.582
       },
       "LastTargetKind": "EntryWaypoint",
       "LastTargetPosition": {

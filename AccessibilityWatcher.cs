@@ -522,6 +522,8 @@ namespace DateEverythingAccess
         private readonly HashSet<string> _doorSourceLocalCompletedKeys = new HashSet<string>(StringComparer.Ordinal);
         private readonly Dictionary<string, Vector3> _doorSourceLocalCompletedGoals = new Dictionary<string, Vector3>(StringComparer.Ordinal);
         private string _openPassageDestinationBridgeCompletedStepKey;
+        private string _rejectedOpenPassageLocalGoalStepKey;
+        private string _rejectedOpenPassageLocalGoalContext;
         private string _localNavigationStallSignature;
         private string _localNavigationBypassSignature;
         private string _lastTrackerTargetKind;
@@ -537,6 +539,7 @@ namespace DateEverythingAccess
         private Vector3 _trackedInteractableApproachTarget;
         private Vector3 _localNavigationPathGoal;
         private Vector3 _openPassageDestinationBridgeCompletedGoal;
+        private Vector3 _rejectedOpenPassageLocalGoal;
         private Vector3 _lastNavigationInputMove;
         private Vector3 _lastNavigationInputLook;
         private Vector3 _lastNavigationInputTarget;
@@ -8174,6 +8177,31 @@ namespace DateEverythingAccess
                     return false;
                 }
 
+                if (TryRetryOpenPassageLocalNavigationAfterRejectedGoal(
+                        currentZone,
+                        step,
+                        playerPosition,
+                        rawTargetPosition,
+                        targetKind,
+                        planningContext,
+                        planningGoal,
+                        out adjustedPosition,
+                        out debugDetail))
+                {
+                    position = adjustedPosition;
+                    targetKind = NavigationTargetKind.LocalWaypoint;
+                    ResetDoorPostInteractionFallbackExhaustion();
+                    LogNavigationTrackerDebug(
+                        "Retried open-passage local navigation after rejected runtime path" +
+                        " stepKey=" + (BuildNavigationStepKey(step) ?? "<null>") +
+                        " rejectedContext=" + (planningContext ?? "<null>") +
+                        " rejectedGoal=" + FormatVector3(planningGoal) +
+                        " retryPosition=" + FormatVector3(position) +
+                        " detail=" + (debugDetail ?? "<null>") +
+                        " step=" + DescribeNavigationStep(step));
+                    return true;
+                }
+
                 RecordDoorPostInteractionFallbackFailure(
                     currentZone,
                     step,
@@ -8214,6 +8242,117 @@ namespace DateEverythingAccess
                 " detail=" + debugDetail +
                 " step=" + DescribeNavigationStep(step));
             return true;
+        }
+
+        private bool TryRetryOpenPassageLocalNavigationAfterRejectedGoal(
+            string currentZone,
+            NavigationGraph.PathStep step,
+            Vector3 playerPosition,
+            Vector3 rawTargetPosition,
+            NavigationTargetKind targetKind,
+            string rejectedContext,
+            Vector3 rejectedGoal,
+            out Vector3 adjustedPosition,
+            out string debugDetail)
+        {
+            adjustedPosition = Vector3.zero;
+            debugDetail = null;
+            if (step == null ||
+                step.Kind != NavigationGraph.StepKind.OpenPassage ||
+                string.IsNullOrWhiteSpace(rejectedContext) ||
+                !rejectedContext.StartsWith("open-passage", StringComparison.Ordinal) ||
+                rejectedGoal == Vector3.zero)
+            {
+                return false;
+            }
+
+            string stepKey = BuildNavigationStepKey(step);
+            if (string.IsNullOrWhiteSpace(stepKey))
+                return false;
+
+            _rejectedOpenPassageLocalGoalStepKey = stepKey;
+            _rejectedOpenPassageLocalGoalContext = rejectedContext;
+            _rejectedOpenPassageLocalGoal = rejectedGoal;
+            ClearLocalNavigationPathState();
+
+            if (!TryResolveLocalNavigationGoal(
+                    currentZone,
+                    step,
+                    playerPosition,
+                    rawTargetPosition,
+                    targetKind,
+                    out string retryPlanningZone,
+                    out Vector3 retryPlanningGoal,
+                    out string retryPlanningContext) ||
+                string.IsNullOrWhiteSpace(retryPlanningZone) ||
+                retryPlanningGoal == Vector3.zero ||
+                (string.Equals(retryPlanningContext, rejectedContext, StringComparison.Ordinal) &&
+                 GetFlatDistance(retryPlanningGoal, rejectedGoal) <= LocalNavigationGoalRetargetDistance))
+            {
+                LogNavigationTrackerDebug(
+                    "Open-passage local navigation retry found no alternate goal" +
+                    " stepKey=" + stepKey +
+                    " rejectedContext=" + (rejectedContext ?? "<null>") +
+                    " rejectedGoal=" + FormatVector3(rejectedGoal) +
+                    " retryContext=" + (retryPlanningContext ?? "<null>") +
+                    " retryGoal=" + FormatVector3(retryPlanningGoal) +
+                    " rawTarget=" + FormatVector3(rawTargetPosition));
+                return false;
+            }
+
+            if (!TryGetLocalNavigationLookaheadTarget(
+                    retryPlanningZone,
+                    retryPlanningGoal,
+                    retryPlanningContext,
+                    stepKey,
+                    playerPosition,
+                    out adjustedPosition,
+                    out debugDetail,
+                    out bool retryLocalGoalReached) ||
+                retryLocalGoalReached)
+            {
+                LogNavigationTrackerDebug(
+                    "Open-passage local navigation retry path unavailable" +
+                    " stepKey=" + stepKey +
+                    " rejectedContext=" + (rejectedContext ?? "<null>") +
+                    " rejectedGoal=" + FormatVector3(rejectedGoal) +
+                    " retryZone=" + (retryPlanningZone ?? "<null>") +
+                    " retryContext=" + (retryPlanningContext ?? "<null>") +
+                    " retryGoal=" + FormatVector3(retryPlanningGoal) +
+                    " retryLocalGoalReached=" + retryLocalGoalReached);
+                return false;
+            }
+
+            return adjustedPosition != Vector3.zero;
+        }
+
+        private bool IsRejectedOpenPassageLocalGoal(
+            NavigationGraph.PathStep step,
+            string planningContext,
+            Vector3 planningGoal)
+        {
+            if (step == null ||
+                planningGoal == Vector3.zero ||
+                string.IsNullOrWhiteSpace(planningContext) ||
+                string.IsNullOrWhiteSpace(_rejectedOpenPassageLocalGoalStepKey) ||
+                string.IsNullOrWhiteSpace(_rejectedOpenPassageLocalGoalContext) ||
+                _rejectedOpenPassageLocalGoal == Vector3.zero)
+            {
+                return false;
+            }
+
+            string stepKey = BuildNavigationStepKey(step);
+            return !string.IsNullOrWhiteSpace(stepKey) &&
+                string.Equals(stepKey, _rejectedOpenPassageLocalGoalStepKey, StringComparison.Ordinal) &&
+                string.Equals(planningContext, _rejectedOpenPassageLocalGoalContext, StringComparison.Ordinal) &&
+                GetFlatDistance(planningGoal, _rejectedOpenPassageLocalGoal) <= LocalNavigationGoalRetargetDistance;
+        }
+
+        private void ClearRejectedOpenPassageLocalGoal()
+        {
+            _rejectedOpenPassageLocalGoalStepKey = null;
+            _rejectedOpenPassageLocalGoalContext = null;
+            _rejectedOpenPassageLocalGoal = Vector3.zero;
         }
 
         private bool TryApplyUnityNavMeshFallbackTarget(
@@ -9314,6 +9453,30 @@ namespace DateEverythingAccess
             }
 
             int lookaheadIndex = GetLocalNavigationLookaheadIndex(playerPosition);
+            if ((_localNavigationPathPoints == null ||
+                 _localNavigationPathPoints.Count < 1 ||
+                 lookaheadIndex < 0 ||
+                 lookaheadIndex >= _localNavigationPathPoints.Count) &&
+                TryRepathLocalNavigationAroundRuntimeBlocker(
+                    planningZone,
+                    planningGoal,
+                    planningContext,
+                    stepKey,
+                    playerPosition,
+                    out string runtimeRepathDetail))
+            {
+                AdvanceLocalNavigationPathIndex(playerPosition);
+                lookaheadIndex = GetLocalNavigationLookaheadIndex(playerPosition);
+                LogNavigationTrackerDebug(
+                    "Retried local navigation path around runtime blocker" +
+                    " stepKey=" + (_localNavigationPathStepKey ?? "<null>") +
+                    " zone=" + planningZone +
+                    " context=" + planningContext +
+                    " goal=" + FormatVector3(planningGoal) +
+                    " detail=" + (runtimeRepathDetail ?? "<null>") +
+                    " retryLookaheadIndex=" + lookaheadIndex);
+            }
+
             if (_localNavigationPathPoints == null ||
                 _localNavigationPathPoints.Count < 1 ||
                 lookaheadIndex < 0 ||
@@ -9348,6 +9511,107 @@ namespace DateEverythingAccess
                 " remainingDistance=" + remainingDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                 " goal=" + FormatVector3(planningGoal);
             return true;
+        }
+
+        private bool TryRepathLocalNavigationAroundRuntimeBlocker(
+            string planningZone,
+            Vector3 planningGoal,
+            string planningContext,
+            string stepKey,
+            Vector3 playerPosition,
+            out string detail)
+        {
+            detail = null;
+            if (string.IsNullOrWhiteSpace(planningZone) ||
+                planningGoal == Vector3.zero ||
+                string.IsNullOrWhiteSpace(planningContext) ||
+                _localNavigationPathPoints == null ||
+                _localNavigationPathPoints.Count < 1)
+            {
+                return false;
+            }
+
+            for (int i = Mathf.Max(0, _localNavigationPathIndex); i < _localNavigationPathPoints.Count; i++)
+            {
+                Vector3 candidatePoint = _localNavigationPathPoints[i];
+                if (IsLocalNavigationLookaheadSegmentClear(playerPosition, candidatePoint, out string blockerDetail))
+                    continue;
+
+                if (!TryParseMovementBlockerBounds(blockerDetail, out Bounds blockerBounds))
+                {
+                    detail = "blocker-bounds-unavailable blocker=" + (blockerDetail ?? "<null>");
+                    return false;
+                }
+
+                if (!LocalNavigationMaps.TryFindPathAvoidingBounds(
+                        planningZone,
+                        playerPosition,
+                        planningGoal,
+                        blockerBounds,
+                        avoidPadding: 0.5f,
+                        out List<Vector3> retryPathPoints,
+                        out string failureReason) ||
+                    retryPathPoints == null ||
+                    retryPathPoints.Count < 1)
+                {
+                    detail =
+                        "avoid-path-unavailable blocker=" + (blockerDetail ?? "<null>") +
+                        " failure=" + (failureReason ?? "<null>");
+                    return false;
+                }
+
+                _localNavigationPathZone = planningZone;
+                _localNavigationPathContext = planningContext;
+                _localNavigationPathStepKey = stepKey ?? string.Empty;
+                _localNavigationPathGoal = planningGoal;
+                _localNavigationPathPoints = retryPathPoints;
+                _localNavigationPathIndex = 0;
+                detail =
+                    "blockedIndex=" + (i + 1) +
+                    " pathPoints=" + retryPathPoints.Count +
+                    " blocker=" + (blockerDetail ?? "<null>");
+                return true;
+            }
+
+            detail = "no-blocked-segment-found";
+            return false;
+        }
+
+        private static bool TryParseMovementBlockerBounds(string blockerDetail, out Bounds bounds)
+        {
+            bounds = default;
+            if (string.IsNullOrWhiteSpace(blockerDetail))
+                return false;
+
+            Match match = Regex.Match(
+                blockerDetail,
+                @"bounds=min=\((?<minx>-?\d+(?:\.\d+)?),\s*(?<miny>-?\d+(?:\.\d+)?),\s*(?<minz>-?\d+(?:\.\d+)?)\)\s*max=\((?<maxx>-?\d+(?:\.\d+)?),\s*(?<maxy>-?\d+(?:\.\d+)?),\s*(?<maxz>-?\d+(?:\.\d+)?)\)");
+            if (!match.Success)
+                return false;
+
+            if (!TryParseInvariantFloat(match.Groups["minx"].Value, out float minX) ||
+                !TryParseInvariantFloat(match.Groups["miny"].Value, out float minY) ||
+                !TryParseInvariantFloat(match.Groups["minz"].Value, out float minZ) ||
+                !TryParseInvariantFloat(match.Groups["maxx"].Value, out float maxX) ||
+                !TryParseInvariantFloat(match.Groups["maxy"].Value, out float maxY) ||
+                !TryParseInvariantFloat(match.Groups["maxz"].Value, out float maxZ))
+            {
+                return false;
+            }
+
+            Vector3 min = new Vector3(minX, minY, minZ);
+            Vector3 max = new Vector3(maxX, maxY, maxZ);
+            bounds.SetMinMax(min, max);
+            return true;
+        }
+
+        private static bool TryParseInvariantFloat(string value, out float result)
+        {
+            return float.TryParse(
+                value,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out result);
         }
 
         private bool MarkDoorPushThroughBridgeLocalGoalReached(

@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "GeneratedAt": "2026-05-13T12:44:20.2164877-04:00",
+  "GeneratedAt": "2026-05-14T19:46:12.7438559-04:00",
   "Inputs": {
     "NavigationDataPath": ".\\artifacts\\navigation\\thirdpersongreybox-navigation-data.json",
     "BlockerDataPath": ".\\artifacts\\navigation\\thirdpersongreybox-blockers.json",
@@ -17,9 +17,9 @@
   },
   "Counts": {
     "GraphZones": 57,
-    "NavigationBlockers": 67,
+    "NavigationBlockers": 72,
     "PrimitiveColliders": 623,
-    "AuthoredRuntimeMeshBlockers": 0
+    "AuthoredRuntimeMeshBlockers": 5
   },
   "Zones": [
     {
@@ -101,7 +101,7 @@
       "EnvelopeCellCount": 1824,
       "BlockedCellCount": 706,
       "WalkableCellCount": 1118,
-      "IntersectingBlockerCount": 9,
+      "IntersectingBlockerCount": 10,
       "EnvelopeIndices": [
         40,
         41,
@@ -2681,10 +2681,16 @@
           "ComponentId": 54245,
           "Name": "BlanketCollider_1",
           "ColliderType": "BoxCollider"
+        },
+        {
+          "ComponentId": -1,
+          "Name": "Table_LivingRoom_TV runtime mesh blocker",
+          "ColliderType": "AuthoredMeshCollider"
         }
       ],
       "Notes": [
         "PrimitiveBlockersOnly",
+        "AuthoredRuntimeMeshBlocker:Table_LivingRoom_TV runtime mesh blocker",
         "AuthoredEnvelopeExtension:living_room_hallway_threshold"
       ]
     },
@@ -2744,7 +2750,7 @@
       "EnvelopeCellCount": 1045,
       "BlockedCellCount": 132,
       "WalkableCellCount": 913,
-      "IntersectingBlockerCount": 7,
+      "IntersectingBlockerCount": 9,
       "EnvelopeIndices": [
         32,
         33,
@@ -3961,10 +3967,22 @@
           "ComponentId": 54261,
           "Name": "Door_Front_MODEL_UPDATE",
           "ColliderType": "BoxCollider"
+        },
+        {
+          "ComponentId": -1,
+          "Name": "Doors_Bathroom1 runtime mesh blocker",
+          "ColliderType": "AuthoredMeshCollider"
+        },
+        {
+          "ComponentId": -1,
+          "Name": "Doors_Office runtime mesh blocker",
+          "ColliderType": "AuthoredMeshCollider"
         }
       ],
       "Notes": [
         "PrimitiveBlockersOnly",
+        "AuthoredRuntimeMeshBlocker:Doors_Bathroom1 runtime mesh blocker",
+        "AuthoredRuntimeMeshBlocker:Doors_Office runtime mesh blocker",
         "AuthoredEnvelopeExtension:hallway_living_room_threshold",
         "AuthoredEnvelopeExtension:bathroom1_hallway_threshold"
       ]
@@ -8443,9 +8461,9 @@
       "GridWidth": 31,
       "GridHeight": 40,
       "EnvelopeCellCount": 860,
-      "BlockedCellCount": 84,
-      "WalkableCellCount": 776,
-      "IntersectingBlockerCount": 7,
+      "BlockedCellCount": 104,
+      "WalkableCellCount": 756,
+      "IntersectingBlockerCount": 8,
       "EnvelopeIndices": [
         15,
         46,
@@ -9309,6 +9327,26 @@
         1207
       ],
       "BlockedIndices": [
+        67,
+        68,
+        69,
+        70,
+        71,
+        98,
+        99,
+        100,
+        101,
+        102,
+        129,
+        130,
+        131,
+        132,
+        133,
+        160,
+        161,
+        162,
+        163,
+        164,
         362,
         393,
         394,
@@ -9429,10 +9467,16 @@
           "ComponentId": 54302,
           "Name": "BlockerSide1",
           "ColliderType": "BoxCollider"
+        },
+        {
+          "ComponentId": -1,
+          "Name": "Doors_Office runtime mesh blocker",
+          "ColliderType": "AuthoredMeshCollider"
         }
       ],
       "Notes": [
-        "PrimitiveBlockersOnly"
+        "PrimitiveBlockersOnly",
+        "AuthoredRuntimeMeshBlocker:Doors_Office runtime mesh blocker"
       ]
     },
     {
@@ -13058,9 +13102,9 @@
       "GridWidth": 11,
       "GridHeight": 16,
       "EnvelopeCellCount": 113,
-      "BlockedCellCount": 41,
-      "WalkableCellCount": 72,
-      "IntersectingBlockerCount": 1,
+      "BlockedCellCount": 78,
+      "WalkableCellCount": 35,
+      "IntersectingBlockerCount": 2,
       "EnvelopeIndices": [
         6,
         7,
@@ -13177,32 +13221,69 @@
         173
       ],
       "BlockedIndices": [
+        50,
+        51,
+        52,
+        61,
+        62,
+        63,
         66,
+        70,
+        71,
+        72,
+        73,
+        74,
         77,
         78,
+        81,
+        82,
+        83,
+        84,
+        85,
         88,
         89,
         90,
+        92,
+        93,
+        94,
+        95,
+        96,
         99,
         100,
         101,
         102,
+        103,
+        104,
+        105,
+        106,
+        107,
         110,
         111,
         112,
         113,
         114,
+        115,
+        116,
+        117,
+        118,
         121,
         122,
         123,
         124,
         125,
+        126,
+        127,
+        128,
+        129,
         132,
         133,
         134,
         135,
         136,
         137,
+        138,
+        139,
+        140,
         146,
         147,
         148,
@@ -13224,10 +13305,16 @@
           "ComponentId": 54288,
           "Name": "CabinetToWallCollider",
           "ColliderType": "BoxCollider"
+        },
+        {
+          "ComponentId": -1,
+          "Name": "Doors_Bathroom1 runtime mesh blocker",
+          "ColliderType": "AuthoredMeshCollider"
         }
       ],
       "Notes": [
         "PrimitiveBlockersOnly",
+        "AuthoredRuntimeMeshBlocker:Doors_Bathroom1 runtime mesh blocker",
         "AuthoredEnvelopeExtension:bathroom1_hallway_door_lane",
         "AuthoredEnvelopeExtension:bathroom1_hallway_threshold"
       ]
@@ -14264,7 +14351,7 @@
       "EnvelopeCellCount": 1726,
       "BlockedCellCount": 0,
       "WalkableCellCount": 1726,
-      "IntersectingBlockerCount": 0,
+      "IntersectingBlockerCount": 2,
       "EnvelopeIndices": [
         0,
         1,
@@ -15994,9 +16081,22 @@
         1875
       ],
       "BlockedIndices": [],
-      "SampleBlockers": [],
+      "SampleBlockers": [
+        {
+          "ComponentId": -1,
+          "Name": "Doors_Gym_ClosetInner runtime mesh blocker",
+          "ColliderType": "AuthoredMeshCollider"
+        },
+        {
+          "ComponentId": -1,
+          "Name": "Doors_Gym_ClosetOuter runtime mesh blocker",
+          "ColliderType": "AuthoredMeshCollider"
+        }
+      ],
       "Notes": [
-        "PrimitiveBlockersOnly"
+        "PrimitiveBlockersOnly",
+        "AuthoredRuntimeMeshBlocker:Doors_Gym_ClosetInner runtime mesh blocker",
+        "AuthoredRuntimeMeshBlocker:Doors_Gym_ClosetOuter runtime mesh blocker"
       ]
     },
     {
@@ -16019,9 +16119,9 @@
       "GridWidth": 19,
       "GridHeight": 39,
       "EnvelopeCellCount": 369,
-      "BlockedCellCount": 0,
-      "WalkableCellCount": 369,
-      "IntersectingBlockerCount": 0,
+      "BlockedCellCount": 13,
+      "WalkableCellCount": 356,
+      "IntersectingBlockerCount": 2,
       "EnvelopeIndices": [
         12,
         214,
@@ -16393,10 +16493,37 @@
         738,
         739
       ],
-      "BlockedIndices": [],
-      "SampleBlockers": [],
+      "BlockedIndices": [
+        344,
+        345,
+        363,
+        364,
+        382,
+        383,
+        401,
+        402,
+        420,
+        421,
+        439,
+        440,
+        441
+      ],
+      "SampleBlockers": [
+        {
+          "ComponentId": -1,
+          "Name": "Doors_Gym_ClosetInner runtime mesh blocker",
+          "ColliderType": "AuthoredMeshCollider"
+        },
+        {
+          "ComponentId": -1,
+          "Name": "Doors_Gym_ClosetOuter runtime mesh blocker",
+          "ColliderType": "AuthoredMeshCollider"
+        }
+      ],
       "Notes": [
         "PrimitiveBlockersOnly",
+        "AuthoredRuntimeMeshBlocker:Doors_Gym_ClosetInner runtime mesh blocker",
+        "AuthoredRuntimeMeshBlocker:Doors_Gym_ClosetOuter runtime mesh blocker",
         "AuthoredEnvelopeExtension:gym_closet_gym_threshold"
       ]
     },

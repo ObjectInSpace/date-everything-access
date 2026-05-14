@@ -1,6 +1,6 @@
 Door executor contract validation
-GeneratedAtUtc: 2026-05-14T17:34:18.1775015Z
-Runtime build: 0.1.1|utc=2026-05-14T17:23:44.0000000Z|sha256=5D7783DAF3FB285B127743F4BDA82023C68106B9C8340D2BC02A8C003CBDD059
+GeneratedAtUtc: 2026-05-14T23:03:29.3328954Z
+Runtime build: 0.1.1|utc=2026-05-14T22:54:32.0000000Z|sha256=53692B573562A8FBC6D33656A33479AD661826F022B65774B12A9C594DE0C6D1
 Expected runtime build: <none>
 Authoritative: True staleBuild=False fullSweep=True
 Door totals: total=22 passed=21 failed=1

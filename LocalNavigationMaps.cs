@@ -182,6 +182,44 @@ namespace DateEverythingAccess
             out List<Vector3> pathPoints,
             out string failureReason)
         {
+            return TryFindPath(
+                zoneName,
+                startPosition,
+                targetPosition,
+                avoidBounds: null,
+                avoidPadding: 0f,
+                out pathPoints,
+                out failureReason);
+        }
+
+        internal static bool TryFindPathAvoidingBounds(
+            string zoneName,
+            Vector3 startPosition,
+            Vector3 targetPosition,
+            Bounds avoidBounds,
+            float avoidPadding,
+            out List<Vector3> pathPoints,
+            out string failureReason)
+        {
+            return TryFindPath(
+                zoneName,
+                startPosition,
+                targetPosition,
+                avoidBounds,
+                avoidPadding,
+                out pathPoints,
+                out failureReason);
+        }
+
+        private static bool TryFindPath(
+            string zoneName,
+            Vector3 startPosition,
+            Vector3 targetPosition,
+            Bounds? avoidBounds,
+            float avoidPadding,
+            out List<Vector3> pathPoints,
+            out string failureReason)
+        {
             pathPoints = null;
             failureReason = null;
 
@@ -286,8 +324,12 @@ namespace DateEverythingAccess
                         if (!TryGetIndex(zone, neighborColumn, neighborRow, out int neighborIndex))
                             continue;
 
-                        if (!zone.Walkable[neighborIndex] || states[neighborIndex] == 2)
+                        if (!zone.Walkable[neighborIndex] ||
+                            states[neighborIndex] == 2 ||
+                            IsAvoidedCell(zone, neighborIndex, snappedStartPosition, snappedTargetPosition, avoidBounds, avoidPadding))
+                        {
                             continue;
+                        }
 
                         float traversalCost = (columnOffset != 0 && rowOffset != 0) ? 1.4142135f : 1f;
                         float tentativeGScore = gScores[currentIndex] + traversalCost;
@@ -326,6 +368,32 @@ namespace DateEverythingAccess
             }
 
             return true;
+        }
+
+        private static bool IsAvoidedCell(
+            ZoneMap zone,
+            int cellIndex,
+            Vector3 snappedStartPosition,
+            Vector3 snappedTargetPosition,
+            Bounds? avoidBounds,
+            float avoidPadding)
+        {
+            if (!avoidBounds.HasValue)
+                return false;
+
+            Vector3 cellCenter = GetCellCenter(zone, cellIndex, snappedTargetPosition.y);
+            if (ComputeFlatDistance(cellCenter, snappedStartPosition) <= zone.CellSize * 0.75f ||
+                ComputeFlatDistance(cellCenter, snappedTargetPosition) <= zone.CellSize * 0.75f)
+            {
+                return false;
+            }
+
+            Bounds expanded = avoidBounds.Value;
+            expanded.Expand(new Vector3(avoidPadding * 2f, 0f, avoidPadding * 2f));
+            return cellCenter.x >= expanded.min.x &&
+                cellCenter.x <= expanded.max.x &&
+                cellCenter.z >= expanded.min.z &&
+                cellCenter.z <= expanded.max.z;
         }
 
         /// <summary>

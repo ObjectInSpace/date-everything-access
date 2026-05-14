@@ -696,6 +696,16 @@ namespace DateEverythingAccess
                     continue;
                 }
 
+                if (IsRejectedOpenPassageLocalGoal(step, planningContext, snappedCandidate))
+                {
+                    detail =
+                        "RejectedProgressCandidate" +
+                        " candidateIndex=" + i +
+                        " reason=previous-runtime-path-rejected" +
+                        " candidateGoal=" + FormatVector3(snappedCandidate);
+                    continue;
+                }
+
                 if (!ShouldUseLocalNavigationGoal(playerPosition, snappedCandidate, reachedDistance))
                     continue;
 
@@ -783,7 +793,7 @@ namespace DateEverythingAccess
                 else
                 {
                     blockerDetail = currentBlockerDetail;
-                    return foundClearSegment;
+                    return false;
                 }
 
                 if (accumulatedDistance >= LocalNavigationLookaheadDistance)

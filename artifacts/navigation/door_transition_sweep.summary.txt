@@ -1,14 +1,14 @@
 Sweep report import summary
 Kind: Door
-Imported at: 2026-05-14T17:34:13.4925365Z
+Imported at: 2026-05-14T23:33:36.9553954Z
 Source: D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\door_transition_sweep.live.json
 Output: .\artifacts\navigation\door_transition_sweep.live.json
-Report generated at: 05/14/2026 17:27:51
+Report generated at: 05/14/2026 23:31:43
 Active scene: ThirdPersonGreybox
-Runtime build: 0.1.1|utc=2026-05-14T17:23:44.0000000Z|sha256=5D7783DAF3FB285B127743F4BDA82023C68106B9C8340D2BC02A8C003CBDD059
+Runtime build: 0.1.1|utc=2026-05-14T23:05:24.0000000Z|sha256=6B72AD6717A530242E5F42D2C6496D1910336B41D3C49E1F5B8921C677702666
 Override load: status=loaded entries=40 normalizedScalarArrays=False detail=Entries=40 normalizedScalarArrays=False
 Latest report totals: total=22 passed=21 failed=1 pending=0
-Imported status changes: newEntries=0 newlyPassed=2 newlyFailed=0 newlyPending=0 unchanged=20
+Imported status changes: newEntries=0 newlyPassed=0 newlyFailed=0 newlyPending=0 unchanged=22
 Door failure breakdown: interactionFalse=0 missingConnectorName=0 highSuspicion=0
 Remaining failed transitions:
-- bathroom1 -> hallway | suspicion=0 | connector=Doors_Bathroom1 | navigation blocked currentZone=bathroom1 detail=door post-interaction loop exhausted loopDetections=4 movement=0.00 stage=DoorEntryAdvance currentZone=bathroom1 targetKind=ZoneFallback targetPosition=(0.01, -0.62, 4.52) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=bathroom1 targetKind=ZoneFallback targetPosition=(0.01, -0.62, 4.52) rawContext=door-entry-advance-no-source-bridge localContext=<null> step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(2.07, 4.17, 7.22) to=(0.75, 4.17, 5.71) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(2.07, 4.17, 7.22) to=(0.75, 4.17, 5.71) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(2.07, 4.17, 7.22) to=(0.75, 4.17, 5.71) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(0.01, -0.62, 4.52)
+- bathroom1 -> hallway | suspicion=0 | connector=Doors_Bathroom1 | navigation blocked currentZone=bathroom1 detail=door post-interaction loop exhausted loopDetections=4 movement=0.00 stage=DoorEntryAdvance currentZone=bathroom1 targetKind=ZoneFallback targetPosition=(0.75, -0.62, 5.71) loopDetail=auto-walk loop detected samples=24 uniqueSignatures=1 elapsed=5.00 movement=0.00 zone=bathroom1 targetKind=ZoneFallback targetPosition=(0.75, -0.62, 5.71) rawContext=door-entry-advance-no-source-bridge localContext=<null> step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(2.07, 4.17, 7.22) to=(0.75, 4.17, 5.71) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(2.07, 4.17, 7.22) to=(0.75, 4.17, 5.71) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) step=bathroom1->hallway kind=Door interaction=True connector=Doors_Bathroom1 from=(2.07, 4.17, 7.22) to=(0.75, 4.17, 5.71) fromCross=(0.00, 0.00, 0.00) toCross=(0.00, 0.00, 0.00) localContext=<null> lastTargetKind=ZoneFallback lastTarget=(0.75, -0.62, 5.71)
