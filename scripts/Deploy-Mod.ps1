@@ -45,3 +45,16 @@ if (Test-Path -LiteralPath $overridePath) {
 } else {
     Write-Warning "Navigation override JSON not found: $overridePath"
 }
+
+$localMapsPath = Join-Path $projectDir "bin\$Configuration\net472\local_navigation_maps.generated.json"
+if (-not (Test-Path -LiteralPath $localMapsPath)) {
+    $localMapsPath = Join-Path $projectDir "artifacts\navigation\local_navigation_maps.generated.json"
+}
+
+if (Test-Path -LiteralPath $localMapsPath) {
+    $localMapsDestination = Join-Path $targetDir "local_navigation_maps.generated.json"
+    Copy-Item -LiteralPath $localMapsPath -Destination $localMapsDestination -Force
+    Write-Host "Deployed local_navigation_maps.generated.json to $localMapsDestination"
+} else {
+    Write-Warning "Local navigation maps JSON not found: $localMapsPath"
+}

@@ -261,6 +261,12 @@ function New-AuthoredAxisAlignedBlocker {
 function Get-AuthoredRuntimeMeshBlockers {
     return @(
         New-AuthoredAxisAlignedBlocker `
+            -Name "Table_LivingRoom_TV runtime mesh blocker" `
+            -Path "===SCENE===/House/LivingRoom/Table_LivingRoom_TV" `
+            -MinX 5.81 -MaxX 13.69 -MinY -0.61 -MaxY 0.87 -MinZ -9.14 -MaxZ -7.09 `
+            -Reason "runtime-probe:living_room->hallway:open-passage-override-source" |
+            ForEach-Object { $_.AppliesToZones = @("living_room"); $_ }
+        New-AuthoredAxisAlignedBlocker `
             -Name "Doors_Bathroom1 runtime mesh blocker" `
             -Path "===SCENE===/House/MultiRoom/Doors/Doors_Bathroom1" `
             -MinX 0.29 -MaxX 2.13 -MinY -0.62 -MaxY 7.35 -MinZ 6.30 -MaxZ 9.89 `
@@ -367,8 +373,8 @@ if ($null -ne $graphData.Zones) {
 }
 
 $cameraSpaces = @($navigationData.CameraSpaces)
-$authoredRuntimeMeshBlockers = @()
-$navigationBlockers = @($blockerData.NavigationBlockers)
+$authoredRuntimeMeshBlockers = @(Get-AuthoredRuntimeMeshBlockers)
+$navigationBlockers = @(@($blockerData.NavigationBlockers) + @($authoredRuntimeMeshBlockers))
 $zonesOutput = New-Object System.Collections.Generic.List[object]
 
 foreach ($zoneName in (Get-UniqueStrings -Values $graphZoneNames)) {
@@ -453,6 +459,7 @@ foreach ($zoneName in (Get-UniqueStrings -Values $graphZoneNames)) {
         SampleBlockers = @($intersectingBlockers | Select-Object -First 12 | ForEach-Object { [ordered]@{ ComponentId = $_.ComponentId; Name = $_.Name; ColliderType = $_.ColliderType } })
         Notes = @(
             "PrimitiveBlockersOnly"
+            @($intersectingBlockers | Where-Object { $null -ne $_.PSObject.Properties["AuthoredRuntimeMeshBlocker"] -and $_.AuthoredRuntimeMeshBlocker } | ForEach-Object { "AuthoredRuntimeMeshBlocker:" + $_.Name })
             @($authoredEnvelopeExtensions | ForEach-Object { "AuthoredEnvelopeExtension:" + $_.Reason })
         )
     })
