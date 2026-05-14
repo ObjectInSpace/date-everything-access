@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 2,
-  "GeneratedAtUtc": "2026-05-12T22:49:44.7361038Z",
+  "GeneratedAtUtc": "2026-05-14T16:56:48.8904445Z",
   "SceneName": "Date Everything House",
   "SourceSceneDataPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\thirdpersongreybox-navigation-data.json",
   "SourceGraphPath": "D:\\SteamLibrary\\steamapps\\Common\\Date Everything\\BepInEx\\plugins\\navigation_graph.json",
@@ -5105,14 +5105,14 @@
         "z": 0.664414
       },
       "SourceClearPoint": {
-        "x": 9.88571,
+        "x": 10.4,
         "y": -0.617448,
-        "z": 5.491036
+        "z": 4.05
       },
       "DestinationClearPoint": {
-        "x": 9.80429,
+        "x": 9.804,
         "y": -0.617448,
-        "z": 7.088964
+        "z": 8.05
       },
       "DestinationApproachPoint": {
         "x": 7.757801,
@@ -5126,14 +5126,14 @@
           "z": 0.664414
         },
         {
-          "x": 9.88571,
+          "x": 10.4,
           "y": -0.617448,
-          "z": 5.491036
+          "z": 4.05
         },
         {
-          "x": 9.80429,
+          "x": 9.804,
           "y": -0.617448,
-          "z": 7.088964
+          "z": 8.05
         },
         {
           "x": 7.757801,
@@ -5166,14 +5166,14 @@
           "z": 0.664414
         },
         "SourceClearPoint": {
-          "x": 9.88571,
+          "x": 10.4,
           "y": -0.617448,
-          "z": 5.491036
+          "z": 4.05
         },
         "DestinationClearPoint": {
-          "x": 9.80429,
+          "x": 9.804,
           "y": -0.617448,
-          "z": 7.088964
+          "z": 8.05
         },
         "DestinationApproachPoint": {
           "x": 7.757801,
@@ -5187,14 +5187,14 @@
             "z": 0.664414
           },
           {
-            "x": 9.88571,
+            "x": 10.4,
             "y": -0.617448,
-            "z": 5.491036
+            "z": 4.05
           },
           {
-            "x": 9.80429,
+            "x": 9.804,
             "y": -0.617448,
-            "z": 7.088964
+            "z": 8.05
           },
           {
             "x": 7.757801,
@@ -5202,11 +5202,11 @@
             "z": 11.494413
           }
         ],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints"
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides"
       },
       "SourceSceneZoneName": "hallway6",
       "DestinationSceneZoneName": "office6",
-      "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+      "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
       "Validation": {
         "AcceptedSourceZones": [
           "hallway6",
@@ -5231,7 +5231,7 @@
         "StepTimeoutSeconds": 8.0,
         "StaticSuspicionScore": 0,
         "StaticIssues": [],
-        "AssetDerivationSource": "DoorObjectAndCameraWaypoints",
+        "AssetDerivationSource": "DoorObjectCameraAndClearOverrides",
         "SourceSceneZoneName": "hallway6",
         "DestinationSceneZoneName": "office6"
       }
@@ -5260,14 +5260,14 @@
         "z": 11.494413
       },
       "SourceClearPoint": {
-        "x": 9.80429,
+        "x": 9.804,
         "y": -0.617448,
-        "z": 7.088964
+        "z": 8.05
       },
       "DestinationClearPoint": {
-        "x": 9.88571,
+        "x": 10.4,
         "y": -0.617448,
-        "z": 5.491036
+        "z": 4.05
       },
       "DestinationApproachPoint": {
         "x": 8.309622,
@@ -5281,14 +5281,14 @@
           "z": 11.494413
         },
         {
-          "x": 9.80429,
+          "x": 9.804,
           "y": -0.617448,
-          "z": 7.088964
+          "z": 8.05
         },
         {
-          "x": 9.88571,
+          "x": 10.4,
           "y": -0.617448,
-          "z": 5.491036
+          "z": 4.05
         },
         {
           "x": 8.309622,
@@ -5321,14 +5321,14 @@
           "z": 11.494413
         },
         "SourceClearPoint": {
-          "x": 9.80429,
+          "x": 9.804,
           "y": -0.617448,
-          "z": 7.088964
+          "z": 8.05
         },
         "DestinationClearPoint": {
-          "x": 9.88571,
+          "x": 10.4,
           "y": -0.617448,
-          "z": 5.491036
+          "z": 4.05
         },
         "DestinationApproachPoint": {
           "x": 8.309622,
@@ -5342,14 +5342,14 @@
             "z": 11.494413
           },
           {
-            "x": 9.80429,
+            "x": 9.804,
             "y": -0.617448,
-            "z": 7.088964
+            "z": 8.05
           },
           {
-            "x": 9.88571,
+            "x": 10.4,
             "y": -0.617448,
-            "z": 5.491036
+            "z": 4.05
           },
           {
             "x": 8.309622,
@@ -7040,9 +7040,9 @@
         "z": 7.220769
       },
       "ToWaypoint": {
-        "x": 0.523441,
+        "x": 0.752,
         "y": 4.17,
-        "z": 0.664414
+        "z": 5.708
       },
       "FromCrossingAnchor": null,
       "ToCrossingAnchor": null,
@@ -7057,14 +7057,14 @@
         "z": 7.220769
       },
       "DestinationClearPoint": {
-        "x": 2.15071,
+        "x": 0.752,
         "y": -0.617448,
-        "z": 5.35
+        "z": 5.708
       },
       "DestinationApproachPoint": {
-        "x": 0.523441,
+        "x": 0.752,
         "y": 4.17,
-        "z": 0.664414
+        "z": 5.708
       },
       "NavigationPoints": [
         {
@@ -7078,14 +7078,14 @@
           "z": 7.220769
         },
         {
-          "x": 2.15071,
+          "x": 0.752,
           "y": -0.617448,
-          "z": 5.35
+          "z": 5.708
         },
         {
-          "x": 0.523441,
+          "x": 0.752,
           "y": 4.17,
-          "z": 0.664414
+          "z": 5.708
         }
       ],
       "ConnectorObjectPosition": {
@@ -7093,7 +7093,7 @@
         "y": -0.617448,
         "z": 6.421805
       },
-      "Cost": 6.7361,
+      "Cost": 2.0059,
       "StepKind": "Door",
       "ConnectorName": "Doors_Bathroom1",
       "ConnectorNames": [],
@@ -7118,14 +7118,14 @@
           "z": 7.220769
         },
         "DestinationClearPoint": {
-          "x": 2.15071,
+          "x": 0.752,
           "y": -0.617448,
-          "z": 5.35
+          "z": 5.708
         },
         "DestinationApproachPoint": {
-          "x": 0.523441,
+          "x": 0.752,
           "y": 4.17,
-          "z": 0.664414
+          "z": 5.708
         },
         "NavigationPoints": [
           {
@@ -7139,14 +7139,14 @@
             "z": 7.220769
           },
           {
-            "x": 2.15071,
+            "x": 0.752,
             "y": -0.617448,
-            "z": 5.35
+            "z": 5.708
           },
           {
-            "x": 0.523441,
+            "x": 0.752,
             "y": 4.17,
-            "z": 0.664414
+            "z": 5.708
           }
         ],
         "AssetDerivationSource": "DoorObjectCameraAndClearOverrides"
@@ -8615,14 +8615,14 @@
         "z": 20.084414
       },
       "SourceClearPoint": {
-        "x": -2.9,
+        "x": -2.35,
         "y": 18.042,
-        "z": 19.308887
+        "z": 18.49
       },
       "DestinationClearPoint": {
-        "x": -14.238859,
-        "y": 17.449999,
-        "z": 14.190958
+        "x": -5.85,
+        "y": 18.02,
+        "z": 20.66
       },
       "DestinationApproachPoint": {
         "x": -10.53503,
@@ -8636,14 +8636,14 @@
           "z": 20.084414
         },
         {
-          "x": -2.9,
+          "x": -2.35,
           "y": 18.042,
-          "z": 19.308887
+          "z": 18.49
         },
         {
-          "x": -14.238859,
-          "y": 17.449999,
-          "z": 14.190958
+          "x": -5.85,
+          "y": 18.02,
+          "z": 20.66
         },
         {
           "x": -10.53503,
@@ -8682,14 +8682,14 @@
           "z": 20.084414
         },
         "SourceClearPoint": {
-          "x": -2.9,
+          "x": -2.35,
           "y": 18.042,
-          "z": 19.308887
+          "z": 18.49
         },
         "DestinationClearPoint": {
-          "x": -14.238859,
-          "y": 17.449999,
-          "z": 14.190958
+          "x": -5.85,
+          "y": 18.02,
+          "z": 20.66
         },
         "DestinationApproachPoint": {
           "x": -10.53503,
@@ -8703,14 +8703,14 @@
             "z": 20.084414
           },
           {
-            "x": -2.9,
+            "x": -2.35,
             "y": 18.042,
-            "z": 19.308887
+            "z": 18.49
           },
           {
-            "x": -14.238859,
-            "y": 17.449999,
-            "z": 14.190958
+            "x": -5.85,
+            "y": 18.02,
+            "z": 20.66
           },
           {
             "x": -10.53503,

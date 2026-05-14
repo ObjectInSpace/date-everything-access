@@ -21,6 +21,9 @@
         "bathroom2_3",
         "bathroom2_5"
       ],
+      "AcceptedDestinationZones": [
+        "bathroom2_5"
+      ],
       "DestinationApproachBias": 1.0,
       "UseExplicitCrossingSegments": false,
       "StepTimeoutSeconds": 10.0,
@@ -29,11 +32,6 @@
           "x": -24.804977,
           "y": 18.23,
           "z": -4.284243
-        },
-        {
-          "x": -25.406582,
-          "y": 17.84,
-          "z": 0.034413
         }
       ]
     },

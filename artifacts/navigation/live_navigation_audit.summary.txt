@@ -1,32 +1,32 @@
 Live navigation audit
-Door build: 0.1.1|utc=2026-05-13T21:01:12.0000000Z|sha256=1F1693BC37EA07B5A5AA07B6F4EF075378A428AE7201ACE90F87D57E6C7F3FF2
-Open build: 0.1.1|utc=2026-05-13T21:01:12.0000000Z|sha256=1F1693BC37EA07B5A5AA07B6F4EF075378A428AE7201ACE90F87D57E6C7F3FF2
-Zones=56 edges=110 passed=105 failed=5 weakComponents=2 orderedReachablePairs=2004
+Door build: 0.1.1|utc=2026-05-14T17:23:44.0000000Z|sha256=5D7783DAF3FB285B127743F4BDA82023C68106B9C8340D2BC02A8C003CBDD059
+Open build: 0.1.1|utc=2026-05-14T17:23:44.0000000Z|sha256=5D7783DAF3FB285B127743F4BDA82023C68106B9C8340D2BC02A8C003CBDD059
+Zones=56 edges=110 passed=105 failed=5 weakComponents=2 orderedReachablePairs=2092
  
 Recommended next target: transition:living_room->hallway
 Inspect runtime traversal logic first; current data does not show a dominant coverage defect.
-Why: Failure loops after CameraSpaceBoundaryGeometry handling path.; impact=hard-blocker; orderedReachabilityDelta=423; derivation=CameraSpaceBoundaryGeometry
+Why: Failure loops after CameraSpaceBoundaryGeometry handling path.; impact=hard-blocker; orderedReachabilityDelta=414; derivation=CameraSpaceBoundaryGeometry
  
-transition:living_room->hallway [OpenPassage] impact=hard-blocker altPath=False pairDelta=423 compDelta=1
+transition:living_room->hallway [OpenPassage] impact=hard-blocker altPath=False pairDelta=414 compDelta=1
   family=runtime loop/no progress confidence=high derivation=CameraSpaceBoundaryGeometry
   reason=Failure loops after CameraSpaceBoundaryGeometry handling path.
-  restores source reachability to: attic, atticWindow, bathroom1, bathroom2, bedroom, bedroom_closet, dorian_attic1, dorian_attic2, dorian_backdoor, dorian_bathroom1, dorian_bathroom2, dorian_bathroom2_1, dorian_bathroom2_2, dorian_bedroom1, dorian_bedroom2, dorian_bedroomcloset1, dorian_bedroomcloset2, dorian_gym1, dorian_gym2, dorian_gym3, dorian_gym4, dorian_gymcloset1, dorian_gymcloset2, dorian_irondoor, dorian_laundry1, dorian_laundry2, dorian_laundrycloset1, dorian_office_closet1, dorian_office_closet2, dorian_office1, dorian_office2, dorian_trapdoor1, dorian_trapdoor2, dorian_upperhallcloset1, gym, gym_closet, hallway, hallway_arma, laundry_room, laundry_room_closet, office, office_1love, office_2friend, office_3hate, office_closet, upper_hallway, upper_hallway3_shelley
+  restores source reachability to: attic, atticWindow, bathroom1, bathroom2, bedroom, bedroom_closet, dorian_attic1, dorian_attic2, dorian_backdoor, dorian_bathroom1, dorian_bathroom2, dorian_bathroom2_2, dorian_bedroom1, dorian_bedroom2, dorian_bedroomcloset1, dorian_bedroomcloset2, dorian_gym1, dorian_gym2, dorian_gym3, dorian_gym4, dorian_gymcloset1, dorian_gymcloset2, dorian_irondoor, dorian_laundry1, dorian_laundry2, dorian_laundrycloset1, dorian_office_closet1, dorian_office_closet2, dorian_office1, dorian_office2, dorian_trapdoor1, dorian_trapdoor2, dorian_upperhallcloset1, gym, gym_closet, hallway, hallway_arma, laundry_room, laundry_room_closet, office, office_1love, office_2friend, office_3hate, office_closet, upper_hallway, upper_hallway3_shelley
  
-transition:hallway->living_room [OpenPassage] impact=hard-blocker altPath=False pairDelta=336 compDelta=1
-  family=runtime loop/no progress confidence=high derivation=CameraSpaceBoundaryGeometry
-  reason=Failure loops after CameraSpaceBoundaryGeometry handling path.
+transition:hallway->living_room [OpenPassage] impact=hard-blocker altPath=False pairDelta=360 compDelta=1
+  family=unknown confidence=low derivation=CameraSpaceBoundaryGeometry
+  reason=No strong coverage mismatch; inspect runtime handling path.
   restores source reachability to: dining_room, frontdoor, kitchen, kitchen_cake, kitchen_ronald, kitchen_tutorial, living_room, living_room_tutorial
  
-transition:gym_closet->gym [Door] impact=hard-blocker altPath=False pairDelta=132 compDelta=0
+transition:bathroom1->hallway [Door] impact=hard-blocker altPath=False pairDelta=88 compDelta=0
   family=runtime loop/no progress confidence=high derivation=DoorObjectCameraAndClearOverrides
   reason=Failure loops after DoorObjectCameraAndClearOverrides handling path.
-  restores source reachability to: attic, atticWindow, bathroom1, bathroom2, bedroom, bedroom_closet, dorian_attic1, dorian_attic2, dorian_backdoor, dorian_bathroom1, dorian_bathroom2, dorian_bathroom2_1, dorian_bathroom2_2, dorian_bedroom1, dorian_bedroom2, dorian_bedroomcloset1, dorian_bedroomcloset2, dorian_gym1, dorian_gym2, dorian_gym3, dorian_gym4, dorian_irondoor, dorian_laundry1, dorian_laundry2, dorian_laundrycloset1, dorian_office_closet1, dorian_office_closet2, dorian_office1, dorian_office2, dorian_trapdoor1, dorian_trapdoor2, dorian_upperhallcloset1, gym, hallway, hallway_arma, laundry_room, laundry_room_closet, office, office_1love, office_2friend, office_3hate, office_closet, upper_hallway, upper_hallway3_shelley
+  restores source reachability to: attic, atticWindow, bathroom2, bedroom, bedroom_closet, dorian_attic1, dorian_attic2, dorian_backdoor, dorian_bathroom2, dorian_bathroom2_2, dorian_bedroom1, dorian_bedroom2, dorian_bedroomcloset1, dorian_bedroomcloset2, dorian_gym1, dorian_gym2, dorian_gym3, dorian_gym4, dorian_gymcloset1, dorian_gymcloset2, dorian_irondoor, dorian_laundry1, dorian_laundry2, dorian_laundrycloset1, dorian_office_closet1, dorian_office_closet2, dorian_office1, dorian_office2, dorian_trapdoor1, dorian_trapdoor2, dorian_upperhallcloset1, gym, gym_closet, hallway, hallway_arma, laundry_room, laundry_room_closet, office, office_1love, office_2friend, office_3hate, office_closet, upper_hallway, upper_hallway3_shelley
  
-transition:bathroom1->hallway [Door] impact=hard-blocker altPath=False pairDelta=90 compDelta=0
-  family=coverage gap confidence=high derivation=DoorObjectCameraAndClearOverrides
-  reason=LastTargetPosition outside bathroom1 bounds by 3.14 on z: (0.52, 4.17, 0.66)
-  restores source reachability to: attic, atticWindow, bathroom2, bedroom, bedroom_closet, dorian_attic1, dorian_attic2, dorian_backdoor, dorian_bathroom2, dorian_bathroom2_1, dorian_bathroom2_2, dorian_bedroom1, dorian_bedroom2, dorian_bedroomcloset1, dorian_bedroomcloset2, dorian_gym1, dorian_gym2, dorian_gym3, dorian_gym4, dorian_gymcloset1, dorian_gymcloset2, dorian_irondoor, dorian_laundry1, dorian_laundry2, dorian_laundrycloset1, dorian_office_closet1, dorian_office_closet2, dorian_office1, dorian_office2, dorian_trapdoor1, dorian_trapdoor2, dorian_upperhallcloset1, gym, gym_closet, hallway, hallway_arma, laundry_room, laundry_room_closet, office, office_1love, office_2friend, office_3hate, office_closet, upper_hallway, upper_hallway3_shelley
-  coverage: LastTargetPosition outside bathroom1 bounds by 3.14 on z: (0.52, 4.17, 0.66)
+transition:bathroom2->dorian_bathroom2_1 [OpenPassage] impact=hard-blocker altPath=False pairDelta=44 compDelta=0
+  family=coverage gap confidence=medium derivation=CameraSpaceBoundaryGeometry
+  reason=LastTargetPosition outside bathroom2 bounds by 2.88 on z: (-25.39, 17.84, -0.62)
+  restores source reachability to: dorian_bathroom2_1
+  coverage: LastTargetPosition outside bathroom2 bounds by 2.88 on z: (-25.39, 17.84, -0.62)
  
 transition:dining_room->piano_room [OpenPassage] impact=likely-blocker altPath=False pairDelta=8 compDelta=0
   family=runtime loop/no progress confidence=high derivation=CameraSpaceBoundaryGeometry
