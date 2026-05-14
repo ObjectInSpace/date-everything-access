@@ -1,12 +1,16 @@
 {
   "Summary": {
-    "GeneratedAtUtc": "2026-05-13T21:03:08.2162015Z",
+    "GeneratedAtUtc": "2026-05-14T17:34:18.1775015Z",
     "DoorSweepPath": "C:\\Users\\amock\\mod template\\artifacts\\navigation\\door_transition_sweep.live.json",
-    "RuntimeBuildStamp": "0.1.1|utc=2026-05-13T15:27:14.0000000Z|sha256=539131607C59F448A4861A5D378CCB9951AE250AA977066440AB2DF10C117BDE",
-    "TotalCount": 2,
-    "PassedCount": 0,
-    "FailedCount": 2,
-    "ViolationCount": 6,
+    "RuntimeBuildStamp": "0.1.1|utc=2026-05-14T17:23:44.0000000Z|sha256=5D7783DAF3FB285B127743F4BDA82023C68106B9C8340D2BC02A8C003CBDD059",
+    "ExpectedRuntimeBuildStamp": "",
+    "IsStaleBuild": false,
+    "IsFullSweep": true,
+    "IsAuthoritative": true,
+    "TotalCount": 22,
+    "PassedCount": 21,
+    "FailedCount": 1,
+    "ViolationCount": 1,
     "WarningCount": 0
   },
   "Violations": [
@@ -17,64 +21,9 @@
       "ToZone": "hallway",
       "Status": "failed",
       "CurrentZoneAtResult": "bathroom1",
-      "LastTargetKind": null,
+      "LastTargetKind": "ZoneFallback",
       "LastLocalNavigationContext": null,
       "Detail": "Passing control is no longer passed."
-    },
-    {
-      "Rule": "PassingControlPresent",
-      "Key": null,
-      "FromZone": null,
-      "ToZone": null,
-      "Status": null,
-      "CurrentZoneAtResult": null,
-      "LastTargetKind": null,
-      "LastLocalNavigationContext": null,
-      "Detail": "Passing control missing: transition:bedroom->bathroom2"
-    },
-    {
-      "Rule": "PassingControlPresent",
-      "Key": null,
-      "FromZone": null,
-      "ToZone": null,
-      "Status": null,
-      "CurrentZoneAtResult": null,
-      "LastTargetKind": null,
-      "LastLocalNavigationContext": null,
-      "Detail": "Passing control missing: transition:dorian_bathroom2_2->bathroom2"
-    },
-    {
-      "Rule": "PassingControlPresent",
-      "Key": null,
-      "FromZone": null,
-      "ToZone": null,
-      "Status": null,
-      "CurrentZoneAtResult": null,
-      "LastTargetKind": null,
-      "LastLocalNavigationContext": null,
-      "Detail": "Passing control missing: transition:office->hallway"
-    },
-    {
-      "Rule": "PassingControlPresent",
-      "Key": null,
-      "FromZone": null,
-      "ToZone": null,
-      "Status": null,
-      "CurrentZoneAtResult": null,
-      "LastTargetKind": null,
-      "LastLocalNavigationContext": null,
-      "Detail": "Passing control missing: transition:office_closet->office"
-    },
-    {
-      "Rule": "PassingControlPresent",
-      "Key": null,
-      "FromZone": null,
-      "ToZone": null,
-      "Status": null,
-      "CurrentZoneAtResult": null,
-      "LastTargetKind": null,
-      "LastLocalNavigationContext": null,
-      "Detail": "Passing control missing: transition:upper_hallway->gym"
     }
   ],
   "Warnings": []

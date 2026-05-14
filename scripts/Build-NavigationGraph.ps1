@@ -955,6 +955,8 @@ $directedOverrides = @{
     "hallway|office" = [ordered]@{
         FromWaypoint = Get-CameraWaypoint "Camera_DorianOfficeDoor2"
         ToWaypoint = Get-CameraWaypoint "Camera_DorianOfficeDoor1"
+        SourceClearPoint = New-Vec3 -X 10.400000 -Y -0.617448 -Z 4.050000
+        DestinationClearPoint = New-Vec3 -X 9.804000 -Y -0.617448 -Z 8.050000
     }
     "office|office_closet" = [ordered]@{
         FromWaypoint = Get-CameraWaypoint "Camera_DorianOfficeClosetDoor1"
@@ -1010,9 +1012,9 @@ $directedOverrides = @{
     }
     "bathroom1|hallway" = [ordered]@{
         FromWaypoint = New-Vec3 -X 2.069290 -Y 4.170 -Z 7.220769
-        ToWaypoint = Get-CameraWaypoint "Camera_DorianBathroomDoor2"
+        ToWaypoint = New-Vec3 -X 0.752000 -Y 4.170 -Z 5.708000
         SourceClearPoint = New-Vec3 -X 2.069290 -Y -0.617448 -Z 7.220769
-        DestinationClearPoint = New-Vec3 -X 2.150710 -Y -0.617448 -Z 5.350000
+        DestinationClearPoint = New-Vec3 -X 0.752000 -Y -0.617448 -Z 5.708000
     }
     "upper_hallway|hallway" = [ordered]@{
         FromWaypoint = Get-CameraWaypoint "Camera_StairsDown"
@@ -1049,14 +1051,20 @@ $directedOverrides = @{
     "gym_closet|gym" = [ordered]@{
         FromWaypoint = Get-CameraWaypoint "Camera_DorianGymClosetDoor2"
         ToWaypoint = Get-CameraWaypoint "Camera_DorianGymClosetDoor1"
-        SourceClearPoint = New-Vec3 -X -2.900000 -Y 18.042 -Z 19.308887
-        DestinationClearPoint = Get-ZoneBoundaryPointNearDoor -ZoneName "gym" -DoorName "Doors_Gym_ClosetOuter"
+        SourceClearPoint = New-Vec3 -X -2.350000 -Y 18.042 -Z 18.490000
+        DestinationClearPoint = New-Vec3 -X -5.850000 -Y 18.020 -Z 20.660000
     }
     "upper_hallway|attic" = [ordered]@{
         FromWaypoint = Get-CameraWaypoint "Camera_DorianAtticDoor1"
         ToWaypoint = Get-CameraWaypoint "Camera_DorianAtticDoor2"
         SourceClearPoint = New-Vec3 -X 0.800 -Y 18.262 -Z 3.435
         DestinationClearPoint = New-Vec3 -X 5.850 -Y 18.099 -Z 3.435
+    }
+    "attic|upper_hallway" = [ordered]@{
+        FromWaypoint = Get-CameraWaypoint "Camera_DorianAtticDoor2"
+        ToWaypoint = Get-CameraWaypoint "Camera_DorianAtticDoor1"
+        SourceClearPoint = New-Vec3 -X 5.850 -Y 18.099 -Z 3.435
+        DestinationClearPoint = New-Vec3 -X 0.800 -Y 18.262 -Z 3.435
     }
 }
 
@@ -1141,6 +1149,10 @@ $stepMetadata = @{
             "Doors_Gym_ClosetInner")
     }
     "upper_hallway|attic" = [ordered]@{
+        StepKind = "Door"
+        ConnectorName = "AtticDoors"
+    }
+    "attic|upper_hallway" = [ordered]@{
         StepKind = "Door"
         ConnectorName = "AtticDoors"
     }

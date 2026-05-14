@@ -441,6 +441,28 @@ namespace DateEverythingAccess
                 bridgePlanningContext);
             if (IsOpenPassageDestinationBridgeLocalGoalCompleted(step, bridgeGoal))
             {
+                if (ShouldReuseCompletedOpenPassageDestinationBridgeLocalGoal(
+                        step,
+                        playerPosition,
+                        desiredPosition,
+                        bridgeGoal,
+                        traversalStage))
+                {
+                    planningZone = resolvedPlanningZone;
+                    planningGoal = bridgeGoal;
+                    planningContext = bridgePlanningContext;
+                    LogNavigationTrackerDebug(
+                        "Reusing completed open-passage destination-stage source bridge local goal" +
+                        " currentZone=" + (currentZone ?? "<null>") +
+                        " planningZone=" + planningZone +
+                        " stage=" + traversalStage +
+                        " bridgeGoal=" + FormatVector3(bridgeGoal) +
+                        " desiredPosition=" + FormatVector3(desiredPosition) +
+                        " context=" + bridgePlanningContext +
+                        " step=" + DescribeNavigationStep(step));
+                    return true;
+                }
+
                 LogNavigationTrackerDebug(
                     "Skipped completed open-passage destination-stage source bridge local goal" +
                     " currentZone=" + (currentZone ?? "<null>") +
@@ -477,6 +499,41 @@ namespace DateEverythingAccess
             return true;
         }
 
+        private bool ShouldReuseCompletedOpenPassageDestinationBridgeLocalGoal(
+            NavigationGraph.PathStep step,
+            Vector3 playerPosition,
+            Vector3 desiredPosition,
+            Vector3 bridgeGoal,
+            OpenPassageTraversalStage traversalStage)
+        {
+            if (step == null ||
+                playerPosition == Vector3.zero ||
+                desiredPosition == Vector3.zero ||
+                bridgeGoal == Vector3.zero)
+            {
+                return false;
+            }
+
+            if (traversalStage != OpenPassageTraversalStage.DestinationWaypoint &&
+                traversalStage != OpenPassageTraversalStage.DestinationHandoff)
+            {
+                return false;
+            }
+
+            if (!ShouldUseLocalNavigationGoal(
+                    playerPosition,
+                    desiredPosition,
+                    AutoWalkArrivalDistance))
+            {
+                return false;
+            }
+
+            return ShouldUseLocalNavigationGoal(
+                playerPosition,
+                bridgeGoal,
+                GetLocalNavigationGoalReachedDistance("open-passage-override-destination"));
+        }
+
         private Vector3 ResolveOpenPassageReachablePlanningGoal(
             string planningZone,
             NavigationGraph.PathStep step,
@@ -501,6 +558,29 @@ namespace DateEverythingAccess
                 return planningGoal;
             }
 
+            if (UsesOverrideOnlyOpenPassageGuidance(step) &&
+                (string.Equals(planningContext, "open-passage-override-source", System.StringComparison.Ordinal) ||
+                 string.Equals(planningContext, "open-passage-override-destination", System.StringComparison.Ordinal)) &&
+                TryResolveOpenPassageGuidedProgressCandidate(
+                    planningZone,
+                    step,
+                    playerPosition,
+                    planningGoal,
+                    planningContext,
+                    out Vector3 progressCandidate,
+                    out string progressDetail))
+            {
+                LogNavigationTrackerDebug(
+                    "Using guided open-passage progress candidate" +
+                    " planningZone=" + planningZone +
+                    " context=" + (planningContext ?? "<null>") +
+                    " originalGoal=" + FormatVector3(planningGoal) +
+                    " candidateGoal=" + FormatVector3(progressCandidate) +
+                    " detail=" + (progressDetail ?? "<null>") +
+                    " step=" + DescribeNavigationStep(step));
+                return progressCandidate;
+            }
+
             if (!LocalNavigationMaps.TryResolveReachableProxyInStartComponent(
                     planningZone,
                     playerPosition,
@@ -512,6 +592,30 @@ namespace DateEverythingAccess
                 return planningGoal;
             }
 
+            if (UsesOverrideOnlyOpenPassageGuidance(step) &&
+                (string.Equals(planningContext, "open-passage-override-source", System.StringComparison.Ordinal) ||
+                 string.Equals(planningContext, "open-passage-override-destination", System.StringComparison.Ordinal)))
+            {
+                Vector3 normalizedPlanningGoal = NormalizeOpenPassageLocalPlanningGoalY(
+                    playerPosition,
+                    planningContext,
+                    planningGoal);
+                float proxyDistance = GetFlatDistance(proxyGoal, normalizedPlanningGoal);
+                if (proxyDistance > AutoWalkOpenPassageHandoffDistance)
+                {
+                    LogNavigationTrackerDebug(
+                        "Rejected broad open-passage reachable proxy" +
+                        " planningZone=" + planningZone +
+                        " context=" + (planningContext ?? "<null>") +
+                        " originalGoal=" + FormatVector3(planningGoal) +
+                        " proxyGoal=" + FormatVector3(proxyGoal) +
+                        " proxyDistance=" + proxyDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " detail=" + (proxyDetail ?? "<null>") +
+                        " step=" + DescribeNavigationStep(step));
+                    return planningGoal;
+                }
+            }
+
             LogNavigationTrackerDebug(
                 "Using reachable open-passage local planning proxy" +
                 " planningZone=" + planningZone +
@@ -521,6 +625,174 @@ namespace DateEverythingAccess
                 " detail=" + (proxyDetail ?? "<null>") +
                 " step=" + DescribeNavigationStep(step));
             return proxyGoal;
+        }
+
+        private bool TryResolveOpenPassageGuidedProgressCandidate(
+            string planningZone,
+            NavigationGraph.PathStep step,
+            Vector3 playerPosition,
+            Vector3 planningGoal,
+            string planningContext,
+            out Vector3 candidateGoal,
+            out string detail)
+        {
+            candidateGoal = Vector3.zero;
+            detail = null;
+            if (string.IsNullOrWhiteSpace(planningZone) ||
+                step == null ||
+                playerPosition == Vector3.zero ||
+                planningGoal == Vector3.zero)
+            {
+                return false;
+            }
+
+            List<Vector3> navigationPoints = BuildOpenPassageGuidedNavigationPoints(step);
+            if (navigationPoints == null || navigationPoints.Count == 0)
+                return false;
+
+            if (!LocalNavigationMaps.TryGetWalkableComponentId(
+                    planningZone,
+                    playerPosition,
+                    out int startComponentId,
+                    out Vector3 snappedPlayerPosition,
+                    out string startDetail) ||
+                startComponentId < 0)
+            {
+                detail = "StartComponentUnavailable detail=" + (startDetail ?? "<null>");
+                return false;
+            }
+
+            float reachedDistance = GetLocalNavigationGoalReachedDistance(planningContext);
+            int startIndex = Mathf.Clamp(_openPassageOverrideWaypointIndex, 0, navigationPoints.Count - 1);
+            Vector3 normalizedPlanningGoal =
+                NormalizeOpenPassageLocalPlanningGoalY(playerPosition, planningContext, planningGoal);
+
+            for (int i = navigationPoints.Count - 1; i >= startIndex; i--)
+            {
+                Vector3 normalizedCandidate = NormalizeOpenPassageLocalPlanningGoalY(
+                    playerPosition,
+                    planningContext,
+                    navigationPoints[i]);
+                if (!LocalNavigationMaps.TryGetWalkableComponentId(
+                        planningZone,
+                        normalizedCandidate,
+                        out int candidateComponentId,
+                        out Vector3 snappedCandidate,
+                        out string candidateDetail) ||
+                    candidateComponentId != startComponentId)
+                {
+                    continue;
+                }
+
+                float snapDistance = GetFlatDistance(snappedCandidate, normalizedCandidate);
+                if (snapDistance > OpenPassageGuidedWaypointAdvanceDistance)
+                {
+                    detail =
+                        "RejectedProgressCandidate" +
+                        " candidateIndex=" + i +
+                        " reason=excessive-snap" +
+                        " snapDistance=" + snapDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " candidateDetail=" + (candidateDetail ?? "<null>");
+                    continue;
+                }
+
+                if (!ShouldUseLocalNavigationGoal(playerPosition, snappedCandidate, reachedDistance))
+                    continue;
+
+                if (!LocalNavigationMaps.TryFindPath(
+                        planningZone,
+                        playerPosition,
+                        snappedCandidate,
+                        out List<Vector3> pathPoints,
+                        out string pathFailure) ||
+                    pathPoints == null ||
+                    pathPoints.Count == 0)
+                {
+                    detail =
+                        "RejectedProgressCandidate" +
+                        " candidateIndex=" + i +
+                        " pathFailure=" + (pathFailure ?? "<null>");
+                    continue;
+                }
+
+                float snappedDistanceToOriginal = GetFlatDistance(snappedCandidate, normalizedPlanningGoal);
+                if (snappedDistanceToOriginal > AutoWalkOpenPassageHandoffDistance)
+                {
+                    detail =
+                        "RejectedProgressCandidate" +
+                        " candidateIndex=" + i +
+                        " reason=excessive-distance-to-guided-goal" +
+                        " snappedDistanceToOriginal=" + snappedDistanceToOriginal.ToString("0.00", CultureInfo.InvariantCulture);
+                    continue;
+                }
+
+                if (!IsOpenPassageCandidateRuntimeReachable(playerPosition, pathPoints, out string runtimeBlockerDetail))
+                {
+                    detail =
+                        "RejectedProgressCandidate" +
+                        " candidateIndex=" + i +
+                        " reason=runtime-segment-blocked" +
+                        " blocker=" + (runtimeBlockerDetail ?? "<null>");
+                    continue;
+                }
+
+                candidateGoal = snappedCandidate;
+                detail =
+                    "startIndex=" + startIndex +
+                    " selectedIndex=" + i +
+                    " waypointCount=" + navigationPoints.Count +
+                    " startComponentId=" + startComponentId +
+                    " snappedPlayer=" + FormatVector3(snappedPlayerPosition) +
+                    " snapDistance=" + snapDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " snappedDistanceToOriginal=" + snappedDistanceToOriginal.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " candidateDetail=" + (candidateDetail ?? "<null>");
+                return true;
+            }
+
+            detail =
+                "NoProgressCandidate" +
+                " startIndex=" + startIndex +
+                " waypointCount=" + navigationPoints.Count +
+                " startComponentId=" + startComponentId +
+                " startDetail=" + (startDetail ?? "<null>");
+            return false;
+        }
+
+        private bool IsOpenPassageCandidateRuntimeReachable(
+            Vector3 playerPosition,
+            List<Vector3> pathPoints,
+            out string blockerDetail)
+        {
+            blockerDetail = null;
+            if (pathPoints == null || pathPoints.Count == 0)
+                return false;
+
+            float accumulatedDistance = 0f;
+            Vector3 previousPoint = playerPosition;
+            previousPoint.y = 0f;
+            bool foundClearSegment = false;
+            for (int i = 0; i < pathPoints.Count; i++)
+            {
+                Vector3 currentPoint = pathPoints[i];
+                currentPoint.y = 0f;
+                accumulatedDistance += Vector3.Distance(previousPoint, currentPoint);
+                if (IsLocalNavigationLookaheadSegmentClear(playerPosition, pathPoints[i], out string currentBlockerDetail))
+                {
+                    foundClearSegment = true;
+                }
+                else
+                {
+                    blockerDetail = currentBlockerDetail;
+                    return foundClearSegment;
+                }
+
+                if (accumulatedDistance >= LocalNavigationLookaheadDistance)
+                    return true;
+
+                previousPoint = currentPoint;
+            }
+
+            return foundClearSegment;
         }
 
         private static Vector3 NormalizeOpenPassageLocalPlanningGoalY(

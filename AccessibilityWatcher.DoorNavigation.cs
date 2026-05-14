@@ -492,11 +492,32 @@ namespace DateEverythingAccess
                     entryAdvanceExtendedProofSatisfied,
                     pushThroughPosition,
                     destinationTarget);
+                Vector3 finalTarget = destinationTarget;
+                NavigationTargetKind finalTargetKind = destinationTargetKind;
+                if (IsFocusedBathroom1NoSourceBridgeStep(step) &&
+                    string.Equals(finalRawContext, "door-entry-advance-no-source-bridge", StringComparison.Ordinal) &&
+                    TryBuildDoorNoSourceBridgeRawExitTarget(
+                        step,
+                        currentZone,
+                        playerPosition,
+                        pushThroughPosition,
+                        destinationTarget,
+                        out Vector3 noSourceRawExitTarget))
+                {
+                    finalTarget = noSourceRawExitTarget;
+                    finalTargetKind = NavigationTargetKind.ZoneFallback;
+                    LogNavigationTrackerDebug(
+                        "Extended no-source door final entry target beyond clear point" +
+                        " originalTarget=" + FormatVector3(destinationTarget) +
+                        " extendedTarget=" + FormatVector3(finalTarget) +
+                        " step=" + DescribeNavigationStep(step));
+                }
+
                 return TryUseDoorPostInteractionTargetDecision(
                     DoorPostInteractionTargetDecision.Create(
                         DoorPostInteractionState.FinalEntryRaw,
-                        destinationTarget,
-                        destinationTargetKind,
+                        finalTarget,
+                        finalTargetKind,
                         finalRawContext,
                         "proof=post-threshold-commit" +
                         " extendedBridgeProof=" + entryAdvanceExtendedProofSatisfied),
@@ -515,6 +536,24 @@ namespace DateEverythingAccess
                     entryAdvanceExtendedProofSatisfied,
                     pushThroughPosition,
                     position);
+                if (IsFocusedBathroom1NoSourceBridgeStep(step) &&
+                    string.Equals(finalFallbackRawContext, "door-entry-advance-no-source-bridge", StringComparison.Ordinal) &&
+                    TryBuildDoorNoSourceBridgeRawExitTarget(
+                        step,
+                        currentZone,
+                        playerPosition,
+                        pushThroughPosition,
+                        position,
+                        out Vector3 noSourceRawExitTarget))
+                {
+                    LogNavigationTrackerDebug(
+                        "Extended fallback no-source door final entry target beyond clear point" +
+                        " originalTarget=" + FormatVector3(position) +
+                        " extendedTarget=" + FormatVector3(noSourceRawExitTarget) +
+                        " step=" + DescribeNavigationStep(step));
+                    position = noSourceRawExitTarget;
+                }
+
                 return TryUseDoorPostInteractionTargetDecision(
                     DoorPostInteractionTargetDecision.Create(
                         DoorPostInteractionState.FinalEntryRaw,
@@ -886,8 +925,8 @@ namespace DateEverythingAccess
                     " step=" + DescribeNavigationStep(step));
             }
 
-            bool isRetainedExtendedBridgeRecoveryStep = IsRetainedExtendedBridgeRecoveryStep(step);
             bool isFocusedClosetDeadlockStep = IsFocusedClosetDeadlockStep(step);
+            bool isRetainedExtendedBridgeRecoveryStep = IsRetainedExtendedBridgeRecoveryStep(step);
             if (isRetainedExtendedBridgeRecoveryStep &&
                 finalEntryLocalCompleted &&
                 HasDoorRetainedExtendedNoProgressReleaseRequest(step))
@@ -1397,6 +1436,150 @@ namespace DateEverythingAccess
                 pushThroughPosition,
                 destinationTarget,
                 out entryAdvanceTarget);
+        }
+
+        private bool TryBuildDoorNoSourceBridgeRawExitTarget(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 playerPosition,
+            Vector3 pushThroughPosition,
+            Vector3 destinationTarget,
+            out Vector3 exitTarget)
+        {
+            exitTarget = Vector3.zero;
+            if (step == null ||
+                step.Kind != NavigationGraph.StepKind.Door ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
+                playerPosition == Vector3.zero ||
+                pushThroughPosition == Vector3.zero ||
+                destinationTarget == Vector3.zero ||
+                !TryGetDoorThresholdAdvanceTarget(step, currentZone, out Vector3 sourceTarget) ||
+                sourceTarget == Vector3.zero)
+            {
+                return false;
+            }
+
+            Vector3 exitDirection = destinationTarget - sourceTarget;
+            exitDirection.y = 0f;
+            if (exitDirection.sqrMagnitude <= 0.0001f)
+                return false;
+
+            exitDirection.Normalize();
+            Vector3 baseTarget = destinationTarget + exitDirection * DoorTraversalClearanceDistance;
+            baseTarget.y = destinationTarget.y != 0f
+                ? destinationTarget.y
+                : pushThroughPosition.y;
+
+            if (TrySelectClearDoorNoSourceExitTarget(
+                    step,
+                    currentZone,
+                    playerPosition,
+                    destinationTarget,
+                    exitDirection,
+                    baseTarget,
+                    out exitTarget))
+            {
+                return GetFlatDistance(exitTarget, destinationTarget) > DoorPushThroughSourceAdvanceDistance;
+            }
+
+            return false;
+        }
+
+        private bool TrySelectClearDoorNoSourceExitTarget(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 playerPosition,
+            Vector3 destinationTarget,
+            Vector3 exitDirection,
+            Vector3 baseTarget,
+            out Vector3 selectedTarget)
+        {
+            selectedTarget = Vector3.zero;
+            if (baseTarget == Vector3.zero)
+                return false;
+
+            if (IsRuntimeMovementSegmentClear(playerPosition, baseTarget, out string baseBlockerDetail))
+            {
+                selectedTarget = baseTarget;
+                return true;
+            }
+
+            Vector3 sideDirection = new Vector3(-exitDirection.z, 0f, exitDirection.x);
+            if (sideDirection.sqrMagnitude <= 0.0001f)
+                return false;
+
+            sideDirection.Normalize();
+            float[] sideOffsets = { 0.75f, -0.75f, 1.25f, -1.25f, 1.75f, -1.75f, 2.25f, -2.25f };
+            float[] forwardOffsets = { 0f, 0.5f, 1f };
+            string lastBlockerDetail = baseBlockerDetail;
+            foreach (float forwardOffset in forwardOffsets)
+            {
+                foreach (float sideOffset in sideOffsets)
+                {
+                    Vector3 candidate = baseTarget + (sideDirection * sideOffset) + (exitDirection * forwardOffset);
+                    candidate.y = baseTarget.y;
+                    if (GetFlatDistance(candidate, destinationTarget) <= DoorPushThroughSourceAdvanceDistance)
+                        continue;
+
+                    if (!IsRuntimeMovementSegmentClear(playerPosition, candidate, out string candidateBlockerDetail))
+                    {
+                        lastBlockerDetail = candidateBlockerDetail;
+                        continue;
+                    }
+
+                    LogNavigationTrackerDebug(
+                        "Selected side-clear no-source door final entry target" +
+                        " currentZone=" + currentZone +
+                        " originalTarget=" + FormatVector3(destinationTarget) +
+                        " baseTarget=" + FormatVector3(baseTarget) +
+                        " selectedTarget=" + FormatVector3(candidate) +
+                        " sideOffset=" + sideOffset.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " forwardOffset=" + forwardOffset.ToString("0.00", CultureInfo.InvariantCulture) +
+                        " baseBlocker=" + (baseBlockerDetail ?? "<null>") +
+                        " step=" + DescribeNavigationStep(step));
+                    selectedTarget = candidate;
+                    return true;
+                }
+            }
+
+            LogNavigationTrackerDebug(
+                "No clear side-offset no-source door final entry target found" +
+                " currentZone=" + currentZone +
+                " originalTarget=" + FormatVector3(destinationTarget) +
+                " baseTarget=" + FormatVector3(baseTarget) +
+                " baseBlocker=" + (baseBlockerDetail ?? "<null>") +
+                " lastBlocker=" + (lastBlockerDetail ?? "<null>") +
+                " step=" + DescribeNavigationStep(step));
+            return false;
+        }
+
+        private bool IsRuntimeMovementSegmentClear(
+            Vector3 playerPosition,
+            Vector3 targetPosition,
+            out string blockerDetail)
+        {
+            blockerDetail = null;
+            if (playerPosition == Vector3.zero ||
+                targetPosition == Vector3.zero ||
+                BetterPlayerControl.Instance == null)
+            {
+                return true;
+            }
+
+            Collider playerCollider = BetterPlayerControl.Instance.GetComponent<Collider>();
+            if (playerCollider == null)
+                return true;
+
+            blockerDetail = ProbeMovementBlocker(
+                playerCollider,
+                playerPosition,
+                targetPosition,
+                requireTrigger: false,
+                minimumHitDistance: 0.05f);
+            return string.Equals(blockerDetail, "none", StringComparison.Ordinal) ||
+                string.Equals(blockerDetail, "target-too-close", StringComparison.Ordinal) ||
+                string.Equals(blockerDetail, "player-collider-null", StringComparison.Ordinal);
         }
 
         private bool IsDoorCommittedSourceRecoveryActiveForStep(
@@ -2275,8 +2458,7 @@ namespace DateEverythingAccess
                 string.IsNullOrWhiteSpace(currentZone) ||
                 string.IsNullOrWhiteSpace(step.FromZone) ||
                 !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
-                !IsFocusedBathroom1NoSourceBridgeStep(step) ||
-                IsDoorSourceLocalGoalCompleted(step, "door-entry-advance-local"))
+                !IsFocusedBathroom1NoSourceBridgeStep(step))
             {
                 return false;
             }
@@ -2292,6 +2474,26 @@ namespace DateEverythingAccess
                 planningGoal == Vector3.zero)
             {
                 planningContext = null;
+                return false;
+            }
+
+            if (TryGetDoorSourceLocalCompletedGoal(step, planningContext, out Vector3 completedFinalEntryLocalGoal) &&
+                !HasDoorPlanningGoalForwardProgressPastCompletedGoal(
+                    step,
+                    currentZone,
+                    planningGoal,
+                    completedFinalEntryLocalGoal))
+            {
+                LogNavigationTrackerDebug(
+                    "Skipped no-source-bridge door final entry local proxy because completed proxy has no new forward progress" +
+                    " currentZone=" + currentZone +
+                    " desiredPosition=" + FormatVector3(desiredPosition) +
+                    " completedGoal=" + FormatVector3(completedFinalEntryLocalGoal) +
+                    " planningGoal=" + FormatVector3(planningGoal) +
+                    " planningContext=" + planningContext +
+                    " step=" + DescribeNavigationStep(step));
+                planningContext = null;
+                planningGoal = Vector3.zero;
                 return false;
             }
 
@@ -2327,6 +2529,35 @@ namespace DateEverythingAccess
                 " planningZone=" + planningZone +
                 " step=" + DescribeNavigationStep(step));
             return true;
+        }
+
+        private bool HasDoorPlanningGoalForwardProgressPastCompletedGoal(
+            NavigationGraph.PathStep step,
+            string currentZone,
+            Vector3 planningGoal,
+            Vector3 completedGoal)
+        {
+            if (step == null ||
+                planningGoal == Vector3.zero ||
+                completedGoal == Vector3.zero ||
+                string.IsNullOrWhiteSpace(currentZone) ||
+                !TryGetDoorThresholdAdvanceTarget(step, currentZone, out Vector3 sourceTarget) ||
+                !TryGetActiveDoorPushThroughPosition(step, currentZone, out Vector3 pushThroughPosition) ||
+                sourceTarget == Vector3.zero ||
+                pushThroughPosition == Vector3.zero)
+            {
+                return false;
+            }
+
+            float completedForwardProgress = GetDoorThresholdForwardProgress(
+                sourceTarget,
+                pushThroughPosition,
+                completedGoal);
+            float planningForwardProgress = GetDoorThresholdForwardProgress(
+                sourceTarget,
+                pushThroughPosition,
+                planningGoal);
+            return planningForwardProgress > completedForwardProgress + 0.25f;
         }
 
         private bool TrySelectDoorFinalEntryLocalPlanningTarget(

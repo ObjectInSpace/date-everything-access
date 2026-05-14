@@ -5988,7 +5988,8 @@ namespace DateEverythingAccess
             Collider playerCollider,
             Vector3 fromPosition,
             Vector3 targetPosition,
-            bool requireTrigger)
+            bool requireTrigger,
+            float minimumHitDistance = 0f)
         {
             if (playerCollider == null)
                 return "player-collider-null";
@@ -6061,7 +6062,12 @@ namespace DateEverythingAccess
             }
 
             RaycastHit hit;
-            if (TryFindFirstRelevantMovementHit(hits, playerCollider.transform, requireTrigger, out hit))
+            if (TryFindFirstRelevantMovementHit(
+                    hits,
+                    playerCollider.transform,
+                    requireTrigger,
+                    minimumHitDistance,
+                    out hit))
                 return DescribeMovementHit(hit);
 
             return requireTrigger ? "none" : "none";
@@ -6071,6 +6077,7 @@ namespace DateEverythingAccess
             RaycastHit[] hits,
             Transform playerTransform,
             bool requireTrigger,
+            float minimumHitDistance,
             out RaycastHit selectedHit)
         {
             selectedHit = default;
@@ -6092,6 +6099,12 @@ namespace DateEverythingAccess
 
                 if (requireTrigger != collider.isTrigger)
                     continue;
+
+                if (minimumHitDistance > 0f &&
+                    hits[i].distance <= minimumHitDistance)
+                {
+                    continue;
+                }
 
                 selectedHit = hits[i];
                 return true;
@@ -8904,6 +8917,15 @@ namespace DateEverythingAccess
                 planningContext = null;
             }
 
+            if (ShouldSuppressGenericOpenPassageLocalFallback(
+                    currentZone,
+                    step,
+                    playerPosition,
+                    desiredPosition))
+            {
+                return false;
+            }
+
             if (step != null)
             {
                 if (targetKind == NavigationTargetKind.TransitionInteractable &&
@@ -8989,6 +9011,46 @@ namespace DateEverythingAccess
             }
 
             return false;
+        }
+
+        private bool ShouldSuppressGenericOpenPassageLocalFallback(
+            string currentZone,
+            NavigationGraph.PathStep step,
+            Vector3 playerPosition,
+            Vector3 desiredPosition)
+        {
+            if (step == null ||
+                step.Kind != NavigationGraph.StepKind.OpenPassage ||
+                desiredPosition == Vector3.zero ||
+                !UsesOverrideOnlyOpenPassageGuidance(step) ||
+                (!IsOpenPassageSourceZone(step, currentZone) &&
+                 !IsAcceptedOverrideSourceZone(step, currentZone)))
+            {
+                return false;
+            }
+
+            OpenPassageTraversalStage traversalStage = GetOpenPassageTraversalStageState();
+            if (traversalStage != OpenPassageTraversalStage.DestinationWaypoint &&
+                traversalStage != OpenPassageTraversalStage.DestinationHandoff)
+            {
+                return false;
+            }
+
+            if (!ShouldUseLocalNavigationGoal(
+                    playerPosition,
+                    desiredPosition,
+                    AutoWalkArrivalDistance))
+            {
+                return false;
+            }
+
+            LogNavigationTrackerDebug(
+                "Suppressed generic open-passage local fallback after source handoff" +
+                " currentZone=" + (currentZone ?? "<null>") +
+                " stage=" + traversalStage +
+                " desiredPosition=" + FormatVector3(desiredPosition) +
+                " step=" + DescribeNavigationStep(step));
+            return true;
         }
 
         private static string ResolveLocalPlanningZone(
@@ -9546,20 +9608,97 @@ namespace DateEverythingAccess
             float accumulatedDistance = 0f;
             Vector3 previousPoint = playerPosition;
             previousPoint.y = 0f;
-            int lookaheadIndex = _localNavigationPathIndex;
+            int lookaheadIndex = -1;
+            string blockedLookaheadDetail = null;
             for (int i = _localNavigationPathIndex; i < _localNavigationPathPoints.Count; i++)
             {
                 Vector3 currentPoint = _localNavigationPathPoints[i];
                 currentPoint.y = 0f;
                 accumulatedDistance += Vector3.Distance(previousPoint, currentPoint);
-                lookaheadIndex = i;
+                Vector3 candidatePoint = _localNavigationPathPoints[i];
+                if (IsLocalNavigationLookaheadSegmentClear(playerPosition, candidatePoint, out string blockerDetail))
+                {
+                    lookaheadIndex = i;
+                }
+                else
+                {
+                    blockedLookaheadDetail = blockerDetail;
+                    break;
+                }
+
                 if (accumulatedDistance >= LocalNavigationLookaheadDistance)
                     break;
 
                 previousPoint = currentPoint;
             }
 
+            bool canRejectBlockedFirstSegment =
+                !string.IsNullOrWhiteSpace(_localNavigationPathContext) &&
+                _localNavigationPathContext.StartsWith("open-passage", StringComparison.Ordinal);
+            if (canRejectBlockedFirstSegment &&
+                !string.IsNullOrWhiteSpace(blockedLookaheadDetail) &&
+                lookaheadIndex < 0)
+            {
+                LogNavigationTrackerDebug(
+                    "Rejected local navigation path because next runtime movement segment is blocked" +
+                    " stepKey=" + (_localNavigationPathStepKey ?? "<null>") +
+                    " zone=" + (_localNavigationPathZone ?? "<null>") +
+                    " context=" + (_localNavigationPathContext ?? "<null>") +
+                    " pathIndex=" + (_localNavigationPathIndex + 1) +
+                    " blockedDetail=" + blockedLookaheadDetail);
+                return -1;
+            }
+
+            if (!canRejectBlockedFirstSegment &&
+                !string.IsNullOrWhiteSpace(blockedLookaheadDetail) &&
+                lookaheadIndex < 0)
+            {
+                lookaheadIndex = _localNavigationPathIndex;
+            }
+
+            if (!string.IsNullOrWhiteSpace(blockedLookaheadDetail) &&
+                lookaheadIndex >= 0 &&
+                lookaheadIndex < _localNavigationPathPoints.Count)
+            {
+                LogNavigationTrackerDebug(
+                    "Reduced local navigation lookahead because runtime movement segment is blocked" +
+                    " stepKey=" + (_localNavigationPathStepKey ?? "<null>") +
+                    " zone=" + (_localNavigationPathZone ?? "<null>") +
+                    " context=" + (_localNavigationPathContext ?? "<null>") +
+                    " selectedIndex=" + (lookaheadIndex + 1) +
+                    " blockedDetail=" + blockedLookaheadDetail);
+            }
+
             return lookaheadIndex;
+        }
+
+        private bool IsLocalNavigationLookaheadSegmentClear(
+            Vector3 playerPosition,
+            Vector3 targetPosition,
+            out string blockerDetail)
+        {
+            blockerDetail = null;
+            if (BetterPlayerControl.Instance == null)
+                return true;
+
+            Collider playerCollider = BetterPlayerControl.Instance.GetComponent<Collider>();
+            if (playerCollider == null)
+                return true;
+
+            Vector3 flatDelta = targetPosition - playerPosition;
+            flatDelta.y = 0f;
+            if (flatDelta.magnitude <= 0.05f)
+                return true;
+
+            blockerDetail = ProbeMovementBlocker(
+                playerCollider,
+                playerPosition,
+                targetPosition,
+                requireTrigger: false,
+                minimumHitDistance: 0.05f);
+            return string.Equals(blockerDetail, "none", StringComparison.Ordinal) ||
+                string.Equals(blockerDetail, "target-too-close", StringComparison.Ordinal) ||
+                string.Equals(blockerDetail, "player-collider-null", StringComparison.Ordinal);
         }
 
         private void ClearLocalNavigationPathState()
@@ -10473,16 +10612,21 @@ namespace DateEverythingAccess
                 forceProxyRelease &&
                 string.Equals(planningContext, "open-passage-override-destination", StringComparison.Ordinal) &&
                 remainingDistance <= OpenPassageOverrideLocalNavigationGoalReachedDistance;
+            bool isOverrideDestinationContext =
+                string.Equals(planningContext, "open-passage-override-destination", StringComparison.Ordinal);
+            bool reachedOverrideLocalGoal =
+                remainingDistance <= OpenPassageOverrideLocalNavigationGoalReachedDistance;
             bool blockForcedDestinationCompletion =
                 forceProxyRelease &&
-                string.Equals(planningContext, "open-passage-override-destination", StringComparison.Ordinal) &&
+                isOverrideDestinationContext &&
                 !acceptedForcedDestinationCompletion;
-            if (!isFinalWaypoint)
+            if (!isFinalWaypoint && reachedOverrideLocalGoal)
             {
                 _openPassageOverrideWaypointIndex = currentIndex + 1;
                 advancedWaypoint = _openPassageOverrideWaypointIndex != previousIndex;
             }
             else if (!blockForcedDestinationCompletion &&
+                reachedOverrideLocalGoal &&
                 (!forceProxyRelease || acceptedForcedDestinationCompletion || step.Kind != NavigationGraph.StepKind.Stairs))
             {
                 _openPassageOverrideWaypointIndex = currentIndex;
@@ -10504,6 +10648,7 @@ namespace DateEverythingAccess
 
             bool acceptedFinalCompletion = isFinalWaypoint &&
                 !blockForcedDestinationCompletion &&
+                reachedOverrideLocalGoal &&
                 (!forceProxyRelease || acceptedForcedDestinationCompletion || step.Kind != NavigationGraph.StepKind.Stairs);
             completed = advancedWaypoint || advancedStage || acceptedFinalCompletion;
             detail =
@@ -10515,6 +10660,7 @@ namespace DateEverythingAccess
                 " advancedWaypoint=" + advancedWaypoint +
                 " advancedStage=" + advancedStage +
                 " forceProxyRelease=" + forceProxyRelease +
+                " reachedLocalGoal=" + reachedOverrideLocalGoal +
                 " remainingDistance=" + remainingDistance.ToString("0.00", CultureInfo.InvariantCulture);
             if (completed)
             {
