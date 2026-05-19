@@ -29,6 +29,10 @@
     <NavigationGraphOutputPath>$(ProjectDir)bin\$(Configuration)\net472\navigation_graph.json</NavigationGraphOutputPath>
     <LocalNavigationMapsSourcePath>$(ProjectDir)artifacts\navigation\local_navigation_maps.generated.json</LocalNavigationMapsSourcePath>
     <LocalNavigationMapsOutputPath>$(ProjectDir)bin\$(Configuration)\net472\local_navigation_maps.generated.json</LocalNavigationMapsOutputPath>
+    <SceneNavigationDataSourcePath>$(ProjectDir)artifacts\navigation\thirdpersongreybox-navigation-data.json</SceneNavigationDataSourcePath>
+    <SceneNavigationDataOutputPath>$(ProjectDir)bin\$(Configuration)\net472\thirdpersongreybox-navigation-data.json</SceneNavigationDataOutputPath>
+    <SceneBlockersSourcePath>$(ProjectDir)artifacts\navigation\thirdpersongreybox-blockers.json</SceneBlockersSourcePath>
+    <SceneBlockersOutputPath>$(ProjectDir)bin\$(Configuration)\net472\thirdpersongreybox-blockers.json</SceneBlockersOutputPath>
   </PropertyGroup>
 
   <Target Name="CopyNavigationGraphToOutput" AfterTargets="Build" Condition="Exists('$(NavigationGraphSourcePath)')">
@@ -39,6 +43,16 @@
   <Target Name="CopyLocalNavigationMapsToOutput" AfterTargets="Build" Condition="Exists('$(LocalNavigationMapsSourcePath)')">
     <Copy SourceFiles="$(LocalNavigationMapsSourcePath)" DestinationFiles="$(LocalNavigationMapsOutputPath)" />
     <Message Text="Copied local navigation maps JSON to $(LocalNavigationMapsOutputPath)" Importance="High" />
+  </Target>
+
+  <Target Name="CopySceneNavigationDataToOutput" AfterTargets="Build" Condition="Exists('$(SceneNavigationDataSourcePath)')">
+    <Copy SourceFiles="$(SceneNavigationDataSourcePath)" DestinationFiles="$(SceneNavigationDataOutputPath)" />
+    <Message Text="Copied scene navigation data JSON to $(SceneNavigationDataOutputPath)" Importance="High" />
+  </Target>
+
+  <Target Name="CopySceneBlockersToOutput" AfterTargets="Build" Condition="Exists('$(SceneBlockersSourcePath)')">
+    <Copy SourceFiles="$(SceneBlockersSourcePath)" DestinationFiles="$(SceneBlockersOutputPath)" />
+    <Message Text="Copied scene blockers JSON to $(SceneBlockersOutputPath)" Importance="High" />
   </Target>
 
   <ItemGroup>
@@ -112,6 +126,8 @@
     <Copy SourceFiles="$(ProjectDir)navigation_transition_overrides.json" DestinationFolder="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\" Condition="Exists('$(ProjectDir)navigation_transition_overrides.json')" />
     <Copy SourceFiles="$(NavigationGraphSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json" Condition="Exists('$(NavigationGraphSourcePath)')" />
     <Copy SourceFiles="$(LocalNavigationMapsSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\local_navigation_maps.generated.json" Condition="Exists('$(LocalNavigationMapsSourcePath)')" />
+    <Copy SourceFiles="$(SceneNavigationDataSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\thirdpersongreybox-navigation-data.json" Condition="Exists('$(SceneNavigationDataSourcePath)')" />
+    <Copy SourceFiles="$(SceneBlockersSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\thirdpersongreybox-blockers.json" Condition="Exists('$(SceneBlockersSourcePath)')" />
     <Message Text="Copied $(TargetFileName) to BepInEx plugins folder" Importance="High" />
   </Target>
 

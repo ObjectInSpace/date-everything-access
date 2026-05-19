@@ -320,7 +320,6 @@ namespace DateEverythingAccess
         private const float DoorTraversalClearanceDistance = 1.4f;
         private const float DoorTraversalLateralOffsetDistance = 0.6f;
         private const float DoorThresholdAdvanceProxyCompletionDistance = DoorTraversalClearanceDistance + DoorTraversalLateralOffsetDistance;
-        private const float DoorTransitionSweepInteractionSettleSeconds = 0.75f;
         private const float DoorTraversalPushThroughDistance = 1.35f;
         private const float DoorTraversalMaximumPushThroughDistance = 3.25f;
         private const float DoorTransitionSweepPostRecoveryGraceSeconds = 1.5f;
@@ -585,6 +584,9 @@ namespace DateEverythingAccess
         private int _doorCommittedSourceWatchdogLoopTripCount;
         private int _doorCommittedSourceWatchdogInteractionRetryCount;
         private TransitionSweepSession _transitionSweepSession;
+        // Captured at sweep-harness step-timeout (via ProbeRuntimeBlocker) so
+        // RecordTransitionSweepResult can stash it on the entry. Cleared after each result.
+        private string _pendingTransitionSweepRuntimeBlocker;
         private LiveRouteAuditSession _liveRouteAuditSession;
         private bool _isRoomObjectPickerOpen;
         private bool _isNavigationActive;
@@ -686,6 +688,7 @@ namespace DateEverythingAccess
                 return;
 
             HandleRepeatLastSpeechRequest();
+            SimpleNavBridge.Tick();
             HandleNavigationRequests();
             HandleNavMeshExportRequest();
             HandleTransitionSweepRequest();
@@ -2608,9 +2611,24 @@ namespace DateEverythingAccess
                     return;
 
                 string currentZone = GetCurrentZoneNameInternal();
+                Vector3 playerPositionAtTimeout = BetterPlayerControl.Instance != null
+                    ? BetterPlayerControl.Instance.transform.position
+                    : Vector3.zero;
+                // Probe what physically blocks the player at the moment of timeout. We use
+                // SimpleNavBridge's last resolved waypoint as the target; null/unset when the
+                // sweep wasn't driven by SimpleNav, in which case the probe label is also null.
+                string runtimeBlocker = null;
+                if (SimpleNavBridge.Enabled && BetterPlayerControl.Instance != null)
+                {
+                    Vector3 probeTarget = SimpleNavBridge.LastResolvedTarget;
+                    if (probeTarget != Vector3.zero)
+                        runtimeBlocker = ProbeRuntimeBlocker(playerPositionAtTimeout, probeTarget);
+                }
+                _pendingTransitionSweepRuntimeBlocker = runtimeBlocker;
                 RecordTransitionSweepFailure(
                     "step timeout currentZone=" + (currentZone ?? "<null>") +
-                    " player=" + (BetterPlayerControl.Instance != null ? FormatVector3(BetterPlayerControl.Instance.transform.position) : "<null>"));
+                    " player=" + (BetterPlayerControl.Instance != null ? FormatVector3(playerPositionAtTimeout) : "<null>") +
+                    " runtimeBlocker=" + (runtimeBlocker ?? "<none>"));
                 return;
             }
 
@@ -2735,18 +2753,21 @@ namespace DateEverythingAccess
 
             Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
 
+            bool stillInSourceZone = !string.IsNullOrEmpty(step.FromZone) &&
+                IsCurrentZoneEquivalentTo(step.FromZone);
+
             if (UsesOpenPassageTraversalModel(step))
             {
-                if (HasReachedOpenPassageTransitionSweepOverrideCheckpoint(step, playerPosition))
+                if (!stillInSourceZone && HasReachedOpenPassageTransitionSweepOverrideCheckpoint(step, playerPosition))
                     return true;
 
-                if (HasReachedOpenPassageOverrideCompletion(step))
+                if (!stillInSourceZone && HasReachedOpenPassageOverrideCompletion(step))
                     return true;
 
                 if (ShouldAdvanceOpenPassageStepByGeometry(step))
                     return true;
 
-                if (step.ToWaypoint != Vector3.zero)
+                if (!stillInSourceZone && step.ToWaypoint != Vector3.zero)
                 {
                     Vector3 targetPosition = step.ToWaypoint;
                     targetPosition.y = playerPosition.y;
@@ -2754,7 +2775,7 @@ namespace DateEverythingAccess
                         return true;
                 }
 
-                if (step.ToCrossingAnchor != Vector3.zero)
+                if (!stillInSourceZone && step.ToCrossingAnchor != Vector3.zero)
                 {
                     Vector3 crossingTarget = step.ToCrossingAnchor;
                     crossingTarget.y = playerPosition.y;
@@ -2766,12 +2787,13 @@ namespace DateEverythingAccess
             }
 
             if (step.Kind == NavigationGraph.StepKind.Door &&
+                !stillInSourceZone &&
                 HasReachedDoorTransitionSweepPushThroughTarget(step, playerPosition))
             {
                 return true;
             }
 
-            if (step.ToWaypoint != Vector3.zero)
+            if (step.ToWaypoint != Vector3.zero && !stillInSourceZone)
             {
                 Vector3 targetPosition = step.ToWaypoint;
                 targetPosition.y = playerPosition.y;
@@ -3736,16 +3758,73 @@ namespace DateEverythingAccess
             if (_transitionSweepSession == null || step == null)
                 return false;
 
-            bool interactionTriggered = TryAttemptDoorTransitionSweepInteraction(step, out Vector3 pushThroughPosition);
-            _transitionSweepSession.DoorInteractionTriggered = interactionTriggered;
-            _transitionSweepSession.DoorPushThroughPosition = pushThroughPosition;
+            // Hand off to SimpleNav as a real player would: force the door closed, drop the
+            // player at the source-side approach waypoint, and let SimpleNav drive the walk.
+            // No pre-arm Interact(), no push-through teleport — those are debug-scaffold
+            // behaviours that mask real nav failures and create stuck-door state of their own.
+            Door door = null;
+            if (!string.IsNullOrEmpty(step.ConnectorName))
+                door = SimpleNav.FindDoorByName(step.ConnectorName);
+            if (door == null && step.ConnectorNames != null)
+            {
+                for (int i = 0; i < step.ConnectorNames.Length && door == null; i++)
+                    door = SimpleNav.FindDoorByName(step.ConnectorNames[i]);
+            }
+            if (door == null)
+                door = SimpleNav.FindDoorBetween(step.FromZone, step.ToZone);
+            if (door == null)
+            {
+                RecordTransitionSweepFailure("no-door-resolved");
+                return true;
+            }
+
+            if (SimpleNavBridge.IsDoorLocked(door))
+            {
+                string lockedDoorName = door.gameObject != null ? door.gameObject.name : "<null>";
+                Main.Log.LogInfo(
+                    "Door sweep skipping locked door=" + lockedDoorName +
+                    " step=" + DescribeNavigationStep(step));
+                RecordTransitionSweepSkippedLocked(lockedDoorName);
+                return true;
+            }
+
+            SimpleNavBridge.ForceDoorClosed(door);
+
+            Transform playerTransform = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform
+                : null;
+            if (playerTransform == null)
+                return false;
+
+            Vector3 spawnPosition = step.FromWaypoint != Vector3.zero
+                ? step.FromWaypoint
+                : (step.SourceApproachPoint != Vector3.zero ? step.SourceApproachPoint : step.FromCrossingAnchor);
+            if (spawnPosition == Vector3.zero)
+            {
+                RecordTransitionSweepFailure("no-spawn-waypoint");
+                return true;
+            }
+
+            spawnPosition = SimpleNav.SnapToFloorPublic(spawnPosition, step.FromZone);
+            playerTransform.position = spawnPosition;
+
+            Vector3 lookDirection = door.transform.position - spawnPosition;
+            lookDirection.y = 0f;
+            if (lookDirection.sqrMagnitude > 0.0001f)
+                playerTransform.rotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
+
+            ApplyNavigationInput(Vector3.zero, Vector3.zero);
+            ResetAutoWalkProgress();
+
+            _transitionSweepSession.DoorInteractionTriggered = false;
+            _transitionSweepSession.DoorPushThroughPosition = Vector3.zero;
             _transitionSweepSession.Phase = TransitionSweepPhase.AwaitingDoorInteractionSettle;
-            _transitionSweepSession.NextActionTime = Time.unscaledTime +
-                (interactionTriggered ? DoorTransitionSweepInteractionSettleSeconds : 0.1f);
+            // Short physics settle window — no pre-arm to wait on; we just give the teleport
+            // a frame to land before SimpleNav grabs the wheel.
+            _transitionSweepSession.NextActionTime = Time.unscaledTime + 0.1f;
             Main.Log.LogInfo(
-                "Door transition sweep prepared interactionTriggered=" + interactionTriggered +
-                " pushThroughPosition=" + FormatVector3(pushThroughPosition) +
-                " step=" + DescribeNavigationStep(step));
+                "Door sweep prepared (force-close+approach-spawn) step=" + DescribeNavigationStep(step) +
+                " spawn=" + FormatVector3(spawnPosition));
             return true;
         }
 
@@ -3761,6 +3840,7 @@ namespace DateEverythingAccess
             int totalCount = _transitionSweepSession.Entries.Count;
             int passedCount = 0;
             int failedCount = 0;
+            int skippedCount = 0;
             for (int i = 0; i < _transitionSweepSession.Entries.Count; i++)
             {
                 string status = _transitionSweepSession.Entries[i].Status;
@@ -3768,13 +3848,16 @@ namespace DateEverythingAccess
                     passedCount++;
                 else if (string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase))
                     failedCount++;
+                else if (status != null && status.StartsWith("skipped", StringComparison.OrdinalIgnoreCase))
+                    skippedCount++;
             }
 
             WriteTransitionSweepReport(isComplete: true);
             Main.Log.LogInfo(
                 GetTransitionSweepLogLabel(sweepKind) + " complete total=" + totalCount +
                 " passed=" + passedCount +
-                " failed=" + failedCount);
+                " failed=" + failedCount +
+                " skipped=" + skippedCount);
             _transitionSweepSession = null;
             ScreenReader.Say(
                 Loc.Get(GetTransitionSweepCompleteMessageKey(sweepKind), totalCount, passedCount, failedCount),
@@ -3973,6 +4056,19 @@ namespace DateEverythingAccess
             {
                 spawnPosition = BuildDoorTransitionSweepStandClearPosition(step, interactable);
                 spawnSource = "door_clearance";
+                // D2 instrumentation: log the door clearance spawn so we can confirm
+                // whether the picker lands on the source side or the destination side
+                // for asymmetric step metadata (e.g. office<->office_closet).
+                if (Main.Log != null && step != null)
+                {
+                    Vector3 doorWorld = interactable != null ? interactable.transform.position : Vector3.zero;
+                    Main.Log.LogInfo("DoorSweep spawn " + step.FromZone + "->" + step.ToZone +
+                        " door=" + (interactable != null && interactable.gameObject != null ? interactable.gameObject.name : "<null>") +
+                        " spawn=" + spawnPosition.ToString("F2") +
+                        " doorPos=" + doorWorld.ToString("F2") +
+                        " sourceClear=" + step.SourceClearPoint.ToString("F2") +
+                        " destClear=" + step.DestinationClearPoint.ToString("F2"));
+                }
                 return true;
             }
 
@@ -3999,85 +4095,6 @@ namespace DateEverythingAccess
             if (TryGetZonePosition(step.FromZone, out spawnPosition))
             {
                 spawnSource = "zone";
-                return true;
-            }
-
-            return false;
-        }
-
-        private bool TryAttemptDoorTransitionSweepInteraction(NavigationGraph.PathStep step, out Vector3 pushThroughPosition)
-        {
-            pushThroughPosition = Vector3.zero;
-            if (step == null ||
-                step.Kind != NavigationGraph.StepKind.Door ||
-                BetterPlayerControl.Instance == null)
-            {
-                return false;
-            }
-
-            if (!TryFindTransitionInteractableCandidate(step, out InteractableObj interactable))
-            {
-                LogNavigationTransitionDebug(
-                    "Door sweep interaction failed: no interactable candidate step=" + DescribeNavigationStep(step));
-                return false;
-            }
-
-            Transform playerTransform = BetterPlayerControl.Instance.transform;
-            for (int attempt = 0; attempt < 2; attempt++)
-            {
-                bool useOppositeLateralSide = attempt == 1;
-                Vector3 interactionPosition = BuildDoorTransitionSweepStandClearPosition(step, interactable, useOppositeLateralSide);
-                playerTransform.position = interactionPosition;
-
-                Vector3 lookDirection = interactable.transform.position - interactionPosition;
-                lookDirection.y = 0f;
-                if (lookDirection.sqrMagnitude > 0.0001f)
-                    playerTransform.rotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
-
-                ApplyNavigationInput(Vector3.zero, Vector3.zero);
-                ResetAutoWalkProgress();
-
-                if (!CanAutoInteractWithStep(step, interactable, out string interactionReason))
-                {
-                    if (IsAlreadyOpenInteractionReason(interactionReason))
-                    {
-                        pushThroughPosition = BuildDoorTraversalPushThroughPosition(step, interactable);
-                        LogNavigationTransitionDebug(
-                            "Door sweep interaction treating open door as ready alternateSide=" + useOppositeLateralSide +
-                            " interactable=" + DescribeInteractable(interactable) +
-                            " pushThroughPosition=" + FormatVector3(pushThroughPosition) +
-                            " step=" + DescribeNavigationStep(step));
-                        return true;
-                    }
-
-                    LogNavigationTransitionDebug(
-                        "Door sweep interaction skipped reason=" + interactionReason +
-                        " alternateSide=" + useOppositeLateralSide +
-                        " interactable=" + DescribeInteractable(interactable) +
-                        " step=" + DescribeNavigationStep(step));
-                    continue;
-                }
-
-                if (!TryTriggerNavigationTransitionInteraction(interactable, out string triggerFailureReason))
-                {
-                    LogNavigationTransitionDebug(
-                        "Door sweep interaction failed: trigger rejected alternateSide=" + useOppositeLateralSide +
-                        " reason=" + triggerFailureReason +
-                        " interactable=" + DescribeInteractable(interactable) +
-                        " step=" + DescribeNavigationStep(step));
-                    continue;
-                }
-
-                _lastNavigationInteractionAttemptTime = Time.unscaledTime;
-                _autoWalkRecoveryAttempts = 0;
-                ResetAutoWalkProgress();
-                pushThroughPosition = BuildDoorTraversalPushThroughPosition(step, interactable);
-                LogNavigationTransitionDebug(
-                    "Door sweep interaction fired interactable=" + DescribeInteractable(interactable) +
-                    " alternateSide=" + useOppositeLateralSide +
-                    " player=" + FormatVector3(playerTransform.position) +
-                    " pushThroughPosition=" + FormatVector3(pushThroughPosition) +
-                    " step=" + DescribeNavigationStep(step));
                 return true;
             }
 
@@ -4274,9 +4291,9 @@ namespace DateEverythingAccess
 
             float pushThroughDistance = Mathf.Min(destinationDistance, DoorTraversalMaximumPushThroughDistance);
             pushThroughPosition = sourceReferencePosition + flattenedDirection / destinationDistance * pushThroughDistance;
-            pushThroughPosition.y = destinationTarget.y != 0f
-                ? destinationTarget.y
-                : sourceReferencePosition.y;
+            pushThroughPosition.y = step.DestinationClearPoint.y != 0f
+                ? step.DestinationClearPoint.y
+                : (destinationTarget.y != 0f ? destinationTarget.y : sourceReferencePosition.y);
             return true;
         }
 
@@ -4563,6 +4580,14 @@ namespace DateEverythingAccess
             RecordTransitionSweepResult("failed", failureReason);
         }
 
+        private void RecordTransitionSweepSkippedLocked(string doorName)
+        {
+            if (_transitionSweepSession == null || _transitionSweepSession.CurrentStep == null)
+                return;
+
+            RecordTransitionSweepResult("skipped-locked", "locked door=" + (doorName ?? "<null>"));
+        }
+
         private void RecordTransitionSweepResult(string status, string failureReason)
         {
             if (_transitionSweepSession == null || _transitionSweepSession.CurrentStep == null)
@@ -4600,7 +4625,26 @@ namespace DateEverythingAccess
                 entry.LastTargetKind = lastTargetKind;
                 entry.LastTargetPosition = lastTargetPosition;
                 entry.LastLocalNavigationContext = lastLocalNavigationContext;
+
+                if (SimpleNavBridge.Enabled)
+                {
+                    SimpleNavBridge.StepTelemetry t = SimpleNavBridge.GetTelemetry();
+                    entry.SimpleNavActive = true;
+                    entry.SimpleNavTargetValid = t.TargetValid;
+                    entry.SimpleNavTarget = t.Target;
+                    entry.SimpleNavReason = t.Reason;
+                    entry.SimpleNavMinDistanceToTarget = float.IsPositiveInfinity(t.MinDistanceToTarget) ? -1f : t.MinDistanceToTarget;
+                    entry.SimpleNavAppliedFrameCount = t.AppliedFrameCount;
+                    entry.SimpleNavPlayerPositionAtStepBegin = t.PlayerPositionAtStepBegin;
+                    entry.SimpleNavSpawnYDelta = t.HasPlayerPositionAtStepBegin
+                        ? Mathf.Abs(playerPositionAtResult.y - t.PlayerPositionAtStepBegin.y)
+                        : 0f;
+                }
+
+                entry.RuntimeBlockerAtFailure = _pendingTransitionSweepRuntimeBlocker;
             }
+
+            _pendingTransitionSweepRuntimeBlocker = null;
 
             Main.Log.LogInfo(
                 "Transition sweep result status=" + status +
@@ -5596,6 +5640,12 @@ namespace DateEverythingAccess
                 return;
             }
 
+            if (SimpleNavBridge.Enabled)
+            {
+                ApplyAutoWalkSimple();
+                return;
+            }
+
             NavigationGraph.PathStep currentStep = GetCurrentNavigationStep();
             if (!TryResolveAutoWalkMovementTarget("initial", out Vector3 nextPosition, out NavigationTargetKind targetKind))
             {
@@ -5854,6 +5904,194 @@ namespace DateEverythingAccess
                 moveInput,
                 lookInput,
                 playerTransform.position);
+        }
+
+        // Slim auto-walk path used when ModConfig.UseSimpleNavigation is true.
+        //
+        // Design:
+        //   - SimpleNav resolves ONE target per step. For door steps the target is on the
+        //     DESTINATION side of the doorway, not a source-side approach point — there is no
+        //     two-phase approach/exit dance.
+        //   - Each frame: if the active step's door is closed and the player is near it, fire
+        //     Interact() to open it. The player keeps walking toward the destination-side
+        //     target; the door opens on approach and they walk through.
+        //   - Arrival = the player is in the destination zone family. This matches the sweep's
+        //     success criterion exactly, so passing here means passing the sweep.
+        //   - OpenPassage / Stairs / Teleporter steps still hand off to the legacy
+        //     TryAttemptTransitionInteraction on arrival — they have not been redesigned.
+        //   - On unresolved target: stop cleanly. SimpleNav doesn't reselect bad targets, so
+        //     the legacy loop detector is unnecessary.
+        private void ApplyAutoWalkSimple()
+        {
+            NavigationGraph.PathStep currentStep = GetCurrentNavigationStep();
+            if (currentStep == null)
+            {
+                StopNavigationBlocked("simple-nav: no current step");
+                return;
+            }
+
+            Transform playerTransform = BetterPlayerControl.Instance.transform;
+            Vector3 playerPos = playerTransform.position;
+            string stepKey = BuildNavigationStepKey(currentStep);
+            string toZone = currentStep.ToZone;
+            bool isDoorStep = currentStep.Kind == NavigationGraph.StepKind.Door;
+            bool isOtherTransitionStep =
+                currentStep.Kind == NavigationGraph.StepKind.OpenPassage ||
+                currentStep.Kind == NavigationGraph.StepKind.Teleporter ||
+                currentStep.Kind == NavigationGraph.StepKind.Stairs;
+
+            NavigationTargetKind targetKind = (isDoorStep || isOtherTransitionStep)
+                ? NavigationTargetKind.TransitionInteractable
+                : NavigationTargetKind.ZoneFallback;
+
+            if (!SimpleNavBridge.TryGetTargetForStep(stepKey, currentStep, out Vector3 target, out string reason))
+            {
+                LogNavigationAutoWalkDebug(
+                    "Simple-nav unresolved target step=" + DescribeNavigationStep(currentStep) +
+                    " reason=" + (reason ?? "<none>"));
+                StopNavigationBlocked("simple-nav unresolved target step=" + DescribeNavigationStep(currentStep) +
+                    " reason=" + (reason ?? "<none>"));
+                return;
+            }
+
+            // Roll forward through the waypoint sequence as the player reaches each leg's end.
+            // After the call, `target` may be stale (the bridge has advanced), so re-read it.
+            if (SimpleNavBridge.TryAdvanceWaypoint(playerPos))
+            {
+                target = SimpleNavBridge.LastResolvedTarget;
+            }
+
+            // Arrival check: player is in destination zone family. This is the only success
+            // criterion that matters; physical proximity to the resolved target is irrelevant
+            // when the player is already in the right room.
+            if (SimpleNavBridge.HasArrived(toZone))
+            {
+                ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                if (isOtherTransitionStep)
+                {
+                    // OpenPassage / Stairs / Teleporter still need the legacy interaction.
+                    if (!TryAttemptTransitionInteraction(currentStep, allowOptionalDoorInteraction: false))
+                    {
+                        if (Time.unscaledTime - _lastAutoWalkProgressTime >=
+                            GetAutoWalkBlockedTimeoutSeconds(currentStep, GetCurrentZoneNameForNavigation(), targetKind, target))
+                        {
+                            StopNavigationBlocked("simple-nav transition interaction timed out step=" + DescribeNavigationStep(currentStep));
+                        }
+                    }
+                    return;
+                }
+                // Door step or terminal step → arrived means done with this step.
+                StopNavigationWithAnnouncement("navigation_arrived");
+                return;
+            }
+
+            // Open the connecting door on approach if needed. Cheap; no-op when door is open,
+            // when no door is associated with this step, or when player is still far away.
+            if (isDoorStep)
+                SimpleNavBridge.TryOpenActiveDoorIfNeeded(playerPos);
+
+            Vector3 toTarget = target - playerPos;
+            toTarget.y = 0f;
+            if (toTarget.sqrMagnitude <= 0.0001f)
+            {
+                ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                return;
+            }
+
+            Vector3 desiredDir = toTarget.normalized;
+            Vector3 localDirection = playerTransform.InverseTransformDirection(desiredDir);
+            localDirection.y = 0f;
+            float turnDegrees = Vector3.SignedAngle(playerTransform.forward, desiredDir, Vector3.up);
+
+            Vector3 moveInput = new Vector3(
+                Mathf.Clamp(localDirection.x, -1f, 1f),
+                0f,
+                Mathf.Clamp(localDirection.z, -1f, 1f));
+            Vector3 lookInput = new Vector3(Mathf.Clamp(turnDegrees / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
+
+            // Hold position while the door is mid-swing. Walking into a moving door trips
+            // Door.OnCollisionEnter → collidedWithPlayer=true → the changeDoorRot coroutine
+            // breaks out, leaving the door pinned at a partial angle. Keep the look input so
+            // we still finish orienting toward the doorway while we wait.
+            bool waitingForDoorSwing = isDoorStep && SimpleNavBridge.IsActiveDoorMoving();
+            if (waitingForDoorSwing)
+                moveInput = Vector3.zero;
+
+            if (!ApplyNavigationInput(moveInput, lookInput))
+            {
+                StopNavigationBlocked("simple-nav input application failed step=" + DescribeNavigationStep(currentStep));
+                return;
+            }
+
+            SimpleNavBridge.RecordFrameProgress(playerPos);
+
+            // Don't tick the progress timeout while we're deliberately holding for a door
+            // swing — otherwise short swings near the timeout boundary would falsely fail.
+            if (waitingForDoorSwing)
+            {
+                _lastAutoWalkProgressTime = Time.unscaledTime;
+                return;
+            }
+
+            if (Vector3.Distance(playerPos, _lastAutoWalkPosition) >= AutoWalkProgressDistance)
+            {
+                _lastAutoWalkPosition = playerPos;
+                _lastAutoWalkProgressTime = Time.unscaledTime;
+                ClearNavigationBlockedDetail();
+            }
+            else if (Time.unscaledTime - _lastAutoWalkProgressTime >=
+                GetAutoWalkBlockedTimeoutSeconds(currentStep, GetCurrentZoneNameForNavigation(), targetKind, target))
+            {
+                // Probe what's actually between the player and the target so the failure log
+                // tells us which collider is blocking instead of just "we didn't make progress".
+                string runtimeBlocker = ProbeRuntimeBlocker(playerPos, target);
+                LogNavigationAutoWalkDebug(
+                    "Simple-nav progress timeout step=" + DescribeNavigationStep(currentStep) +
+                    " target=" + FormatVector3(target) +
+                    " player=" + FormatVector3(playerPos) +
+                    " runtimeBlocker=" + (runtimeBlocker ?? "<none>"));
+                StopNavigationBlocked("simple-nav progress timeout step=" + DescribeNavigationStep(currentStep) +
+                    " runtimeBlocker=" + (runtimeBlocker ?? "<none>"));
+            }
+
+            RecordNavigationMovementCommand(
+                currentStep,
+                targetKind,
+                target,
+                moveInput,
+                lookInput,
+                playerPos);
+        }
+
+        // Probe what's physically between the player and the active waypoint at runtime. Casts
+        // at two heights because doorframe sills and door-bottom colliders sit below the chest
+        // height the player capsule normally encounters. Returns "chest=<a> ankle=<b>" with
+        // either side filled with "<clear>" when that probe is unblocked, or null if both clear.
+        private static string ProbeRuntimeBlocker(Vector3 playerPos, Vector3 target)
+        {
+            Vector3 toward = target - playerPos;
+            toward.y = 0f;
+            float dist = toward.magnitude;
+            if (dist < 0.1f) return null;
+            Vector3 dir = toward / dist;
+            float castDist = dist + 0.5f;
+
+            string chestLabel = ProbeOne(playerPos + new Vector3(0f, 1.0f, 0f), dir, castDist);
+            string ankleLabel = ProbeOne(playerPos + new Vector3(0f, 0.2f, 0f), dir, castDist);
+            if (chestLabel == null && ankleLabel == null) return null;
+            return "chest=" + (chestLabel ?? "<clear>") + " ankle=" + (ankleLabel ?? "<clear>");
+        }
+
+        private static string ProbeOne(Vector3 origin, Vector3 dir, float maxDist)
+        {
+            if (!Physics.SphereCast(origin, 0.35f, dir, out RaycastHit hit, maxDist,
+                    Physics.AllLayers, QueryTriggerInteraction.Ignore))
+                return null;
+            string name = hit.collider != null && hit.collider.gameObject != null
+                ? hit.collider.gameObject.name
+                : "<unknown>";
+            int layer = hit.collider != null ? hit.collider.gameObject.layer : -1;
+            return name + " layer=" + layer + " dist=" + hit.distance.ToString("0.00");
         }
 
         private void RecordNavigationMovementCommand(

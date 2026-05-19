@@ -1,10 +1,11 @@
 Door executor contract validation
-GeneratedAtUtc: 2026-05-14T23:03:29.3328954Z
-Runtime build: 0.1.1|utc=2026-05-14T22:54:32.0000000Z|sha256=53692B573562A8FBC6D33656A33479AD661826F022B65774B12A9C594DE0C6D1
+GeneratedAtUtc: 2026-05-18T21:46:56.2728231Z
+Runtime build: 0.1.1|utc=2026-05-18T21:16:18.0000000Z|sha256=0A41F57189A4B5430E559FFF3587214121C3447CED555B1975331A325B1D9E0C
 Expected runtime build: <none>
 Authoritative: True staleBuild=False fullSweep=True
-Door totals: total=22 passed=21 failed=1
-Violations: 1
+Door totals: total=21 passed=13 failed=8
+Violations: 2
 Violation details:
 - PassingControlStillPassed: transition:bathroom1->hallway - Passing control is no longer passed.
+- PassingControlStillPassed: transition:office->hallway - Passing control is no longer passed.
 Warnings: 0

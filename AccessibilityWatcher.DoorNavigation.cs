@@ -1,3 +1,5 @@
+#define VALIDATION_TEST_ENABLED
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -185,6 +187,21 @@ namespace DateEverythingAccess
                 {
                     hasValidHandoffTarget = true;
                     handoffDistance = GetPlanarDistanceToTarget(playerPosition, handoffTarget);
+#if VALIDATION_TEST_ENABLED
+                    if (TryValidateTargetForTestCase(
+                        step, currentZone, handoffTarget, "HandoffTarget",
+                        out bool shouldUseHandoffTarget) &&
+                        !shouldUseHandoffTarget)
+                    {
+                        DebugLogger.Log(
+                            LogCategory.State,
+                            "TARGET_VALIDATION_TEST: bathroom1->hallway handoff target rejected, clearing" +
+                            " handoffTarget=" + FormatVector3(handoffTarget));
+                        hasValidHandoffTarget = false;
+                        handoffTarget = Vector3.zero;
+                        handoffDistance = float.PositiveInfinity;
+                    }
+#endif
                 }
             }
 
@@ -553,6 +570,19 @@ namespace DateEverythingAccess
                         " step=" + DescribeNavigationStep(step));
                     position = noSourceRawExitTarget;
                 }
+
+                // === VALIDATION HYPOTHESIS TEST ===
+                #if VALIDATION_TEST_ENABLED
+                if (TryValidateTargetForTestCase(step, currentZone, position, "ZoneFallback", out bool shouldUse))
+                {
+                    if (!shouldUse)
+                    {
+                        DebugLogger.Log(LogCategory.State, "TARGET_VALIDATION_TEST: bathroom1->hallway rejected target, returning false");
+                        return false;
+                    }
+                }
+                #endif
+                // === END TEST ===
 
                 return TryUseDoorPostInteractionTargetDecision(
                     DoorPostInteractionTargetDecision.Create(

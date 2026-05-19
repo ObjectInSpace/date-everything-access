@@ -1,7 +1,13 @@
 [CmdletBinding()]
 param(
     [Parameter()]
-    [string]$ScenePath = "D:\root\AssetRipper\1.3.12\extracted\Ripped\ExportedProject\Assets\ThirdPersonGreybox.unity",
+    [string]$ScenePath = "D:\root\AssetRipper\1.3.12-premium\extracted\Ripped\ExportedProject\Assets\ThirdPersonGreybox.unity",
+
+    [Parameter()]
+    [string]$MeshAssetRoot = "D:\root\AssetRipper\1.3.12-premium\extracted\Ripped\ExportedProject\Assets\Mesh",
+
+    [Parameter()]
+    [string]$MeshGuidIndexCachePath = ".\artifacts\navigation\mesh_guid_index.cache.json",
 
     [Parameter()]
     [string]$OutputPath = ".\artifacts\navigation\thirdpersongreybox-blockers.json",
@@ -13,13 +19,49 @@ param(
     [double]$MaximumBlockingBottomY = 2.35,
 
     [Parameter()]
-    [double]$MinimumFootprintRadius = 0.15
+    [double]$MinimumFootprintRadius = 0.15,
+
+    [Parameter()]
+    [double]$PlayerSliceLowY = 0.6,
+
+    [Parameter()]
+    [double]$PlayerSliceHighY = 1.5,
+
+    [Parameter()]
+    [double]$MaxMeshFootprintAreaSqM = 25.0,
+
+    # Bypass MaxMeshFootprintAreaSqM when a mesh has a wall-like signature:
+    # tall (vertical extent >= WallMinVerticalExtent), grounded
+    # (BottomY <= WallMaxBottomY), capped (TopY <= WallMaxTopY to exclude
+    # trees), AND thin in at least one horizontal direction
+    # (min(Width, Depth) <= WallMaxThinDimension). The thinness check is the
+    # critical one: combined-room wall meshes like SM_Walls_Hall1 satisfy the
+    # tall/grounded criteria but their AABBs span an entire room interior, so
+    # admitting them blocks all routes inside the room. Real wall meshes
+    # (fences, single-wall segments) are thin in one direction.
+    [Parameter()]
+    [double]$WallMinVerticalExtent = 3.0,
+
+    [Parameter()]
+    [double]$WallMaxBottomY = 0.6,
+
+    [Parameter()]
+    [double]$WallMaxTopY = 25.0,
+
+    [Parameter()]
+    [double]$WallMaxThinDimension = 1.5,
+
+    [Parameter()]
+    [int[]]$SkipMeshLayers = @(18, 31)
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName System.Numerics
+
+# Dot-source the mesh parser so Read-UnityMeshAsset is in-scope.
+. (Join-Path $PSScriptRoot "Read-UnityMeshAsset.ps1")
 
 function ConvertTo-Float {
     param(
@@ -438,6 +480,288 @@ function Get-LineValueOrDefault {
     return $value
 }
 
+function Build-MeshGuidIndex {
+    param(
+        [Parameter(Mandatory = $true)][string]$MeshRoot,
+        [Parameter(Mandatory = $true)][string]$CachePath
+    )
+
+    $latestMetaWrite = [datetime]::MinValue
+    $metaFiles = Get-ChildItem -Path $MeshRoot -Filter "*.asset.meta" -File
+    foreach ($mf in $metaFiles) {
+        if ($mf.LastWriteTimeUtc -gt $latestMetaWrite) { $latestMetaWrite = $mf.LastWriteTimeUtc }
+    }
+
+    if (Test-Path -LiteralPath $CachePath) {
+        $cacheFile = Get-Item -LiteralPath $CachePath
+        if ($cacheFile.LastWriteTimeUtc -ge $latestMetaWrite) {
+            $cached = Get-Content -LiteralPath $CachePath -Raw | ConvertFrom-Json
+            if ($cached.MeshRoot -eq $MeshRoot -and $cached.MetaCount -eq $metaFiles.Count) {
+                $dict = [System.Collections.Generic.Dictionary[string, string]]::new()
+                foreach ($prop in $cached.Entries.PSObject.Properties) {
+                    $dict[$prop.Name] = [string]$prop.Value
+                }
+                return $dict
+            }
+        }
+    }
+
+    $dict = [System.Collections.Generic.Dictionary[string, string]]::new()
+    foreach ($mf in $metaFiles) {
+        $lines = [System.IO.File]::ReadAllLines($mf.FullName)
+        foreach ($line in $lines) {
+            if ($line.StartsWith("guid: ")) {
+                $guid = $line.Substring(6).Trim()
+                $assetPath = $mf.FullName.Substring(0, $mf.FullName.Length - 5)
+                $dict[$guid] = $assetPath
+                break
+            }
+        }
+    }
+
+    $cacheDir = Split-Path -Parent $CachePath
+    if (-not [string]::IsNullOrWhiteSpace($cacheDir)) {
+        New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+    }
+    $entries = [ordered]@{}
+    foreach ($kvp in $dict.GetEnumerator()) { $entries[$kvp.Key] = $kvp.Value }
+    $cacheObj = [ordered]@{
+        MeshRoot = $MeshRoot
+        MetaCount = $metaFiles.Count
+        GeneratedAt = (Get-Date).ToString("o")
+        Entries = $entries
+    }
+    $cacheObj | ConvertTo-Json -Depth 4 -Compress | Set-Content -LiteralPath $CachePath -Encoding UTF8
+    return $dict
+}
+
+function Get-ConvexHull2D {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [System.Collections.Generic.List[System.Numerics.Vector2]]$Points
+    )
+
+    if ($Points.Count -lt 3) {
+        return $Points
+    }
+
+    $sorted = [System.Collections.Generic.List[System.Numerics.Vector2]]::new($Points)
+    $sorted.Sort([System.Comparison[System.Numerics.Vector2]]{
+        param($a, $b)
+        if ($a.X -lt $b.X) { return -1 }
+        if ($a.X -gt $b.X) { return 1 }
+        if ($a.Y -lt $b.Y) { return -1 }
+        if ($a.Y -gt $b.Y) { return 1 }
+        return 0
+    })
+
+    $cross = {
+        param($o, $a, $b)
+        return ($a.X - $o.X) * ($b.Y - $o.Y) - ($a.Y - $o.Y) * ($b.X - $o.X)
+    }
+
+    $lower = [System.Collections.Generic.List[System.Numerics.Vector2]]::new()
+    foreach ($p in $sorted) {
+        while ($lower.Count -ge 2 -and ((& $cross $lower[$lower.Count - 2] $lower[$lower.Count - 1] $p) -le 0)) {
+            $lower.RemoveAt($lower.Count - 1)
+        }
+        $lower.Add($p)
+    }
+
+    $upper = [System.Collections.Generic.List[System.Numerics.Vector2]]::new()
+    for ($i = $sorted.Count - 1; $i -ge 0; $i--) {
+        $p = $sorted[$i]
+        while ($upper.Count -ge 2 -and ((& $cross $upper[$upper.Count - 2] $upper[$upper.Count - 1] $p) -le 0)) {
+            $upper.RemoveAt($upper.Count - 1)
+        }
+        $upper.Add($p)
+    }
+
+    $hull = [System.Collections.Generic.List[System.Numerics.Vector2]]::new()
+    for ($i = 0; $i -lt $lower.Count - 1; $i++) { $hull.Add($lower[$i]) }
+    for ($i = 0; $i -lt $upper.Count - 1; $i++) { $hull.Add($upper[$i]) }
+    return $hull
+}
+
+function Get-PolygonArea {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [System.Collections.Generic.List[System.Numerics.Vector2]]$Points
+    )
+
+    if ($Points.Count -lt 3) { return 0.0 }
+    $sum = 0.0
+    for ($i = 0; $i -lt $Points.Count; $i++) {
+        $j = ($i + 1) % $Points.Count
+        $sum += ($Points[$i].X * $Points[$j].Y) - ($Points[$j].X * $Points[$i].Y)
+    }
+    return [Math]::Abs($sum) / 2.0
+}
+
+function Get-TrianglePlaneIntersections {
+    param(
+        [Parameter(Mandatory = $true)][System.Numerics.Vector3]$A,
+        [Parameter(Mandatory = $true)][System.Numerics.Vector3]$B,
+        [Parameter(Mandatory = $true)][System.Numerics.Vector3]$C,
+        [Parameter(Mandatory = $true)][double]$PlaneY,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.Generic.List[System.Numerics.Vector2]]$Out
+    )
+
+    $verts = @($A, $B, $C)
+    $signs = @(
+        ($A.Y - $PlaneY),
+        ($B.Y - $PlaneY),
+        ($C.Y - $PlaneY)
+    )
+
+    $hits = 0
+    for ($i = 0; $i -lt 3; $i++) {
+        $j = ($i + 1) % 3
+        $si = $signs[$i]
+        $sj = $signs[$j]
+        if (($si -ge 0 -and $sj -lt 0) -or ($si -lt 0 -and $sj -ge 0)) {
+            $denom = $si - $sj
+            if ([Math]::Abs($denom) -lt 1e-9) { continue }
+            $t = $si / $denom
+            $vi = $verts[$i]
+            $vj = $verts[$j]
+            $x = $vi.X + ($vj.X - $vi.X) * $t
+            $z = $vi.Z + ($vj.Z - $vi.Z) * $t
+            $Out.Add([System.Numerics.Vector2]::new([float]$x, [float]$z))
+            $hits++
+            if ($hits -eq 2) { return }
+        }
+    }
+}
+
+function Get-MeshColliderRecord {
+    param(
+        [Parameter(Mandatory = $true)][object]$Component,
+        [Parameter(Mandatory = $true)][object]$GameObject,
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][object]$WorldTransform,
+        [Parameter(Mandatory = $true)][object]$MeshData,
+        [Parameter(Mandatory = $true)][double]$SliceLowY,
+        [Parameter(Mandatory = $true)][double]$SliceHighY,
+        [Parameter(Mandatory = $true)][double]$MinTopY,
+        [Parameter(Mandatory = $true)][double]$MaxBottomY
+    )
+
+    $worldVerts = New-Object System.Numerics.Vector3[] $MeshData.Vertices.Length
+    for ($i = 0; $i -lt $MeshData.Vertices.Length; $i++) {
+        $worldVerts[$i] = Transform-LocalPoint -WorldTransform $WorldTransform -LocalPoint $MeshData.Vertices[$i]
+    }
+
+    $minY = [double]::PositiveInfinity
+    $maxY = [double]::NegativeInfinity
+    foreach ($v in $worldVerts) {
+        if ($v.Y -lt $minY) { $minY = $v.Y }
+        if ($v.Y -gt $maxY) { $maxY = $v.Y }
+    }
+
+    $pointBag = [ordered]@{
+        Points = New-Object System.Collections.Generic.List[System.Numerics.Vector2]
+        TrianglePoints = New-Object System.Collections.Generic.List[System.Numerics.Vector3]
+        IntersectedTriangleCount = 0
+    }
+
+    $tris = $MeshData.Triangles
+    $triCount = [int]($tris.Length / 3)
+    $slicePlanes = @(@($SliceLowY, $SliceHighY).Where({ $_ -ge $minY -and $_ -le $maxY }))
+    if ($slicePlanes.Count -eq 0 -and $minY -ge $MinTopY -and $minY -le $MaxBottomY) {
+        # Whole mesh sits inside the band but neither slice plane clips it (very thin object).
+        # Use vertex projection as fallback.
+        foreach ($v in $worldVerts) {
+            if ($v.Y -ge $MinTopY -and $v.Y -le $MaxBottomY) {
+                $pointBag.Points.Add([System.Numerics.Vector2]::new([float]$v.X, [float]$v.Z))
+            }
+        }
+    } else {
+        foreach ($plane in $slicePlanes) {
+            for ($t = 0; $t -lt $triCount; $t++) {
+                $a = $worldVerts[$tris[$t * 3]]
+                $b = $worldVerts[$tris[$t * 3 + 1]]
+                $c = $worldVerts[$tris[$t * 3 + 2]]
+                $before = $pointBag.Points.Count
+                Get-TrianglePlaneIntersections -A $a -B $b -C $c -PlaneY $plane -Out $pointBag.Points
+                if ($pointBag.Points.Count -gt $before) { $pointBag.IntersectedTriangleCount++ }
+            }
+        }
+    }
+
+    if ($pointBag.Points.Count -lt 1) {
+        return $null
+    }
+
+    $hull = Get-ConvexHull2D -Points $pointBag.Points
+    $area = Get-PolygonArea -Points $hull
+
+    $hullArray = New-Object System.Collections.Generic.List[object]
+    $minX = [double]::PositiveInfinity
+    $maxX = [double]::NegativeInfinity
+    $minZ = [double]::PositiveInfinity
+    $maxZ = [double]::NegativeInfinity
+    $sumX = 0.0
+    $sumZ = 0.0
+    foreach ($p in $hull) {
+        $hullArray.Add((Convert-FlatVectorToObject -X ([double]$p.X) -Z ([double]$p.Y)))
+        if ($p.X -lt $minX) { $minX = $p.X }
+        if ($p.X -gt $maxX) { $maxX = $p.X }
+        if ($p.Y -lt $minZ) { $minZ = $p.Y }
+        if ($p.Y -gt $maxZ) { $maxZ = $p.Y }
+        $sumX += $p.X
+        $sumZ += $p.Y
+    }
+    $centerX = $sumX / $hull.Count
+    $centerZ = $sumZ / $hull.Count
+    $worldCenter = [System.Numerics.Vector3]::new([float]$centerX, [float](($minY + $maxY) / 2.0), [float]$centerZ)
+
+    $points3D = New-Object System.Collections.Generic.List[System.Numerics.Vector3]
+    $points3D.Add([System.Numerics.Vector3]::new([float]$minX, [float]$minY, [float]$minZ))
+    $points3D.Add([System.Numerics.Vector3]::new([float]$maxX, [float]$maxY, [float]$maxZ))
+
+    $componentForRecord = [ordered]@{
+        ComponentId = $Component.ComponentId
+        Enabled = $Component.Enabled
+        IsTrigger = $Component.IsTrigger
+        IsDoorConnector = $Component.IsDoorConnector
+        IsTeleporterConnector = $Component.IsTeleporterConnector
+        HasRigidbody = $Component.HasRigidbody
+        RigidbodyIsKinematic = $Component.RigidbodyIsKinematic
+        TransformId = $Component.TransformId
+        WorldCenter = $worldCenter
+        BottomY = $minY
+        TopY = $maxY
+        LocalShape = [ordered]@{
+            MeshName = $MeshData.Name
+            MeshGuid = $Component.MeshGuid
+            VertexCount = $MeshData.VertexCount
+            TriangleCount = $MeshData.TriangleCount
+            IsConvex = [bool]$Component.IsConvex
+            LocalAabbCenter = if ($null -ne $MeshData.LocalAabbCenter) { Convert-Vector3ToObject $MeshData.LocalAabbCenter } else { $null }
+            LocalAabbExtent = if ($null -ne $MeshData.LocalAabbExtent) { Convert-Vector3ToObject $MeshData.LocalAabbExtent } else { $null }
+        }
+    }
+
+    $record = New-ColliderRecord -Component $componentForRecord `
+        -ColliderType "MeshCollider" `
+        -GameObject $GameObject `
+        -Path $Path `
+        -WorldTransform $WorldTransform `
+        -Points $points3D `
+        -Footprint ([ordered]@{
+            Kind = "ConvexHull2D"
+            Center = Convert-Vector3ToObject $worldCenter
+            Vertices = $hullArray.ToArray()
+            AreaSqM = [Math]::Round($area, 6)
+            IntersectedTriangleCount = $pointBag.IntersectedTriangleCount
+        })
+
+    return $record
+}
+
 function New-ColliderRecord {
     param(
         [Parameter(Mandatory = $true)]
@@ -613,7 +937,7 @@ $doorGameObjectIds = New-Object System.Collections.Generic.HashSet[long]
 $teleporterGameObjectIds = New-Object System.Collections.Generic.HashSet[long]
 $rigidbodyByGameObjectId = [System.Collections.Generic.Dictionary[long, object]]::new()
 $primitiveColliderComponents = New-Object System.Collections.Generic.List[object]
-$meshColliderCount = 0
+$meshColliderComponents = New-Object System.Collections.Generic.List[object]
 $terrainColliderCount = 0
 $currentHeader = $null
 $currentLines = [System.Collections.Generic.List[string]]::new()
@@ -665,7 +989,19 @@ function Process-SceneSection {
                 }
             }
         }
-        64 { $script:meshColliderCount++ }
+        64 {
+            $gameObjectIdText = Get-LineValue -Lines $linesArray -Pattern "^  m_GameObject: \{fileID: (\d+)\}$"
+            if ($null -ne $gameObjectIdText) {
+                $meshGuid = Get-LineValue -Lines $linesArray -Pattern "^  m_Mesh: \{fileID: -?\d+, guid: ([0-9a-f]+), type: \d+\}\s*$"
+                $script:meshColliderComponents.Add([pscustomobject]@{
+                    ComponentId = $sectionInfo.Id; ColliderType = "MeshCollider"; GameObjectId = [long]$gameObjectIdText
+                    Enabled = ((Get-LineValue -Lines $linesArray -Pattern "^  m_Enabled: (\d+)$") -ne "0")
+                    IsTrigger = ((Get-LineValue -Lines $linesArray -Pattern "^  m_IsTrigger: (\d+)$") -eq "1")
+                    IsConvex = ((Get-LineValue -Lines $linesArray -Pattern "^  m_Convex: (\d+)$") -eq "1")
+                    MeshGuid = $meshGuid
+                })
+            }
+        }
         65 {
             $gameObjectIdText = Get-LineValue -Lines $linesArray -Pattern "^  m_GameObject: \{fileID: (\d+)\}$"
             if ($null -ne $gameObjectIdText) {
@@ -805,17 +1141,201 @@ foreach ($component in $primitiveColliderComponents) {
     $navigationBlockers.Add($record)
 }
 
+$meshSupported = $false
+$meshGuidIndexCount = 0
+$meshColliderRecords = New-Object System.Collections.Generic.List[object]
+$meshColliderIgnoredReasons = New-ReasonCounter
+$meshLayerHistogram = [System.Collections.Generic.Dictionary[int, int]]::new()
+$meshColliderResolvedCount = 0
+$meshColliderUnresolvedCount = 0
+$meshParseFailures = New-Object System.Collections.Generic.List[object]
+$meshCache = [System.Collections.Generic.Dictionary[string, object]]::new()
+
+if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($MeshAssetRoot) -and (Test-Path -LiteralPath $MeshAssetRoot)) {
+    $meshSupported = $true
+    Write-Host ("Building mesh GUID index from {0}" -f $MeshAssetRoot)
+    $guidIndex = Build-MeshGuidIndex -MeshRoot $MeshAssetRoot -CachePath $MeshGuidIndexCachePath
+    $meshGuidIndexCount = $guidIndex.Count
+    Write-Host ("Mesh GUID index entries: {0}" -f $meshGuidIndexCount)
+
+    $skipLayerSet = [System.Collections.Generic.HashSet[int]]::new()
+    foreach ($lyr in $SkipMeshLayers) { [void]$skipLayerSet.Add([int]$lyr) }
+
+    foreach ($component in $meshColliderComponents) {
+        if (-not $gameObjects.ContainsKey($component.GameObjectId) -or -not $transformByGameObjectId.ContainsKey($component.GameObjectId)) {
+            Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "MissingSceneObject"
+            continue
+        }
+        $gameObject = $gameObjects[$component.GameObjectId]
+        if ($meshLayerHistogram.ContainsKey($gameObject.Layer)) { $meshLayerHistogram[$gameObject.Layer]++ } else { $meshLayerHistogram[$gameObject.Layer] = 1 }
+
+        $transformInfo = $transformByGameObjectId[$component.GameObjectId]
+        if (-not $worldTransforms.ContainsKey($transformInfo.Id)) {
+            Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "MissingWorldTransform"
+            continue
+        }
+
+        if ($null -eq $component.MeshGuid) {
+            Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "MissingMeshReference"
+            $script:meshColliderUnresolvedCount++
+            continue
+        }
+
+        if (-not $guidIndex.ContainsKey($component.MeshGuid)) {
+            Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "MeshGuidUnresolved"
+            $script:meshColliderUnresolvedCount++
+            continue
+        }
+
+        $script:meshColliderResolvedCount++
+
+        $rigidbodyIsKinematic = $false
+        if ($rigidbodyByGameObjectId.ContainsKey($gameObject.Id)) { $rigidbodyIsKinematic = $rigidbodyByGameObjectId[$gameObject.Id].IsKinematic }
+        $component | Add-Member -NotePropertyName TransformId -NotePropertyValue $transformInfo.Id -Force
+        $component | Add-Member -NotePropertyName IsDoorConnector -NotePropertyValue ($doorGameObjectIds.Contains($gameObject.Id)) -Force
+        $component | Add-Member -NotePropertyName IsTeleporterConnector -NotePropertyValue ($teleporterGameObjectIds.Contains($gameObject.Id)) -Force
+        $component | Add-Member -NotePropertyName HasRigidbody -NotePropertyValue ($rigidbodyByGameObjectId.ContainsKey($gameObject.Id)) -Force
+        $component | Add-Member -NotePropertyName RigidbodyIsKinematic -NotePropertyValue $rigidbodyIsKinematic -Force
+
+        if (-not $component.Enabled) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "DisabledCollider"; continue }
+        if ($component.IsTrigger) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "TriggerCollider"; continue }
+        if (-not $gameObject.IsActive) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "InactiveGameObject"; continue }
+        if ($component.IsDoorConnector) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "DoorConnector"; continue }
+        if ($component.IsTeleporterConnector) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "TeleporterConnector"; continue }
+        if ($component.HasRigidbody) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "RigidbodyObject"; continue }
+        if ($skipLayerSet.Contains($gameObject.Layer)) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason ("SkippedLayer:{0}" -f $gameObject.Layer); continue }
+
+        $assetPath = $guidIndex[$component.MeshGuid]
+        $meshData = $null
+        if ($meshCache.ContainsKey($assetPath)) {
+            $meshData = $meshCache[$assetPath]
+        } else {
+            try {
+                $meshData = Read-UnityMeshAsset -Path $assetPath
+                $meshCache[$assetPath] = $meshData
+            } catch {
+                $meshCache[$assetPath] = $null
+                $meshParseFailures.Add([ordered]@{ AssetPath = $assetPath; Guid = $component.MeshGuid; Error = $_.Exception.Message })
+            }
+        }
+        if ($null -eq $meshData) {
+            Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "MeshParseFailed"
+            continue
+        }
+
+        $worldTransform = $worldTransforms[$transformInfo.Id]
+        $path = Get-GameObjectPath -GameObjectId $gameObject.Id -GameObjects $gameObjects -TransformByGameObjectId $transformByGameObjectId -TransformsById $transformsById
+        $record = Get-MeshColliderRecord -Component $component -GameObject $gameObject -Path $path `
+            -WorldTransform $worldTransform -MeshData $meshData `
+            -SliceLowY $PlayerSliceLowY -SliceHighY $PlayerSliceHighY `
+            -MinTopY $MinimumBlockingTopY -MaxBottomY $MaximumBlockingBottomY
+
+        if ($null -eq $record) {
+            Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "EmptyFootprint"
+            continue
+        }
+
+        $meshColliderRecords.Add($record)
+
+        $reason = $null
+        if ($record.TopY -lt $MinimumBlockingTopY) { $reason = "BelowBlockingHeight" }
+        elseif ($record.BottomY -gt $MaximumBlockingBottomY) { $reason = "AbovePlayerBand" }
+        elseif ($null -eq $record.Bounds2D) { $reason = "MissingFootprintBounds" }
+        elseif ([double]$record.Footprint.AreaSqM -gt $MaxMeshFootprintAreaSqM) {
+            # Wall-like bypass: tall, grounded, capped (rejects trees/skyboxes),
+            # AND thin in one horizontal direction. Thinness is the critical
+            # check: combined-room wall meshes have huge XZ AABBs that span the
+            # whole room interior; admitting them blocks routes inside the room.
+            $verticalExtent = [double]$record.TopY - [double]$record.BottomY
+            $thinDim = [Math]::Min([double]$record.Bounds2D.Width, [double]$record.Bounds2D.Depth)
+            $isWallLike = ($verticalExtent -ge $WallMinVerticalExtent) -and `
+                ([double]$record.BottomY -le $WallMaxBottomY) -and `
+                ([double]$record.TopY -le $WallMaxTopY) -and `
+                ($thinDim -le $WallMaxThinDimension)
+            if (-not $isWallLike) { $reason = "FootprintAreaExceedsMax" }
+            else {
+                $flatRadius = [Math]::Max([double]$record.Bounds2D.Width, [double]$record.Bounds2D.Depth) / 2.0
+                if ($flatRadius -lt $MinimumFootprintRadius) { $reason = "TinyFootprint" }
+            }
+        }
+        else {
+            $flatRadius = [Math]::Max([double]$record.Bounds2D.Width, [double]$record.Bounds2D.Depth) / 2.0
+            if ($flatRadius -lt $MinimumFootprintRadius) { $reason = "TinyFootprint" }
+        }
+
+        if ($null -ne $reason) {
+            Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason $reason
+            continue
+        }
+
+        $navigationBlockers.Add($record)
+    }
+}
+
 $outputDirectory = Split-Path -Parent $OutputPath
 if (-not [string]::IsNullOrWhiteSpace($outputDirectory)) {
     New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
 }
 
 $ignoredPrimitiveColliderCounts = @(Convert-ReasonCounterToArray -Counter $ignoredReasons)
+$ignoredMeshColliderCounts = @(Convert-ReasonCounterToArray -Counter $meshColliderIgnoredReasons)
+$meshLayerHistogramArray = @($meshLayerHistogram.Keys | Sort-Object | ForEach-Object { [ordered]@{ Layer = [int]$_; Count = [int]$meshLayerHistogram[$_] } })
 $primitiveColliderArray = $primitiveColliders.ToArray()
+$meshColliderArray = $meshColliderRecords.ToArray()
 $navigationBlockerArray = $navigationBlockers.ToArray()
+
+# Layer inventory: every non-default layer (>=8) gets its GameObject paths
+# enumerated so we can identify what layer 31 (and friends) actually contain.
+$primitiveGameObjectIds = [System.Collections.Generic.HashSet[long]]::new()
+foreach ($component in $primitiveColliderComponents) { [void]$primitiveGameObjectIds.Add([long]$component.GameObjectId) }
+$meshGameObjectIds = [System.Collections.Generic.HashSet[long]]::new()
+foreach ($component in $meshColliderComponents) { [void]$meshGameObjectIds.Add([long]$component.GameObjectId) }
+
+$layerInventory = [System.Collections.Generic.Dictionary[int, object]]::new()
+foreach ($entry in $gameObjects.GetEnumerator()) {
+    $go = $entry.Value
+    $layer = [int]$go.Layer
+    if ($layer -lt 8) { continue }
+    if (-not $layerInventory.ContainsKey($layer)) {
+        $layerInventory[$layer] = [pscustomobject]@{
+            Layer = $layer
+            Count = 0
+            CountWithPrimitiveCollider = 0
+            CountWithMeshCollider = 0
+            CountActive = 0
+            SamplePaths = New-Object System.Collections.Generic.List[string]
+        }
+    }
+    $bucket = $layerInventory[$layer]
+    $bucket.Count++
+    if ($go.IsActive) { $bucket.CountActive++ }
+    $hasPrim = $primitiveGameObjectIds.Contains([long]$go.Id)
+    $hasMesh = $meshGameObjectIds.Contains([long]$go.Id)
+    if ($hasPrim) { $bucket.CountWithPrimitiveCollider++ }
+    if ($hasMesh) { $bucket.CountWithMeshCollider++ }
+    if ($bucket.SamplePaths.Count -lt 25 -and ($hasPrim -or $hasMesh)) {
+        $path = Get-GameObjectPath -GameObjectId $go.Id -GameObjects $gameObjects -TransformByGameObjectId $transformByGameObjectId -TransformsById $transformsById
+        if (-not [string]::IsNullOrWhiteSpace($path)) { [void]$bucket.SamplePaths.Add($path) }
+    }
+}
+
+$layerInventoryArray = @(
+    $layerInventory.Keys | Sort-Object | ForEach-Object {
+        $b = $layerInventory[$_]
+        [ordered]@{
+            Layer = $b.Layer
+            Count = $b.Count
+            CountActive = $b.CountActive
+            CountWithPrimitiveCollider = $b.CountWithPrimitiveCollider
+            CountWithMeshCollider = $b.CountWithMeshCollider
+            SamplePaths = @($b.SamplePaths)
+        }
+    }
+)
 
 $result = [ordered]@{
     ScenePath = $ScenePath
+    MeshAssetRoot = $MeshAssetRoot
     GeneratedAt = (Get-Date).ToString("o")
     Filtering = [ordered]@{
         MinimumBlockingTopY = [Math]::Round($MinimumBlockingTopY, 4)
@@ -823,23 +1343,40 @@ $result = [ordered]@{
         MinimumFootprintRadius = [Math]::Round($MinimumFootprintRadius, 4)
         DoorAndTeleporterCollidersExcluded = $true
         RigidbodyObjectsExcluded = $true
-        MeshCollidersUnsupported = $true
+        MeshCollidersUnsupported = (-not $meshSupported)
+        MeshSlicePlanes = @([Math]::Round($PlayerSliceLowY, 4), [Math]::Round($PlayerSliceHighY, 4))
+        MaxMeshFootprintAreaSqM = [Math]::Round($MaxMeshFootprintAreaSqM, 4)
+        WallMinVerticalExtent = [Math]::Round($WallMinVerticalExtent, 4)
+        WallMaxBottomY = [Math]::Round($WallMaxBottomY, 4)
+        WallMaxTopY = [Math]::Round($WallMaxTopY, 4)
+        WallMaxThinDimension = [Math]::Round($WallMaxThinDimension, 4)
+        SkipMeshLayers = @($SkipMeshLayers | ForEach-Object { [int]$_ })
         TerrainCollidersUnsupported = $true
     }
     Counts = [ordered]@{
         GameObjects = $gameObjects.Count
         PrimitiveColliders = $primitiveColliders.Count
         NavigationBlockers = $navigationBlockers.Count
-        MeshColliders = $meshColliderCount
+        MeshColliders = $meshColliderComponents.Count
+        MeshCollidersResolved = $meshColliderResolvedCount
+        MeshCollidersUnresolved = $meshColliderUnresolvedCount
+        MeshColliderRecords = $meshColliderRecords.Count
+        MeshGuidIndexEntries = $meshGuidIndexCount
         TerrainColliders = $terrainColliderCount
         DoorGameObjects = $doorGameObjectIds.Count
         TeleporterGameObjects = $teleporterGameObjectIds.Count
         RigidbodyObjects = $rigidbodyByGameObjectId.Count
     }
+    MeshColliderLayerHistogram = $meshLayerHistogramArray
+    LayerInventory = $layerInventoryArray
     IgnoredPrimitiveColliderCounts = $ignoredPrimitiveColliderCounts
+    IgnoredMeshColliderCounts = $ignoredMeshColliderCounts
+    MeshParseFailures = $meshParseFailures.ToArray()
     PrimitiveColliders = $primitiveColliderArray
+    MeshColliders = $meshColliderArray
     NavigationBlockers = $navigationBlockerArray
 }
 
-$result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $OutputPath
+$result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $OutputPath
 Write-Host "Wrote blocker collider data to $OutputPath"
+Write-Host ("MeshColliders parsed: {0}/{1}  Records: {2}  Total navigation blockers: {3}" -f $meshColliderResolvedCount, $meshColliderComponents.Count, $meshColliderRecords.Count, $navigationBlockers.Count)

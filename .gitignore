@@ -33,3 +33,7 @@ artifacts/release-staging/
 
 # Development tools (extraction tool, build artifacts, dependencies)
 tools/
+
+# Local tool caches
+*.lscache
+artifacts/navigation/mesh_guid_index.cache.json
