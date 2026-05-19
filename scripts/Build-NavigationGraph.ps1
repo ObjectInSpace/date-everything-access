@@ -7,6 +7,9 @@ param(
     [string]$InputGraphPath = "D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json",
 
     [Parameter()]
+    [string]$BlockersPath = ".\artifacts\navigation\thirdpersongreybox-blockers.json",
+
+    [Parameter()]
     [string]$OutputPath = ".\artifacts\navigation\navigation_graph.generated.json"
 )
 
@@ -39,6 +42,33 @@ function Copy-Vec3 {
     )
 
     return New-Vec3 -X ([double]$Source.x) -Y ([double]$Source.y) -Z ([double]$Source.z)
+}
+
+# CameraSpace anchors in the source scene sit at door-pivot height (~Y=4-5
+# downstairs, ~Y=16-19 upstairs) rather than the floor. Snap Y to the per-band
+# floor unless the point falls in a carve-out: basement (Y<-3), or the
+# hallway_arma stair landing (8<Y<11). Authored override waypoints already at
+# floor Y are no-ops after snapping.
+function Snap-FloorY {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Source
+    )
+
+    $y = [double]$Source.y
+    if ($y -lt -3.0) {
+        # Basement / out-of-band; leave alone.
+        $snapped = $y
+    } elseif ($y -gt 8.0 -and $y -lt 11.0) {
+        # Stair landing (hallway_arma); leave alone.
+        $snapped = $y
+    } elseif ($y -lt 8.0) {
+        $snapped = -0.61
+    } else {
+        $snapped = 12.82
+    }
+
+    return New-Vec3 -X ([double]$Source.x) -Y $snapped -Z ([double]$Source.z)
 }
 
 function Clamp-Value {
@@ -103,6 +133,133 @@ function Lerp-Vec3 {
         -X ([double]$A.x + (([double]$B.x - [double]$A.x) * $clamped)) `
         -Y ([double]$A.y + (([double]$B.y - [double]$A.y) * $clamped)) `
         -Z ([double]$A.z + (([double]$B.z - [double]$A.z) * $clamped))
+}
+
+$script:WallAabbs = @()
+
+# Loads wall mesh AABBs from the blockers export. Used by Get-WallSnappedPoint
+# to nudge door clear points off geometry that the runtime SphereCast would
+# otherwise hit. Reads from MeshColliders (not NavigationBlockers) because the
+# thin-wall filter applied to the latter excludes most named walls. Walls that
+# fail to resolve in the export (e.g. SM_Walls_Gym, SM_Walls_Hall2) are
+# unreachable from here regardless and left as-is.
+function Initialize-WallAabbCache {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        $script:WallAabbs = @()
+        return
+    }
+
+    $blockersDoc = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    $meshColliders = $blockersDoc.PSObject.Properties["MeshColliders"]
+    if ($null -eq $meshColliders -or $null -eq $meshColliders.Value) {
+        $script:WallAabbs = @()
+        return
+    }
+
+    $list = New-Object System.Collections.Generic.List[object]
+    foreach ($mc in @($meshColliders.Value)) {
+        if ($null -eq $mc) { continue }
+        $name = [string]$mc.Name
+        if (-not $name.StartsWith("SM_Walls_")) { continue }
+        if ($null -eq $mc.Bounds2D -or $null -eq $mc.BottomY -or $null -eq $mc.TopY) { continue }
+        $list.Add([ordered]@{
+            Name = $name
+            MinX = [double]$mc.Bounds2D.MinX
+            MaxX = [double]$mc.Bounds2D.MaxX
+            MinZ = [double]$mc.Bounds2D.MinZ
+            MaxZ = [double]$mc.Bounds2D.MaxZ
+            BottomY = [double]$mc.BottomY
+            TopY = [double]$mc.TopY
+        }) | Out-Null
+    }
+
+    $script:WallAabbs = $list.ToArray()
+}
+
+# Returns the wall that intersects the inflated XZ box around $Point, or $null.
+function Find-NearbyWallAabb {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Point,
+
+        [Parameter(Mandatory = $true)]
+        [double]$Clearance
+    )
+
+    $px = [double]$Point.x
+    $py = [double]$Point.y
+    $pz = [double]$Point.z
+    foreach ($wall in $script:WallAabbs) {
+        # Y band check with a small chest-height tolerance: walls in the export
+        # extend from floor to ceiling, so a generous match is fine.
+        if ($py -lt ($wall.BottomY - 0.5) -or $py -gt ($wall.TopY + 0.5)) { continue }
+        if ($px -lt ($wall.MinX - $Clearance)) { continue }
+        if ($px -gt ($wall.MaxX + $Clearance)) { continue }
+        if ($pz -lt ($wall.MinZ - $Clearance)) { continue }
+        if ($pz -gt ($wall.MaxZ + $Clearance)) { continue }
+        return $wall
+    }
+
+    return $null
+}
+
+# Shifts $Point perpendicular to $Direction (in XZ) until it clears all walls
+# within $Clearance. Tries both perpendicular signs, picks the smaller shift
+# that resolves the conflict. Bails after a few iterations to avoid runaway
+# pushes when walls hem the corridor in on both sides — in that case the
+# original point is returned and the failure stays for triage.
+function Get-WallSnappedPoint {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Point,
+
+        [Parameter(Mandatory = $true)]
+        [object]$Direction,
+
+        [Parameter()]
+        [double]$Clearance = 0.6,
+
+        [Parameter()]
+        [double]$MaxShift = 1.5
+    )
+
+    if ($script:WallAabbs.Count -eq 0) { return $Point }
+
+    $dx = [double]$Direction.x
+    $dz = [double]$Direction.z
+    if (([Math]::Abs($dx) + [Math]::Abs($dz)) -lt 0.0001) { return $Point }
+
+    # Perpendicular in XZ. Sign +1 and -1 cover both lateral options.
+    $perpA = [ordered]@{ x = -$dz; z = $dx }
+    $perpB = [ordered]@{ x = $dz; z = -$dx }
+
+    # Walk along each perpendicular in fixed steps and accept the first clear
+    # position. Prefer whichever side requires the smaller total shift.
+    $best = $null
+    $bestShift = [double]::MaxValue
+    foreach ($perp in @($perpA, $perpB)) {
+        $shift = 0.0
+        while ($shift -le $MaxShift) {
+            $candidate = Get-OffsetPoint -Origin $Point -Direction $perp -Distance $shift
+            $hit = Find-NearbyWallAabb -Point $candidate -Clearance $Clearance
+            if ($null -eq $hit) {
+                if ($shift -lt $bestShift) {
+                    $best = $candidate
+                    $bestShift = $shift
+                }
+                break
+            }
+            $shift = $shift + 0.2
+        }
+    }
+
+    if ($null -ne $best -and $bestShift -gt 0.0) { return $best }
+    return $Point
 }
 
 function Get-NormalizedFlatDirection {
@@ -441,6 +598,7 @@ if (-not (Test-Path -LiteralPath $InputGraphPath)) {
 
 $sceneData = Get-Content -LiteralPath $SceneDataPath -Raw | ConvertFrom-Json
 $inputGraph = Get-Content -LiteralPath $InputGraphPath -Raw | ConvertFrom-Json
+Initialize-WallAabbCache -Path $BlockersPath
 
 $inputLinks = @()
 $linksProperty = $inputGraph.PSObject.Properties["Links"]
@@ -581,7 +739,7 @@ function Get-ZoneWaypoint {
         throw "Unknown zone '$ZoneName'"
     }
 
-    return Copy-Vec3 $zonesByName[$ZoneName].Position
+    return Snap-FloorY $zonesByName[$ZoneName].Position
 }
 
 function Get-CameraWaypoint {
@@ -594,7 +752,7 @@ function Get-CameraWaypoint {
         throw "Unknown camera '$CameraName'"
     }
 
-    return Copy-Vec3 $camerasByName[$CameraName].Position
+    return Snap-FloorY $camerasByName[$CameraName].Position
 }
 
 function Get-TeleporterWaypoint {
@@ -831,6 +989,28 @@ function Get-ConnectorGeometry {
         if ($StepKind -eq "Door") {
             $assetDerivationSource = "DoorObjectCameraAndClearOverrides"
         }
+    }
+
+    # Doors and open passages route at floor level on each side. Snap the
+    # derived points (connector-offsets for doors, lerps for open passages)
+    # so they don't inherit the door pivot's Y. Stairs and teleporters
+    # legitimately cross floors mid-step; leave their derived points alone.
+    if ($StepKind -eq "Door" -or $StepKind -eq "OpenPassage") {
+        $sourceApproachPoint = Snap-FloorY $sourceApproachPoint
+        $sourceClearPoint = Snap-FloorY $sourceClearPoint
+        $destinationClearPoint = Snap-FloorY $destinationClearPoint
+        $destinationApproachPoint = Snap-FloorY $destinationApproachPoint
+    }
+
+    # Door clear points sit 0.8m off the connector along the door normal. If a
+    # wall mesh is within 0.6m of either point's XZ at floor Y, shift the point
+    # laterally (perpendicular to the door normal) until it clears. The source
+    # side walks against the door direction; pass the reversed direction so the
+    # perpendicular axes are computed consistently.
+    if ($StepKind -eq "Door") {
+        $reverseDirection = [ordered]@{ x = -([double]$direction.x); z = -([double]$direction.z) }
+        $sourceClearPoint = Get-WallSnappedPoint -Point $sourceClearPoint -Direction $reverseDirection
+        $destinationClearPoint = Get-WallSnappedPoint -Point $destinationClearPoint -Direction $direction
     }
 
     return [ordered]@{
@@ -1196,7 +1376,7 @@ foreach ($graphZoneName in $graphZoneNames) {
             Zone = $graphZoneName
             SceneZoneName = $sceneZone.Name
             Kind = if ($sceneZone.Name -eq $graphZoneName) { "ZoneCenter" } else { "RoomSubZone" }
-            Position = Copy-Vec3 $sceneZone.Position
+            Position = Snap-FloorY $sceneZone.Position
             Scale = Copy-Vec3 $sceneZone.Scale
             Source = "CameraSpaces"
         }
@@ -1220,7 +1400,32 @@ foreach ($graphZoneName in $graphZoneNames) {
 }
 
 $generatedTransitions = New-Object System.Collections.Generic.List[object]
+$skippedDorianTransitions = 0
+$skippedBogusTransitions = 0
+# Pairs the input graph infers from XZ adjacency but that aren't navigable as a
+# single transition because they cross floor bands without a stair or teleporter
+# in between. Listed as unordered set; both directions are dropped. The runtime
+# will return "no path" for these instead of computing a confidently-broken
+# route through a wall.
+$bogusPairs = @{
+    "laundry_room|upper_hallway" = $true
+    "upper_hallway|laundry_room" = $true
+}
 foreach ($link in $inputLinks) {
+    # MVP: skip routes involving dorian_* cameraspaces. They are point-zones
+    # (Scale=0) representing dateable spawn positions, not navigable destinations.
+    # The dateable itself is reached via the door/object once you're in the room.
+    if ($link.FromZone -like "dorian_*" -or $link.ToZone -like "dorian_*") {
+        $skippedDorianTransitions++
+        continue
+    }
+
+    $linkKey = "$($link.FromZone)|$($link.ToZone)"
+    if ($bogusPairs.ContainsKey($linkKey)) {
+        $skippedBogusTransitions++
+        continue
+    }
+
     $key = "$($link.FromZone)|$($link.ToZone)"
     $waypointPair = $null
     $metadata = $stepMetadata[$key]
@@ -1235,6 +1440,14 @@ foreach ($link in $inputLinks) {
 
     if ($directedOverrides.ContainsKey($key)) {
         $waypointPair = $directedOverrides[$key]
+        # Authored override From/To waypoints sometimes sit at door-pivot Y
+        # rather than the floor (e.g. bathroom1->hallway uses Y=4.352).
+        # Snap them so they route at floor level alongside the connector-derived
+        # points. Stairs/Teleporter waypoints legitimately span floors; leave.
+        if ($stepKind -eq "Door" -or $stepKind -eq "OpenPassage") {
+            $waypointPair.FromWaypoint = Snap-FloorY $waypointPair.FromWaypoint
+            $waypointPair.ToWaypoint = Snap-FloorY $waypointPair.ToWaypoint
+        }
     } elseif ($stepKind -eq "OpenPassage") {
         $waypointPair = Get-OpenPassageGeometry -FromZoneName $link.FromZone -ToZoneName $link.ToZone
     } else {
@@ -1468,4 +1681,4 @@ if (-not [string]::IsNullOrWhiteSpace($outputDirectory)) {
 }
 
 $outputGraph | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $OutputPath
-Write-Host "Wrote navigation graph to $OutputPath (zones=$($generatedZones.Count) nodes=$($generatedNodes.Count) transitions=$($generatedTransitions.Count))"
+Write-Host "Wrote navigation graph to $OutputPath (zones=$($generatedZones.Count) nodes=$($generatedNodes.Count) transitions=$($generatedTransitions.Count) skippedDorian=$skippedDorianTransitions skippedBogus=$skippedBogusTransitions)"

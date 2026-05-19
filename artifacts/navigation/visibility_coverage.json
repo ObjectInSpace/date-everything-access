@@ -1,0 +1,1006 @@
+{
+  "GeneratedAt": "2026-05-17T19:04:35.045633+00:00",
+  "BlockersPath": "c:\\Users\\amock\\mod template\\artifacts\\navigation\\thirdpersongreybox-blockers.json",
+  "GraphPath": "c:\\Users\\amock\\mod template\\artifacts\\navigation\\navigation_graph.generated.json",
+  "Skin": 0.05,
+  "Totals": {
+    "ZoneCount": 57,
+    "ZonesFullyConnected": 53,
+    "ZonesWithIsolatedAnchors": 4,
+    "TotalPairs": 1374,
+    "TotalBlocked": 174,
+    "OverallBlockedFraction": 0.1266
+  },
+  "Zones": [
+    {
+      "Zone": "attic",
+      "AnchorCount": 10,
+      "PairCount": 45,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 10,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "atticWindow",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "bathroom1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "bathroom2",
+      "AnchorCount": 5,
+      "PairCount": 10,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 5,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "bedroom",
+      "AnchorCount": 14,
+      "PairCount": 91,
+      "BlockedCount": 4,
+      "BlockedFraction": 0.044,
+      "ComponentCount": 1,
+      "LargestComponentSize": 14,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": [
+        {
+          "From": "RoomSubZone:bedroom3",
+          "To": "RoomSubZone:bedroom9",
+          "BlockedBy": "PianoStool"
+        },
+        {
+          "From": "RoomSubZone:bedroom4",
+          "To": "RoomSubZone:bedroom9",
+          "BlockedBy": "Piano_Leg_2_MODEL_UPDATE"
+        },
+        {
+          "From": "RoomSubZone:bedroom5",
+          "To": "RoomSubZone:bedroom9",
+          "BlockedBy": "PianoStool"
+        },
+        {
+          "From": "RoomSubZone:bedroom8",
+          "To": "RoomSubZone:bedroom9",
+          "BlockedBy": "Piano_Leg_3_MODEL_UPDATE"
+        }
+      ]
+    },
+    {
+      "Zone": "bedroom_closet",
+      "AnchorCount": 7,
+      "PairCount": 21,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 7,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "crawlspace",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dining_room",
+      "AnchorCount": 14,
+      "PairCount": 91,
+      "BlockedCount": 39,
+      "BlockedFraction": 0.4286,
+      "ComponentCount": 2,
+      "LargestComponentSize": 13,
+      "IsolatedAnchors": 1,
+      "BlockedPairsSample": [
+        {
+          "From": "ZoneCenter:dining_room",
+          "To": "RoomSubZone:dining_room4",
+          "BlockedBy": "SM_Doorframe_Big_1"
+        },
+        {
+          "From": "ZoneCenter:dining_room",
+          "To": "Crossing->kitchen",
+          "BlockedBy": "SM_Doorframe_Big_1"
+        },
+        {
+          "From": "ZoneCenter:dining_room",
+          "To": "Crossing<-kitchen",
+          "BlockedBy": "SM_Doorframe_Big_1"
+        },
+        {
+          "From": "RoomSubZone:dining_room2",
+          "To": "RoomSubZone:dining_room4",
+          "BlockedBy": "SM_Doorframe_Big_1"
+        },
+        {
+          "From": "RoomSubZone:dining_room2",
+          "To": "Crossing<-living_room",
+          "BlockedBy": "SM_Doorframe_Big_1"
+        },
+        {
+          "From": "RoomSubZone:dining_room2",
+          "To": "Crossing->living_room",
+          "BlockedBy": "SM_Doorframe_Big_1"
+        },
+        {
+          "From": "RoomSubZone:dining_room2",
+          "To": "Crossing->kitchen",
+          "BlockedBy": "SM_Doorframe_Big_1"
+        },
+        {
+          "From": "RoomSubZone:dining_room2",
+          "To": "Crossing<-kitchen",
+          "BlockedBy": "SM_Doorframe_Big_1"
+        },
+        {
+          "From": "RoomSubZone:dining_room3",
+          "To": "RoomSubZone:dining_room4",
+          "BlockedBy": "SM_Doorframe_Big_1"
+        },
+        {
+          "From": "RoomSubZone:dining_room3",
+          "To": "Crossing<-living_room",
+          "BlockedBy": "SM_Doorframe_Big_1"
+        }
+      ]
+    },
+    {
+      "Zone": "dorian_attic1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_attic2",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_backdoor",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_bathroom1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_bathroom2",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_bathroom2_1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_bathroom2_2",
+      "AnchorCount": 1,
+      "PairCount": 0,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 1,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_bedroom1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_bedroom2",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_bedroomcloset1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_bedroomcloset2",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_gym1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_gym2",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_gym3",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_gym4",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_gymcloset1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_gymcloset2",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_irondoor",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_laundry1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_laundry2",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_laundrycloset1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_office1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_office2",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_office_closet1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_office_closet2",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_trapdoor1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_trapdoor2",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "dorian_upperhallcloset1",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "frontdoor",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "gym",
+      "AnchorCount": 16,
+      "PairCount": 120,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 16,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "gym_closet",
+      "AnchorCount": 7,
+      "PairCount": 21,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 7,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "hallway",
+      "AnchorCount": 13,
+      "PairCount": 78,
+      "BlockedCount": 26,
+      "BlockedFraction": 0.3333,
+      "ComponentCount": 2,
+      "LargestComponentSize": 12,
+      "IsolatedAnchors": 1,
+      "BlockedPairsSample": [
+        {
+          "From": "ZoneCenter:hallway",
+          "To": "RoomSubZone:hallway5",
+          "BlockedBy": "Door_frame_Front_MODEL_UPDATE"
+        },
+        {
+          "From": "RoomSubZone:hallway2",
+          "To": "RoomSubZone:hallway5",
+          "BlockedBy": "Door_Front_BrokenGlass_MODEL_UPDATE"
+        },
+        {
+          "From": "RoomSubZone:hallway3",
+          "To": "RoomSubZone:hallway5",
+          "BlockedBy": "Door_Front_BrokenGlass_MODEL_UPDATE"
+        },
+        {
+          "From": "RoomSubZone:hallway4",
+          "To": "RoomSubZone:hallway5",
+          "BlockedBy": "Door_Front_BrokenGlass_MODEL_UPDATE"
+        },
+        {
+          "From": "RoomSubZone:hallway4",
+          "To": "RoomSubZone:hallway6",
+          "BlockedBy": "SM_Walls_Hall1_2"
+        },
+        {
+          "From": "RoomSubZone:hallway4",
+          "To": "RoomSubZone:hallway7",
+          "BlockedBy": "SM_Walls_Hall1_2"
+        },
+        {
+          "From": "RoomSubZone:hallway5",
+          "To": "RoomSubZone:hallway6",
+          "BlockedBy": "Door_Front_BrokenGlass_MODEL_UPDATE"
+        },
+        {
+          "From": "RoomSubZone:hallway5",
+          "To": "RoomSubZone:hallway7",
+          "BlockedBy": "Door_Front_BrokenGlass_MODEL_UPDATE"
+        },
+        {
+          "From": "RoomSubZone:hallway5",
+          "To": "Crossing->living_room",
+          "BlockedBy": "Curtain_Hall1_Right"
+        },
+        {
+          "From": "RoomSubZone:hallway5",
+          "To": "Crossing<-living_room",
+          "BlockedBy": "Curtain_Hall1_Right"
+        }
+      ]
+    },
+    {
+      "Zone": "hallway_arma",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "kitchen",
+      "AnchorCount": 13,
+      "PairCount": 78,
+      "BlockedCount": 26,
+      "BlockedFraction": 0.3333,
+      "ComponentCount": 1,
+      "LargestComponentSize": 13,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": [
+        {
+          "From": "ZoneCenter:kitchen",
+          "To": "RoomSubZone:kitchen3",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "ZoneCenter:kitchen",
+          "To": "RoomSubZone:kitchen4",
+          "BlockedBy": "Banana_3_MODEL_UPDATE"
+        },
+        {
+          "From": "ZoneCenter:kitchen",
+          "To": "Crossing<-kitchen_ronald",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "ZoneCenter:kitchen",
+          "To": "Crossing->kitchen_ronald",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "ZoneCenter:kitchen",
+          "To": "Crossing<-kitchen_cake",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "ZoneCenter:kitchen",
+          "To": "Crossing->kitchen_cake",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "RoomSubZone:kitchen2",
+          "To": "Crossing<-kitchen_ronald",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "RoomSubZone:kitchen2",
+          "To": "Crossing->kitchen_ronald",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "RoomSubZone:kitchen3",
+          "To": "Crossing<-kitchen_tutorial",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "RoomSubZone:kitchen3",
+          "To": "Crossing->kitchen_tutorial",
+          "BlockedBy": "ChairCollider"
+        }
+      ]
+    },
+    {
+      "Zone": "kitchen_cake",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "kitchen_ronald",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "kitchen_tutorial",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "laundry_room",
+      "AnchorCount": 14,
+      "PairCount": 91,
+      "BlockedCount": 11,
+      "BlockedFraction": 0.1209,
+      "ComponentCount": 1,
+      "LargestComponentSize": 14,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": [
+        {
+          "From": "ZoneCenter:laundry_room",
+          "To": "RoomSubZone:laundry_room6",
+          "BlockedBy": "SM_Doorframe_Small_5"
+        },
+        {
+          "From": "RoomSubZone:laundry_room3",
+          "To": "RoomSubZone:laundry_room6",
+          "BlockedBy": "SM_Doorframe_Small_5"
+        },
+        {
+          "From": "RoomSubZone:laundry_room4",
+          "To": "RoomSubZone:laundry_room6",
+          "BlockedBy": "SM_Doorframe_Small_5"
+        },
+        {
+          "From": "RoomSubZone:laundry_room6",
+          "To": "Crossing<-upper_hallway",
+          "BlockedBy": "SM_Doorframe_Small_5"
+        },
+        {
+          "From": "RoomSubZone:laundry_room6",
+          "To": "Crossing->upper_hallway",
+          "BlockedBy": "SM_Doorframe_Small_5"
+        },
+        {
+          "From": "RoomSubZone:laundry_room6",
+          "To": "Crossing<-dorian_backdoor",
+          "BlockedBy": "SM_Doorframe_Small_5"
+        },
+        {
+          "From": "RoomSubZone:laundry_room6",
+          "To": "Crossing->dorian_backdoor",
+          "BlockedBy": "SM_Doorframe_Small_5"
+        },
+        {
+          "From": "RoomSubZone:laundry_room6",
+          "To": "Crossing<-dorian_laundry1",
+          "BlockedBy": "SM_Doorframe_Small_5"
+        },
+        {
+          "From": "RoomSubZone:laundry_room6",
+          "To": "Crossing->dorian_laundry1",
+          "BlockedBy": "SM_Doorframe_Small_5"
+        },
+        {
+          "From": "RoomSubZone:laundry_room6",
+          "To": "Crossing<-dorian_laundry2",
+          "BlockedBy": "SM_Doorframe_Small_5"
+        }
+      ]
+    },
+    {
+      "Zone": "laundry_room_closet",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "living_room",
+      "AnchorCount": 17,
+      "PairCount": 136,
+      "BlockedCount": 26,
+      "BlockedFraction": 0.1912,
+      "ComponentCount": 2,
+      "LargestComponentSize": 16,
+      "IsolatedAnchors": 1,
+      "BlockedPairsSample": [
+        {
+          "From": "ZoneCenter:living_room",
+          "To": "RoomSubZone:living_room11",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "ZoneCenter:living_room",
+          "To": "Crossing<-hallway",
+          "BlockedBy": "TV_Living_MODEL_UPDATE"
+        },
+        {
+          "From": "ZoneCenter:living_room",
+          "To": "Crossing->hallway",
+          "BlockedBy": "TV_Living_MODEL_UPDATE"
+        },
+        {
+          "From": "RoomSubZone:living_room10",
+          "To": "RoomSubZone:living_room11",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "RoomSubZone:living_room10",
+          "To": "Crossing<-hallway",
+          "BlockedBy": "TV_Living_MODEL_UPDATE"
+        },
+        {
+          "From": "RoomSubZone:living_room10",
+          "To": "Crossing->hallway",
+          "BlockedBy": "TV_Living_MODEL_UPDATE"
+        },
+        {
+          "From": "RoomSubZone:living_room11",
+          "To": "RoomSubZone:living_room2",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "RoomSubZone:living_room11",
+          "To": "RoomSubZone:living_room3",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "RoomSubZone:living_room11",
+          "To": "RoomSubZone:living_room4",
+          "BlockedBy": "ChairCollider"
+        },
+        {
+          "From": "RoomSubZone:living_room11",
+          "To": "RoomSubZone:living_room5",
+          "BlockedBy": "SofaCollider"
+        }
+      ]
+    },
+    {
+      "Zone": "living_room_tutorial",
+      "AnchorCount": 5,
+      "PairCount": 10,
+      "BlockedCount": 7,
+      "BlockedFraction": 0.7,
+      "ComponentCount": 3,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 2,
+      "BlockedPairsSample": [
+        {
+          "From": "ZoneCenter:living_room_tutorial",
+          "To": "Crossing<-frontdoor",
+          "BlockedBy": "SM_Doorframe_Small_6"
+        },
+        {
+          "From": "ZoneCenter:living_room_tutorial",
+          "To": "Crossing->frontdoor",
+          "BlockedBy": "SM_Doorframe_Small_6"
+        },
+        {
+          "From": "Crossing->living_room",
+          "To": "Crossing<-frontdoor",
+          "BlockedBy": "SM_Doorframe_Small_6"
+        },
+        {
+          "From": "Crossing->living_room",
+          "To": "Crossing->frontdoor",
+          "BlockedBy": "SM_Doorframe_Small_6"
+        },
+        {
+          "From": "Crossing<-living_room",
+          "To": "Crossing<-frontdoor",
+          "BlockedBy": "SM_Doorframe_Small_6"
+        },
+        {
+          "From": "Crossing<-living_room",
+          "To": "Crossing->frontdoor",
+          "BlockedBy": "SM_Doorframe_Small_6"
+        },
+        {
+          "From": "Crossing<-frontdoor",
+          "To": "Crossing->frontdoor",
+          "BlockedBy": "SM_Doorframe_Small_6"
+        }
+      ]
+    },
+    {
+      "Zone": "office",
+      "AnchorCount": 21,
+      "PairCount": 210,
+      "BlockedCount": 35,
+      "BlockedFraction": 0.1667,
+      "ComponentCount": 1,
+      "LargestComponentSize": 21,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": [
+        {
+          "From": "ZoneCenter:office",
+          "To": "RoomSubZone:office3",
+          "BlockedBy": "SM_Chair_Office"
+        },
+        {
+          "From": "ZoneCenter:office",
+          "To": "RoomSubZone:office4",
+          "BlockedBy": "SM_Chair_Office"
+        },
+        {
+          "From": "ZoneCenter:office",
+          "To": "RoomSubZone:office6",
+          "BlockedBy": "BlockerBack"
+        },
+        {
+          "From": "ZoneCenter:office",
+          "To": "Crossing<-dorian_office1",
+          "BlockedBy": "BlockerBack"
+        },
+        {
+          "From": "ZoneCenter:office",
+          "To": "Crossing->dorian_office1",
+          "BlockedBy": "BlockerBack"
+        },
+        {
+          "From": "ZoneCenter:office",
+          "To": "Crossing<-dorian_office2",
+          "BlockedBy": "BlockerBack"
+        },
+        {
+          "From": "ZoneCenter:office",
+          "To": "Crossing->dorian_office2",
+          "BlockedBy": "BlockerBack"
+        },
+        {
+          "From": "ZoneCenter:office",
+          "To": "Crossing<-office_1love",
+          "BlockedBy": "BlockerSide1"
+        },
+        {
+          "From": "ZoneCenter:office",
+          "To": "Crossing->office_1love",
+          "BlockedBy": "BlockerSide1"
+        },
+        {
+          "From": "RoomSubZone:office2",
+          "To": "RoomSubZone:office4",
+          "BlockedBy": "BlockerBack"
+        }
+      ]
+    },
+    {
+      "Zone": "office_1love",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "office_2friend",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "office_3hate",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "office_closet",
+      "AnchorCount": 7,
+      "PairCount": 21,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 7,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "piano_room",
+      "AnchorCount": 13,
+      "PairCount": 78,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 13,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "upper_hallway",
+      "AnchorCount": 18,
+      "PairCount": 153,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 18,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    },
+    {
+      "Zone": "upper_hallway3_shelley",
+      "AnchorCount": 3,
+      "PairCount": 3,
+      "BlockedCount": 0,
+      "BlockedFraction": 0.0,
+      "ComponentCount": 1,
+      "LargestComponentSize": 3,
+      "IsolatedAnchors": 0,
+      "BlockedPairsSample": []
+    }
+  ]
+}

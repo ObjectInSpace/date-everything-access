@@ -1,0 +1,92 @@
+Visibility Coverage Audit
+=========================
+Generated: 2026-05-17T19:04:35.045633+00:00
+Skin: 0.05 m
+
+Zones audited:           57
+Fully-connected zones:   53
+Zones w/ isolated anchor:4
+Anchor pairs tested:     1374
+Blocked pairs:           174  (12.7%)
+
+Per-zone (zones with any blocked pair, sorted by blocked count desc):
+----------------------------------------------------------------------
+  dining_room                  anchors= 14  blocked= 39/91   components=2  isolated=1
+      ZoneCenter:dining_room  <->  RoomSubZone:dining_room4    blocked by SM_Doorframe_Big_1
+      ZoneCenter:dining_room  <->  Crossing->kitchen    blocked by SM_Doorframe_Big_1
+      ZoneCenter:dining_room  <->  Crossing<-kitchen    blocked by SM_Doorframe_Big_1
+      RoomSubZone:dining_room2  <->  RoomSubZone:dining_room4    blocked by SM_Doorframe_Big_1
+      RoomSubZone:dining_room2  <->  Crossing<-living_room    blocked by SM_Doorframe_Big_1
+      RoomSubZone:dining_room2  <->  Crossing->living_room    blocked by SM_Doorframe_Big_1
+      RoomSubZone:dining_room2  <->  Crossing->kitchen    blocked by SM_Doorframe_Big_1
+      RoomSubZone:dining_room2  <->  Crossing<-kitchen    blocked by SM_Doorframe_Big_1
+      RoomSubZone:dining_room3  <->  RoomSubZone:dining_room4    blocked by SM_Doorframe_Big_1
+      RoomSubZone:dining_room3  <->  Crossing<-living_room    blocked by SM_Doorframe_Big_1
+  office                       anchors= 21  blocked= 35/210  components=1  isolated=0
+      ZoneCenter:office  <->  RoomSubZone:office3    blocked by SM_Chair_Office
+      ZoneCenter:office  <->  RoomSubZone:office4    blocked by SM_Chair_Office
+      ZoneCenter:office  <->  RoomSubZone:office6    blocked by BlockerBack
+      ZoneCenter:office  <->  Crossing<-dorian_office1    blocked by BlockerBack
+      ZoneCenter:office  <->  Crossing->dorian_office1    blocked by BlockerBack
+      ZoneCenter:office  <->  Crossing<-dorian_office2    blocked by BlockerBack
+      ZoneCenter:office  <->  Crossing->dorian_office2    blocked by BlockerBack
+      ZoneCenter:office  <->  Crossing<-office_1love    blocked by BlockerSide1
+      ZoneCenter:office  <->  Crossing->office_1love    blocked by BlockerSide1
+      RoomSubZone:office2  <->  RoomSubZone:office4    blocked by BlockerBack
+  hallway                      anchors= 13  blocked= 26/78   components=2  isolated=1
+      ZoneCenter:hallway  <->  RoomSubZone:hallway5    blocked by Door_frame_Front_MODEL_UPDATE
+      RoomSubZone:hallway2  <->  RoomSubZone:hallway5    blocked by Door_Front_BrokenGlass_MODEL_UPDATE
+      RoomSubZone:hallway3  <->  RoomSubZone:hallway5    blocked by Door_Front_BrokenGlass_MODEL_UPDATE
+      RoomSubZone:hallway4  <->  RoomSubZone:hallway5    blocked by Door_Front_BrokenGlass_MODEL_UPDATE
+      RoomSubZone:hallway4  <->  RoomSubZone:hallway6    blocked by SM_Walls_Hall1_2
+      RoomSubZone:hallway4  <->  RoomSubZone:hallway7    blocked by SM_Walls_Hall1_2
+      RoomSubZone:hallway5  <->  RoomSubZone:hallway6    blocked by Door_Front_BrokenGlass_MODEL_UPDATE
+      RoomSubZone:hallway5  <->  RoomSubZone:hallway7    blocked by Door_Front_BrokenGlass_MODEL_UPDATE
+      RoomSubZone:hallway5  <->  Crossing->living_room    blocked by Curtain_Hall1_Right
+      RoomSubZone:hallway5  <->  Crossing<-living_room    blocked by Curtain_Hall1_Right
+  kitchen                      anchors= 13  blocked= 26/78   components=1  isolated=0
+      ZoneCenter:kitchen  <->  RoomSubZone:kitchen3    blocked by ChairCollider
+      ZoneCenter:kitchen  <->  RoomSubZone:kitchen4    blocked by Banana_3_MODEL_UPDATE
+      ZoneCenter:kitchen  <->  Crossing<-kitchen_ronald    blocked by ChairCollider
+      ZoneCenter:kitchen  <->  Crossing->kitchen_ronald    blocked by ChairCollider
+      ZoneCenter:kitchen  <->  Crossing<-kitchen_cake    blocked by ChairCollider
+      ZoneCenter:kitchen  <->  Crossing->kitchen_cake    blocked by ChairCollider
+      RoomSubZone:kitchen2  <->  Crossing<-kitchen_ronald    blocked by ChairCollider
+      RoomSubZone:kitchen2  <->  Crossing->kitchen_ronald    blocked by ChairCollider
+      RoomSubZone:kitchen3  <->  Crossing<-kitchen_tutorial    blocked by ChairCollider
+      RoomSubZone:kitchen3  <->  Crossing->kitchen_tutorial    blocked by ChairCollider
+  living_room                  anchors= 17  blocked= 26/136  components=2  isolated=1
+      ZoneCenter:living_room  <->  RoomSubZone:living_room11    blocked by ChairCollider
+      ZoneCenter:living_room  <->  Crossing<-hallway    blocked by TV_Living_MODEL_UPDATE
+      ZoneCenter:living_room  <->  Crossing->hallway    blocked by TV_Living_MODEL_UPDATE
+      RoomSubZone:living_room10  <->  RoomSubZone:living_room11    blocked by ChairCollider
+      RoomSubZone:living_room10  <->  Crossing<-hallway    blocked by TV_Living_MODEL_UPDATE
+      RoomSubZone:living_room10  <->  Crossing->hallway    blocked by TV_Living_MODEL_UPDATE
+      RoomSubZone:living_room11  <->  RoomSubZone:living_room2    blocked by ChairCollider
+      RoomSubZone:living_room11  <->  RoomSubZone:living_room3    blocked by ChairCollider
+      RoomSubZone:living_room11  <->  RoomSubZone:living_room4    blocked by ChairCollider
+      RoomSubZone:living_room11  <->  RoomSubZone:living_room5    blocked by SofaCollider
+  laundry_room                 anchors= 14  blocked= 11/91   components=1  isolated=0
+      ZoneCenter:laundry_room  <->  RoomSubZone:laundry_room6    blocked by SM_Doorframe_Small_5
+      RoomSubZone:laundry_room3  <->  RoomSubZone:laundry_room6    blocked by SM_Doorframe_Small_5
+      RoomSubZone:laundry_room4  <->  RoomSubZone:laundry_room6    blocked by SM_Doorframe_Small_5
+      RoomSubZone:laundry_room6  <->  Crossing<-upper_hallway    blocked by SM_Doorframe_Small_5
+      RoomSubZone:laundry_room6  <->  Crossing->upper_hallway    blocked by SM_Doorframe_Small_5
+      RoomSubZone:laundry_room6  <->  Crossing<-dorian_backdoor    blocked by SM_Doorframe_Small_5
+      RoomSubZone:laundry_room6  <->  Crossing->dorian_backdoor    blocked by SM_Doorframe_Small_5
+      RoomSubZone:laundry_room6  <->  Crossing<-dorian_laundry1    blocked by SM_Doorframe_Small_5
+      RoomSubZone:laundry_room6  <->  Crossing->dorian_laundry1    blocked by SM_Doorframe_Small_5
+      RoomSubZone:laundry_room6  <->  Crossing<-dorian_laundry2    blocked by SM_Doorframe_Small_5
+  living_room_tutorial         anchors=  5  blocked=  7/10   components=3  isolated=2
+      ZoneCenter:living_room_tutorial  <->  Crossing<-frontdoor    blocked by SM_Doorframe_Small_6
+      ZoneCenter:living_room_tutorial  <->  Crossing->frontdoor    blocked by SM_Doorframe_Small_6
+      Crossing->living_room  <->  Crossing<-frontdoor    blocked by SM_Doorframe_Small_6
+      Crossing->living_room  <->  Crossing->frontdoor    blocked by SM_Doorframe_Small_6
+      Crossing<-living_room  <->  Crossing<-frontdoor    blocked by SM_Doorframe_Small_6
+      Crossing<-living_room  <->  Crossing->frontdoor    blocked by SM_Doorframe_Small_6
+      Crossing<-frontdoor  <->  Crossing->frontdoor    blocked by SM_Doorframe_Small_6
+  bedroom                      anchors= 14  blocked=  4/91   components=1  isolated=0
+      RoomSubZone:bedroom3  <->  RoomSubZone:bedroom9    blocked by PianoStool
+      RoomSubZone:bedroom4  <->  RoomSubZone:bedroom9    blocked by Piano_Leg_2_MODEL_UPDATE
+      RoomSubZone:bedroom5  <->  RoomSubZone:bedroom9    blocked by PianoStool
+      RoomSubZone:bedroom8  <->  RoomSubZone:bedroom9    blocked by Piano_Leg_3_MODEL_UPDATE

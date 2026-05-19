@@ -409,6 +409,7 @@ $transformByGameObjectId = [System.Collections.Generic.Dictionary[long, object]]
 $zones = [System.Collections.Generic.List[object]]::new()
 $teleporterComponents = [System.Collections.Generic.List[object]]::new()
 $doorComponents = [System.Collections.Generic.List[object]]::new()
+$occlusionPortalComponents = [System.Collections.Generic.List[object]]::new()
 
 $currentHeader = $null
 $currentLines = [System.Collections.Generic.List[string]]::new()
@@ -471,6 +472,23 @@ function Process-SceneSection {
 
             $transformsById[$sectionInfo.Id] = $transformInfo
             $transformByGameObjectId[$transformInfo.GameObjectId] = $transformInfo
+        }
+        41 {
+            $gameObjectIdText = Get-LineValue -Lines $linesArray -Pattern "^  m_GameObject: \{fileID: (\d+)\}$"
+            $centerText = Get-LineValue -Lines $linesArray -Pattern "^  m_Center: (.+)$"
+            $sizeText = Get-LineValue -Lines $linesArray -Pattern "^  m_Size: (.+)$"
+            $openText = Get-LineValue -Lines $linesArray -Pattern "^  m_Open: (\d+)$"
+            if ($null -eq $gameObjectIdText -or $null -eq $centerText -or $null -eq $sizeText) {
+                return
+            }
+
+            $occlusionPortalComponents.Add([pscustomobject]@{
+                ComponentId = $sectionInfo.Id
+                GameObjectId = [long]$gameObjectIdText
+                LocalCenter = Parse-Vector3Literal $centerText
+                LocalSize = Parse-Vector3Literal $sizeText
+                IsOpen = ($openText -eq "1")
+            })
         }
         114 {
             if ($linesArray -contains "  zones:") {
@@ -541,7 +559,14 @@ foreach ($transformId in $transformsById.Keys) {
 }
 
 $graphJson = Get-Content -LiteralPath $GraphPath -Raw | ConvertFrom-Json
-$graphLinks = @($graphJson.Links)
+# Support both legacy `Links` schema and current `Transitions` schema in the graph file.
+$graphLinks = if ($null -ne $graphJson.PSObject.Properties['Links']) {
+    @($graphJson.Links)
+} elseif ($null -ne $graphJson.PSObject.Properties['Transitions']) {
+    @($graphJson.Transitions)
+} else {
+    @()
+}
 $graphZoneNames = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($link in $graphLinks) {
     [void]$graphZoneNames.Add($link.FromZone)
@@ -660,6 +685,114 @@ foreach ($teleporter in $teleporterComponents) {
     })
 }
 
+# Build a lookup of door GameObject Ids so OcclusionPortal entries can resolve their parent door
+# by walking up the transform parent chain.
+$doorGameObjectIdSet = New-Object System.Collections.Generic.HashSet[long]
+foreach ($doorEntry in $doorObjects) {
+    [void]$doorGameObjectIdSet.Add([long]$doorEntry.Id)
+}
+
+$transformsByGameObjectId = $transformByGameObjectId
+$gameObjectIdByTransformId = [System.Collections.Generic.Dictionary[long, long]]::new()
+foreach ($entry in $transformsById.GetEnumerator()) {
+    $gameObjectIdByTransformId[$entry.Key] = $entry.Value.GameObjectId
+}
+
+function Resolve-ParentDoorGameObjectId {
+    param(
+        [Parameter(Mandatory = $true)]
+        [long]$StartGameObjectId
+    )
+
+    $currentGameObjectId = $StartGameObjectId
+    $safety = 0
+    while ($currentGameObjectId -ne 0 -and $safety -lt 64) {
+        if ($doorGameObjectIdSet.Contains($currentGameObjectId)) {
+            return $currentGameObjectId
+        }
+        if (-not $transformsByGameObjectId.ContainsKey($currentGameObjectId)) {
+            return 0L
+        }
+        $transformInfo = $transformsByGameObjectId[$currentGameObjectId]
+        $parentTransformId = $transformInfo.ParentTransformId
+        if ($parentTransformId -eq 0) {
+            return 0L
+        }
+        if (-not $gameObjectIdByTransformId.ContainsKey($parentTransformId)) {
+            return 0L
+        }
+        $currentGameObjectId = $gameObjectIdByTransformId[$parentTransformId]
+        $safety++
+    }
+    return 0L
+}
+
+$occlusionPortalObjects = New-Object System.Collections.Generic.List[object]
+foreach ($portal in $occlusionPortalComponents) {
+    if (-not $transformByGameObjectId.ContainsKey($portal.GameObjectId)) {
+        continue
+    }
+    $portalTransform = $transformByGameObjectId[$portal.GameObjectId]
+    if (-not $worldTransforms.ContainsKey($portalTransform.Id)) {
+        continue
+    }
+    $portalWorld = $worldTransforms[$portalTransform.Id]
+
+    # Convert local Center/Size to world. Center is rotated/scaled/translated by the parent
+    # transform; Size is a componentwise multiplication with world scale (axis-aligned box in
+    # local space, becomes oriented when the parent rotates — for downstream consumers that
+    # only need an approximate doorway opening, we expose both the world rotation and a
+    # rotated AABB convenience field is intentionally not produced here).
+    $scaledLocalCenter = [System.Numerics.Vector3]::new(
+        $portal.LocalCenter.X * $portalWorld.Scale.X,
+        $portal.LocalCenter.Y * $portalWorld.Scale.Y,
+        $portal.LocalCenter.Z * $portalWorld.Scale.Z
+    )
+    $rotatedLocalCenter = [System.Numerics.Vector3]::Transform($scaledLocalCenter, $portalWorld.Rotation)
+    $worldCenter = $portalWorld.Position + $rotatedLocalCenter
+
+    $worldSize = [System.Numerics.Vector3]::new(
+        [Math]::Abs($portal.LocalSize.X * $portalWorld.Scale.X),
+        [Math]::Abs($portal.LocalSize.Y * $portalWorld.Scale.Y),
+        [Math]::Abs($portal.LocalSize.Z * $portalWorld.Scale.Z)
+    )
+
+    $parentDoorGameObjectId = Resolve-ParentDoorGameObjectId -StartGameObjectId $portal.GameObjectId
+    $parentDoorName = $null
+    if ($parentDoorGameObjectId -ne 0 -and $gameObjects.ContainsKey($parentDoorGameObjectId)) {
+        $parentDoorName = $gameObjects[$parentDoorGameObjectId].Name
+    }
+
+    $portalGameObjectName = $null
+    if ($gameObjects.ContainsKey($portal.GameObjectId)) {
+        $portalGameObjectName = $gameObjects[$portal.GameObjectId].Name
+    }
+
+    $containingPortalZones = Get-ContainingZones -Position $worldCenter -Zones $graphZones
+    $nearestPortalZones = Get-NearestZones -Position $worldCenter -Zones $graphZones -Count 4
+
+    $occlusionPortalObjects.Add([ordered]@{
+        ComponentId = $portal.ComponentId
+        GameObjectId = $portal.GameObjectId
+        GameObjectName = $portalGameObjectName
+        IsOpen = $portal.IsOpen
+        Center = Convert-Vector3ToObject $worldCenter
+        Size = Convert-Vector3ToObject $worldSize
+        Rotation = Convert-QuaternionToObject $portalWorld.Rotation
+        LocalCenter = Convert-Vector3ToObject $portal.LocalCenter
+        LocalSize = Convert-Vector3ToObject $portal.LocalSize
+        ParentDoorGameObjectId = $parentDoorGameObjectId
+        ParentDoorName = $parentDoorName
+        ContainingGraphZones = $containingPortalZones
+        NearestGraphZones = @($nearestPortalZones | ForEach-Object {
+            [ordered]@{
+                Name = $_.Name
+                Distance = $_.Distance
+            }
+        })
+    })
+}
+
 $zoneObjects = @($zones | Sort-Object Name | ForEach-Object {
     [ordered]@{
         Name = $_.Name
@@ -693,12 +826,14 @@ $result = [ordered]@{
         DoorObjects = $doorObjects.Count
         CameraObjects = $cameraObjects.Count
         Teleporters = $teleporterObjects.Count
+        OcclusionPortals = $occlusionPortalObjects.Count
     }
     GraphLinks = $graphLinksOutput
     CameraSpaces = $zoneObjects
     DoorObjects = $doorObjects
     CameraObjects = $cameraObjects
     Teleporters = $teleporterObjects
+    OcclusionPortals = $occlusionPortalObjects
 }
 
 $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $OutputPath

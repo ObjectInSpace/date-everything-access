@@ -10,7 +10,14 @@ param(
     [string]$SummaryPath = ".\artifacts\navigation\transition_sweep.summary.txt",
 
     [Parameter()]
-    [string]$OverridePath = ".\navigation_transition_overrides.json"
+    [string]$OverridePath = ".\navigation_transition_overrides.json",
+
+    # When set, the import refreshes navigation_transition_overrides.json with
+    # entries derived from failed sweep rows. Default is off so imports stay
+    # pure artifact-refresh operations; pass -WriteOverrides to restore the
+    # legacy auto-grow behavior.
+    [Parameter()]
+    [switch]$WriteOverrides
 )
 
 Set-StrictMode -Version Latest
@@ -32,7 +39,11 @@ if ($null -eq $importedReport) {
 
 $latestReport = Merge-SweepReportDocuments -ExistingReport $null -ImportedReport $importedReport -DefaultSweepKind "OpenPassage"
 $statusChanges = Get-SweepStatusChangeSummary -ExistingReport $existingReport -ImportedReport $importedReport
-$overrideUpdate = Update-OpenPassageOverridesFromReport -MergedReport $latestReport -OverridePath $OverridePath
+$overrideUpdate = if ($WriteOverrides) {
+    Update-OpenPassageOverridesFromReport -MergedReport $latestReport -OverridePath $OverridePath
+} else {
+    $null
+}
 $summaryLines = Format-SweepSummaryLines `
     -SourcePath $SourcePath `
     -OutputPath $OutputPath `
@@ -47,6 +58,10 @@ Write-TextDocument -Path $SummaryPath -Lines $summaryLines
 
 Write-Host "Imported transition sweep report to $OutputPath"
 Write-Host "Wrote transition sweep summary to $SummaryPath"
-Write-Host "Updated navigation overrides at $OverridePath"
 Write-Host "Latest report totals: total=$($latestReport.TotalCount) passed=$($latestReport.PassedCount) failed=$($latestReport.FailedCount) pending=$($latestReport.PendingCount)"
-Write-Host "Override refresh: added=$($overrideUpdate.Added) refreshed=$($overrideUpdate.Refreshed) preservedManualWaypoints=$($overrideUpdate.PreservedManualWaypoints)"
+if ($WriteOverrides) {
+    Write-Host "Updated navigation overrides at $OverridePath"
+    Write-Host "Override refresh: added=$($overrideUpdate.Added) refreshed=$($overrideUpdate.Refreshed) preservedManualWaypoints=$($overrideUpdate.PreservedManualWaypoints)"
+} else {
+    Write-Host "Override refresh skipped (pass -WriteOverrides to mutate $OverridePath)"
+}

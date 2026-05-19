@@ -45,6 +45,21 @@ namespace DateEverythingAccess
             public string LastTargetKind;
             public Vector3 LastTargetPosition;
             public string LastLocalNavigationContext;
+
+            // SimpleNav-side telemetry. Populated only when SimpleNav drove this step.
+            public bool SimpleNavActive;
+            public bool SimpleNavTargetValid;
+            public Vector3 SimpleNavTarget;
+            public string SimpleNavReason;
+            public float SimpleNavMinDistanceToTarget;
+            public int SimpleNavAppliedFrameCount;
+            public Vector3 SimpleNavPlayerPositionAtStepBegin;
+            public float SimpleNavSpawnYDelta;     // |player.y at result - player.y at step begin|
+
+            // SphereCast probe label captured at sweep-harness step-timeout, describing what
+            // collider sits between the player and the active waypoint at chest+ankle height.
+            // Null when the step didn't time out or the probe wasn't run.
+            public string RuntimeBlockerAtFailure;
         }
 
         [Serializable]
@@ -100,7 +115,16 @@ namespace DateEverythingAccess
                 PlayerPositionAtResult = Vector3.zero,
                 LastTargetKind = null,
                 LastTargetPosition = Vector3.zero,
-                LastLocalNavigationContext = null
+                LastLocalNavigationContext = null,
+                SimpleNavActive = false,
+                SimpleNavTargetValid = false,
+                SimpleNavTarget = Vector3.zero,
+                SimpleNavReason = null,
+                SimpleNavMinDistanceToTarget = 0f,
+                SimpleNavAppliedFrameCount = 0,
+                SimpleNavPlayerPositionAtStepBegin = Vector3.zero,
+                SimpleNavSpawnYDelta = 0f,
+                RuntimeBlockerAtFailure = null,
             };
         }
 
@@ -117,6 +141,7 @@ namespace DateEverythingAccess
             int passedCount = 0;
             int failedCount = 0;
             int pendingCount = 0;
+            int skippedCount = 0;
 
             if (entries != null)
             {
@@ -131,6 +156,10 @@ namespace DateEverythingAccess
                     else if (string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase))
                     {
                         failedCount++;
+                    }
+                    else if (status != null && status.StartsWith("skipped", StringComparison.OrdinalIgnoreCase))
+                    {
+                        skippedCount++;
                     }
                     else
                     {
@@ -170,7 +199,8 @@ namespace DateEverythingAccess
                     overrideNormalizedScalarArrays,
                     overridePath,
                     overrideFileSha256,
-                    overrideFileLastWriteUtc));
+                    overrideFileLastWriteUtc,
+                    skippedCount));
 
             PersistPassedKeys(outputPath, entries);
         }
@@ -556,7 +586,8 @@ namespace DateEverythingAccess
             bool openPassageOverrideNormalizedScalarArrays,
             string openPassageOverridePath,
             string openPassageOverrideFileSha256,
-            string openPassageOverrideFileLastWriteUtc)
+            string openPassageOverrideFileLastWriteUtc,
+            int skippedCount)
         {
             var builder = new StringBuilder(8192);
             builder.AppendLine("{");
@@ -579,6 +610,7 @@ namespace DateEverythingAccess
             AppendProperty(builder, "PassedCount", passedCount, 1, trailingComma: true);
             AppendProperty(builder, "FailedCount", failedCount, 1, trailingComma: true);
             AppendProperty(builder, "PendingCount", pendingCount, 1, trailingComma: true);
+            AppendProperty(builder, "SkippedCount", skippedCount, 1, trailingComma: true);
 
             builder.Append(new string(' ', 4));
             builder.AppendLine("\"Entries\": [");
@@ -631,7 +663,16 @@ namespace DateEverythingAccess
             AppendVector(builder, "PlayerPositionAtResult", entry != null ? entry.PlayerPositionAtResult : Vector3.zero, indentLevel + 1, trailingComma: true);
             AppendProperty(builder, "LastTargetKind", entry != null ? entry.LastTargetKind : null, indentLevel + 1, trailingComma: true);
             AppendVector(builder, "LastTargetPosition", entry != null ? entry.LastTargetPosition : Vector3.zero, indentLevel + 1, trailingComma: true);
-            AppendProperty(builder, "LastLocalNavigationContext", entry != null ? entry.LastLocalNavigationContext : null, indentLevel + 1, trailingComma: false);
+            AppendProperty(builder, "LastLocalNavigationContext", entry != null ? entry.LastLocalNavigationContext : null, indentLevel + 1, trailingComma: true);
+            AppendProperty(builder, "SimpleNavActive", entry != null && entry.SimpleNavActive, indentLevel + 1, trailingComma: true);
+            AppendProperty(builder, "SimpleNavTargetValid", entry != null && entry.SimpleNavTargetValid, indentLevel + 1, trailingComma: true);
+            AppendVector(builder, "SimpleNavTarget", entry != null ? entry.SimpleNavTarget : Vector3.zero, indentLevel + 1, trailingComma: true);
+            AppendProperty(builder, "SimpleNavReason", entry != null ? entry.SimpleNavReason : null, indentLevel + 1, trailingComma: true);
+            AppendProperty(builder, "SimpleNavMinDistanceToTarget", entry != null ? entry.SimpleNavMinDistanceToTarget : 0f, indentLevel + 1, trailingComma: true);
+            AppendProperty(builder, "SimpleNavAppliedFrameCount", entry != null ? entry.SimpleNavAppliedFrameCount : 0, indentLevel + 1, trailingComma: true);
+            AppendVector(builder, "SimpleNavPlayerPositionAtStepBegin", entry != null ? entry.SimpleNavPlayerPositionAtStepBegin : Vector3.zero, indentLevel + 1, trailingComma: true);
+            AppendProperty(builder, "SimpleNavSpawnYDelta", entry != null ? entry.SimpleNavSpawnYDelta : 0f, indentLevel + 1, trailingComma: true);
+            AppendProperty(builder, "RuntimeBlockerAtFailure", entry != null ? entry.RuntimeBlockerAtFailure : null, indentLevel + 1, trailingComma: false);
             builder.Append(indent);
             builder.Append("}");
             if (trailingComma)
