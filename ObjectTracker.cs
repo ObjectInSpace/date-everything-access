@@ -55,13 +55,13 @@ namespace DateEverythingAccess
         /// </summary>
         public static void StartTracking(Vector3 targetPosition)
         {
-            StartTracking(targetPosition, NavigationGraph.StepKind.Unknown, requiresInteraction: false);
+            StartTracking(targetPosition, requiresInteraction: false);
         }
 
         /// <summary>
-        /// Starts or refreshes tracking for the supplied target position and transition type.
+        /// Starts or refreshes tracking for the supplied target position.
         /// </summary>
-        public static void StartTracking(Vector3 targetPosition, NavigationGraph.StepKind stepKind, bool requiresInteraction)
+        public static void StartTracking(Vector3 targetPosition, bool requiresInteraction)
         {
             Initialize();
 
@@ -86,7 +86,6 @@ namespace DateEverythingAccess
                     LogSource,
                     "RetargetTracking target=" + targetPosition +
                     " previousTarget=" + previousTargetPosition +
-                    " step=" + stepKind +
                     " requiresInteraction=" + requiresInteraction +
                     " restart=False");
             }
@@ -99,7 +98,6 @@ namespace DateEverythingAccess
                 LogCategory.State,
                 LogSource,
                 "StartTracking target=" + targetPosition +
-                " step=" + stepKind +
                 " requiresInteraction=" + requiresInteraction +
                 " restart=True");
             StartTonePlayback();

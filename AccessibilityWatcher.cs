@@ -6219,7 +6219,7 @@ namespace DateEverythingAccess
             // where they're being walked. The legacy executor does this via UpdateNavigationTracker;
             // the route branch has no PathStep, so we call ObjectTracker.StartTracking directly
             // with the route waypoint position. Cheap to call every frame — it's idempotent.
-            ObjectTracker.StartTracking(target, NavigationGraph.StepKind.Unknown, requiresInteraction: false);
+            ObjectTracker.StartTracking(target, requiresInteraction: false);
 
             // Arrival: within target interaction radius (XZ). The planner already routes to a
             // goal cell inside this disc, so this matches the goal-cell expansion in O4.
