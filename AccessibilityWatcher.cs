@@ -3378,7 +3378,7 @@ namespace DateEverythingAccess
             string currentZone = GetCurrentZoneNameForNavigation();
             if (!TryGetRoomNavigationTargets(currentZone, out List<RoomObjectTarget> targets) || targets.Count == 0)
             {
-                ScreenReader.Say(Loc.Get("navigation_no_rooms"));
+                ScreenReader.Say(Loc.Get("navigation_object_picker_empty"));
                 return;
             }
 
@@ -3470,7 +3470,7 @@ namespace DateEverythingAccess
         {
             if (_roomObjectTargets == null || _roomObjectTargets.Count == 0)
             {
-                ScreenReader.Say(Loc.Get("navigation_no_rooms"));
+                ScreenReader.Say(Loc.Get("navigation_object_picker_empty"));
                 return;
             }
 
@@ -3489,7 +3489,7 @@ namespace DateEverythingAccess
             ReleaseRoomObjectPickerInputBlock();
             SyncRoomObjectPickerKeyStates();
             if (announceClosed)
-                ScreenReader.Say(Loc.Get("navigation_room_picker_closed"));
+                ScreenReader.Say(Loc.Get("navigation_object_picker_closed"));
         }
 
         private void UpdateRoomObjectPicker()
@@ -3497,14 +3497,6 @@ namespace DateEverythingAccess
             if (_roomObjectTargets == null || _roomObjectTargets.Count == 0)
             {
                 CloseRoomObjectPicker(announceClosed: false);
-                return;
-            }
-
-            string currentZone = GetCurrentZoneNameForNavigation();
-            if (string.IsNullOrEmpty(currentZone) ||
-                !string.Equals(currentZone, _lastRoomObjectListZone, StringComparison.OrdinalIgnoreCase))
-            {
-                CloseRoomObjectPicker(announceClosed: true);
                 return;
             }
 
@@ -3543,8 +3535,8 @@ namespace DateEverythingAccess
             RoomObjectTarget target = _roomObjectTargets[_navigationSelectionIndex];
             string currentZone = GetCurrentZoneNameForNavigation();
             string targetLabel = BuildRoomNavigationSelectionLabel(target.ZoneName, target.Label, currentZone);
-            string announcement = Loc.Get("navigation_room_option", _navigationSelectionIndex + 1, _roomObjectTargets.Count, targetLabel);
-            ScreenReader.Say(Loc.Get("navigation_room_list_title") + ". " + announcement);
+            string announcement = Loc.Get("navigation_object_picker_option", _navigationSelectionIndex + 1, _roomObjectTargets.Count, targetLabel);
+            ScreenReader.Say(Loc.Get("navigation_object_picker_title") + ". " + announcement);
         }
 
         private void SelectCurrentRoomObjectPickerItem()
@@ -3557,50 +3549,116 @@ namespace DateEverythingAccess
 
             _navigationSelectionIndex = Mathf.Clamp(_navigationSelectionIndex, 0, _roomObjectTargets.Count - 1);
             RoomObjectTarget target = _roomObjectTargets[_navigationSelectionIndex];
-            SetTrackedInteractable(null, target.ZoneName, target.Label);
+            SetTrackedInteractable(target.Interactable, target.ZoneName, target.Label);
             CloseRoomObjectPicker(announceClosed: false);
             BeginNavigation(target.ZoneName, target.Label);
         }
 
+        // Object-first picker source (Ctrl+Shift+F6). Flat list of every InteractableObj in the
+        // scene, deduped by identity, sorted by distance from the player. Replaces the
+        // zone-list picker — selection feeds SimpleNavPlanner directly with an interactable's
+        // GameObject, no zone-graph indirection.
         private bool TryGetRoomNavigationTargets(string currentZone, out List<RoomObjectTarget> targets)
         {
             targets = new List<RoomObjectTarget>();
-            List<string> zones = NavigationGraph.GetAllZones();
-            if (zones == null || zones.Count == 0)
+            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
+            if (interactables == null || interactables.Length == 0)
                 return false;
 
-            for (int i = 0; i < zones.Count; i++)
+            Transform playerTransform = BetterPlayerControl.Instance != null ? BetterPlayerControl.Instance.transform : null;
+            for (int i = 0; i < interactables.Length; i++)
             {
-                string zoneName = zones[i];
-                if (string.IsNullOrWhiteSpace(zoneName))
+                InteractableObj candidate = interactables[i];
+                if (candidate == null || !candidate.gameObject.activeInHierarchy)
                     continue;
 
-                string label = NormalizeIdentifierName(zoneName);
-                if (string.IsNullOrWhiteSpace(label))
-                    label = zoneName;
+                string label = GetObjectFacingDisplayName(candidate);
+                if (!IsUsableRoomObjectLabel(label))
+                    continue;
+
+                if (!IsInteractableKnownToPlayer(candidate))
+                    continue;
+
+                // Zone name kept on the entry for the announcement template (e.g. "in PianoRoom")
+                // and for legacy BeginNavigation fallback. The planner ignores it.
+                TryGetZoneNameForInteractable(candidate, out string candidateZone);
+
+                if (TryFindEquivalentRoomObjectTarget(targets, candidate, label, out RoomObjectTarget existing))
+                {
+                    if (playerTransform == null)
+                        continue;
+                    float existingDistance = Vector3.Distance(playerTransform.position, existing.Interactable.transform.position);
+                    float candidateDistance = Vector3.Distance(playerTransform.position, candidate.transform.position);
+                    if (candidateDistance < existingDistance)
+                    {
+                        existing.Interactable = candidate;
+                        existing.Label = label;
+                        existing.ZoneName = candidateZone;
+                    }
+                    continue;
+                }
 
                 targets.Add(new RoomObjectTarget
                 {
-                    Interactable = null,
+                    Interactable = candidate,
                     Label = label,
-                    ZoneName = zoneName
+                    ZoneName = candidateZone
                 });
             }
 
             if (targets.Count == 0)
                 return false;
 
-            targets.Sort((left, right) =>
+            if (playerTransform != null)
             {
-                bool leftIsCurrent = !string.IsNullOrWhiteSpace(currentZone) && AreZonesEquivalent(left.ZoneName, currentZone);
-                bool rightIsCurrent = !string.IsNullOrWhiteSpace(currentZone) && AreZonesEquivalent(right.ZoneName, currentZone);
-                if (leftIsCurrent != rightIsCurrent)
-                    return leftIsCurrent ? -1 : 1;
-
-                return string.Compare(left.Label, right.Label, StringComparison.CurrentCultureIgnoreCase);
-            });
+                targets.Sort((left, right) =>
+                {
+                    float ld = Vector3.Distance(playerTransform.position, left.Interactable.transform.position);
+                    float rd = Vector3.Distance(playerTransform.position, right.Interactable.transform.position);
+                    int cmp = ld.CompareTo(rd);
+                    return cmp != 0 ? cmp : string.Compare(left.Label, right.Label, StringComparison.CurrentCultureIgnoreCase);
+                });
+            }
+            else
+            {
+                targets.Sort((left, right) => string.Compare(left.Label, right.Label, StringComparison.CurrentCultureIgnoreCase));
+            }
 
             return true;
+        }
+
+        // True if the player has any prior awareness of this interactable, so the picker can
+        // safely surface it. Avoids leaking the existence of unmet datables and never-touched
+        // props. Datables: GetDateStatus != Unmet (the player has spoken to them). Non-datables:
+        // objSaveData.hasNormalInteracted (the player has triggered the alt-interaction).
+        // Conservative: if the save isn't available yet (early in load) we include the object,
+        // since blocking everything on a missing singleton would hide the whole picker.
+        private static bool IsInteractableKnownToPlayer(InteractableObj interactable)
+        {
+            if (interactable == null) return false;
+
+            Save save = null;
+            try { save = Singleton<Save>.Instance; } catch { save = null; }
+            if (save == null) return true;
+
+            bool isDatable = !string.IsNullOrEmpty(interactable.inkFileName);
+            string internalName = interactable.InternalName();
+
+            if (isDatable && !string.IsNullOrEmpty(internalName))
+            {
+                try
+                {
+                    RelationshipStatus status = save.GetDateStatus(internalName);
+                    return status != RelationshipStatus.Unmet;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            ObjectSaveData saveData = interactable.objSaveData;
+            return saveData != null && saveData.hasNormalInteracted;
         }
 
         private static int FindCurrentRoomTargetIndex(List<RoomObjectTarget> targets, string currentZone)
@@ -3724,7 +3782,51 @@ namespace DateEverythingAccess
             _isAutoWalking = true;
             _lastAutoWalkPosition = BetterPlayerControl.Instance != null ? BetterPlayerControl.Instance.transform.position : Vector3.zero;
             _lastAutoWalkProgressTime = Time.unscaledTime;
+
+            // O6.5: plan an object-first route from the player to the tracked interactable and
+            // install it into the bridge. ApplyAutoWalkSimple sees HasActiveRoute=true and takes
+            // the route-driven branch. If planning fails the autowalk falls through to the
+            // legacy zone-graph FSM (which retires in O7 once the planner is the sole driver).
+            TryPlanAndInstallSimpleNavRoute();
+
             ScreenReader.Say(Loc.Get("navigation_autowalk_started"));
+        }
+
+        // Plan a SimpleNavRoute from the player's current position to the tracked interactable,
+        // and install it on SimpleNavBridge. Silent no-op if the planner isn't ready, the
+        // interactable isn't resolvable, or the planner returns null (no path). Logged so the
+        // first end-to-end test can see whether the new path was taken.
+        private void TryPlanAndInstallSimpleNavRoute()
+        {
+            if (!SimpleNavPlanner.IsReady)
+            {
+                if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: SimpleNavPlanner not ready, skipping route install");
+                return;
+            }
+            if (!TryGetTrackedInteractable(out InteractableObj target) || target == null || target.gameObject == null)
+            {
+                if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: no tracked interactable for route planning");
+                return;
+            }
+            if (BetterPlayerControl.Instance == null)
+            {
+                if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: no BetterPlayerControl for route planning");
+                return;
+            }
+
+            Vector3 startPos = BetterPlayerControl.Instance.transform.position;
+            Vector3 targetPos = target.transform.position;
+            int goId = target.gameObject.GetInstanceID();
+            string goName = target.gameObject.name;
+            float radius = target.InteractionRadius;
+
+            SimpleNavRoute route = SimpleNavPlanner.Plan(startPos, targetPos, radius, goName, goId);
+            if (route == null)
+            {
+                if (Main.Log != null) Main.Log.LogInfo("ToggleAutoWalk: planner returned no route for target=" + goName + " — falling back to legacy FSM");
+                return;
+            }
+            SimpleNavBridge.BeginRoute(route);
         }
 
         private bool TryBeginForcedTransitionSweepNavigation(NavigationGraph.PathStep step)
@@ -6112,6 +6214,12 @@ namespace DateEverythingAccess
             Vector3 target = SimpleNavBridge.LastResolvedTarget;
             if (SimpleNavBridge.TryAdvanceWaypoint(playerPos))
                 target = SimpleNavBridge.LastResolvedTarget;
+
+            // Drive the audible tone source from the current next-waypoint so the player hears
+            // where they're being walked. The legacy executor does this via UpdateNavigationTracker;
+            // the route branch has no PathStep, so we call ObjectTracker.StartTracking directly
+            // with the route waypoint position. Cheap to call every frame — it's idempotent.
+            ObjectTracker.StartTracking(target, NavigationGraph.StepKind.Unknown, requiresInteraction: false);
 
             // Arrival: within target interaction radius (XZ). The planner already routes to a
             // goal cell inside this disc, so this matches the goal-cell expansion in O4.
