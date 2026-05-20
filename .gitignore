@@ -41,3 +41,6 @@ artifacts/navigation/mesh_guid_index.cache.json
 # Python bytecode cache
 **/__pycache__/
 *.pyc
+
+# Coverage-sweep harness output (reproducible from sweep_coverage_planner.py)
+artifacts/navigation/sweep/

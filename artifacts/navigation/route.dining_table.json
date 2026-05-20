@@ -1,0 +1,556 @@
+{
+  "status": "ok",
+  "target": {
+    "GameObjectId": 12018,
+    "Name": "Table_Dining",
+    "Path": "===SCENE===/House/DiningRoom/Table_Dining",
+    "Position": {
+      "x": -24.532045,
+      "y": 0.966287,
+      "z": -1.524251
+    },
+    "IsDatable": true,
+    "InkFileName": "abel_table.dining_table",
+    "InteractionRadius": 7.5
+  },
+  "start": {
+    "floor": "ground",
+    "cell": [
+      163,
+      344
+    ],
+    "world_xz": [
+      -0.613,
+      0.661
+    ],
+    "wx": -0.613,
+    "wz": 0.661,
+    "floor_y": -0.5
+  },
+  "goal_cell_count": 164,
+  "path_length_cells": 123,
+  "waypoint_count": 12,
+  "total_cost_m": 26.637,
+  "waypoints": [
+    {
+      "floor": "ground",
+      "cell": [
+        163,
+        344
+      ],
+      "world_xz": [
+        -0.613,
+        0.661
+      ],
+      "wx": -0.613,
+      "wz": 0.661,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        152,
+        344
+      ],
+      "world_xz": [
+        -2.813,
+        0.661
+      ],
+      "wx": -2.813,
+      "wz": 0.661,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        146,
+        350
+      ],
+      "world_xz": [
+        -4.013,
+        1.861
+      ],
+      "wx": -4.013,
+      "wz": 1.861,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        135,
+        350
+      ],
+      "world_xz": [
+        -6.213,
+        1.861
+      ],
+      "wx": -6.213,
+      "wz": 1.861,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        128,
+        357
+      ],
+      "world_xz": [
+        -7.613,
+        3.261
+      ],
+      "wx": -7.613,
+      "wz": 3.261,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        86,
+        357
+      ],
+      "world_xz": [
+        -16.013,
+        3.261
+      ],
+      "wx": -16.013,
+      "wz": 3.261,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        85,
+        358
+      ],
+      "world_xz": [
+        -16.213,
+        3.461
+      ],
+      "wx": -16.213,
+      "wz": 3.461,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        73,
+        358
+      ],
+      "world_xz": [
+        -18.613,
+        3.461
+      ],
+      "wx": -18.613,
+      "wz": 3.461,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        61,
+        346
+      ],
+      "world_xz": [
+        -21.013,
+        1.061
+      ],
+      "wx": -21.013,
+      "wz": 1.061,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        61,
+        334
+      ],
+      "world_xz": [
+        -21.013,
+        -1.339
+      ],
+      "wx": -21.013,
+      "wz": -1.339,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        60,
+        333
+      ],
+      "world_xz": [
+        -21.213,
+        -1.539
+      ],
+      "wx": -21.213,
+      "wz": -1.539,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        53,
+        333
+      ],
+      "world_xz": [
+        -22.613,
+        -1.539
+      ],
+      "wx": -22.613,
+      "wz": -1.539,
+      "floor_y": -0.5
+    }
+  ],
+  "segments": [
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          163,
+          344
+        ],
+        "world_xz": [
+          -0.613,
+          0.661
+        ],
+        "wx": -0.613,
+        "wz": 0.661,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          152,
+          344
+        ],
+        "world_xz": [
+          -2.813,
+          0.661
+        ],
+        "wx": -2.813,
+        "wz": 0.661,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          152,
+          344
+        ],
+        "world_xz": [
+          -2.813,
+          0.661
+        ],
+        "wx": -2.813,
+        "wz": 0.661,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          146,
+          350
+        ],
+        "world_xz": [
+          -4.013,
+          1.861
+        ],
+        "wx": -4.013,
+        "wz": 1.861,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          146,
+          350
+        ],
+        "world_xz": [
+          -4.013,
+          1.861
+        ],
+        "wx": -4.013,
+        "wz": 1.861,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          135,
+          350
+        ],
+        "world_xz": [
+          -6.213,
+          1.861
+        ],
+        "wx": -6.213,
+        "wz": 1.861,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          135,
+          350
+        ],
+        "world_xz": [
+          -6.213,
+          1.861
+        ],
+        "wx": -6.213,
+        "wz": 1.861,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          128,
+          357
+        ],
+        "world_xz": [
+          -7.613,
+          3.261
+        ],
+        "wx": -7.613,
+        "wz": 3.261,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          128,
+          357
+        ],
+        "world_xz": [
+          -7.613,
+          3.261
+        ],
+        "wx": -7.613,
+        "wz": 3.261,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          86,
+          357
+        ],
+        "world_xz": [
+          -16.013,
+          3.261
+        ],
+        "wx": -16.013,
+        "wz": 3.261,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          86,
+          357
+        ],
+        "world_xz": [
+          -16.013,
+          3.261
+        ],
+        "wx": -16.013,
+        "wz": 3.261,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          85,
+          358
+        ],
+        "world_xz": [
+          -16.213,
+          3.461
+        ],
+        "wx": -16.213,
+        "wz": 3.461,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          85,
+          358
+        ],
+        "world_xz": [
+          -16.213,
+          3.461
+        ],
+        "wx": -16.213,
+        "wz": 3.461,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          73,
+          358
+        ],
+        "world_xz": [
+          -18.613,
+          3.461
+        ],
+        "wx": -18.613,
+        "wz": 3.461,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          73,
+          358
+        ],
+        "world_xz": [
+          -18.613,
+          3.461
+        ],
+        "wx": -18.613,
+        "wz": 3.461,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          61,
+          346
+        ],
+        "world_xz": [
+          -21.013,
+          1.061
+        ],
+        "wx": -21.013,
+        "wz": 1.061,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          61,
+          346
+        ],
+        "world_xz": [
+          -21.013,
+          1.061
+        ],
+        "wx": -21.013,
+        "wz": 1.061,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          61,
+          334
+        ],
+        "world_xz": [
+          -21.013,
+          -1.339
+        ],
+        "wx": -21.013,
+        "wz": -1.339,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          61,
+          334
+        ],
+        "world_xz": [
+          -21.013,
+          -1.339
+        ],
+        "wx": -21.013,
+        "wz": -1.339,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          60,
+          333
+        ],
+        "world_xz": [
+          -21.213,
+          -1.539
+        ],
+        "wx": -21.213,
+        "wz": -1.539,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          60,
+          333
+        ],
+        "world_xz": [
+          -21.213,
+          -1.539
+        ],
+        "wx": -21.213,
+        "wz": -1.539,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          53,
+          333
+        ],
+        "world_xz": [
+          -22.613,
+          -1.539
+        ],
+        "wx": -22.613,
+        "wz": -1.539,
+        "floor_y": -0.5
+      },
+      "doors": []
+    }
+  ],
+  "edge_kinds_used": [
+    "walk"
+  ],
+  "params": {
+    "cell_size_m": 0.2,
+    "interaction_radius_used_m": 2.0,
+    "corner_waypoint_deg": 30.0,
+    "door_tag_radius_m": 0.8
+  }
+}
