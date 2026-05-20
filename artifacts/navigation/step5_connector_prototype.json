@@ -1,0 +1,93 @@
+{
+  "params": {
+    "capsule_radius_m": 0.4,
+    "capsule_height_m": 2.5,
+    "step_up_tolerance_m": 0.25,
+    "adjacency_tolerance_m": 3.0,
+    "sample_step_m": 0.4
+  },
+  "walkable_zone_tagging": {
+    "total_surfaces": 853,
+    "tagged_to_any_target": 26,
+    "per_zone_counts": {
+      "bedroom": 5,
+      "bathroom2": 3,
+      "gym": 6,
+      "gym_closet": 12
+    }
+  },
+  "pairs": [
+    {
+      "error": "no shared boundary within tolerance",
+      "zone_a": {
+        "name": "bedroom",
+        "xmin": -17.0197665,
+        "xmax": -10.075525500000001,
+        "ymin": 11.73,
+        "ymax": 21.73,
+        "zmin": -13.949409500000002,
+        "zmax": -7.237822500000001,
+        "cx": -13.547646,
+        "cy": 16.73,
+        "cz": -10.593616,
+        "sx": 6.944241,
+        "sy": 10.0,
+        "sz": 6.711587
+      },
+      "zone_b": {
+        "name": "bathroom2",
+        "xmin": -31.061847,
+        "xmax": -18.548107,
+        "ymin": 13.23,
+        "ymax": 23.23,
+        "zmin": -5.0702095,
+        "zmax": -3.4982765000000002,
+        "cx": -24.804977,
+        "cy": 18.23,
+        "cz": -4.284243,
+        "sx": 12.51374,
+        "sy": 10.0,
+        "sz": 1.571933
+      },
+      "from": "bedroom",
+      "to": "bathroom2",
+      "sweep_label": "good"
+    },
+    {
+      "error": "no shared boundary within tolerance",
+      "zone_a": {
+        "name": "gym",
+        "xmin": -22.484141,
+        "xmax": -14.238859,
+        "ymin": 12.449998999999998,
+        "ymax": 22.449999,
+        "zmin": 8.552548,
+        "zmax": 14.190958,
+        "cx": -18.3615,
+        "cy": 17.449999,
+        "cz": 11.371753,
+        "sx": 8.245282,
+        "sy": 10.0,
+        "sz": 5.63841
+      },
+      "zone_b": {
+        "name": "gym_closet",
+        "xmin": -3.3922845,
+        "xmax": 3.0521105,
+        "ymin": 13.042000000000002,
+        "ymax": 23.042,
+        "zmin": 13.925603,
+        "zmax": 19.308887,
+        "cx": -0.170087,
+        "cy": 18.042,
+        "cz": 16.617245,
+        "sx": 6.444395,
+        "sy": 10.0,
+        "sz": 5.383284
+      },
+      "from": "gym",
+      "to": "gym_closet",
+      "sweep_label": "bad"
+    }
+  ]
+}
