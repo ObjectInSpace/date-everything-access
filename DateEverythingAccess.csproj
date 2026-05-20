@@ -33,6 +33,8 @@
     <SceneNavigationDataOutputPath>$(ProjectDir)bin\$(Configuration)\net472\thirdpersongreybox-navigation-data.json</SceneNavigationDataOutputPath>
     <SceneBlockersSourcePath>$(ProjectDir)artifacts\navigation\thirdpersongreybox-blockers.json</SceneBlockersSourcePath>
     <SceneBlockersOutputPath>$(ProjectDir)bin\$(Configuration)\net472\thirdpersongreybox-blockers.json</SceneBlockersOutputPath>
+    <NavigableRegionBakeSourcePath>$(ProjectDir)artifacts\navigation\navigable_region.bake.json</NavigableRegionBakeSourcePath>
+    <NavigableRegionBakeOutputPath>$(ProjectDir)bin\$(Configuration)\net472\navigable_region.bake.json</NavigableRegionBakeOutputPath>
   </PropertyGroup>
 
   <Target Name="CopyNavigationGraphToOutput" AfterTargets="Build" Condition="Exists('$(NavigationGraphSourcePath)')">
@@ -53,6 +55,11 @@
   <Target Name="CopySceneBlockersToOutput" AfterTargets="Build" Condition="Exists('$(SceneBlockersSourcePath)')">
     <Copy SourceFiles="$(SceneBlockersSourcePath)" DestinationFiles="$(SceneBlockersOutputPath)" />
     <Message Text="Copied scene blockers JSON to $(SceneBlockersOutputPath)" Importance="High" />
+  </Target>
+
+  <Target Name="CopyNavigableRegionBakeToOutput" AfterTargets="Build" Condition="Exists('$(NavigableRegionBakeSourcePath)')">
+    <Copy SourceFiles="$(NavigableRegionBakeSourcePath)" DestinationFiles="$(NavigableRegionBakeOutputPath)" />
+    <Message Text="Copied navigable region bake JSON to $(NavigableRegionBakeOutputPath)" Importance="High" />
   </Target>
 
   <ItemGroup>
@@ -128,6 +135,7 @@
     <Copy SourceFiles="$(LocalNavigationMapsSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\local_navigation_maps.generated.json" Condition="Exists('$(LocalNavigationMapsSourcePath)')" />
     <Copy SourceFiles="$(SceneNavigationDataSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\thirdpersongreybox-navigation-data.json" Condition="Exists('$(SceneNavigationDataSourcePath)')" />
     <Copy SourceFiles="$(SceneBlockersSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\thirdpersongreybox-blockers.json" Condition="Exists('$(SceneBlockersSourcePath)')" />
+    <Copy SourceFiles="$(NavigableRegionBakeSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigable_region.bake.json" Condition="Exists('$(NavigableRegionBakeSourcePath)')" />
     <Message Text="Copied $(TargetFileName) to BepInEx plugins folder" Importance="High" />
   </Target>
 

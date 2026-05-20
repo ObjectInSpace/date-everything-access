@@ -252,6 +252,10 @@ namespace DateEverythingAccess
             Add("navigation_no_room_objects", "Keine verfolgbaren Objekte im aktuellen Raum.", "No trackable objects in the current room.");
             Add("navigation_room_object_option", "Objekt {0} von {1}. {2}", "Object {0} of {1}. {2}");
             Add("navigation_room_object_picker_closed", "Objektliste geschlossen.", "Object list closed.");
+            Add("navigation_object_picker_title", "Bekannte Objekte", "Known objects");
+            Add("navigation_object_picker_option", "Objekt {0} von {1}. {2}", "Object {0} of {1}. {2}");
+            Add("navigation_object_picker_empty", "Keine bekannten Objekte verfuegbar.", "No known objects available.");
+            Add("navigation_object_picker_closed", "Objektliste geschlossen.", "Object list closed.");
             Add("room_scan_title", "Raum: {0}", "Room: {0}");
             Add("room_scan_empty", "Raum: {0}. Keine verfolgbaren Objekte in diesem Raum.", "Room: {0}. No trackable objects in this room.");
             Add("room_scan_unavailable", "Raumbericht ist gerade nicht verfuegbar.", "Room report is not available right now.");
