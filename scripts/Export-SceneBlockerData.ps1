@@ -16,16 +16,17 @@ param(
     [double]$MinimumBlockingTopY = 0.35,
 
     [Parameter()]
-    [double]$MaximumBlockingBottomY = 2.35,
+    [double]$MaximumBlockingBottomY = 15.0,
 
     [Parameter()]
     [double]$MinimumFootprintRadius = 0.15,
 
+    # Mesh slice planes (world Y). Each plane intersects the mesh and contributes
+    # to its 2D footprint. Defaults cover the player capsule band on both floors:
+    # ground at ~Y=-0.5 -> slice at 0.1, 1.0; upper at ~Y=12.5 -> slice at 13.1, 14.0.
+    # See [[project-navigation-step-o2-outcome]] for the floor-band rationale.
     [Parameter()]
-    [double]$PlayerSliceLowY = 0.6,
-
-    [Parameter()]
-    [double]$PlayerSliceHighY = 1.5,
+    [double[]]$MeshSlicePlanes = @(0.1, 1.0, 13.1, 14.0),
 
     [Parameter()]
     [double]$MaxMeshFootprintAreaSqM = 25.0,
@@ -643,8 +644,7 @@ function Get-MeshColliderRecord {
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][object]$WorldTransform,
         [Parameter(Mandatory = $true)][object]$MeshData,
-        [Parameter(Mandatory = $true)][double]$SliceLowY,
-        [Parameter(Mandatory = $true)][double]$SliceHighY,
+        [Parameter(Mandatory = $true)][double[]]$SlicePlanes,
         [Parameter(Mandatory = $true)][double]$MinTopY,
         [Parameter(Mandatory = $true)][double]$MaxBottomY
     )
@@ -669,7 +669,7 @@ function Get-MeshColliderRecord {
 
     $tris = $MeshData.Triangles
     $triCount = [int]($tris.Length / 3)
-    $slicePlanes = @(@($SliceLowY, $SliceHighY).Where({ $_ -ge $minY -and $_ -le $maxY }))
+    $slicePlanes = @($SlicePlanes.Where({ $_ -ge $minY -and $_ -le $maxY }))
     if ($slicePlanes.Count -eq 0 -and $minY -ge $MinTopY -and $minY -le $MaxBottomY) {
         # Whole mesh sits inside the band but neither slice plane clips it (very thin object).
         # Use vertex projection as fallback.
@@ -1227,7 +1227,7 @@ if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($
         $path = Get-GameObjectPath -GameObjectId $gameObject.Id -GameObjects $gameObjects -TransformByGameObjectId $transformByGameObjectId -TransformsById $transformsById
         $record = Get-MeshColliderRecord -Component $component -GameObject $gameObject -Path $path `
             -WorldTransform $worldTransform -MeshData $meshData `
-            -SliceLowY $PlayerSliceLowY -SliceHighY $PlayerSliceHighY `
+            -SlicePlanes $MeshSlicePlanes `
             -MinTopY $MinimumBlockingTopY -MaxBottomY $MaximumBlockingBottomY
 
         if ($null -eq $record) {
@@ -1344,7 +1344,7 @@ $result = [ordered]@{
         DoorAndTeleporterCollidersExcluded = $true
         RigidbodyObjectsExcluded = $true
         MeshCollidersUnsupported = (-not $meshSupported)
-        MeshSlicePlanes = @([Math]::Round($PlayerSliceLowY, 4), [Math]::Round($PlayerSliceHighY, 4))
+        MeshSlicePlanes = @($MeshSlicePlanes | ForEach-Object { [Math]::Round([double]$_, 4) })
         MaxMeshFootprintAreaSqM = [Math]::Round($MaxMeshFootprintAreaSqM, 4)
         WallMinVerticalExtent = [Math]::Round($WallMinVerticalExtent, 4)
         WallMaxBottomY = [Math]::Round($WallMaxBottomY, 4)

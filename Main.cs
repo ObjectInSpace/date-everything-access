@@ -22,6 +22,7 @@ namespace DateEverythingAccess
     {
         private const int VkF1 = 0x70;
         private const int VkF6 = 0x75;
+        private const int VkF8 = 0x77;
         private const int VkF9 = 0x78;
         private const int WmHotkey = 0x0312;
         private const int WmQuit = 0x0012;
@@ -41,6 +42,7 @@ namespace DateEverythingAccess
         private const int TransitionSweepHotkeyId = 10;
         private const int DoorTransitionSweepHotkeyId = 11;
         private const int LiveRouteAuditHotkeyId = 12;
+        private const int CoverageSweepHotkeyId = 13;
 
         private Thread _hotkeyThread;
         private volatile bool _hotkeyThreadRunning;
@@ -246,6 +248,7 @@ namespace DateEverythingAccess
                 RegisterHotkeyOrThrow(TransitionSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF9, "Ctrl+Alt+Shift+F9");
                 RegisterHotkeyOrThrow(DoorTransitionSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+Shift+F6");
                 RegisterHotkeyOrThrow(LiveRouteAuditHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF1, "Ctrl+Alt+Shift+F1");
+                RegisterHotkeyOrThrow(CoverageSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF8, "Ctrl+Alt+Shift+F8");
                 Logger.LogInfo("Background hotkey message loop active");
 
                 NativeMessage message;
@@ -279,6 +282,7 @@ namespace DateEverythingAccess
                 UnregisterHotKey(IntPtr.Zero, TransitionSweepHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, DoorTransitionSweepHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, LiveRouteAuditHotkeyId);
+                UnregisterHotKey(IntPtr.Zero, CoverageSweepHotkeyId);
                 Logger.LogInfo("Background hotkey thread exiting");
             }
         }
@@ -416,6 +420,16 @@ namespace DateEverythingAccess
 
                 Logger.LogInfo("Live route audit hotkey detected");
                 AccessibilityWatcher.RequestToggleLiveRouteAudit();
+                return;
+            }
+
+            if (hotkeyId == CoverageSweepHotkeyId)
+            {
+                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || !IsModifierKeyDown(0x12))
+                    return;
+
+                Logger.LogInfo("Coverage sweep hotkey detected");
+                AccessibilityWatcher.RequestToggleCoverageSweep();
             }
         }
 

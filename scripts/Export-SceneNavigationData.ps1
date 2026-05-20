@@ -794,12 +794,20 @@ foreach ($portal in $occlusionPortalComponents) {
 }
 
 $zoneObjects = @($zones | Sort-Object Name | ForEach-Object {
+    # A zone enters the navigation graph only if (a) it is referenced by a graph link AND
+    # (b) it has non-zero horizontal extent. Zero-scale (Scale.x == 0 AND Scale.z == 0) zones
+    # are state-marker anchor pins for the game's camera/state system, not walkable regions.
+    # Per Step 3 of the navigation unification plan: per-object navigation keys to the
+    # datable GameObject, so anchor names have no role in the navigation graph itself.
+    $hasHorizontalExtent = ($_.Scale.X -ne 0) -and ($_.Scale.Z -ne 0)
+    $inGraph = $graphZoneNames.Contains($_.Name) -and $hasHorizontalExtent
+
     [ordered]@{
         Name = $_.Name
         Position = Convert-Vector3ToObject $_.Position
         Scale = Convert-Vector3ToObject $_.Scale
         Rotation = Convert-QuaternionToObject $_.Rotation
-        InNavigationGraph = $graphZoneNames.Contains($_.Name)
+        InNavigationGraph = $inGraph
     }
 })
 
