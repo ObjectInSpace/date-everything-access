@@ -37,3 +37,7 @@ tools/
 # Local tool caches
 *.lscache
 artifacts/navigation/mesh_guid_index.cache.json
+
+# Python bytecode cache
+**/__pycache__/
+*.pyc

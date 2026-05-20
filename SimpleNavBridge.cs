@@ -29,6 +29,13 @@ namespace DateEverythingAccess
         private static readonly System.Collections.Generic.List<Vector3> _waypoints =
             new System.Collections.Generic.List<Vector3>(8);
         private static int _waypointIndex;
+
+        // O5 route-driven mode (object-first navigation). When non-null, the bridge is driving
+        // an object-route polyline instead of a zone-graph step. _activeDoor here is updated
+        // per segment from the route's door tags, not per step. The two modes are mutually
+        // exclusive within a session; BeginRoute clears step state and vice versa.
+        private static SimpleNavRoute _activeRoute;
+        private static int _activeRouteSegment; // index into _activeRoute.SegmentDoorNames
         // Player must come within this XZ distance of the active waypoint before we advance.
         // Tuned to be larger than the autowalk's tick-distance so we don't oscillate, but small
         // enough that mid-room steiner waypoints don't drag the player off the natural line.
@@ -65,6 +72,8 @@ namespace DateEverythingAccess
             _activeTarget = Vector3.zero;
             _lastResolveReason = null;
             _activeDoor = null;
+            _activeRoute = null;
+            _activeRouteSegment = 0;
             _waypoints.Clear();
             _waypointIndex = 0;
             _nextDoorInteractTime = 0f;
@@ -89,11 +98,93 @@ namespace DateEverythingAccess
             _activeTarget = Vector3.zero;
             _lastResolveReason = null;
             _activeDoor = null;
+            _activeRoute = null;
+            _activeRouteSegment = 0;
             _waypoints.Clear();
             _waypointIndex = 0;
             _minDistanceToTarget = float.PositiveInfinity;
             _appliedFrameCount = 0;
             _hasPlayerPositionAtStepBegin = false;
+        }
+
+        // ---- O5 route-driven mode --------------------------------------------------------
+        //
+        // The object-first navigation contract: given a SimpleNavRoute (loaded from O4's
+        // route.<name>.json), drive the autowalk toward the route's final target by following
+        // the polyline, opening doors as path preconditions when a segment has a door tag.
+        //
+        // The bridge owns the route's lifecycle (BeginRoute → per-frame TryAdvanceWaypoint →
+        // EndStep). The autowalk loop in AccessibilityWatcher checks HasActiveRoute first and
+        // takes the route-driven path; otherwise it falls back to the zone-graph step model.
+
+        /// <summary>The active O5 object-route, or null when running in step-driven mode.</summary>
+        public static SimpleNavRoute ActiveRoute => _activeRoute;
+        public static bool HasActiveRoute => _activeRoute != null;
+
+        /// <summary>
+        /// Begin driving the autowalk against an object-route polyline. Replaces any active
+        /// step-driven plan. Caller is responsible for actually invoking the autowalk loop —
+        /// this just installs the route.
+        /// </summary>
+        public static void BeginRoute(SimpleNavRoute route)
+        {
+            if (route == null || route.Waypoints == null || route.Waypoints.Count < 2)
+            {
+                if (Main.Log != null) Main.Log.LogWarning("SimpleNavBridge.BeginRoute: empty/short route");
+                EndStep();
+                return;
+            }
+
+            BeginStep("route:" + (route.TargetName ?? "<unnamed>") + "#" + route.TargetGameObjectId);
+            _activeRoute = route;
+            _activeRouteSegment = 0;
+            _waypoints.Clear();
+            _waypoints.AddRange(route.Waypoints);
+            // Skip the start waypoint (player's own position) — drive toward index 1 first.
+            _waypointIndex = 1;
+            _activeTarget = _waypoints[_waypointIndex];
+            _activeTargetValid = true;
+            _lastResolveReason = null;
+            ResolveActiveDoorForSegment(_activeRouteSegment);
+            if (Main.Log != null)
+                Main.Log.LogInfo("SimpleNavBridge.BeginRoute target=" + (route.TargetName ?? "<null>") +
+                    " waypoints=" + route.Waypoints.Count +
+                    " segments=" + route.SegmentCount);
+        }
+
+        /// <summary>
+        /// True when the player is within the target's interaction radius (XZ) of the route's
+        /// target world position. The route's planner already routes to a goal cell inside this
+        /// disc, so this check is the natural arrival predicate for O5.
+        /// </summary>
+        public static bool HasArrivedAtRouteTarget(Vector3 playerPos)
+        {
+            if (_activeRoute == null) return false;
+            Vector3 t = _activeRoute.TargetPosition;
+            float dx = t.x - playerPos.x;
+            float dz = t.z - playerPos.z;
+            float r = _activeRoute.TargetInteractionRadius;
+            if (r < 0.5f) r = 0.5f;
+            // Clamp absurdly large interaction radii (some props publish 7.5m). Matches the
+            // planner's same clamp so arrival lines up with the goal-cell expansion.
+            if (r > 2.0f) r = 2.0f;
+            return (dx * dx + dz * dz) <= r * r;
+        }
+
+        // Resolve _activeDoor from the route's segment door tags. Multiple doors per segment
+        // are possible at clusters; we pick the first that resolves to a live Door instance.
+        private static void ResolveActiveDoorForSegment(int segmentIndex)
+        {
+            _activeDoor = null;
+            if (_activeRoute == null) return;
+            if (segmentIndex < 0 || segmentIndex >= _activeRoute.SegmentDoorNames.Count) return;
+            var names = _activeRoute.SegmentDoorNames[segmentIndex];
+            if (names == null || names.Count == 0) return;
+            for (int i = 0; i < names.Count; i++)
+            {
+                Door d = SimpleNav.FindDoorByName(names[i]);
+                if (d != null) { _activeDoor = d; return; }
+            }
         }
 
         /// <summary>
@@ -634,9 +725,20 @@ namespace DateEverythingAccess
             if (dx * dx + dz * dz > WaypointArrivalRadius * WaypointArrivalRadius) return false;
             _waypointIndex++;
             _activeTarget = _waypoints[_waypointIndex];
+            if (_activeRoute != null)
+            {
+                // Segment index = (waypointIndex - 1) since segment N spans waypoints N→N+1.
+                // After advancing to waypoint k, we are now traversing segment k.
+                _activeRouteSegment = _waypointIndex - 1;
+                if (_activeRouteSegment >= _activeRoute.SegmentCount)
+                    _activeRouteSegment = _activeRoute.SegmentCount - 1;
+                ResolveActiveDoorForSegment(_activeRouteSegment);
+            }
             if (Main.Log != null)
                 Main.Log.LogInfo("SimpleNavBridge advance step=" + (_activeStepKey ?? "<null>") +
-                    " waypoint=" + _waypointIndex + "/" + (_waypoints.Count - 1));
+                    " waypoint=" + _waypointIndex + "/" + (_waypoints.Count - 1) +
+                    (_activeRoute != null ? (" segment=" + _activeRouteSegment +
+                        " door=" + (_activeDoor != null && _activeDoor.gameObject != null ? _activeDoor.gameObject.name : "<none>")) : ""));
             return true;
         }
 

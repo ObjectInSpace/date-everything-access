@@ -674,6 +674,13 @@ namespace DateEverythingAccess
             Interlocked.Exchange(ref _liveRouteAuditRequested, 1);
         }
 
+        internal static void RequestToggleCoverageSweep()
+        {
+            Interlocked.Exchange(ref _coverageSweepRequested, 1);
+        }
+
+        private static int _coverageSweepRequested;
+
         internal static void RequestDateADexEntryAnnouncement()
         {
             Interlocked.Exchange(ref _pendingDateADexEntryAnnouncementRequested, 1);
@@ -696,6 +703,8 @@ namespace DateEverythingAccess
             HandleLiveRouteAuditRequest();
             HandleTransitionSweep();
             HandleLiveRouteAudit();
+            HandleCoverageSweepRequest();
+            SimpleNavCoverageSweep.Tick();
 
             bool isSettingsMenuOpen = ModConfig.IsMenuOpen;
             if (isSettingsMenuOpen)
@@ -1781,6 +1790,13 @@ namespace DateEverythingAccess
                 valueEndIndex = detail.Length;
 
             return detail.Substring(valueStartIndex, valueEndIndex - valueStartIndex);
+        }
+
+        private void HandleCoverageSweepRequest()
+        {
+            if (Interlocked.Exchange(ref _coverageSweepRequested, 0) == 0)
+                return;
+            SimpleNavCoverageSweep.RequestToggle();
         }
 
         private void HandleTransitionSweepRequest()
@@ -5923,6 +5939,15 @@ namespace DateEverythingAccess
         //     the legacy loop detector is unnecessary.
         private void ApplyAutoWalkSimple()
         {
+            // O5 route-driven mode (object-first navigation). When a route is installed via
+            // SimpleNavBridge.BeginRoute, drive from it instead of the legacy zone-graph step
+            // model. The two modes are mutually exclusive within a session.
+            if (SimpleNavBridge.HasActiveRoute)
+            {
+                ApplyAutoWalkSimpleRoute();
+                return;
+            }
+
             NavigationGraph.PathStep currentStep = GetCurrentNavigationStep();
             if (currentStep == null)
             {
@@ -6061,6 +6086,118 @@ namespace DateEverythingAccess
                 moveInput,
                 lookInput,
                 playerPos);
+        }
+
+        // O5 route-driven autowalk. Follows SimpleNavBridge.ActiveRoute's polyline. Differences
+        // from the step-driven path:
+        //   - No NavigationGraph.PathStep — target source is the route's current waypoint.
+        //   - Arrival is "within target's interaction radius" (XZ), not zone-family membership.
+        //   - The connecting door is whichever door is tagged on the current segment, refreshed
+        //     by SimpleNavBridge.TryAdvanceWaypoint when crossing into a new segment.
+        //   - On arrival, the player turns toward the target object's world position before stop.
+        private void ApplyAutoWalkSimpleRoute()
+        {
+            SimpleNavRoute route = SimpleNavBridge.ActiveRoute;
+            if (route == null)
+            {
+                StopNavigationBlocked("simple-nav route: no active route");
+                return;
+            }
+
+            Transform playerTransform = BetterPlayerControl.Instance.transform;
+            Vector3 playerPos = playerTransform.position;
+
+            // Roll forward through the polyline as the player reaches each leg's end. This also
+            // updates the active door (per-segment door tags from the route).
+            Vector3 target = SimpleNavBridge.LastResolvedTarget;
+            if (SimpleNavBridge.TryAdvanceWaypoint(playerPos))
+                target = SimpleNavBridge.LastResolvedTarget;
+
+            // Arrival: within target interaction radius (XZ). The planner already routes to a
+            // goal cell inside this disc, so this matches the goal-cell expansion in O4.
+            if (SimpleNavBridge.HasArrivedAtRouteTarget(playerPos))
+            {
+                // Face the target object before stopping. World-space facing (decided 2026-05-19).
+                Vector3 toTarget = route.TargetPosition - playerPos;
+                toTarget.y = 0f;
+                if (toTarget.sqrMagnitude > 0.0001f)
+                {
+                    Vector3 desiredDir = toTarget.normalized;
+                    float turnDegrees = Vector3.SignedAngle(playerTransform.forward, desiredDir, Vector3.up);
+                    if (Mathf.Abs(turnDegrees) > 5f)
+                    {
+                        Vector3 lookInput = new Vector3(Mathf.Clamp(turnDegrees / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
+                        ApplyNavigationInput(Vector3.zero, lookInput);
+                        return; // hold position and keep turning until aligned
+                    }
+                }
+                ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                StopNavigationWithAnnouncement("navigation_arrived");
+                return;
+            }
+
+            // Open the segment's tagged door if needed. Cheap; no-op when there's no door or it's
+            // already open. The bridge's TryOpenActiveDoorIfNeeded already gates by range/cooldown.
+            bool segmentHasDoor = SimpleNavBridge.ActiveDoor != null;
+            if (segmentHasDoor)
+                SimpleNavBridge.TryOpenActiveDoorIfNeeded(playerPos);
+
+            Vector3 toWaypoint = target - playerPos;
+            toWaypoint.y = 0f;
+            if (toWaypoint.sqrMagnitude <= 0.0001f)
+            {
+                ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                return;
+            }
+
+            Vector3 walkDir = toWaypoint.normalized;
+            Vector3 localDirection = playerTransform.InverseTransformDirection(walkDir);
+            localDirection.y = 0f;
+            float turnDeg = Vector3.SignedAngle(playerTransform.forward, walkDir, Vector3.up);
+
+            Vector3 move = new Vector3(
+                Mathf.Clamp(localDirection.x, -1f, 1f),
+                0f,
+                Mathf.Clamp(localDirection.z, -1f, 1f));
+            Vector3 look = new Vector3(Mathf.Clamp(turnDeg / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
+
+            // Hold position while the segment's door is mid-swing. Same reasoning as the step path:
+            // walking into a moving door trips Door.OnCollisionEnter and pins the swing.
+            bool waitingForDoorSwing = segmentHasDoor && SimpleNavBridge.IsActiveDoorMoving();
+            if (waitingForDoorSwing)
+                move = Vector3.zero;
+
+            if (!ApplyNavigationInput(move, look))
+            {
+                StopNavigationBlocked("simple-nav route input application failed target=" + (route.TargetName ?? "<null>"));
+                return;
+            }
+
+            SimpleNavBridge.RecordFrameProgress(playerPos);
+
+            if (waitingForDoorSwing)
+            {
+                _lastAutoWalkProgressTime = Time.unscaledTime;
+                return;
+            }
+
+            if (Vector3.Distance(playerPos, _lastAutoWalkPosition) >= AutoWalkProgressDistance)
+            {
+                _lastAutoWalkPosition = playerPos;
+                _lastAutoWalkProgressTime = Time.unscaledTime;
+                ClearNavigationBlockedDetail();
+            }
+            else if (Time.unscaledTime - _lastAutoWalkProgressTime >= AutoWalkBlockedTimeoutSeconds)
+            {
+                string runtimeBlocker = ProbeRuntimeBlocker(playerPos, target);
+                LogNavigationAutoWalkDebug(
+                    "Simple-nav route progress timeout target=" + (route.TargetName ?? "<null>") +
+                    " waypoint=" + FormatVector3(target) +
+                    " player=" + FormatVector3(playerPos) +
+                    " runtimeBlocker=" + (runtimeBlocker ?? "<none>"));
+                StopNavigationBlocked("simple-nav route progress timeout target=" + (route.TargetName ?? "<null>") +
+                    " runtimeBlocker=" + (runtimeBlocker ?? "<none>"));
+            }
         }
 
         // Probe what's physically between the player and the active waypoint at runtime. Casts
