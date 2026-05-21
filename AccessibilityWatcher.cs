@@ -290,7 +290,6 @@ namespace DateEverythingAccess
         private string _trackedInteractableLabel;
         private string _trackedInteractableZone;
         private string _trackedInteractableApproachId;
-        private string _trackedInteractableApproachZone;
         private string _navigationTargetZone;
         private string _navigationTargetLabel;
         private Vector3 _lastAutoWalkPosition;
@@ -1175,7 +1174,6 @@ namespace DateEverythingAccess
             if (save == null || BetterPlayerControl.Instance == null)
                 return false;
 
-            string currentZone = GetCurrentZoneNameInternal();
             Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
             InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
             float bestScore = float.MinValue;
@@ -1207,12 +1205,6 @@ namespace DateEverythingAccess
                 }
 
                 float score = 0f;
-                if (TryGetZoneNameForInteractable(candidate, out string candidateZone) &&
-                    AreZonesEquivalent(candidateZone, currentZone))
-                {
-                    score += 50f;
-                }
-
                 score -= Vector3.Distance(playerPosition, candidate.transform.position);
                 if (score <= bestScore)
                     continue;
@@ -1286,11 +1278,8 @@ namespace DateEverythingAccess
             string objectLabel = GetObjectFacingDisplayName(interactable);
             string sceneName = NormalizeIdentifierName(interactable.name);
             string knownName = GetKnownDateableDisplayName(interactable);
-            string currentZone = GetCurrentZoneNameInternal();
-            bool isCurrentZone = TryGetZoneNameForInteractable(interactable, out string objectZone) &&
-                AreZonesEquivalent(objectZone, currentZone);
 
-            float score = isCurrentZone ? 5f : 0f;
+            float score = 0f;
 
             switch (objectiveKind)
             {
@@ -1648,7 +1637,7 @@ namespace DateEverythingAccess
                 if (!TryGetZoneNameForInteractable(candidate, out string candidateZone))
                     continue;
 
-                float score = ScoreNavigableInteractableCandidate(interactable, candidate, candidateZone);
+                float score = ScoreNavigableInteractableCandidate(interactable, candidate);
                 if (score <= bestScore)
                     continue;
 
@@ -1660,7 +1649,7 @@ namespace DateEverythingAccess
             return resolvedInteractable != null && !string.IsNullOrEmpty(zoneName);
         }
 
-        private static float ScoreNavigableInteractableCandidate(InteractableObj preferredInteractable, InteractableObj candidate, string candidateZone)
+        private static float ScoreNavigableInteractableCandidate(InteractableObj preferredInteractable, InteractableObj candidate)
         {
             if (preferredInteractable == null || candidate == null)
                 return float.MinValue;
@@ -1690,13 +1679,6 @@ namespace DateEverythingAccess
                 !mainText.StartsWith("Default hover text for ", StringComparison.OrdinalIgnoreCase))
             {
                 score += 100f;
-            }
-
-            string currentZone = GetCurrentZoneNameInternal();
-            if (!string.IsNullOrEmpty(currentZone) &&
-                AreZonesEquivalent(candidateZone, currentZone))
-            {
-                score += 50f;
             }
 
             score -= Vector3.Distance(preferredInteractable.transform.position, candidate.transform.position) * 5f;
@@ -1908,18 +1890,10 @@ namespace DateEverythingAccess
                 return false;
             }
 
-            string currentZone = GetCurrentZoneNameInternal();
-            if (!TryGetTrackedInteractableZone(trackedInteractable, out string trackedZone) ||
-                !IsExactZoneMatch(trackedZone, currentZone))
-            {
-                return false;
-            }
-
             Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
             Vector3 targetPosition = trackedInteractable.transform.position;
             if (!TryGetTrackedInteractableNavigationTarget(
                     trackedInteractable,
-                    currentZone,
                     playerPosition,
                     out targetPosition,
                     out _))
@@ -1934,7 +1908,6 @@ namespace DateEverythingAccess
 
         private bool TryGetTrackedInteractableNavigationTarget(
             InteractableObj interactable,
-            string currentZone,
             Vector3 playerPosition,
             out Vector3 targetPosition,
             out string debugDetail)
@@ -1943,15 +1916,6 @@ namespace DateEverythingAccess
             debugDetail = null;
             if (interactable == null)
                 return false;
-
-            string navigationZone = GetNavigationZoneName(currentZone);
-            if (string.IsNullOrEmpty(navigationZone))
-            {
-                targetPosition = interactable.transform.position;
-                targetPosition.y = playerPosition.y;
-                debugDetail = "mode=raw-object zone=<null>";
-                return true;
-            }
 
             if (!TryBuildTrackedInteractableApproachCandidates(
                     interactable,
@@ -1970,15 +1934,12 @@ namespace DateEverythingAccess
 
             if (CanReuseTrackedInteractableApproachTarget(
                     interactable,
-                    navigationZone,
                     referencePosition))
             {
                 targetPosition = _trackedInteractableApproachTarget;
                 targetPosition.y = playerPosition.y;
                 debugDetail =
-                    "mode=cached" +
-                    " zone=" + navigationZone +
-                    " candidateSource=" + candidateDetail;
+                    "mode=cached candidateSource=" + candidateDetail;
                 return true;
             }
 
@@ -1996,37 +1957,28 @@ namespace DateEverythingAccess
             }
 
             _trackedInteractableApproachId = interactable.Id;
-            _trackedInteractableApproachZone = navigationZone;
             _trackedInteractableApproachReferencePosition = referencePosition;
             _trackedInteractableApproachTarget = targetPosition;
             targetPosition.y = playerPosition.y;
-            debugDetail =
-                resolutionDetail +
-                " zone=" + navigationZone +
-                " candidateSource=" + candidateDetail;
+            debugDetail = resolutionDetail + " candidateSource=" + candidateDetail;
             return true;
         }
 
         private void ResetTrackedInteractableApproachTarget()
         {
             _trackedInteractableApproachId = null;
-            _trackedInteractableApproachZone = null;
             _trackedInteractableApproachReferencePosition = Vector3.zero;
             _trackedInteractableApproachTarget = Vector3.zero;
         }
 
         private bool CanReuseTrackedInteractableApproachTarget(
             InteractableObj interactable,
-            string navigationZone,
             Vector3 referencePosition)
         {
             return interactable != null &&
                 !string.IsNullOrEmpty(interactable.Id) &&
-                !string.IsNullOrEmpty(navigationZone) &&
                 !string.IsNullOrEmpty(_trackedInteractableApproachId) &&
-                !string.IsNullOrEmpty(_trackedInteractableApproachZone) &&
                 string.Equals(_trackedInteractableApproachId, interactable.Id, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(_trackedInteractableApproachZone, navigationZone, StringComparison.OrdinalIgnoreCase) &&
                 GetFlatDistance(_trackedInteractableApproachReferencePosition, referencePosition) <= TrackedInteractableApproachRetargetDistance;
         }
 
@@ -6287,80 +6239,5 @@ namespace DateEverythingAccess
             return cleaned.Trim();
         }
 
-        private static string GetZoneFamilyKey(string zoneName)
-        {
-            string cleaned = NormalizeText(zoneName);
-            if (string.IsNullOrEmpty(cleaned))
-                return null;
-
-            int endIndex = cleaned.Length;
-            while (endIndex > 0 && char.IsDigit(cleaned[endIndex - 1]))
-            {
-                endIndex--;
-            }
-
-            cleaned = cleaned.Substring(0, endIndex).TrimEnd('_', '-', ' ');
-            return string.IsNullOrEmpty(cleaned)
-                ? null
-                : cleaned.ToLowerInvariant();
-        }
-
-        private static bool IsExactZoneMatch(string firstZone, string secondZone)
-        {
-            return !string.IsNullOrWhiteSpace(firstZone) &&
-                !string.IsNullOrWhiteSpace(secondZone) &&
-                string.Equals(firstZone, secondZone, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool AreZonesEquivalent(string firstZone, string secondZone)
-        {
-            if (string.IsNullOrWhiteSpace(firstZone) || string.IsNullOrWhiteSpace(secondZone))
-                return false;
-
-            if (IsExactZoneMatch(firstZone, secondZone))
-                return true;
-
-            string firstNavigationZone = GetNavigationZoneName(firstZone);
-            string secondNavigationZone = GetNavigationZoneName(secondZone);
-            if (!string.IsNullOrWhiteSpace(firstNavigationZone) &&
-                !string.IsNullOrWhiteSpace(secondNavigationZone))
-            {
-                return string.Equals(firstNavigationZone, secondNavigationZone, StringComparison.OrdinalIgnoreCase);
-            }
-
-            return string.Equals(GetZoneFamilyKey(firstZone), GetZoneFamilyKey(secondZone), StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string GetNavigationZoneName(string zoneName)
-        {
-            if (string.IsNullOrWhiteSpace(zoneName))
-                return null;
-
-            if (SimpleNavSceneData.IsPrimaryZone(zoneName))
-                return zoneName;
-
-            string zoneFamilyKey = GetZoneFamilyKey(zoneName);
-            if (!string.IsNullOrEmpty(zoneFamilyKey) && SimpleNavSceneData.IsPrimaryZone(zoneFamilyKey))
-                return zoneFamilyKey;
-
-            return null;
-        }
-
-        private static bool IsZoneEquivalentToNavigationZone(string runtimeZone, string navigationZone)
-        {
-            if (string.IsNullOrWhiteSpace(runtimeZone) || string.IsNullOrWhiteSpace(navigationZone))
-                return false;
-
-            string normalizedRuntimeZone = GetNavigationZoneName(runtimeZone);
-            if (!string.IsNullOrEmpty(normalizedRuntimeZone))
-                return string.Equals(normalizedRuntimeZone, navigationZone, StringComparison.OrdinalIgnoreCase);
-
-            return AreZonesEquivalent(runtimeZone, navigationZone);
-        }
-
-        private static bool IsCurrentZoneEquivalentTo(string navigationZone)
-        {
-            return IsZoneEquivalentToNavigationZone(GetCurrentZoneNameInternal(), navigationZone);
-        }
     }
 }

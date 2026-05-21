@@ -4,9 +4,6 @@ param(
     [string]$ScenePath = "D:\root\AssetRipper\1.3.12\extracted\Ripped\ExportedProject\Assets\ThirdPersonGreybox.unity",
 
     [Parameter()]
-    [string]$GraphPath = "D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigation_graph.json",
-
-    [Parameter()]
     [string]$OutputPath = ".\artifacts\navigation\thirdpersongreybox-navigation-data.json"
 )
 
@@ -399,10 +396,6 @@ if (-not (Test-Path -LiteralPath $ScenePath)) {
     throw "Scene file not found: $ScenePath"
 }
 
-if (-not (Test-Path -LiteralPath $GraphPath)) {
-    throw "Navigation graph file not found: $GraphPath"
-}
-
 $gameObjects = [System.Collections.Generic.Dictionary[long, object]]::new()
 $transformsById = [System.Collections.Generic.Dictionary[long, object]]::new()
 $transformByGameObjectId = [System.Collections.Generic.Dictionary[long, object]]::new()
@@ -558,24 +551,6 @@ foreach ($transformId in $transformsById.Keys) {
     [void](Get-WorldTransform -TransformId $transformId -TransformsById $transformsById -WorldTransforms $worldTransforms)
 }
 
-$graphJson = Get-Content -LiteralPath $GraphPath -Raw | ConvertFrom-Json
-# Support both legacy `Links` schema and current `Transitions` schema in the graph file.
-$graphLinks = if ($null -ne $graphJson.PSObject.Properties['Links']) {
-    @($graphJson.Links)
-} elseif ($null -ne $graphJson.PSObject.Properties['Transitions']) {
-    @($graphJson.Transitions)
-} else {
-    @()
-}
-$graphZoneNames = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
-foreach ($link in $graphLinks) {
-    [void]$graphZoneNames.Add($link.FromZone)
-    [void]$graphZoneNames.Add($link.ToZone)
-}
-
-$graphZones = @($zones | Where-Object { $graphZoneNames.Contains($_.Name) })
-$extraZones = @($zones | Where-Object { -not $graphZoneNames.Contains($_.Name) })
-
 $doorNamePattern = '(?i)(^doors?_.*|.*door.*|.*trapdoor.*|.*stairs.*)'
 $cameraNamePattern = '^(Camera_.+|Camera [^ ].+)$'
 
@@ -599,9 +574,8 @@ foreach ($gameObject in $gameObjects.Values | Sort-Object Name, Id) {
 
     $transformInfo = $transformByGameObjectId[$gameObject.Id]
     $worldInfo = $worldTransforms[$transformInfo.Id]
-    $containingGraphZones = Get-ContainingZones -Position $worldInfo.Position -Zones $graphZones
-    $nearestGraphZones = Get-NearestZones -Position $worldInfo.Position -Zones $graphZones -Count 4
-    $nearestExtraZones = Get-NearestZones -Position $worldInfo.Position -Zones $extraZones -Count 4
+    $containingZones = Get-ContainingZones -Position $worldInfo.Position -Zones $zones
+    $nearestZones = Get-NearestZones -Position $worldInfo.Position -Zones $zones -Count 4
 
     $doorObjects.Add([ordered]@{
         Name = $gameObject.Name
@@ -609,14 +583,8 @@ foreach ($gameObject in $gameObjects.Values | Sort-Object Name, Id) {
         TransformId = $transformInfo.Id
         Position = Convert-Vector3ToObject $worldInfo.Position
         Rotation = Convert-QuaternionToObject $worldInfo.Rotation
-        ContainingGraphZones = $containingGraphZones
-        NearestGraphZones = @($nearestGraphZones | ForEach-Object {
-            [ordered]@{
-                Name = $_.Name
-                Distance = $_.Distance
-            }
-        })
-        NearestExtraZones = @($nearestExtraZones | ForEach-Object {
+        ContainingZones = $containingZones
+        NearestZones = @($nearestZones | ForEach-Object {
             [ordered]@{
                 Name = $_.Name
                 Distance = $_.Distance
@@ -654,7 +622,7 @@ foreach ($gameObject in $gameObjects.Values | Sort-Object Name, Id) {
         TransformId = $transformInfo.Id
         Position = Convert-Vector3ToObject $worldInfo.Position
         Rotation = Convert-QuaternionToObject $worldInfo.Rotation
-        NearestGraphZones = @((Get-NearestZones -Position $worldInfo.Position -Zones $graphZones -Count 4) | ForEach-Object {
+        NearestZones = @((Get-NearestZones -Position $worldInfo.Position -Zones $zones -Count 4) | ForEach-Object {
             [ordered]@{
                 Name = $_.Name
                 Distance = $_.Distance
@@ -768,8 +736,8 @@ foreach ($portal in $occlusionPortalComponents) {
         $portalGameObjectName = $gameObjects[$portal.GameObjectId].Name
     }
 
-    $containingPortalZones = Get-ContainingZones -Position $worldCenter -Zones $graphZones
-    $nearestPortalZones = Get-NearestZones -Position $worldCenter -Zones $graphZones -Count 4
+    $containingPortalZones = Get-ContainingZones -Position $worldCenter -Zones $zones
+    $nearestPortalZones = Get-NearestZones -Position $worldCenter -Zones $zones -Count 4
 
     $occlusionPortalObjects.Add([ordered]@{
         ComponentId = $portal.ComponentId
@@ -783,8 +751,8 @@ foreach ($portal in $occlusionPortalComponents) {
         LocalSize = Convert-Vector3ToObject $portal.LocalSize
         ParentDoorGameObjectId = $parentDoorGameObjectId
         ParentDoorName = $parentDoorName
-        ContainingGraphZones = $containingPortalZones
-        NearestGraphZones = @($nearestPortalZones | ForEach-Object {
+        ContainingZones = $containingPortalZones
+        NearestZones = @($nearestPortalZones | ForEach-Object {
             [ordered]@{
                 Name = $_.Name
                 Distance = $_.Distance
@@ -794,27 +762,11 @@ foreach ($portal in $occlusionPortalComponents) {
 }
 
 $zoneObjects = @($zones | Sort-Object Name | ForEach-Object {
-    # A zone enters the navigation graph only if (a) it is referenced by a graph link AND
-    # (b) it has non-zero horizontal extent. Zero-scale (Scale.x == 0 AND Scale.z == 0) zones
-    # are state-marker anchor pins for the game's camera/state system, not walkable regions.
-    # Per Step 3 of the navigation unification plan: per-object navigation keys to the
-    # datable GameObject, so anchor names have no role in the navigation graph itself.
-    $hasHorizontalExtent = ($_.Scale.X -ne 0) -and ($_.Scale.Z -ne 0)
-    $inGraph = $graphZoneNames.Contains($_.Name) -and $hasHorizontalExtent
-
     [ordered]@{
         Name = $_.Name
         Position = Convert-Vector3ToObject $_.Position
         Scale = Convert-Vector3ToObject $_.Scale
         Rotation = Convert-QuaternionToObject $_.Rotation
-        InNavigationGraph = $inGraph
-    }
-})
-
-$graphLinksOutput = @($graphLinks | ForEach-Object {
-    [ordered]@{
-        FromZone = $_.FromZone
-        ToZone = $_.ToZone
     }
 })
 
@@ -825,18 +777,14 @@ if (-not [string]::IsNullOrWhiteSpace($outputDirectory)) {
 
 $result = [ordered]@{
     ScenePath = $ScenePath
-    GraphPath = $GraphPath
     GeneratedAt = (Get-Date).ToString("o")
     Counts = [ordered]@{
         CameraSpaces = $zoneObjects.Count
-        GraphZones = $graphZones.Count
-        ExtraZones = $extraZones.Count
         DoorObjects = $doorObjects.Count
         CameraObjects = $cameraObjects.Count
         Teleporters = $teleporterObjects.Count
         OcclusionPortals = $occlusionPortalObjects.Count
     }
-    GraphLinks = $graphLinksOutput
     CameraSpaces = $zoneObjects
     DoorObjects = $doorObjects
     CameraObjects = $cameraObjects
