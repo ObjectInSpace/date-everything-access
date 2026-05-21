@@ -5,51 +5,40 @@ using UnityEngine;
 
 namespace DateEverythingAccess
 {
-    // Bridge between the SimpleNav module and the rest of the mod. Owns target selection,
-    // door-open timing, and arrival checks for the autowalk loop.
+    // Bridge between the SimpleNav module and the rest of the mod. Owns the route-driven
+    // autowalk lifecycle: install a planner-emitted polyline, drive along it, open doors as
+    // path preconditions.
     //
-    // This bridge is deliberately thin. It owns:
+    // The bridge is deliberately thin. It owns:
     //   1. Per-frame Observe() so SimpleNav can sample floor Y.
-    //   2. A route-driven mode (object-first navigation) that drives along a polyline
-    //      from SimpleNavPlanner, opening doors as path preconditions.
-    //   3. A simple "arrived?" check that maps to SimpleNav.HasArrived.
+    //   2. Route-driven mode (object-first navigation) that drives along a polyline from
+    //      SimpleNavPlanner, opening doors as path preconditions.
     internal static class SimpleNavBridge
     {
         private static string _activeStepKey;
         private static Vector3 _activeTarget;
         private static bool _activeTargetValid;
-        private static string _lastResolveReason;
         private static Door _activeDoor;
-        // Waypoint sequence for the active step. _activeTarget mirrors _waypoints[_waypointIndex]
-        // so legacy single-target callers see the current leg without changing their API. Empty
-        // when the active step came in through the single-target overload (no route was planned).
+        // Waypoint sequence for the active route. _activeTarget mirrors _waypoints[_waypointIndex].
         private static readonly System.Collections.Generic.List<Vector3> _waypoints =
             new System.Collections.Generic.List<Vector3>(8);
         private static int _waypointIndex;
 
         // O5 route-driven mode (object-first navigation). When non-null, the bridge is driving
-        // an object-route polyline instead of a zone-graph step. _activeDoor here is updated
-        // per segment from the route's door tags, not per step. The two modes are mutually
-        // exclusive within a session; BeginRoute clears step state and vice versa.
+        // an object-route polyline. _activeDoor is updated per segment from the route's door tags.
         private static SimpleNavRoute _activeRoute;
-        private static int _activeRouteSegment; // index into _activeRoute.SegmentDoorNames
+        private static int _activeRouteSegment;
         // Player must come within this XZ distance of the active waypoint before we advance.
-        // Tuned to be larger than the autowalk's tick-distance so we don't oscillate, but small
-        // enough that mid-room steiner waypoints don't drag the player off the natural line.
         private const float WaypointArrivalRadius = 1.0f;
 
-        // Telemetry recorded per active step. Read by the sweep reporter when a step ends so we
-        // can correlate a failure with what SimpleNav actually did, instead of inferring from logs.
+        // Telemetry recorded per active route. Used by RecordFrameProgress so failures can be
+        // diagnosed without log scraping.
         private static float _minDistanceToTarget = float.PositiveInfinity;
-        private static Vector3 _playerPositionAtStepBegin;
-        private static bool _hasPlayerPositionAtStepBegin;
         private static int _appliedFrameCount;
 
-
         /// <summary>
-        /// The currently-active waypoint after the most recent <see cref="TryGetTargetForStep"/>
-        /// or <see cref="TryAdvanceWaypoint"/> call. Callers that drive movement from a cached
-        /// `target` variable should re-read this after advancing.
+        /// The currently-active waypoint after the most recent <see cref="BeginRoute"/> or
+        /// <see cref="TryAdvanceWaypoint"/> call.
         /// </summary>
         public static Vector3 LastResolvedTarget => _activeTarget;
 
@@ -59,12 +48,11 @@ namespace DateEverythingAccess
             SimpleNav.Observe();
         }
 
-        public static void BeginStep(string stepKey)
+        private static void BeginStep(string stepKey)
         {
             _activeStepKey = stepKey;
             _activeTargetValid = false;
             _activeTarget = Vector3.zero;
-            _lastResolveReason = null;
             _activeDoor = null;
             _activeRoute = null;
             _activeRouteSegment = 0;
@@ -73,16 +61,6 @@ namespace DateEverythingAccess
             _nextDoorInteractTime = 0f;
             _minDistanceToTarget = float.PositiveInfinity;
             _appliedFrameCount = 0;
-            if (BetterPlayerControl.Instance != null)
-            {
-                _playerPositionAtStepBegin = BetterPlayerControl.Instance.transform.position;
-                _hasPlayerPositionAtStepBegin = true;
-            }
-            else
-            {
-                _playerPositionAtStepBegin = Vector3.zero;
-                _hasPlayerPositionAtStepBegin = false;
-            }
         }
 
         public static void EndStep()
@@ -90,7 +68,6 @@ namespace DateEverythingAccess
             _activeStepKey = null;
             _activeTargetValid = false;
             _activeTarget = Vector3.zero;
-            _lastResolveReason = null;
             _activeDoor = null;
             _activeRoute = null;
             _activeRouteSegment = 0;
@@ -98,27 +75,17 @@ namespace DateEverythingAccess
             _waypointIndex = 0;
             _minDistanceToTarget = float.PositiveInfinity;
             _appliedFrameCount = 0;
-            _hasPlayerPositionAtStepBegin = false;
         }
 
         // ---- O5 route-driven mode --------------------------------------------------------
-        //
-        // The object-first navigation contract: given a SimpleNavRoute (loaded from O4's
-        // route.<name>.json), drive the autowalk toward the route's final target by following
-        // the polyline, opening doors as path preconditions when a segment has a door tag.
-        //
-        // The bridge owns the route's lifecycle (BeginRoute → per-frame TryAdvanceWaypoint →
-        // EndStep). The autowalk loop in AccessibilityWatcher checks HasActiveRoute first and
-        // takes the route-driven path; otherwise it falls back to the zone-graph step model.
 
-        /// <summary>The active O5 object-route, or null when running in step-driven mode.</summary>
+        /// <summary>The active O5 object-route, or null when no route is installed.</summary>
         public static SimpleNavRoute ActiveRoute => _activeRoute;
         public static bool HasActiveRoute => _activeRoute != null;
 
         /// <summary>
-        /// Begin driving the autowalk against an object-route polyline. Replaces any active
-        /// step-driven plan. Caller is responsible for actually invoking the autowalk loop —
-        /// this just installs the route.
+        /// Begin driving the autowalk against an object-route polyline. Caller is responsible
+        /// for actually invoking the autowalk loop — this just installs the route.
         /// </summary>
         public static void BeginRoute(SimpleNavRoute route)
         {
@@ -138,7 +105,6 @@ namespace DateEverythingAccess
             _waypointIndex = 1;
             _activeTarget = _waypoints[_waypointIndex];
             _activeTargetValid = true;
-            _lastResolveReason = null;
             ResolveActiveDoorForSegment(_activeRouteSegment);
             if (Main.Log != null)
                 Main.Log.LogInfo("SimpleNavBridge.BeginRoute target=" + (route.TargetName ?? "<null>") +
@@ -148,8 +114,7 @@ namespace DateEverythingAccess
 
         /// <summary>
         /// True when the player is within the target's interaction radius (XZ) of the route's
-        /// target world position. The route's planner already routes to a goal cell inside this
-        /// disc, so this check is the natural arrival predicate for O5.
+        /// target world position. The planner already routes to a goal cell inside this disc.
         /// </summary>
         public static bool HasArrivedAtRouteTarget(Vector3 playerPos)
         {
@@ -182,8 +147,7 @@ namespace DateEverythingAccess
         }
 
         /// <summary>
-        /// The Door connecting the current step's zones, when SimpleNav resolved one. Null
-        /// otherwise. Read by the bridge's caller to open the door on approach.
+        /// The Door for the current route segment, when the route has a door tag. Null otherwise.
         /// </summary>
         public static Door ActiveDoor => _activeDoor;
 
@@ -194,27 +158,18 @@ namespace DateEverythingAccess
         private const float DoorInteractCooldownSeconds = 0.75f;
         private static float _nextDoorInteractTime;
 
-        /// <summary>
-        /// If the active step has a connecting door and the player is approaching it while
-        /// it's still closed, fire Interact() to open it. Safe to call every frame; cooldown
-        /// and open-state checks prevent spamming. Returns true if an interact was fired.
-        /// </summary>
         // Log skip-reason at most once per step so we can diagnose without log spam.
         private static string _doorSkipLoggedForStep;
-        // One-shot entry-state dump per step for Class D2 diagnosis (office->hallway,
-        // office->office_closet). Emitted by TryOpenActiveDoorIfNeeded on first call per
-        // _activeStepKey so we can see which branch each transition takes.
+        // One-shot entry-state dump per step.
         private static string _doorEntryLoggedForStep;
 
         // How close to door.range counts as "fully open" — anything below this on a door reporting
         // open=true is treated as a stuck-mid-swing desync (the game's changeDoorRot broke on
-        // collidedWithPlayer). We no longer auto-recover; we surface the skip and let the step
-        // time out so the failure is honest.
+        // collidedWithPlayer).
         private const float DoorFullyOpenRotationFraction = 0.95f;
 
         // Reflected access to Door.startRot (private Vector3 set in Initialize() to the
-        // closed orientation). Used to diagnose the "logically open but visually closed"
-        // case where Door.open == true at scene load but the transform was never rotated.
+        // closed orientation).
         private static FieldInfo _doorStartRotField;
         private static bool _doorStartRotFieldResolved;
         private static FieldInfo GetDoorStartRotField()
@@ -236,8 +191,7 @@ namespace DateEverythingAccess
         }
 
         // Reflected access to Door.moving (private bool set true while changeDoorRot is
-        // animating the swing). Used by the autowalk to pause forward motion so the player
-        // doesn't barge into a half-open door and trip OnCollisionEnter → stopOnCollision.
+        // animating the swing).
         private static FieldInfo _doorMovingField;
         private static bool _doorMovingFieldResolved;
         private static FieldInfo GetDoorMovingField()
@@ -259,10 +213,7 @@ namespace DateEverythingAccess
         }
 
         // Reflected access to Door.collidedWithPlayer (private bool latched true when the
-        // player rigidbody touches the door collider). Once set, Open()/Close() short-circuit
-        // and the door becomes inert until OnCollisionExit clears the flag. Teleporting the
-        // player away does NOT fire OnCollisionExit, so the sweep harness has to reset it
-        // manually whenever it relocates the player around an in-progress door.
+        // player rigidbody touches the door collider). Cleared manually during sweep teleports.
         private static FieldInfo _doorCollidedField;
         private static bool _doorCollidedFieldResolved;
         private static FieldInfo GetDoorCollidedField()
@@ -283,9 +234,7 @@ namespace DateEverythingAccess
             return _doorCollidedField;
         }
 
-        // Reflected access to Door.portal (private OcclusionPortal). When we bypass CloseDoor()
-        // and write Door.open directly the portal can stay stuck open, leaving stale visibility
-        // state that confuses downstream code.
+        // Reflected access to Door.portal (private OcclusionPortal).
         private static FieldInfo _doorPortalField;
         private static bool _doorPortalFieldResolved;
         private static FieldInfo GetDoorPortalField()
@@ -306,13 +255,10 @@ namespace DateEverythingAccess
             return _doorPortalField;
         }
 
-        public static bool IsDoorLocked(Door door) => door != null && door.locked;
-
         /// <summary>
         /// Snap a door back to its authored closed orientation and clear the collision/animation
-        /// flags that would otherwise keep it inert. Used by the door sweep harness to guarantee
-        /// each step starts with the door in a known-good state regardless of what state earlier
-        /// sweep steps left it in.
+        /// flags. Used by the route coverage sweep to guarantee each route starts with the door
+        /// in a known-good state.
         /// </summary>
         public static void ForceDoorClosed(Door door)
         {
@@ -381,9 +327,8 @@ namespace DateEverythingAccess
         }
 
         /// <summary>
-        /// True when the active step's door is currently animating its swing. The autowalk
-        /// should hold the player in place while this is true; pushing forward into a moving
-        /// door triggers OnCollisionEnter, which stops the swing partway and pins the player.
+        /// True when the active route's door is currently animating its swing. The autowalk
+        /// should hold the player in place while this is true.
         /// </summary>
         public static bool IsActiveDoorMoving()
         {
@@ -429,8 +374,7 @@ namespace DateEverythingAccess
             float dist = -1f;
             float visualRotDelta = -1f;
 
-            // One-shot per-step entry dump: lets D2 diagnosis distinguish stuck-recovery
-            // exhaust (office->hallway) from wrong-side spawn (office->office_closet).
+            // One-shot per-step entry dump.
             if (_doorEntryLoggedForStep != _activeStepKey && Main.Log != null)
             {
                 _doorEntryLoggedForStep = _activeStepKey;
@@ -473,9 +417,8 @@ namespace DateEverythingAccess
                 else if (visualRotDelta >= 0f && visualRotDelta < openThreshold)
                 {
                     // Door.open is true but the swing finished short of the open pose —
-                    // the game's changeDoorRot broke on collidedWithPlayer. A real player
-                    // would step back and wait rather than have the door re-cycled, so
-                    // skip honestly and let the step time out.
+                    // the game's changeDoorRot broke on collidedWithPlayer. Skip honestly
+                    // and let the step time out so the failure is visible.
                     skipReason = "door-stuck-player-blocking";
                 }
                 else
@@ -487,8 +430,6 @@ namespace DateEverythingAccess
             {
                 // Mirror the game's in-range test (BetterPlayerControl.cs:499):
                 //   Distance(door.collider.ClosestPointOnBounds(camPos), camPos) < InteractionRadius
-                // Falls back to player position when the camera isn't available, and to a
-                // 7.5f default radius when the door has no InteractableObj component.
                 Vector3 origin = Camera.main != null ? Camera.main.transform.position : playerPos;
                 Collider doorCol = door.GetComponent<Collider>();
                 Vector3 nearestOnDoor = doorCol != null ? doorCol.ClosestPointOnBounds(origin) : door.transform.position;
@@ -531,56 +472,7 @@ namespace DateEverythingAccess
         }
 
         /// <summary>
-        /// Snapshot of the current step's SimpleNav-side telemetry. Read by the sweep reporter at
-        /// step end so failures can be diagnosed without log scraping.
-        /// </summary>
-        public readonly struct StepTelemetry
-        {
-            public readonly string StepKey;
-            public readonly bool TargetValid;
-            public readonly Vector3 Target;
-            public readonly string Reason;
-            public readonly float MinDistanceToTarget;
-            public readonly int AppliedFrameCount;
-            public readonly Vector3 PlayerPositionAtStepBegin;
-            public readonly bool HasPlayerPositionAtStepBegin;
-
-            public StepTelemetry(
-                string stepKey,
-                bool targetValid,
-                Vector3 target,
-                string reason,
-                float minDistanceToTarget,
-                int appliedFrameCount,
-                Vector3 playerPositionAtStepBegin,
-                bool hasPlayerPositionAtStepBegin)
-            {
-                StepKey = stepKey;
-                TargetValid = targetValid;
-                Target = target;
-                Reason = reason;
-                MinDistanceToTarget = minDistanceToTarget;
-                AppliedFrameCount = appliedFrameCount;
-                PlayerPositionAtStepBegin = playerPositionAtStepBegin;
-                HasPlayerPositionAtStepBegin = hasPlayerPositionAtStepBegin;
-            }
-        }
-
-        public static StepTelemetry GetTelemetry()
-        {
-            return new StepTelemetry(
-                _activeStepKey,
-                _activeTargetValid,
-                _activeTarget,
-                _lastResolveReason,
-                _minDistanceToTarget,
-                _appliedFrameCount,
-                _playerPositionAtStepBegin,
-                _hasPlayerPositionAtStepBegin);
-        }
-
-        /// <summary>
-        /// Called once per frame from ApplyAutoWalkSimple after the player position is known, so
+        /// Called once per frame from the route autowalk after the player position is known, so
         /// telemetry tracks the closest the player ever got to the resolved target.
         /// </summary>
         public static void RecordFrameProgress(Vector3 playerPosition)
@@ -593,107 +485,9 @@ namespace DateEverythingAccess
             if (dist < _minDistanceToTarget) _minDistanceToTarget = dist;
         }
 
-        // Resolve the active step's target exactly once per step. Subsequent frames reuse
-        // the cached target. This is the key behavioural difference from the legacy stack,
-        // which re-derived an identical unreachable target every frame.
-        public static bool TryGetTarget(string stepKey, string toZoneName, out Vector3 target, out string reason)
-        {
-            if (!string.Equals(stepKey, _activeStepKey, StringComparison.Ordinal))
-            {
-                BeginStep(stepKey);
-            }
-
-            if (_activeTargetValid)
-            {
-                target = _activeTarget;
-                reason = _lastResolveReason;
-                return true;
-            }
-
-            bool ok = SimpleNav.TryResolveTarget(toZoneName, out _activeTarget, out _lastResolveReason, out _activeDoor);
-            _activeTargetValid = ok;
-            target = _activeTarget;
-            reason = _lastResolveReason;
-            if (Main.Log != null)
-            {
-                Main.Log.LogInfo(SimpleNav.DescribeTarget(toZoneName, target, reason));
-            }
-            return ok;
-        }
-
-        /// <summary>
-        /// Step-aware target resolution. Plans a waypoint route across the step's fromZone +
-        /// toZone anchors once per step, then exposes the current leg's waypoint via
-        /// <paramref name="target"/>. Subsequent calls reuse the cached route. Use
-        /// <see cref="TryAdvanceWaypoint"/> once per frame to roll forward when the player
-        /// reaches an intermediate waypoint.
-        /// </summary>
-        public static bool TryGetTargetForStep(
-            string stepKey,
-            NavigationGraph.PathStep step,
-            out Vector3 target,
-            out string reason)
-        {
-            if (!string.Equals(stepKey, _activeStepKey, StringComparison.Ordinal))
-            {
-                BeginStep(stepKey);
-            }
-
-            if (_activeTargetValid)
-            {
-                target = _activeTarget;
-                reason = _lastResolveReason;
-                return true;
-            }
-
-            bool ok = SimpleNav.TryResolveRoute(step, out System.Collections.Generic.List<Vector3> route, out _activeDoor, out _lastResolveReason);
-            if (ok && route != null && route.Count > 0)
-            {
-                _waypoints.Clear();
-                _waypoints.AddRange(route);
-                // First waypoint is the player's own position — skip it; the autowalk drives
-                // toward the *next* one. Hold onto index 0 only if the route is degenerate.
-                _waypointIndex = _waypoints.Count > 1 ? 1 : 0;
-                _activeTarget = _waypoints[_waypointIndex];
-                _activeTargetValid = true;
-            }
-            else
-            {
-                _activeTargetValid = false;
-                _activeTarget = Vector3.zero;
-            }
-            target = _activeTarget;
-            reason = _lastResolveReason;
-            if (Main.Log != null)
-            {
-                string preview = ok ? (_waypoints.Count.ToString() + "-waypoint route") : "no-route";
-                Main.Log.LogInfo("SimpleNavBridge step=" + (stepKey ?? "<null>") +
-                    " resolve=" + preview + " reason=" + (reason ?? "<ok>") +
-                    " target=" + SimpleNav.DescribeTarget(step?.ToZone, target, null));
-                if (ok && _waypoints.Count > 0)
-                {
-                    var ci = CultureInfo.InvariantCulture;
-                    var sb = new System.Text.StringBuilder("SimpleNavBridge waypoints: ");
-                    for (int i = 0; i < _waypoints.Count; i++)
-                    {
-                        var w = _waypoints[i];
-                        if (i > 0) sb.Append(" -> ");
-                        sb.Append("[").Append(i).Append("](")
-                          .Append(w.x.ToString("0.00", ci)).Append(", ")
-                          .Append(w.y.ToString("0.00", ci)).Append(", ")
-                          .Append(w.z.ToString("0.00", ci)).Append(")");
-                    }
-                    Main.Log.LogInfo(sb.ToString());
-                }
-            }
-            return ok;
-        }
-
         /// <summary>
         /// If the player is within <see cref="WaypointArrivalRadius"/> of the active waypoint
-        /// (XZ), advance to the next one. Returns true when a waypoint was advanced. The active
-        /// target stays at the final waypoint after the route's end is reached — the
-        /// step-level arrival check ("am I in the destination zone family?") then takes over.
+        /// (XZ), advance to the next one. Returns true when a waypoint was advanced.
         /// </summary>
         public static bool TryAdvanceWaypoint(Vector3 playerPos)
         {
@@ -708,7 +502,6 @@ namespace DateEverythingAccess
             if (_activeRoute != null)
             {
                 // Segment index = (waypointIndex - 1) since segment N spans waypoints N→N+1.
-                // After advancing to waypoint k, we are now traversing segment k.
                 _activeRouteSegment = _waypointIndex - 1;
                 if (_activeRouteSegment >= _activeRoute.SegmentCount)
                     _activeRouteSegment = _activeRoute.SegmentCount - 1;
@@ -720,33 +513,6 @@ namespace DateEverythingAccess
                     (_activeRoute != null ? (" segment=" + _activeRouteSegment +
                         " door=" + (_activeDoor != null && _activeDoor.gameObject != null ? _activeDoor.gameObject.name : "<none>")) : ""));
             return true;
-        }
-
-        public static bool HasArrived(string toZoneName)
-        {
-            return SimpleNav.HasArrived(toZoneName);
-        }
-
-        // No-op pass-through. An earlier version did a chest-height SphereCast and steered the
-        // player around blockers, but it hit door frames and lintels every frame and veered the
-        // player out of doorways. SimpleNav already routes through door approach points that
-        // are on an obstacle-free line to the door, so steering wasn't pulling its weight.
-        // Kept as a public seam so a future, more selective avoidance layer can slot in here.
-        public static Vector3 SteerAroundObstacles(Vector3 playerPos, Vector3 desiredDir)
-        {
-            if (desiredDir.sqrMagnitude < 0.0001f) return desiredDir;
-            return new Vector3(desiredDir.x, 0f, desiredDir.z).normalized;
-        }
-
-        public static string DescribeState()
-        {
-            var ci = CultureInfo.InvariantCulture;
-            return "SimpleNavBridge step=" + (_activeStepKey ?? "<none>") +
-                " targetValid=" + _activeTargetValid +
-                " target=(" + _activeTarget.x.ToString("0.00", ci) + ", " +
-                _activeTarget.y.ToString("0.00", ci) + ", " +
-                _activeTarget.z.ToString("0.00", ci) + ")" +
-                " reason=" + (_lastResolveReason ?? "<none>");
         }
     }
 }
