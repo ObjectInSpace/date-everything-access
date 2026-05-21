@@ -235,6 +235,10 @@ namespace DateEverythingAccess
         private static bool _choiceRightWasDown;
         private static bool _choiceReturnWasDown;
         private static bool _choiceSpaceWasDown;
+        private static bool _pickerUpWasDown;
+        private static bool _pickerDownWasDown;
+        private static bool _pickerReturnWasDown;
+        private static bool _pickerEscapeWasDown;
         private static int _virtualChatChoiceIndex = -1;
         private static string _virtualChatChoiceContextKey;
         private static AccessibilityWatcher _instance;
@@ -297,6 +301,17 @@ namespace DateEverythingAccess
         private Vector3 _trackedInteractableApproachTarget;
         private bool _isNavigationActive;
         private bool _isAutoWalking;
+
+        private sealed class KnownObjectTarget
+        {
+            public InteractableObj Interactable;
+            public string Label;
+            public float Distance;
+        }
+
+        private List<KnownObjectTarget> _knownObjectTargets;
+        private int _knownObjectSelectionIndex = -1;
+        private bool _isKnownObjectPickerOpen;
 
         internal static void EnsureCreated()
         {
@@ -390,6 +405,10 @@ namespace DateEverythingAccess
             if (isSettingsMenuOpen)
             {
                 ModConfig.Update();
+            }
+            else if (_isKnownObjectPickerOpen)
+            {
+                UpdateKnownObjectPicker();
             }
             else
             {
@@ -523,7 +542,7 @@ namespace DateEverythingAccess
 
             if (Interlocked.Exchange(ref _selectNavigationTargetRequested, 0) != 0)
             {
-                ScreenReader.Say(Loc.Get("navigation_object_picker_empty"));
+                OpenKnownObjectPicker();
             }
 
             if (Interlocked.Exchange(ref _navigateToObjectiveRequested, 0) != 0)
@@ -571,6 +590,18 @@ namespace DateEverythingAccess
             if (IsTrackedObjectReached())
             {
                 StopNavigationWithAnnouncement("navigation_arrived");
+                return;
+            }
+
+            if (!_isAutoWalking &&
+                SimpleNavBridge.HasActiveRoute &&
+                BetterPlayerControl.Instance != null)
+            {
+                Vector3 playerPos = BetterPlayerControl.Instance.transform.position;
+                Vector3 waypoint = SimpleNavBridge.LastResolvedTarget;
+                if (SimpleNavBridge.TryAdvanceWaypoint(playerPos))
+                    waypoint = SimpleNavBridge.LastResolvedTarget;
+                ObjectTracker.StartTracking(waypoint, requiresInteraction: false);
             }
         }
 
@@ -758,6 +789,7 @@ namespace DateEverythingAccess
             }
 
             ResetAutoWalkProgress();
+            _isNavigationActive = true;
             return true;
         }
 
@@ -1419,7 +1451,264 @@ namespace DateEverythingAccess
             }
 
             SetTrackedInteractable(interactable, targetZone, targetLabel);
-            BeginNavigation(targetZone, targetLabel);
+            BeginNavigationAndStartTrackerTone(targetZone, targetLabel);
+        }
+
+        // Shared selection tail: BeginNavigation, plan the route, and start the tracker tone at
+        // the first waypoint so the player gets safe spatial feedback immediately. Used by both
+        // Ctrl+F6 (objective selection) and the Ctrl+Shift+F6 known-objects picker.
+        private void BeginNavigationAndStartTrackerTone(string targetZone, string targetLabel)
+        {
+            if (!BeginNavigation(targetZone, targetLabel))
+                return;
+
+            TryPlanAndInstallSimpleNavRoute();
+            if (SimpleNavBridge.HasActiveRoute)
+                ObjectTracker.StartTracking(SimpleNavBridge.LastResolvedTarget, requiresInteraction: false);
+        }
+
+        // Ctrl+Shift+F6 known-objects picker. Flat house-wide list of every active InteractableObj
+        // the player has previously noticed (datables: status != Unmet; non-datables:
+        // hasNormalInteracted), deduped by identity, sorted by current XZ distance ascending.
+        // Up/Down move selection; Enter selects (drives the same nav-tone flow as Ctrl+F6);
+        // Escape closes.
+        private void OpenKnownObjectPicker()
+        {
+            Loc.RefreshLanguage();
+
+            if (!TryBuildKnownObjectTargets(out List<KnownObjectTarget> targets) || targets.Count == 0)
+            {
+                ScreenReader.Say(Loc.Get("navigation_object_picker_empty"));
+                return;
+            }
+
+            _knownObjectTargets = targets;
+            _knownObjectSelectionIndex = 0;
+            _isKnownObjectPickerOpen = true;
+            SyncKnownObjectPickerKeyStates();
+            AnnounceCurrentKnownObjectPickerItem();
+        }
+
+        private void CloseKnownObjectPicker(bool announceClosed)
+        {
+            if (!_isKnownObjectPickerOpen)
+                return;
+
+            _isKnownObjectPickerOpen = false;
+            _knownObjectTargets = null;
+            _knownObjectSelectionIndex = -1;
+            SyncKnownObjectPickerKeyStates();
+            if (announceClosed)
+                ScreenReader.Say(Loc.Get("navigation_object_picker_closed"));
+        }
+
+        private void UpdateKnownObjectPicker()
+        {
+            if (_knownObjectTargets == null || _knownObjectTargets.Count == 0)
+            {
+                CloseKnownObjectPicker(announceClosed: false);
+                return;
+            }
+
+            if (WasChoiceKeyPressed(KeyCode.UpArrow, VkUp, ref _pickerUpWasDown))
+            {
+                _knownObjectSelectionIndex = (_knownObjectSelectionIndex + _knownObjectTargets.Count - 1) % _knownObjectTargets.Count;
+                AnnounceCurrentKnownObjectPickerItem();
+                return;
+            }
+
+            if (WasChoiceKeyPressed(KeyCode.DownArrow, VkDown, ref _pickerDownWasDown))
+            {
+                _knownObjectSelectionIndex = (_knownObjectSelectionIndex + 1) % _knownObjectTargets.Count;
+                AnnounceCurrentKnownObjectPickerItem();
+                return;
+            }
+
+            if (WasChoiceKeyPressed(KeyCode.Return, VkReturn, ref _pickerReturnWasDown) ||
+                WasChoiceKeyPressed(KeyCode.KeypadEnter, VkReturn, ref _pickerReturnWasDown))
+            {
+                SelectCurrentKnownObjectPickerItem();
+                return;
+            }
+
+            if (WasChoiceKeyPressed(KeyCode.Escape, VkEscape, ref _pickerEscapeWasDown))
+            {
+                CloseKnownObjectPicker(announceClosed: true);
+            }
+        }
+
+        private void AnnounceCurrentKnownObjectPickerItem()
+        {
+            if (_knownObjectTargets == null || _knownObjectTargets.Count == 0)
+                return;
+
+            _knownObjectSelectionIndex = Mathf.Clamp(_knownObjectSelectionIndex, 0, _knownObjectTargets.Count - 1);
+            KnownObjectTarget target = _knownObjectTargets[_knownObjectSelectionIndex];
+            string option = Loc.Get(
+                "navigation_object_picker_option",
+                _knownObjectSelectionIndex + 1,
+                _knownObjectTargets.Count,
+                target.Label);
+            ScreenReader.Say(Loc.Get("navigation_object_picker_title") + ". " + option);
+        }
+
+        private void SelectCurrentKnownObjectPickerItem()
+        {
+            if (_knownObjectTargets == null || _knownObjectTargets.Count == 0)
+            {
+                CloseKnownObjectPicker(announceClosed: false);
+                return;
+            }
+
+            _knownObjectSelectionIndex = Mathf.Clamp(_knownObjectSelectionIndex, 0, _knownObjectTargets.Count - 1);
+            KnownObjectTarget target = _knownObjectTargets[_knownObjectSelectionIndex];
+            InteractableObj interactable = target.Interactable;
+
+            CloseKnownObjectPicker(announceClosed: false);
+
+            if (interactable == null || !interactable.gameObject.activeInHierarchy)
+            {
+                ScreenReader.Say(Loc.Get("navigation_object_picker_empty"));
+                return;
+            }
+
+            TryGetZoneNameForInteractable(interactable, out string targetZone);
+            string targetLabel = target.Label;
+
+            SetTrackedInteractable(interactable, targetZone, targetLabel);
+            BeginNavigationAndStartTrackerTone(targetZone, targetLabel);
+        }
+
+        private static void SyncKnownObjectPickerKeyStates()
+        {
+            _pickerUpWasDown = (GetAsyncKeyState(VkUp) & 0x8000) != 0;
+            _pickerDownWasDown = (GetAsyncKeyState(VkDown) & 0x8000) != 0;
+            _pickerReturnWasDown = (GetAsyncKeyState(VkReturn) & 0x8000) != 0;
+            _pickerEscapeWasDown = (GetAsyncKeyState(VkEscape) & 0x8000) != 0;
+        }
+
+        private bool TryBuildKnownObjectTargets(out List<KnownObjectTarget> targets)
+        {
+            targets = new List<KnownObjectTarget>();
+            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
+            if (interactables == null || interactables.Length == 0)
+                return false;
+
+            Transform playerTransform = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform
+                : null;
+            Vector3 playerPosition = playerTransform != null ? playerTransform.position : Vector3.zero;
+
+            for (int i = 0; i < interactables.Length; i++)
+            {
+                InteractableObj candidate = interactables[i];
+                if (candidate == null || candidate.gameObject == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                string label = GetObjectFacingDisplayName(candidate);
+                if (string.IsNullOrWhiteSpace(label) ||
+                    string.Equals(label, Loc.Get("unknown_object"), StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!IsInteractableKnownToPlayer(candidate))
+                    continue;
+
+                Vector3 candidatePos = candidate.transform.position;
+                float distance = playerTransform != null
+                    ? GetFlatDistance(playerPosition, candidatePos)
+                    : 0f;
+
+                if (TryFindEquivalentKnownObjectTarget(targets, candidate, label, out KnownObjectTarget existing))
+                {
+                    if (playerTransform != null && distance < existing.Distance)
+                    {
+                        existing.Interactable = candidate;
+                        existing.Label = label;
+                        existing.Distance = distance;
+                    }
+                    continue;
+                }
+
+                targets.Add(new KnownObjectTarget
+                {
+                    Interactable = candidate,
+                    Label = label,
+                    Distance = distance,
+                });
+            }
+
+            targets.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+            return targets.Count > 0;
+        }
+
+        private static bool TryFindEquivalentKnownObjectTarget(
+            List<KnownObjectTarget> targets,
+            InteractableObj candidate,
+            string label,
+            out KnownObjectTarget equivalent)
+        {
+            equivalent = null;
+            if (targets == null || candidate == null)
+                return false;
+
+            string candidateId = candidate.Id;
+            string candidateInternal = candidate.InternalName();
+            for (int i = 0; i < targets.Count; i++)
+            {
+                KnownObjectTarget existing = targets[i];
+                if (existing == null || existing.Interactable == null)
+                    continue;
+
+                if (!string.IsNullOrEmpty(candidateId) &&
+                    string.Equals(existing.Interactable.Id, candidateId, StringComparison.OrdinalIgnoreCase))
+                {
+                    equivalent = existing;
+                    return true;
+                }
+
+                if (!string.IsNullOrEmpty(candidateInternal) &&
+                    string.Equals(existing.Interactable.InternalName(), candidateInternal, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(existing.Label, label, StringComparison.OrdinalIgnoreCase))
+                {
+                    equivalent = existing;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsInteractableKnownToPlayer(InteractableObj interactable)
+        {
+            if (interactable == null)
+                return false;
+
+            Save save = null;
+            try { save = Singleton<Save>.Instance; }
+            catch { save = null; }
+            if (save == null)
+                return true;
+
+            bool isDatable = !string.IsNullOrEmpty(interactable.inkFileName);
+            string internalName = interactable.InternalName();
+
+            if (isDatable && !string.IsNullOrEmpty(internalName))
+            {
+                try
+                {
+                    RelationshipStatus status = save.GetDateStatus(internalName);
+                    return status != RelationshipStatus.Unmet;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            ObjectSaveData saveData = interactable.objSaveData;
+            return saveData != null && saveData.hasNormalInteracted;
         }
 
         private void ToggleAutoWalk()
