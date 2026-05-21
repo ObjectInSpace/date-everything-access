@@ -206,7 +206,6 @@ namespace DateEverythingAccess
         private const int AutoWalkLoopSampleWindowSize = 24;
         private const float AutoWalkLoopSampleWindowSeconds = 5f;
         private const float AutoWalkLoopMovementAllowance = 0.6f;
-        private const float AutoWalkLoopTargetSignatureResolution = 0.25f;
         private const float AutoWalkZoneBoundaryFallbackDistance = 5f;
         private const float AutoWalkMovementProbeMinimumCommand = 0.2f;
         private const float AutoWalkMovementProbeCancelledVelocity = 0.1f;
@@ -414,10 +413,6 @@ namespace DateEverythingAccess
         private string _openPassageTraversalStepKey;
         private string _navigationZoneOverride;
         private string _navigationZoneOverrideStepKey;
-        private string _localNavigationPathZone;
-        private string _localNavigationPathContext;
-        private string _localNavigationPathStepKey;
-        private string _rawNavigationTargetContext;
         private string _doorPostInteractionFallbackFailureSignature;
         private string _doorPostInteractionFallbackExhaustedDetail;
         private string _doorPostInteractionLoopSignature;
@@ -428,20 +423,15 @@ namespace DateEverythingAccess
         private string _openPassageDestinationBridgeCompletedStepKey;
         private string _rejectedOpenPassageLocalGoalStepKey;
         private string _rejectedOpenPassageLocalGoalContext;
-        private string _localNavigationStallSignature;
-        private string _localNavigationBypassSignature;
         private string _lastTrackerTargetKind;
         private string _lastTrackerTargetStepKey;
         private Vector3 _lastAutoWalkPosition;
         private Vector3 _autoWalkLoopWindowStartPosition;
         private Vector3 _doorPostInteractionFallbackFailureStartPosition;
         private Vector3 _doorPostInteractionLoopStartPosition;
-        private Vector3 _localNavigationStallTarget;
-        private Vector3 _localNavigationStallStartPosition;
         private Vector3 _lastTrackerTargetPosition;
         private Vector3 _trackedInteractableApproachReferencePosition;
         private Vector3 _trackedInteractableApproachTarget;
-        private Vector3 _localNavigationPathGoal;
         private Vector3 _openPassageDestinationBridgeCompletedGoal;
         private Vector3 _rejectedOpenPassageLocalGoal;
         private Vector3 _lastNavigationInputMove;
@@ -450,19 +440,15 @@ namespace DateEverythingAccess
         private Vector3 _lastNavigationInputPosition;
         private readonly string[] _autoWalkLoopSignatureWindow = new string[AutoWalkLoopSampleWindowSize];
         private List<NavigationGraph.PathStep> _navigationPath;
-        private List<Vector3> _localNavigationPathPoints;
         private List<RoomObjectTarget> _roomObjectTargets;
         private int _autoWalkRecoveryAttempts;
         private int _autoWalkLoopSignatureCount;
         private int _autoWalkLoopSignatureIndex;
         private int _doorPostInteractionFallbackFailureCount;
         private int _doorPostInteractionLoopDetectionCount;
-        private int _localNavigationPathIndex;
         private int _openPassageOverrideWaypointIndex;
         private float _autoWalkLoopWindowStartedAt;
         private float _doorPostInteractionFallbackFailureStartedAt;
-        private float _localNavigationStallStartedAt;
-        private float _localNavigationBypassUntil;
         private float _lastNavigationInputAppliedAt;
         private bool _hasLastTrackerTarget;
         private bool _hasLastNavigationInput;
@@ -2434,33 +2420,6 @@ namespace DateEverythingAccess
             _autoWalkLoopWindowStartPosition = BetterPlayerControl.Instance != null
                 ? BetterPlayerControl.Instance.transform.position
                 : Vector3.zero;
-        }
-
-        private string BuildAutoWalkLoopSignature(
-            NavigationGraph.PathStep step,
-            string currentZone,
-            NavigationTargetKind targetKind,
-            Vector3 nextPosition)
-        {
-            string stepKey = BuildNavigationStepKey(step) ?? "<null>";
-            Vector3 roundedTarget = RoundVector3(nextPosition, AutoWalkLoopTargetSignatureResolution);
-            return stepKey +
-                "|zone=" + (currentZone ?? "<null>") +
-                "|kind=" + targetKind +
-                "|raw=" + (_rawNavigationTargetContext ?? "<null>") +
-                "|local=" + (_localNavigationPathContext ?? "<null>") +
-                "|target=" + FormatVector3(roundedTarget);
-        }
-
-        private static Vector3 RoundVector3(Vector3 value, float resolution)
-        {
-            if (resolution <= 0f)
-                return value;
-
-            value.x = Mathf.Round(value.x / resolution) * resolution;
-            value.y = Mathf.Round(value.y / resolution) * resolution;
-            value.z = Mathf.Round(value.z / resolution) * resolution;
-            return value;
         }
 
         private static string BuildNavigationStepKey(NavigationGraph.PathStep step)
