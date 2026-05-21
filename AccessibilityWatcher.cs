@@ -389,7 +389,6 @@ namespace DateEverythingAccess
         private string _trackedInteractableZone;
         private string _trackedInteractableApproachId;
         private string _trackedInteractableApproachZone;
-        private int _trackedInteractableApproachPreferredComponentId = -1;
         private string _lastRoomObjectListZone;
         private string _navigationTargetZone;
         private string _navigationTargetLabel;
@@ -413,7 +412,6 @@ namespace DateEverythingAccess
         private bool _doorTraversalInteractionTriggered;
         private Vector3 _doorTraversalPushThroughPosition;
         private bool _doorTraversalPostThresholdCommitted;
-        private bool _isRoomObjectPickerOpen;
         private bool _isNavigationActive;
         private bool _isAutoWalking;
 
@@ -510,10 +508,6 @@ namespace DateEverythingAccess
             {
                 ModConfig.Update();
             }
-            else if (_isRoomObjectPickerOpen)
-            {
-                UpdateRoomObjectPicker();
-            }
             else
             {
                 HandleChoiceKeyboardInput();
@@ -539,7 +533,7 @@ namespace DateEverythingAccess
             AnnounceSpecsDetailIfNeeded();
             AnnounceCreditsIfNeeded();
             HandlePendingDateADexEntryAnnouncement();
-            if (!isSettingsMenuOpen && !_isRoomObjectPickerOpen)
+            if (!isSettingsMenuOpen)
             {
                 AnnounceSelectionIfNeeded();
             }
@@ -641,12 +635,12 @@ namespace DateEverythingAccess
         {
             if (Interlocked.Exchange(ref _describeCurrentRoomRequested, 0) != 0)
             {
-                DescribeCurrentRoom();
+                ScreenReader.Say(Loc.Get("room_scan_unavailable"));
             }
 
             if (Interlocked.Exchange(ref _selectNavigationTargetRequested, 0) != 0)
             {
-                CycleNavigationTarget();
+                ScreenReader.Say(Loc.Get("navigation_object_picker_empty"));
             }
 
             if (Interlocked.Exchange(ref _navigateToObjectiveRequested, 0) != 0)
@@ -2096,70 +2090,24 @@ namespace DateEverythingAccess
                 return true;
             }
 
-            bool hasPreferredComponentId = TryGetTrackedInteractablePreferredComponentId(
-                navigationZone,
-                playerPosition,
-                out int preferredComponentId,
-                out string preferredComponentDetail);
             if (CanReuseTrackedInteractableApproachTarget(
                     interactable,
                     navigationZone,
-                    referencePosition,
-                    hasPreferredComponentId ? preferredComponentId : -1))
+                    referencePosition))
             {
                 targetPosition = _trackedInteractableApproachTarget;
                 targetPosition.y = playerPosition.y;
                 debugDetail =
                     "mode=cached" +
                     " zone=" + navigationZone +
-                    (hasPreferredComponentId
-                        ? " preferredComponentId=" + preferredComponentId +
-                          " preferredComponentDetail=" + (preferredComponentDetail ?? "<null>")
-                        : string.Empty) +
                     " candidateSource=" + candidateDetail;
                 return true;
             }
 
-            string preferredComponentFailureDetail = null;
-            int cachedPreferredComponentId = -1;
-            if (hasPreferredComponentId &&
-                LocalNavigationMaps.TryResolveApproachTargetForComponent(
-                    navigationZone,
-                    playerPosition,
-                    referencePosition,
-                    candidateTargets,
-                    preferredComponentId,
-                    out targetPosition,
-                    out string componentResolutionDetail))
-            {
-                cachedPreferredComponentId = preferredComponentId;
-                _trackedInteractableApproachId = interactable.Id;
-                _trackedInteractableApproachZone = navigationZone;
-                _trackedInteractableApproachPreferredComponentId = cachedPreferredComponentId;
-                _trackedInteractableApproachReferencePosition = referencePosition;
-                _trackedInteractableApproachTarget = targetPosition;
-                targetPosition.y = playerPosition.y;
-                debugDetail =
-                    componentResolutionDetail +
-                    " zone=" + navigationZone +
-                    " candidateSource=" + candidateDetail +
-                    " preferredComponentSource=player" +
-                    " preferredComponentDetail=" + (preferredComponentDetail ?? "<null>");
-                return true;
-            }
-            else if (hasPreferredComponentId)
-            {
-                preferredComponentFailureDetail =
-                    " preferredComponentResolution=failed" +
-                    " preferredComponentId=" + preferredComponentId +
-                    " preferredComponentDetail=" + (preferredComponentDetail ?? "<null>");
-            }
-
             if (!TryResolveTrackedInteractableApproachTarget(
-                    navigationZone,
-                    playerPosition,
                     referencePosition,
                     candidateTargets,
+                    playerPosition,
                     out targetPosition,
                     out string resolutionDetail))
             {
@@ -2171,14 +2119,12 @@ namespace DateEverythingAccess
 
             _trackedInteractableApproachId = interactable.Id;
             _trackedInteractableApproachZone = navigationZone;
-            _trackedInteractableApproachPreferredComponentId = cachedPreferredComponentId;
             _trackedInteractableApproachReferencePosition = referencePosition;
             _trackedInteractableApproachTarget = targetPosition;
             targetPosition.y = playerPosition.y;
             debugDetail =
                 resolutionDetail +
                 " zone=" + navigationZone +
-                preferredComponentFailureDetail +
                 " candidateSource=" + candidateDetail;
             return true;
         }
@@ -2187,7 +2133,6 @@ namespace DateEverythingAccess
         {
             _trackedInteractableApproachId = null;
             _trackedInteractableApproachZone = null;
-            _trackedInteractableApproachPreferredComponentId = -1;
             _trackedInteractableApproachReferencePosition = Vector3.zero;
             _trackedInteractableApproachTarget = Vector3.zero;
         }
@@ -2195,8 +2140,7 @@ namespace DateEverythingAccess
         private bool CanReuseTrackedInteractableApproachTarget(
             InteractableObj interactable,
             string navigationZone,
-            Vector3 referencePosition,
-            int preferredComponentId)
+            Vector3 referencePosition)
         {
             return interactable != null &&
                 !string.IsNullOrEmpty(interactable.Id) &&
@@ -2205,47 +2149,13 @@ namespace DateEverythingAccess
                 !string.IsNullOrEmpty(_trackedInteractableApproachZone) &&
                 string.Equals(_trackedInteractableApproachId, interactable.Id, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(_trackedInteractableApproachZone, navigationZone, StringComparison.OrdinalIgnoreCase) &&
-                _trackedInteractableApproachPreferredComponentId == preferredComponentId &&
                 GetFlatDistance(_trackedInteractableApproachReferencePosition, referencePosition) <= TrackedInteractableApproachRetargetDistance;
         }
 
-        private bool TryGetTrackedInteractablePreferredComponentId(
-            string navigationZone,
-            Vector3 playerPosition,
-            out int preferredComponentId,
-            out string detail)
-        {
-            preferredComponentId = -1;
-            detail = null;
-            if (string.IsNullOrWhiteSpace(navigationZone) || !LocalNavigationMaps.IsAvailable)
-                return false;
-
-            List<LocalNavigationMaps.WalkableComponentSummary> components =
-                LocalNavigationMaps.GetWalkableComponents(navigationZone);
-            if (components == null || components.Count <= 1)
-                return false;
-
-            if (!LocalNavigationMaps.TryGetWalkableComponentId(
-                    navigationZone,
-                    playerPosition,
-                    out preferredComponentId,
-                    out Vector3 snappedPlayerPosition,
-                    out string componentDetail))
-            {
-                return false;
-            }
-
-            detail =
-                (componentDetail ?? "<null>") +
-                " snappedPlayer=" + FormatVector3(snappedPlayerPosition);
-            return preferredComponentId >= 0;
-        }
-
         private bool TryResolveTrackedInteractableApproachTarget(
-            string navigationZone,
-            Vector3 playerPosition,
             Vector3 referencePosition,
             List<Vector3> candidateTargets,
+            Vector3 playerPosition,
             out Vector3 targetPosition,
             out string detail)
         {
@@ -2253,58 +2163,6 @@ namespace DateEverythingAccess
             detail = null;
             if (candidateTargets == null || candidateTargets.Count < 1)
                 return false;
-
-            bool foundPathCandidate = false;
-            float bestPathDistance = float.PositiveInfinity;
-            float bestReferenceDistance = float.PositiveInfinity;
-            if (!string.IsNullOrEmpty(navigationZone) && LocalNavigationMaps.IsAvailable)
-            {
-                for (int i = 0; i < candidateTargets.Count; i++)
-                {
-                    Vector3 candidateTarget = candidateTargets[i];
-                    if (!LocalNavigationMaps.TryFindPath(
-                            navigationZone,
-                            playerPosition,
-                            candidateTarget,
-                            out List<Vector3> pathPoints,
-                            out _) ||
-                        pathPoints == null ||
-                        pathPoints.Count < 1)
-                    {
-                        continue;
-                    }
-
-                    float pathDistance = ComputeFlatPathDistance(playerPosition, pathPoints);
-                    Vector3 snappedTarget = pathPoints[pathPoints.Count - 1];
-                    float referenceDistance = GetFlatDistance(snappedTarget, referencePosition);
-                    if (foundPathCandidate &&
-                        pathDistance > bestPathDistance + 0.01f)
-                    {
-                        continue;
-                    }
-
-                    if (foundPathCandidate &&
-                        Mathf.Abs(pathDistance - bestPathDistance) <= 0.01f &&
-                        referenceDistance >= bestReferenceDistance)
-                    {
-                        continue;
-                    }
-
-                    foundPathCandidate = true;
-                    bestPathDistance = pathDistance;
-                    bestReferenceDistance = referenceDistance;
-                    targetPosition = snappedTarget;
-                }
-            }
-
-            if (foundPathCandidate)
-            {
-                detail =
-                    "mode=path-selected" +
-                    " pathDistance=" + bestPathDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                    " referenceDistance=" + bestReferenceDistance.ToString("0.00", CultureInfo.InvariantCulture);
-                return true;
-            }
 
             bool foundFallbackCandidate = false;
             float bestPlayerDistance = float.PositiveInfinity;
@@ -2365,25 +2223,6 @@ namespace DateEverythingAccess
                 " playerDistance=" + bestPlayerDistance.ToString("0.00", CultureInfo.InvariantCulture) +
                 " referenceDistance=" + bestFallbackReferenceDistance.ToString("0.00", CultureInfo.InvariantCulture);
             return true;
-        }
-
-        private float ComputeFlatPathDistance(Vector3 startPosition, List<Vector3> pathPoints)
-        {
-            if (pathPoints == null || pathPoints.Count < 1)
-                return 0f;
-
-            float distance = 0f;
-            Vector3 previousPoint = startPosition;
-            previousPoint.y = 0f;
-            for (int i = 0; i < pathPoints.Count; i++)
-            {
-                Vector3 currentPoint = pathPoints[i];
-                currentPoint.y = 0f;
-                distance += Vector3.Distance(previousPoint, currentPoint);
-                previousPoint = currentPoint;
-            }
-
-            return distance;
         }
 
         private bool TryBuildTrackedInteractableApproachCandidates(
