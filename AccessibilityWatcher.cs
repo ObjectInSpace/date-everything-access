@@ -206,11 +206,9 @@ namespace DateEverythingAccess
         private const int AutoWalkLoopSampleWindowSize = 24;
         private const float AutoWalkLoopSampleWindowSeconds = 5f;
         private const float AutoWalkLoopMovementAllowance = 0.6f;
-        private const float AutoWalkZoneBoundaryFallbackDistance = 5f;
         private const float AutoWalkMovementProbeMinimumCommand = 0.2f;
         private const float AutoWalkMovementProbeCancelledVelocity = 0.1f;
         private const float AutoWalkMovementProbeCancelledDisplacement = 0.08f;
-        private const float AutoWalkOpenPassageCommitDistance = 2.5f;
         private const float AutoWalkOpenPassageHandoffDistance = 2.5f;
         private const float OpenPassageGuidedWaypointAdvanceDistance = 1.25f;
         private const float OpenPassageGuidedWaypointDedupDistance = 0.25f;
@@ -2342,13 +2340,6 @@ namespace DateEverythingAccess
             _openPassageDestinationHandoffRecoveryFloor = 0;
             _openPassageSourceHandoffProgressFloor = 0f;
             _openPassageDestinationHandoffProgressFloor = 0f;
-        }
-
-        private OpenPassageTraversalStage GetOpenPassageTraversalStageState()
-        {
-            return _openPassageTraversalStateMachine != null
-                ? _openPassageTraversalStateMachine.CurrentState
-                : OpenPassageTraversalStage.None;
         }
 
         private void SetOpenPassageTraversalStage(OpenPassageTraversalStage stage)
