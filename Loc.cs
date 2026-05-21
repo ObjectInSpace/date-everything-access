@@ -106,27 +106,6 @@ namespace DateEverythingAccess
                 "Debug-Modus aktiviert. Aktuelle Eingabebelegungen fuer {0} Geraete wurden ins Protokoll geschrieben.",
                 "Debug mode enabled. Current input mappings for {0} devices were written to the log.");
             Add("debug_mode_disabled", "Debug-Modus deaktiviert.", "Debug mode disabled.");
-            Add("navmesh_export_success",
-                "Navmesh exportiert. {0} Dreiecke. {1} Uebergangspruefungen.",
-                "Navmesh exported. {0} triangles. {1} transition checks.");
-            Add("navmesh_export_success_with_runtime_occupancy",
-                "Navmesh exportiert. {0} Dreiecke. {1} Uebergangspruefungen. Laufzeit-Kollisionskarte exportiert. {2} Zonen, {3} blockierte Zellen. Bitte Spiel neu starten, damit sie geladen wird.",
-                "Navmesh exported. {0} triangles. {1} transition checks. Runtime collision map exported. {2} zones, {3} blocked cells. Restart the game to load it.");
-            Add("navmesh_export_diagnostic",
-                "Navmesh-Diagnose exportiert. In dieser Szene ist kein aktives Navmesh verfuegbar. {0} Uebergangspruefungen wurden trotzdem geschrieben.",
-                "Navmesh diagnostic exported. No active navmesh is available in this scene. {0} transition checks were still written.");
-            Add("navmesh_export_diagnostic_with_runtime_occupancy",
-                "Navmesh-Diagnose exportiert. In dieser Szene ist kein aktives Navmesh verfuegbar. {1} Uebergangspruefungen wurden trotzdem geschrieben. Laufzeit-Kollisionskarte exportiert. {2} Zonen, {3} blockierte Zellen. Bitte Spiel neu starten, damit sie geladen wird.",
-                "Navmesh diagnostic exported. No active navmesh is available in this scene. {1} transition checks were still written. Runtime collision map exported. {2} zones, {3} blocked cells. Restart the game to load it.");
-            Add("navmesh_export_no_navmesh",
-                "In der aktuellen Szene ist kein aktives Navmesh verfuegbar.",
-                "No active navmesh is available in the current scene.");
-            Add("navmesh_export_write_failed",
-                "Die Navmesh-Datei konnte nicht geschrieben werden. Details stehen im Protokoll.",
-                "The navmesh file could not be written. Check the log for details.");
-            Add("navmesh_export_failed",
-                "Der Navmesh-Export ist fehlgeschlagen. Details stehen im Protokoll.",
-                "Navmesh export failed. Check the log for details.");
             Add("repeat_last_unavailable", "Noch keine Sprachausgabe zum Wiederholen vorhanden.", "Nothing has been spoken yet.");
             Add("settings_menu_opened", "Zugaenglichkeitseinstellungen geoeffnet.", "Accessibility settings opened.");
             Add("settings_menu_closed", "Zugaenglichkeitseinstellungen geschlossen und gespeichert.", "Accessibility settings closed and saved.");
@@ -299,18 +278,6 @@ namespace DateEverythingAccess
             Add("door_transition_sweep_unavailable",
                 "Tuer-Uebergangstestlauf ist hier gerade nicht verfuegbar.",
                 "Door transition sweep is not available right now.");
-            Add("live_route_audit_started",
-                "Live-Routenpruefung gestartet. {0} geordnete Raumrouten, {1} Routen in der Warteschlange.",
-                "Live route audit started. {0} ordered room routes, {1} routes queued.");
-            Add("live_route_audit_complete",
-                "Live-Routenpruefung abgeschlossen. {0} geordnete Raumrouten. {1} bestanden. {2} fehlgeschlagen.",
-                "Live route audit complete. {0} ordered room routes. {1} passed. {2} failed.");
-            Add("live_route_audit_stopped",
-                "Live-Routenpruefung gestoppt.",
-                "Live route audit stopped.");
-            Add("live_route_audit_unavailable",
-                "Die Live-Routenpruefung ist hier gerade nicht verfuegbar.",
-                "The live route audit is not available right now.");
         }
     }
 }

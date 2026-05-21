@@ -38,10 +38,8 @@ namespace DateEverythingAccess
         private const int NavigateToObjectiveHotkeyId = 6;
         private const int SelectNavigationTargetHotkeyId = 7;
         private const int AutoWalkHotkeyId = 8;
-        private const int ExportNavMeshHotkeyId = 9;
         private const int TransitionSweepHotkeyId = 10;
         private const int DoorTransitionSweepHotkeyId = 11;
-        private const int LiveRouteAuditHotkeyId = 12;
         private const int CoverageSweepHotkeyId = 13;
 
         private Thread _hotkeyThread;
@@ -244,10 +242,8 @@ namespace DateEverythingAccess
                 RegisterHotkeyOrThrow(NavigateToObjectiveHotkeyId, ModControl | ModNoRepeat, VkF6, "Ctrl+F6");
                 RegisterHotkeyOrThrow(SelectNavigationTargetHotkeyId, ModControl | ModShift | ModNoRepeat, VkF6, "Ctrl+Shift+F6");
                 RegisterHotkeyOrThrow(AutoWalkHotkeyId, ModControl | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+F6");
-                RegisterHotkeyOrThrow(ExportNavMeshHotkeyId, ModControl | ModShift | ModNoRepeat, VkF9, "Ctrl+Shift+F9");
                 RegisterHotkeyOrThrow(TransitionSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF9, "Ctrl+Alt+Shift+F9");
                 RegisterHotkeyOrThrow(DoorTransitionSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+Shift+F6");
-                RegisterHotkeyOrThrow(LiveRouteAuditHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF1, "Ctrl+Alt+Shift+F1");
                 RegisterHotkeyOrThrow(CoverageSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF8, "Ctrl+Alt+Shift+F8");
                 Logger.LogInfo("Background hotkey message loop active");
 
@@ -278,10 +274,8 @@ namespace DateEverythingAccess
                 UnregisterHotKey(IntPtr.Zero, NavigateToObjectiveHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, SelectNavigationTargetHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, AutoWalkHotkeyId);
-                UnregisterHotKey(IntPtr.Zero, ExportNavMeshHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, TransitionSweepHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, DoorTransitionSweepHotkeyId);
-                UnregisterHotKey(IntPtr.Zero, LiveRouteAuditHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, CoverageSweepHotkeyId);
                 Logger.LogInfo("Background hotkey thread exiting");
             }
@@ -393,16 +387,6 @@ namespace DateEverythingAccess
                 return;
             }
 
-            if (hotkeyId == ExportNavMeshHotkeyId)
-            {
-                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || IsModifierKeyDown(0x12))
-                    return;
-
-                Logger.LogInfo("Navmesh export hotkey detected");
-                AccessibilityWatcher.RequestExportNavMesh();
-                return;
-            }
-
             if (hotkeyId == TransitionSweepHotkeyId)
             {
                 if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || !IsModifierKeyDown(0x12))
@@ -410,16 +394,6 @@ namespace DateEverythingAccess
 
                 Logger.LogInfo("Transition sweep hotkey detected");
                 AccessibilityWatcher.RequestToggleTransitionSweep();
-                return;
-            }
-
-            if (hotkeyId == LiveRouteAuditHotkeyId)
-            {
-                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || !IsModifierKeyDown(0x12))
-                    return;
-
-                Logger.LogInfo("Live route audit hotkey detected");
-                AccessibilityWatcher.RequestToggleLiveRouteAudit();
                 return;
             }
 
