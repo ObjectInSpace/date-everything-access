@@ -38,8 +38,6 @@ namespace DateEverythingAccess
         private const int NavigateToObjectiveHotkeyId = 6;
         private const int SelectNavigationTargetHotkeyId = 7;
         private const int AutoWalkHotkeyId = 8;
-        private const int TransitionSweepHotkeyId = 10;
-        private const int DoorTransitionSweepHotkeyId = 11;
         private const int CoverageSweepHotkeyId = 13;
 
         private Thread _hotkeyThread;
@@ -242,8 +240,6 @@ namespace DateEverythingAccess
                 RegisterHotkeyOrThrow(NavigateToObjectiveHotkeyId, ModControl | ModNoRepeat, VkF6, "Ctrl+F6");
                 RegisterHotkeyOrThrow(SelectNavigationTargetHotkeyId, ModControl | ModShift | ModNoRepeat, VkF6, "Ctrl+Shift+F6");
                 RegisterHotkeyOrThrow(AutoWalkHotkeyId, ModControl | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+F6");
-                RegisterHotkeyOrThrow(TransitionSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF9, "Ctrl+Alt+Shift+F9");
-                RegisterHotkeyOrThrow(DoorTransitionSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+Shift+F6");
                 RegisterHotkeyOrThrow(CoverageSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF8, "Ctrl+Alt+Shift+F8");
                 Logger.LogInfo("Background hotkey message loop active");
 
@@ -274,8 +270,6 @@ namespace DateEverythingAccess
                 UnregisterHotKey(IntPtr.Zero, NavigateToObjectiveHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, SelectNavigationTargetHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, AutoWalkHotkeyId);
-                UnregisterHotKey(IntPtr.Zero, TransitionSweepHotkeyId);
-                UnregisterHotKey(IntPtr.Zero, DoorTransitionSweepHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, CoverageSweepHotkeyId);
                 Logger.LogInfo("Background hotkey thread exiting");
             }
@@ -374,26 +368,6 @@ namespace DateEverythingAccess
 
                 Logger.LogInfo("Auto-walk hotkey detected");
                 AccessibilityWatcher.RequestAutoWalk();
-                return;
-            }
-
-            if (hotkeyId == DoorTransitionSweepHotkeyId)
-            {
-                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || !IsModifierKeyDown(0x12))
-                    return;
-
-                Logger.LogInfo("Door transition sweep hotkey detected");
-                AccessibilityWatcher.RequestToggleDoorTransitionSweep();
-                return;
-            }
-
-            if (hotkeyId == TransitionSweepHotkeyId)
-            {
-                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || !IsModifierKeyDown(0x12))
-                    return;
-
-                Logger.LogInfo("Transition sweep hotkey detected");
-                AccessibilityWatcher.RequestToggleTransitionSweep();
                 return;
             }
 
