@@ -49,7 +49,6 @@ namespace DateEverythingAccess
         private static ConfigEntry<bool> _readRoomChanges;
         private static ConfigEntry<bool> _readNearbyObjects;
         private static ConfigEntry<bool> _readStatusChanges;
-        private static ConfigEntry<bool> _useSimpleNavigation;
         private static InputModeHandle _inputModeHandle;
         private static volatile bool _menuOpen;
         private static int _currentSettingIndex;
@@ -105,12 +104,6 @@ namespace DateEverythingAccess
         public static bool ReadStatusChanges => _readStatusChanges.Value;
 
         /// <summary>
-        /// When true, the experimental SimpleNav module owns navigation target selection and
-        /// auto-walk steering. When false (default), the legacy AccessibilityWatcher stack runs.
-        /// </summary>
-        public static bool UseSimpleNavigation => _useSimpleNavigation != null && _useSimpleNavigation.Value;
-
-        /// <summary>
         /// Gets a value indicating whether the spoken settings menu is currently open.
         /// </summary>
         public static bool IsMenuOpen => _menuOpen;
@@ -132,11 +125,6 @@ namespace DateEverythingAccess
             _readRoomChanges = config.Bind("Accessibility", "ReadRoomChanges", true, "Speak room changes while exploring.");
             _readNearbyObjects = config.Bind("Accessibility", "ReadNearbyObjects", true, "Speak nearby interactables.");
             _readStatusChanges = config.Bind("Accessibility", "ReadStatusChanges", true, "Speak Dateviators, time, and progression changes.");
-            _useSimpleNavigation = config.Bind(
-                "Navigation",
-                "UseSimpleNavigation",
-                true,
-                "Route auto-walk through the SimpleNav module (live CameraSpaces + live Door lookup). Default on. Set to false to fall back to the legacy navigation stack.");
         }
 
         /// <summary>

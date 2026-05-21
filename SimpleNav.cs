@@ -31,8 +31,7 @@ namespace DateEverythingAccess
     // Door geometry (swing pivot, open type, range) is read from the live Door component via
     // reflection where the field is private.
     //
-    // The legacy AccessibilityWatcher.* navigation stack is untouched. This module is opt-in,
-    // gated by ModConfig.UseSimpleNavigation. The legacy path remains the default.
+    // This module owns autowalk target selection.
     internal static class SimpleNav
     {
         public const float DoorClearanceMargin = 0.6f;   // distance to stand back from a door before triggering it
