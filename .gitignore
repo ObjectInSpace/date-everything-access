@@ -4,6 +4,7 @@
 # Build output
 bin/
 obj/
+build.log
 .dotnet/
 .dotnet-cli/
 .nuget/
