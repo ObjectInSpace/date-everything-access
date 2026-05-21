@@ -754,46 +754,16 @@ namespace DateEverythingAccess
                 return;
             }
 
-            if (HandlePendingNavigationTransition())
-                return;
-
-            string navigationUnavailableReason = GetNavigationUnavailableReason();
-            if ((!CanUseNavigationNow() || string.IsNullOrEmpty(_navigationTargetZone)) &&
-                !IsExpectedTeleporterSweepControlLock(GetCurrentNavigationStep(), navigationUnavailableReason))
+            if (!CanUseNavigationNow())
             {
                 if (_isAutoWalking)
                 {
                     StopNavigationBlocked(
-                        "navigation unavailable reason=" + navigationUnavailableReason +
-                        " targetZone=" + (_navigationTargetZone ?? "<null>"));
+                        "navigation unavailable reason=" + GetNavigationUnavailableReason());
                 }
                 else
                     StopNavigationRuntime();
                 return;
-            }
-
-            if (NeedsNavigationPathRefresh(out string refreshReason))
-            {
-                LogNavigationAutoWalkDebug(
-                    "Navigation path refresh requested reason=" + refreshReason +
-                    " currentZone=" + (GetCurrentZoneNameInternal() ?? "<null>") +
-                    " targetZone=" + (_navigationTargetZone ?? "<null>") +
-                    " targetLabel=" + (_navigationTargetLabel ?? "<null>"));
-                if (!TryRefreshNavigationPath(forceAnnounce: false))
-                {
-                    if (IsZoneNavigationTargetReached(GetCurrentZoneNameInternal()))
-                        return;
-
-                    if (_isAutoWalking)
-                        StopNavigationBlocked("path refresh failed after refresh request reason=" + refreshReason);
-                    else
-                        StopNavigationRuntime();
-                    return;
-                }
-            }
-            else
-            {
-                UpdateNavigationTracker();
             }
 
             if (IsTrackedObjectReached())
@@ -1360,24 +1330,6 @@ namespace DateEverythingAccess
             {
                 LogNavigationAutoWalkDebug("BeginNavigation blocked reason=" + GetNavigationUnavailableReason());
                 SetNavigationBlockedDetail("begin navigation unavailable reason=" + GetNavigationUnavailableReason());
-                if (announceFailure)
-                    StopNavigationBlocked();
-                else
-                    StopNavigationRuntime();
-                return false;
-            }
-
-            if (!TryRefreshNavigationPath(forceAnnounce: true))
-            {
-                string currentZone = GetCurrentZoneNameInternal();
-                if (IsZoneNavigationTargetReached(currentZone))
-                {
-                    return false;
-                }
-
-                SetNavigationBlockedDetail(
-                    "begin navigation failed after path refresh currentZone=" + (currentZone ?? "<null>") +
-                    " targetZone=" + (_navigationTargetZone ?? "<null>"));
                 if (announceFailure)
                     StopNavigationBlocked();
                 else
@@ -3044,123 +2996,6 @@ namespace DateEverythingAccess
                 return;
             }
             SimpleNavBridge.BeginRoute(route);
-        }
-
-        private void RecordTrackerTarget(
-            Vector3 targetPosition,
-            NavigationTargetKind targetKind,
-            NavigationGraph.PathStep step)
-        {
-            _hasLastTrackerTarget = true;
-            _lastTrackerTargetPosition = targetPosition;
-            _lastTrackerTargetKind = targetKind.ToString();
-            _lastTrackerTargetStepKey = BuildNavigationStepKey(step);
-            LogNavigationTrackerDebug(
-                "Tone target set kind=" + targetKind +
-                " position=" + FormatVector3(targetPosition) +
-                " stepKey=" + (_lastTrackerTargetStepKey ?? "<null>") +
-                " localContext=" + (_localNavigationPathContext ?? "<null>"));
-        }
-
-        private void ClearTrackerTargetDiagnostics()
-        {
-            _hasLastTrackerTarget = false;
-            _lastTrackerTargetPosition = Vector3.zero;
-            _lastTrackerTargetKind = null;
-            _lastTrackerTargetStepKey = null;
-        }
-
-        private bool TryResolveAutoWalkMovementTarget(
-            string resolutionSource,
-            out Vector3 nextPosition,
-            out NavigationTargetKind targetKind)
-        {
-            if (!TryGetNavigationMovementTarget(out nextPosition, out targetKind))
-                return false;
-
-            CompareTrackerAndMovementTarget(nextPosition, targetKind, resolutionSource);
-            return true;
-        }
-
-        private void CompareTrackerAndMovementTarget(
-            Vector3 movementTarget,
-            NavigationTargetKind targetKind,
-            string resolutionSource)
-        {
-            float delta = _hasLastTrackerTarget
-                ? Vector3.Distance(_lastTrackerTargetPosition, movementTarget)
-                : -1f;
-            string stepKey = _lastTrackerTargetStepKey ?? "<null>";
-            LogNavigationAutoWalkDebug(
-                "Movement target resolved source=" + (resolutionSource ?? "<null>") +
-                " kind=" + targetKind +
-                " position=" + FormatVector3(movementTarget) +
-                " trackerKind=" + (_lastTrackerTargetKind ?? "<null>") +
-                " trackerPosition=" + (_hasLastTrackerTarget ? FormatVector3(_lastTrackerTargetPosition) : "<null>") +
-                " delta=" + delta.ToString("0.00", CultureInfo.InvariantCulture) +
-                " stepKey=" + stepKey);
-
-            if (!_hasLastTrackerTarget)
-                return;
-
-            if (delta > 0.05f ||
-                !string.Equals(_lastTrackerTargetKind, targetKind.ToString(), StringComparison.Ordinal))
-            {
-                LogNavigationTrackerDebug(
-                    "Tone alignment mismatch source=" + (resolutionSource ?? "<null>") +
-                    " trackerKind=" + (_lastTrackerTargetKind ?? "<null>") +
-                    " movementKind=" + targetKind +
-                    " trackerPosition=" + FormatVector3(_lastTrackerTargetPosition) +
-                    " movementPosition=" + FormatVector3(movementTarget) +
-                    " delta=" + delta.ToString("0.00", CultureInfo.InvariantCulture) +
-                    " stepKey=" + stepKey);
-            }
-        }
-
-        private void UpdateNavigationTracker()
-        {
-            if (TryGetNavigationMovementTarget(out Vector3 nextPosition, out NavigationTargetKind targetKind))
-            {
-                NavigationGraph.PathStep step = GetCurrentNavigationStep();
-                NavigationGraph.StepKind stepKind = step != null ? step.Kind : NavigationGraph.StepKind.Unknown;
-                bool requiresInteraction = targetKind == NavigationTargetKind.TransitionInteractable ||
-                    (step != null && step.RequiresInteraction);
-                ObjectTracker.StartTracking(nextPosition, stepKind, requiresInteraction);
-                RecordTrackerTarget(nextPosition, targetKind, step);
-                return;
-            }
-
-            ClearTrackerTargetDiagnostics();
-            ObjectTracker.StopTracking();
-        }
-
-        private bool TryGetNavigationMovementTarget(out Vector3 position, out NavigationTargetKind targetKind)
-        {
-            position = Vector3.zero;
-            targetKind = NavigationTargetKind.ZoneFallback;
-
-            if (!TryGetNextNavigationPosition(out position, out targetKind))
-                return false;
-
-            if (BetterPlayerControl.Instance == null)
-                return true;
-
-            string currentZone = GetCurrentZoneNameForNavigation();
-            NavigationGraph.PathStep step = GetCurrentNavigationStep();
-            if (TryAdjustNavigationTargetWithLocalPathing(
-                currentZone,
-                step,
-                BetterPlayerControl.Instance.transform.position,
-                ref position,
-                ref targetKind))
-            {
-                return true;
-            }
-
-            if (TryGetDoorPostInteractionFallbackExhaustedDetail(step, out _))
-                return false;
-
-            return true;
         }
 
         private bool TryAdjustNavigationTargetWithLocalPathing(
