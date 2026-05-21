@@ -32,29 +32,3 @@ if (-not (Test-Path -LiteralPath $dllPath)) {
 
 Copy-Item -LiteralPath $dllPath -Destination $targetDir -Force
 Write-Host "Deployed DateEverythingAccess.dll to $targetDir"
-
-$overridePath = Join-Path $projectDir "bin\$Configuration\net472\navigation_transition_overrides.json"
-if (-not (Test-Path -LiteralPath $overridePath)) {
-    $overridePath = Join-Path $projectDir "navigation_transition_overrides.json"
-}
-
-if (Test-Path -LiteralPath $overridePath) {
-    $overrideDestination = Join-Path $targetDir "navigation_transition_overrides.json"
-    Copy-Item -LiteralPath $overridePath -Destination $overrideDestination -Force
-    Write-Host "Deployed navigation_transition_overrides.json to $overrideDestination"
-} else {
-    Write-Warning "Navigation override JSON not found: $overridePath"
-}
-
-$localMapsPath = Join-Path $projectDir "bin\$Configuration\net472\local_navigation_maps.generated.json"
-if (-not (Test-Path -LiteralPath $localMapsPath)) {
-    $localMapsPath = Join-Path $projectDir "artifacts\navigation\local_navigation_maps.generated.json"
-}
-
-if (Test-Path -LiteralPath $localMapsPath) {
-    $localMapsDestination = Join-Path $targetDir "local_navigation_maps.generated.json"
-    Copy-Item -LiteralPath $localMapsPath -Destination $localMapsDestination -Force
-    Write-Host "Deployed local_navigation_maps.generated.json to $localMapsDestination"
-} else {
-    Write-Warning "Local navigation maps JSON not found: $localMapsPath"
-}
