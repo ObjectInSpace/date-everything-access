@@ -1366,7 +1366,6 @@ namespace DateEverythingAccess
             ResetOpenPassageTraversalState();
             ResetDoorTraversalState();
             ClearNavigationZoneOverride();
-            ClearLocalNavigationPathState();
             _lastNavigationNextZone = null;
             _lastNavigationAnnouncementLabel = null;
             _lastAutoWalkProgressTime = 0f;
@@ -1381,9 +1380,7 @@ namespace DateEverythingAccess
             _lastNavigationTransitionDebugSnapshot = null;
             _lastNavigationBlockedDetail = null;
             ResetAutoWalkLoopDetection();
-            ResetLocalNavigationStallTracking();
             ResetDoorPostInteractionFallbackExhaustion();
-            ClearTrackerTargetDiagnostics();
             ObjectTracker.StopTracking();
             ApplyNavigationInput(Vector3.zero, Vector3.zero);
         }
@@ -2415,18 +2412,6 @@ namespace DateEverythingAccess
         }
 
 
-        private void ResetLocalNavigationStallTracking()
-        {
-            _localNavigationStallSignature = null;
-            _localNavigationBypassSignature = null;
-            _localNavigationStallTarget = Vector3.zero;
-            _localNavigationStallStartPosition = BetterPlayerControl.Instance != null
-                ? BetterPlayerControl.Instance.transform.position
-                : Vector3.zero;
-            _localNavigationStallStartedAt = 0f;
-            _localNavigationBypassUntil = 0f;
-        }
-
         private void ResetDoorPostInteractionFallbackExhaustion()
         {
             _doorPostInteractionFallbackFailureSignature = null;
@@ -2800,16 +2785,6 @@ namespace DateEverythingAccess
                 string.Equals(blockerDetail, "player-collider-null", StringComparison.Ordinal);
         }
 
-        private void ClearLocalNavigationPathState()
-        {
-            _localNavigationPathZone = null;
-            _localNavigationPathContext = null;
-            _localNavigationPathStepKey = null;
-            _localNavigationPathGoal = Vector3.zero;
-            _localNavigationPathPoints = null;
-            _localNavigationPathIndex = 0;
-        }
-
         private static float GetFlatDistance(Vector3 first, Vector3 second)
         {
             first.y = 0f;
@@ -2824,7 +2799,6 @@ namespace DateEverythingAccess
                 : Vector3.zero;
             _lastAutoWalkProgressTime = Time.unscaledTime;
             ResetAutoWalkLoopDetection();
-            ResetLocalNavigationStallTracking();
             ResetDoorPostInteractionFallbackExhaustion();
             ClearNavigationBlockedDetail();
         }
@@ -3161,131 +3135,6 @@ namespace DateEverythingAccess
             _doorCommittedSourceWatchdogInteractionRetryCount = 0;
         }
 
-        private void ActivateDoorCommittedSourceRecoveryFromLoop(
-            NavigationGraph.PathStep step,
-            string currentZone,
-            NavigationTargetKind targetKind,
-            Vector3 targetPosition)
-        {
-            if (step == null ||
-                step.Kind != NavigationGraph.StepKind.Door ||
-                targetKind == NavigationTargetKind.TransitionInteractable ||
-                targetPosition == Vector3.zero ||
-                string.IsNullOrWhiteSpace(currentZone) ||
-                string.IsNullOrWhiteSpace(step.FromZone) ||
-                !IsZoneEquivalentToNavigationZone(currentZone, step.FromZone) ||
-                !IsDoorTraversalPostThresholdCommitted(step))
-            {
-                return;
-            }
-
-            string stepKey = BuildNavigationStepKey(step);
-            if (string.IsNullOrWhiteSpace(stepKey))
-                return;
-
-            if (TryForceDoorInteractionRetryFromCommittedSourceLoop(
-                    step,
-                    stepKey,
-                    targetKind,
-                    targetPosition))
-            {
-                return;
-            }
-
-            if (string.Equals(_doorCommittedSourceRecoveryStepKey, stepKey, StringComparison.Ordinal) &&
-                GetDoorCommittedSourceRecoveryStage() != DoorCommittedSourceRecoveryStage.None)
-            {
-                if (GetDoorCommittedSourceRecoveryStage() == DoorCommittedSourceRecoveryStage.SourceThreshold &&
-                    TryAdvanceDoorCommittedSourceRecoveryStage(DoorCommittedSourceRecoveryTrigger.EscalateFromRepeatedLoop))
-                {
-                    LogNavigationAutoWalkDebug(
-                        "Escalated door committed-source recovery stage=PushThrough due to repeated loop detection" +
-                        " targetKind=" + targetKind +
-                        " targetPosition=" + FormatVector3(targetPosition) +
-                        " step=" + DescribeNavigationStep(step));
-                }
-
-                return;
-            }
-
-            _doorCommittedSourceRecoveryStepKey = stepKey;
-            TryAdvanceDoorCommittedSourceRecoveryStage(DoorCommittedSourceRecoveryTrigger.ActivateFromLoop);
-            LogNavigationAutoWalkDebug(
-                "Activated door committed-source recovery stage=SourceThreshold" +
-                " targetKind=" + targetKind +
-                " targetPosition=" + FormatVector3(targetPosition) +
-                " step=" + DescribeNavigationStep(step));
-        }
-
-        private bool TryForceDoorInteractionRetryFromCommittedSourceLoop(
-            NavigationGraph.PathStep step,
-            string stepKey,
-            NavigationTargetKind targetKind,
-            Vector3 targetPosition)
-        {
-            if (step == null || string.IsNullOrWhiteSpace(stepKey))
-                return false;
-
-            if (!string.Equals(_doorCommittedSourceWatchdogStepKey, stepKey, StringComparison.Ordinal))
-            {
-                _doorCommittedSourceWatchdogStepKey = stepKey;
-                _doorCommittedSourceWatchdogLoopTripCount = 0;
-                _doorCommittedSourceWatchdogInteractionRetryCount = 0;
-            }
-
-            _doorCommittedSourceWatchdogLoopTripCount++;
-            LogNavigationAutoWalkDebug(
-                "Door committed-source watchdog loop trip" +
-                " count=" + _doorCommittedSourceWatchdogLoopTripCount +
-                " retryCount=" + _doorCommittedSourceWatchdogInteractionRetryCount +
-                " targetKind=" + targetKind +
-                " targetPosition=" + FormatVector3(targetPosition) +
-                " step=" + DescribeNavigationStep(step));
-
-            if (_doorCommittedSourceWatchdogLoopTripCount <
-                DoorCommittedSourceWatchdogLoopTripsBeforeRetry)
-            {
-                return false;
-            }
-
-            _doorCommittedSourceWatchdogLoopTripCount = 0;
-            if (_doorCommittedSourceWatchdogInteractionRetryCount >=
-                DoorCommittedSourceWatchdogMaxInteractionRetries)
-            {
-                LogNavigationAutoWalkDebug(
-                    "Door committed-source watchdog retries exhausted" +
-                    " maxRetries=" + DoorCommittedSourceWatchdogMaxInteractionRetries +
-                    " targetKind=" + targetKind +
-                    " targetPosition=" + FormatVector3(targetPosition) +
-                    " step=" + DescribeNavigationStep(step));
-                return false;
-            }
-
-            if (!_doorTraversalInteractionTriggered ||
-                !string.Equals(_doorTraversalStepKey, stepKey, StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            _doorCommittedSourceWatchdogInteractionRetryCount++;
-            _doorTraversalInteractionTriggered = false;
-            _doorTraversalPushThroughPosition = Vector3.zero;
-            _doorTraversalPostThresholdCommitted = false;
-
-            ResetDoorCommittedSourceRecoveryState();
-            ResetDoorSourceLocalGoalCompletion();
-            _autoWalkRecoveryAttempts = 0;
-            ClearLocalNavigationPathState();
-            LogNavigationAutoWalkDebug(
-                "Door committed-source watchdog forcing interaction retry" +
-                " retryAttempt=" + _doorCommittedSourceWatchdogInteractionRetryCount +
-                " maxRetries=" + DoorCommittedSourceWatchdogMaxInteractionRetries +
-                " targetKind=" + targetKind +
-                " targetPosition=" + FormatVector3(targetPosition) +
-                " step=" + DescribeNavigationStep(step));
-            return true;
-        }
-
         private void ClearNavigationZoneOverride()
         {
             _navigationZoneOverride = null;
@@ -3467,64 +3316,6 @@ namespace DateEverythingAccess
             return true;
         }
 
-        private OpenPassageTraversalStage GetOpenPassageTraversalStage(
-            NavigationGraph.PathStep step,
-            string currentZone,
-            Vector3 playerPosition,
-            float fromDistance,
-            float sourceSegmentDistance,
-            float destinationWaypointDistance)
-        {
-            SyncOpenPassageTraversalState(step);
-            if (step == null || !UsesOpenPassageTraversalModel(step))
-                return OpenPassageTraversalStage.None;
-
-            OpenPassageTraversalStage traversalStage = GetOpenPassageTraversalStageState();
-            if ((!string.IsNullOrEmpty(step.ToZone) &&
-                 IsZoneEquivalentToNavigationZone(currentZone, step.ToZone)) ||
-                IsAcceptedOverrideDestinationZone(step, currentZone))
-            {
-                if (traversalStage != OpenPassageTraversalStage.DestinationHandoff)
-                    _openPassageDestinationHandoffProgressFloor = 0f;
-                TryAdvanceOpenPassageTraversalStage(OpenPassageTraversalTrigger.DestinationZoneReached);
-                return GetOpenPassageTraversalStageState();
-            }
-
-            switch (traversalStage)
-            {
-                case OpenPassageTraversalStage.SourceWaypoint:
-                    if (fromDistance <= AutoWalkOpenPassageCommitDistance)
-                    {
-                        _openPassageSourceHandoffProgressFloor = 0f;
-                        TryAdvanceOpenPassageTraversalStage(OpenPassageTraversalTrigger.SourceWaypointCommitted);
-                    }
-                    break;
-
-                case OpenPassageTraversalStage.SourceHandoff:
-                    if (ShouldAdvanceOpenPassageSourceHandoff(
-                            step,
-                            currentZone,
-                            playerPosition,
-                            sourceSegmentDistance))
-                    {
-                        _openPassageDestinationHandoffProgressFloor = 0f;
-                        TryAdvanceOpenPassageTraversalStage(OpenPassageTraversalTrigger.SourceHandoffCompleted);
-                    }
-                    break;
-
-                case OpenPassageTraversalStage.DestinationWaypoint:
-                    if (destinationWaypointDistance <= AutoWalkArrivalDistance ||
-                        (_autoWalkRecoveryAttempts > 0 && destinationWaypointDistance <= AutoWalkZoneBoundaryFallbackDistance))
-                    {
-                        _openPassageDestinationHandoffProgressFloor = 0f;
-                        TryAdvanceOpenPassageTraversalStage(OpenPassageTraversalTrigger.DestinationWaypointReached);
-                    }
-                    break;
-            }
-
-            return GetOpenPassageTraversalStageState();
-        }
-
         private bool ShouldAttemptAutoWalkInteractionRecovery(
             NavigationGraph.PathStep step,
             bool allowOptionalDoorInteraction,
@@ -3549,93 +3340,6 @@ namespace DateEverythingAccess
                     step,
                     out optionalOpenPassageInteractable,
                     out optionalOpenPassageInteractionDetail);
-        }
-
-        private bool ShouldAdvanceOpenPassageSourceHandoff(
-            NavigationGraph.PathStep step,
-            string currentZone,
-            Vector3 playerPosition,
-            float sourceSegmentDistance)
-        {
-            if (step == null)
-                return false;
-
-            if (!UsesOverrideOnlyOpenPassageGuidance(step))
-            {
-                if (HasReachedOpenPassageSourceLocalWaypointProxy(
-                        step,
-                        playerPosition,
-                        out string localProxyDetail))
-                {
-                    LogNavigationTrackerDebug(
-                        "Advanced open-passage source handoff at local waypoint proxy" +
-                        " sourceSegmentDistance=" + sourceSegmentDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " detail=" + (localProxyDetail ?? "<null>") +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-
-                if (sourceSegmentDistance <= OpenPassageOverrideLocalNavigationGoalReachedDistance)
-                    return true;
-
-                if (HasReachedOpenPassageReachableSourceProxy(
-                        step,
-                        currentZone,
-                        playerPosition,
-                        out string proxyDetail))
-                {
-                    LogNavigationTrackerDebug(
-                        "Advanced open-passage source handoff at reachable proxy" +
-                        " sourceSegmentDistance=" + sourceSegmentDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                        " detail=" + (proxyDetail ?? "<null>") +
-                        " step=" + DescribeNavigationStep(step));
-                    return true;
-                }
-
-                return false;
-            }
-
-            if (HasReachedOpenPassageOverrideSourceLocalWaypointProxy(
-                    step,
-                    playerPosition,
-                    out bool reachedFinalOverrideWaypoint,
-                    out string overrideLocalProxyDetail))
-            {
-                LogNavigationTrackerDebug(
-                    "Advanced open-passage override source waypoint at local proxy" +
-                    " reachedFinal=" + reachedFinalOverrideWaypoint +
-                    " sourceSegmentDistance=" + sourceSegmentDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                    " detail=" + (overrideLocalProxyDetail ?? "<null>") +
-                    " step=" + DescribeNavigationStep(step));
-                return reachedFinalOverrideWaypoint &&
-                    step.Kind != NavigationGraph.StepKind.Stairs &&
-                    !string.IsNullOrWhiteSpace(step.ToZone);
-            }
-
-            if (!TryGetOpenPassageGuidedNavigationTarget(
-                    step,
-                    playerPosition,
-                    out Vector3 guidedTarget,
-                    out _,
-                    out _,
-                    out bool isFinalWaypoint) ||
-                !isFinalWaypoint ||
-                guidedTarget == Vector3.zero)
-            {
-                return false;
-            }
-
-            guidedTarget.y = playerPosition.y;
-            if (Vector3.Distance(playerPosition, guidedTarget) >
-                GetOpenPassageGuidedWaypointAdvanceDistance())
-            {
-                return false;
-            }
-
-            return !string.IsNullOrWhiteSpace(step.ToZone) &&
-                (IsZoneEquivalentToNavigationZone(currentZone, step.ToZone) ||
-                 IsAcceptedOverrideDestinationZone(step, currentZone) ||
-                 sourceSegmentDistance <= OpenPassageOverrideLocalNavigationGoalReachedDistance);
         }
 
         private bool TryAdvanceOpenPassageOverrideLocalGoalReached(
@@ -3820,99 +3524,6 @@ namespace DateEverythingAccess
             }
 
             return null;
-        }
-
-        private bool HasReachedOpenPassageSourceLocalWaypointProxy(
-            NavigationGraph.PathStep step,
-            Vector3 playerPosition,
-            out string detail)
-        {
-            detail = null;
-            if (step == null ||
-                !UsesOpenPassageTraversalModel(step) ||
-                GetOpenPassageTraversalStageState() != OpenPassageTraversalStage.SourceHandoff ||
-                !UsesExplicitOpenPassageCrossingSegments(step) ||
-                !_hasLastTrackerTarget ||
-                !string.Equals(_lastTrackerTargetKind, NavigationTargetKind.LocalWaypoint.ToString(), StringComparison.Ordinal) ||
-                !string.Equals(_lastTrackerTargetStepKey, BuildNavigationStepKey(step), StringComparison.Ordinal) ||
-                !string.Equals(_localNavigationPathContext, "open-passage-handoff", StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            float targetDistance = GetFlatDistance(playerPosition, _lastTrackerTargetPosition);
-            if (targetDistance > OpenPassageGuidedWaypointAdvanceDistance)
-                return false;
-
-            int previousIndex = _openPassageOverrideWaypointIndex;
-            List<Vector3> navigationPoints = BuildOpenPassageGuidedNavigationPoints(step);
-            if (navigationPoints != null && navigationPoints.Count > 1)
-            {
-                int currentIndex = Mathf.Clamp(previousIndex, 0, navigationPoints.Count - 1);
-                if (currentIndex < navigationPoints.Count - 1)
-                    _openPassageOverrideWaypointIndex = currentIndex + 1;
-            }
-
-            ClearLocalNavigationPathState();
-            ResetLocalNavigationStallTracking();
-            detail =
-                "target=" + FormatVector3(_lastTrackerTargetPosition) +
-                " targetDistance=" + targetDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                " previousIndex=" + previousIndex +
-                " nextIndex=" + _openPassageOverrideWaypointIndex;
-            return true;
-        }
-
-        private bool HasReachedOpenPassageOverrideSourceLocalWaypointProxy(
-            NavigationGraph.PathStep step,
-            Vector3 playerPosition,
-            out bool reachedFinalWaypoint,
-            out string detail)
-        {
-            reachedFinalWaypoint = false;
-            detail = null;
-            if (step == null ||
-                !UsesOverrideOnlyOpenPassageGuidance(step) ||
-                GetOpenPassageTraversalStageState() != OpenPassageTraversalStage.SourceHandoff ||
-                !_hasLastTrackerTarget ||
-                !string.Equals(_lastTrackerTargetKind, NavigationTargetKind.LocalWaypoint.ToString(), StringComparison.Ordinal) ||
-                !string.Equals(_lastTrackerTargetStepKey, BuildNavigationStepKey(step), StringComparison.Ordinal) ||
-                !string.Equals(_localNavigationPathContext, "open-passage-override-source", StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            float targetDistance = GetFlatDistance(playerPosition, _lastTrackerTargetPosition);
-            if (targetDistance > OpenPassageGuidedWaypointAdvanceDistance)
-                return false;
-
-            string stepKey = BuildNavigationStepKey(step);
-            float remainingDistance = ComputeLocalNavigationRemainingDistance(playerPosition);
-            if (!TryAdvanceOpenPassageOverrideLocalGoalReached(
-                    stepKey,
-                    "open-passage-override-source",
-                    _localNavigationPathGoal,
-                    remainingDistance,
-                    forceProxyRelease: false,
-                    out bool completed,
-                    out string completionDetail) ||
-                !completed)
-            {
-                return false;
-            }
-
-            List<Vector3> navigationPoints = BuildOpenPassageGuidedNavigationPoints(step);
-            reachedFinalWaypoint = navigationPoints != null &&
-                navigationPoints.Count > 0 &&
-                _openPassageOverrideWaypointIndex >= navigationPoints.Count - 1;
-            ClearLocalNavigationPathState();
-            ResetLocalNavigationStallTracking();
-            detail =
-                "target=" + FormatVector3(_lastTrackerTargetPosition) +
-                " targetDistance=" + targetDistance.ToString("0.00", CultureInfo.InvariantCulture) +
-                " reachedFinal=" + reachedFinalWaypoint +
-                " completionDetail=" + (completionDetail ?? "<null>");
-            return true;
         }
 
         private bool TryResolveOptionalOpenPassageInteractionCandidate(
