@@ -5,16 +5,13 @@ using UnityEngine;
 
 namespace DateEverythingAccess
 {
-    // Opt-in bridge between the new SimpleNav module and the rest of the mod.
-    //
-    // The legacy AccessibilityWatcher autowalk path is untouched. When
-    // ModConfig.UseSimpleNavigation is true, the bridge takes over target selection and
-    // movement for the active step. When false, control returns to the legacy stack.
+    // Bridge between the SimpleNav module and the rest of the mod. Owns target selection,
+    // door-open timing, and arrival checks for the autowalk loop.
     //
     // This bridge is deliberately thin. It owns:
     //   1. Per-frame Observe() so SimpleNav can sample floor Y.
-    //   2. A "current target" derived from SimpleNav.TryResolveTarget once per step
-    //      (NOT per frame — the architectural fix from NAVIGATION_REVIEW.md).
+    //   2. A route-driven mode (object-first navigation) that drives along a polyline
+    //      from SimpleNavPlanner, opening doors as path preconditions.
     //   3. A simple "arrived?" check that maps to SimpleNav.HasArrived.
     internal static class SimpleNavBridge
     {
@@ -48,7 +45,6 @@ namespace DateEverythingAccess
         private static bool _hasPlayerPositionAtStepBegin;
         private static int _appliedFrameCount;
 
-        public static bool Enabled => ModConfig.UseSimpleNavigation;
 
         /// <summary>
         /// The currently-active waypoint after the most recent <see cref="TryGetTargetForStep"/>
@@ -57,11 +53,9 @@ namespace DateEverythingAccess
         /// </summary>
         public static Vector3 LastResolvedTarget => _activeTarget;
 
-        // Called from AccessibilityWatcher.Update once per frame regardless of which nav stack
-        // is active. Cheap when disabled.
+        // Called from AccessibilityWatcher.Update once per frame.
         public static void Tick()
         {
-            if (!Enabled) return;
             SimpleNav.Observe();
         }
 
@@ -604,13 +598,6 @@ namespace DateEverythingAccess
         // which re-derived an identical unreachable target every frame.
         public static bool TryGetTarget(string stepKey, string toZoneName, out Vector3 target, out string reason)
         {
-            if (!Enabled)
-            {
-                target = Vector3.zero;
-                reason = "simple-nav-disabled";
-                return false;
-            }
-
             if (!string.Equals(stepKey, _activeStepKey, StringComparison.Ordinal))
             {
                 BeginStep(stepKey);
@@ -647,13 +634,6 @@ namespace DateEverythingAccess
             out Vector3 target,
             out string reason)
         {
-            if (!Enabled)
-            {
-                target = Vector3.zero;
-                reason = "simple-nav-disabled";
-                return false;
-            }
-
             if (!string.Equals(stepKey, _activeStepKey, StringComparison.Ordinal))
             {
                 BeginStep(stepKey);
@@ -744,7 +724,7 @@ namespace DateEverythingAccess
 
         public static bool HasArrived(string toZoneName)
         {
-            return Enabled && SimpleNav.HasArrived(toZoneName);
+            return SimpleNav.HasArrived(toZoneName);
         }
 
         // No-op pass-through. An earlier version did a chest-height SphereCast and steered the
@@ -761,8 +741,7 @@ namespace DateEverythingAccess
         public static string DescribeState()
         {
             var ci = CultureInfo.InvariantCulture;
-            return "SimpleNavBridge enabled=" + Enabled +
-                " step=" + (_activeStepKey ?? "<none>") +
+            return "SimpleNavBridge step=" + (_activeStepKey ?? "<none>") +
                 " targetValid=" + _activeTargetValid +
                 " target=(" + _activeTarget.x.ToString("0.00", ci) + ", " +
                 _activeTarget.y.ToString("0.00", ci) + ", " +
