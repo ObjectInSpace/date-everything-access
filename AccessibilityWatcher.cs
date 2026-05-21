@@ -2960,6 +2960,92 @@ namespace DateEverythingAccess
                 destinationDistance <= AutoWalkArrivalDistance;
         }
 
+        private void StartNavigationToCurrentTarget()
+        {
+            Loc.RefreshLanguage();
+
+            if (!TryResolveCurrentObjectiveInteractable(out InteractableObj interactable, out string targetZone, out string targetLabel))
+            {
+                ScreenReader.Say(Loc.Get("navigation_no_objective"));
+                return;
+            }
+
+            SetTrackedInteractable(interactable, targetZone, targetLabel);
+            BeginNavigation(targetZone, targetLabel);
+        }
+
+        private void ToggleAutoWalk()
+        {
+            Loc.RefreshLanguage();
+
+            if (_isAutoWalking)
+            {
+                StopNavigationRuntime();
+                ScreenReader.Say(Loc.Get("navigation_autowalk_stopped"));
+                return;
+            }
+
+            if (!TryEnsureNavigationTarget(out string targetZone, out string targetLabel))
+            {
+                ScreenReader.Say(Loc.Get("navigation_no_objective"));
+                return;
+            }
+
+            if (!BeginNavigation(targetZone, targetLabel))
+                return;
+
+            if (!CanUseNavigationNow() || !ApplyNavigationInput(Vector3.zero, Vector3.zero))
+            {
+                StopNavigationRuntime();
+                ScreenReader.Say(Loc.Get("navigation_blocked"));
+                return;
+            }
+
+            _isAutoWalking = true;
+            _lastAutoWalkPosition = BetterPlayerControl.Instance != null ? BetterPlayerControl.Instance.transform.position : Vector3.zero;
+            _lastAutoWalkProgressTime = Time.unscaledTime;
+
+            TryPlanAndInstallSimpleNavRoute();
+
+            ScreenReader.Say(Loc.Get("navigation_autowalk_started"));
+        }
+
+        // Plan a SimpleNavRoute from the player's current position to the tracked interactable,
+        // and install it on SimpleNavBridge. Silent no-op if the planner isn't ready, the
+        // interactable isn't resolvable, or the planner returns null (no path).
+        private void TryPlanAndInstallSimpleNavRoute()
+        {
+            if (!SimpleNavPlanner.IsReady)
+            {
+                if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: SimpleNavPlanner not ready, skipping route install");
+                return;
+            }
+            if (!TryGetTrackedInteractable(out InteractableObj target) || target == null || target.gameObject == null)
+            {
+                if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: no tracked interactable for route planning");
+                return;
+            }
+            if (BetterPlayerControl.Instance == null)
+            {
+                if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: no BetterPlayerControl for route planning");
+                return;
+            }
+
+            Vector3 startPos = BetterPlayerControl.Instance.transform.position;
+            Vector3 targetPos = target.transform.position;
+            int goId = target.gameObject.GetInstanceID();
+            string goName = target.gameObject.name;
+            float radius = target.InteractionRadius;
+
+            SimpleNavRoute route = SimpleNavPlanner.Plan(startPos, targetPos, radius, goName, goId);
+            if (route == null)
+            {
+                if (Main.Log != null) Main.Log.LogInfo("ToggleAutoWalk: planner returned no route for target=" + goName);
+                return;
+            }
+            SimpleNavBridge.BeginRoute(route);
+        }
+
         private void RecordTrackerTarget(
             Vector3 targetPosition,
             NavigationTargetKind targetKind,
