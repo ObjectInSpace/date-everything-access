@@ -203,9 +203,6 @@ namespace DateEverythingAccess
         private const float AutoWalkProgressDistance = 0.35f;
         private const float AutoWalkBlockedTimeoutSeconds = 2f;
         private const float AutoWalkInteractionRetrySeconds = 0.75f;
-        private const int AutoWalkLoopSampleWindowSize = 24;
-        private const float AutoWalkLoopSampleWindowSeconds = 5f;
-        private const float AutoWalkLoopMovementAllowance = 0.6f;
         private const float AutoWalkMovementProbeMinimumCommand = 0.2f;
         private const float AutoWalkMovementProbeCancelledVelocity = 0.1f;
         private const float AutoWalkMovementProbeCancelledDisplacement = 0.08f;
@@ -424,7 +421,6 @@ namespace DateEverythingAccess
         private string _lastTrackerTargetKind;
         private string _lastTrackerTargetStepKey;
         private Vector3 _lastAutoWalkPosition;
-        private Vector3 _autoWalkLoopWindowStartPosition;
         private Vector3 _doorPostInteractionFallbackFailureStartPosition;
         private Vector3 _doorPostInteractionLoopStartPosition;
         private Vector3 _lastTrackerTargetPosition;
@@ -436,16 +432,12 @@ namespace DateEverythingAccess
         private Vector3 _lastNavigationInputLook;
         private Vector3 _lastNavigationInputTarget;
         private Vector3 _lastNavigationInputPosition;
-        private readonly string[] _autoWalkLoopSignatureWindow = new string[AutoWalkLoopSampleWindowSize];
         private List<NavigationGraph.PathStep> _navigationPath;
         private List<RoomObjectTarget> _roomObjectTargets;
         private int _autoWalkRecoveryAttempts;
-        private int _autoWalkLoopSignatureCount;
-        private int _autoWalkLoopSignatureIndex;
         private int _doorPostInteractionFallbackFailureCount;
         private int _doorPostInteractionLoopDetectionCount;
         private int _openPassageOverrideWaypointIndex;
-        private float _autoWalkLoopWindowStartedAt;
         private float _doorPostInteractionFallbackFailureStartedAt;
         private float _lastNavigationInputAppliedAt;
         private bool _hasLastTrackerTarget;
@@ -1363,7 +1355,6 @@ namespace DateEverythingAccess
             _lastNavigationAutoWalkDebugSnapshot = null;
             _lastNavigationTransitionDebugSnapshot = null;
             _lastNavigationBlockedDetail = null;
-            ResetAutoWalkLoopDetection();
             ResetDoorPostInteractionFallbackExhaustion();
             ObjectTracker.StopTracking();
             ApplyNavigationInput(Vector3.zero, Vector3.zero);
@@ -2285,36 +2276,8 @@ namespace DateEverythingAccess
                 ? BetterPlayerControl.Instance.transform.position
                 : Vector3.zero;
             _lastAutoWalkProgressTime = Time.unscaledTime;
-            ResetAutoWalkLoopDetection();
             ResetDoorPostInteractionFallbackExhaustion();
             ClearNavigationBlockedDetail();
-        }
-
-        private void RecordAutoWalkLoopSample(string signature, Vector3 playerPosition, float now)
-        {
-            if (_autoWalkLoopSignatureCount == 0)
-            {
-                _autoWalkLoopWindowStartedAt = now;
-                _autoWalkLoopWindowStartPosition = playerPosition;
-            }
-
-            _autoWalkLoopSignatureWindow[_autoWalkLoopSignatureIndex] = signature;
-            _autoWalkLoopSignatureIndex = (_autoWalkLoopSignatureIndex + 1) % AutoWalkLoopSampleWindowSize;
-            if (_autoWalkLoopSignatureCount < AutoWalkLoopSampleWindowSize)
-                _autoWalkLoopSignatureCount++;
-            else
-                _autoWalkLoopWindowStartedAt = now - AutoWalkLoopSampleWindowSeconds;
-        }
-
-        private void ResetAutoWalkLoopDetection()
-        {
-            Array.Clear(_autoWalkLoopSignatureWindow, 0, _autoWalkLoopSignatureWindow.Length);
-            _autoWalkLoopSignatureCount = 0;
-            _autoWalkLoopSignatureIndex = 0;
-            _autoWalkLoopWindowStartedAt = 0f;
-            _autoWalkLoopWindowStartPosition = BetterPlayerControl.Instance != null
-                ? BetterPlayerControl.Instance.transform.position
-                : Vector3.zero;
         }
 
         private static string BuildNavigationStepKey(NavigationGraph.PathStep step)
