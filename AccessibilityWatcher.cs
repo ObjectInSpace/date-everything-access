@@ -92,76 +92,6 @@ namespace DateEverythingAccess
             AheadLeft
         }
 
-        private sealed class OpenPassageTransitionOverride
-        {
-            public string[] AcceptedSourceZones;
-            public string[] AcceptedDestinationZones;
-            public float DestinationApproachBias;
-            public Vector3[] IntermediateWaypoints;
-            public float StepTimeoutSeconds;
-            public bool UseExplicitCrossingSegments;
-        }
-
-        private sealed class GuidedNavigationPoint
-        {
-            public Vector3 Position;
-            public float Progress;
-            public int Sequence;
-        }
-
-        [DataContract]
-        private sealed class OpenPassageTransitionOverrideDocument
-        {
-            [DataMember(Name = "Entries")]
-            public OpenPassageTransitionOverrideEntry[] Entries = null;
-        }
-
-        [DataContract]
-        private sealed class OpenPassageTransitionOverrideEntry
-        {
-            [DataMember(Name = "FromZone")]
-            public string FromZone = null;
-
-            [DataMember(Name = "ToZone")]
-            public string ToZone = null;
-
-            [DataMember(Name = "AcceptedSourceZones")]
-            public string[] AcceptedSourceZones = null;
-
-            [DataMember(Name = "AcceptedDestinationZones")]
-            public string[] AcceptedDestinationZones = null;
-
-            [DataMember(Name = "DestinationApproachBias")]
-            public float DestinationApproachBias = 0f;
-
-            [DataMember(Name = "IntermediateWaypoints")]
-            public SerializableVector3[] IntermediateWaypoints = null;
-
-            [DataMember(Name = "StepTimeoutSeconds")]
-            public float StepTimeoutSeconds = 0f;
-
-            [DataMember(Name = "UseExplicitCrossingSegments")]
-            public bool UseExplicitCrossingSegments = false;
-        }
-
-        [DataContract]
-        private sealed class SerializableVector3
-        {
-            [DataMember(Name = "x")]
-            public float X = 0f;
-
-            [DataMember(Name = "y")]
-            public float Y = 0f;
-
-            [DataMember(Name = "z")]
-            public float Z = 0f;
-
-            public Vector3 ToVector3()
-            {
-                return new Vector3(X, Y, Z);
-            }
-        }
-
         private enum TutorialObjectiveKind
         {
             None,
@@ -175,13 +105,6 @@ namespace DateEverythingAccess
             Skylar,
             AnyUnmetDatable,
             AnyUnrealizedDatable
-        }
-
-        private sealed class RoomObjectTarget
-        {
-            public InteractableObj Interactable;
-            public string Label;
-            public string ZoneName;
         }
 
         private const float PopupSelectionSuppressionSeconds = 0.75f;
@@ -258,17 +181,6 @@ namespace DateEverythingAccess
         private const int VkEscape = 0x1B;
 
         private static readonly Regex RichTextRegex = new Regex("<[^>]+>", RegexOptions.Compiled);
-        private static readonly Dictionary<string, OpenPassageTransitionOverride> OpenPassageTransitionOverrides =
-            new Dictionary<string, OpenPassageTransitionOverride>(StringComparer.OrdinalIgnoreCase);
-        private static bool _openPassageTransitionOverridesLoaded;
-        private static string _openPassageTransitionOverrideLoadStatus = "uninitialized";
-        private static string _openPassageTransitionOverrideLoadDetail = "Overrides not checked yet.";
-        private static int _openPassageTransitionOverrideEntryCount;
-        private static bool _openPassageTransitionOverrideNormalizedScalarArrays;
-        private static string _openPassageTransitionOverridePath;
-        private static string _openPassageTransitionOverrideFileSha256;
-        private static string _openPassageTransitionOverrideFileLastWriteUtc;
-
         private static FieldInfo _talkingUiDialogBoxField;
         private static FieldInfo _dialogBoxNameTextField;
         private static FieldInfo _dialogBoxDialogTextField;
@@ -323,11 +235,6 @@ namespace DateEverythingAccess
         private static bool _choiceRightWasDown;
         private static bool _choiceReturnWasDown;
         private static bool _choiceSpaceWasDown;
-        private static bool _roomPickerUpWasDown;
-        private static bool _roomPickerDownWasDown;
-        private static bool _roomPickerReturnWasDown;
-        private static bool _roomPickerSpaceWasDown;
-        private static bool _roomPickerEscapeWasDown;
         private static int _virtualChatChoiceIndex = -1;
         private static string _virtualChatChoiceContextKey;
         private static AccessibilityWatcher _instance;
@@ -369,7 +276,6 @@ namespace DateEverythingAccess
         private int _lastLoveCount = -1;
         private int _lastHateCount = -1;
         private int _lastRealizedCount = -1;
-        private int _navigationSelectionIndex = -1;
         private float _nextPollTime;
         private float _suppressDateADexSelectionUntil;
         private float _suppressPopupSelectionUntil;
@@ -377,41 +283,19 @@ namespace DateEverythingAccess
         private float _suppressSpecsSelectionUntil;
         private float _suppressCreditsSelectionUntil;
         private float _suppressPendingSpecsTutorialUntil;
-        private float _lastNavigationInteractionAttemptTime;
         private float _lastAutoWalkProgressTime;
-        private float _autoWalkTransitionUntil;
-        private float _lastTransitionFacingAlignmentAt;
         private SpecsAnnouncementMode _lastSpecsAnnouncementMode;
-        private InputModeHandle _roomObjectPickerInputHandle;
         private InteractableObj _trackedInteractable;
         private string _trackedInteractableId;
         private string _trackedInteractableLabel;
         private string _trackedInteractableZone;
         private string _trackedInteractableApproachId;
         private string _trackedInteractableApproachZone;
-        private string _lastRoomObjectListZone;
         private string _navigationTargetZone;
         private string _navigationTargetLabel;
-        private string _lastNavigationNextZone;
-        private string _lastNavigationAnnouncementLabel;
-        private string _openPassageTraversalStepKey;
-        private string _rejectedOpenPassageLocalGoalStepKey;
-        private string _rejectedOpenPassageLocalGoalContext;
-        private string _lastTrackerTargetKind;
-        private string _lastTrackerTargetStepKey;
         private Vector3 _lastAutoWalkPosition;
-        private Vector3 _lastTrackerTargetPosition;
         private Vector3 _trackedInteractableApproachReferencePosition;
         private Vector3 _trackedInteractableApproachTarget;
-        private Vector3 _rejectedOpenPassageLocalGoal;
-        private List<RoomObjectTarget> _roomObjectTargets;
-        private int _autoWalkRecoveryAttempts;
-        private int _openPassageOverrideWaypointIndex;
-        private bool _hasLastTrackerTarget;
-        private string _doorTraversalStepKey;
-        private bool _doorTraversalInteractionTriggered;
-        private Vector3 _doorTraversalPushThroughPosition;
-        private bool _doorTraversalPostThresholdCommitted;
         private bool _isNavigationActive;
         private bool _isAutoWalking;
 
@@ -898,13 +782,7 @@ namespace DateEverythingAccess
                 " autoWalk=" + _isAutoWalking);
             _isNavigationActive = false;
             _isAutoWalking = false;
-            _lastNavigationNextZone = null;
-            _lastNavigationAnnouncementLabel = null;
             _lastAutoWalkProgressTime = 0f;
-            _lastNavigationInteractionAttemptTime = 0f;
-            _autoWalkTransitionUntil = 0f;
-            _lastTransitionFacingAlignmentAt = 0f;
-            _autoWalkRecoveryAttempts = 0;
             _lastNavigationTargetDebugSnapshot = null;
             _lastNavigationAutoWalkDebugSnapshot = null;
             _lastNavigationTransitionDebugSnapshot = null;
@@ -2356,161 +2234,6 @@ namespace DateEverythingAccess
             Vector3 candidate = bounds.center + new Vector3(offsetX, 0f, offsetZ);
             candidate.y = targetY;
             return candidate;
-        }
-
-        private bool TryGetRoomObjectTargets(string zoneName, out List<RoomObjectTarget> targets)
-        {
-            targets = new List<RoomObjectTarget>();
-            if (string.IsNullOrEmpty(zoneName))
-                return false;
-
-            if (TryCollectRoomObjectTargets(zoneName, exactZoneOnly: true, targets))
-                return true;
-
-            string zoneFamilyKey = GetZoneFamilyKey(zoneName);
-            if (string.IsNullOrEmpty(zoneFamilyKey))
-                return false;
-
-            return TryCollectRoomObjectTargets(zoneName, exactZoneOnly: false, targets);
-        }
-
-        private bool TryCollectRoomObjectTargets(string zoneName, bool exactZoneOnly, List<RoomObjectTarget> targets)
-        {
-            if (targets == null || string.IsNullOrEmpty(zoneName))
-                return false;
-
-            targets.Clear();
-            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
-            Transform playerTransform = BetterPlayerControl.Instance != null ? BetterPlayerControl.Instance.transform : null;
-            string currentZoneFamilyKey = exactZoneOnly ? null : GetZoneFamilyKey(zoneName);
-            for (int i = 0; i < interactables.Length; i++)
-            {
-                InteractableObj candidate = interactables[i];
-                if (candidate == null || !candidate.gameObject.activeInHierarchy)
-                    continue;
-
-                if (!TryGetZoneNameForInteractable(candidate, out string candidateZone))
-                    continue;
-
-                bool zoneMatches = string.Equals(candidateZone, zoneName, StringComparison.OrdinalIgnoreCase);
-                if (!zoneMatches && !exactZoneOnly)
-                {
-                    zoneMatches = string.Equals(GetZoneFamilyKey(candidateZone), currentZoneFamilyKey, StringComparison.OrdinalIgnoreCase);
-                }
-
-                if (!zoneMatches)
-                {
-                    continue;
-                }
-
-                string label = GetObjectFacingDisplayName(candidate);
-                if (!IsUsableRoomObjectLabel(label))
-                    continue;
-
-                if (TryFindEquivalentRoomObjectTarget(targets, candidate, label, out RoomObjectTarget existingTarget))
-                {
-                    if (playerTransform == null)
-                        continue;
-
-                    float existingDistance = Vector3.Distance(playerTransform.position, existingTarget.Interactable.transform.position);
-                    float candidateDistance = Vector3.Distance(playerTransform.position, candidate.transform.position);
-                    if (candidateDistance < existingDistance)
-                    {
-                        existingTarget.Interactable = candidate;
-                        existingTarget.Label = label;
-                        existingTarget.ZoneName = candidateZone;
-                    }
-
-                    continue;
-                }
-
-                targets.Add(new RoomObjectTarget
-                {
-                    Interactable = candidate,
-                    Label = label,
-                    ZoneName = candidateZone
-                });
-            }
-
-            if (targets.Count == 0)
-                return false;
-
-            if (playerTransform != null)
-            {
-                targets.Sort((left, right) =>
-                {
-                    float leftDistance = Vector3.Distance(playerTransform.position, left.Interactable.transform.position);
-                    float rightDistance = Vector3.Distance(playerTransform.position, right.Interactable.transform.position);
-                    int distanceComparison = leftDistance.CompareTo(rightDistance);
-                    return distanceComparison != 0
-                        ? distanceComparison
-                        : string.Compare(left.Label, right.Label, StringComparison.CurrentCultureIgnoreCase);
-                });
-            }
-            else
-            {
-                targets.Sort((left, right) => string.Compare(left.Label, right.Label, StringComparison.CurrentCultureIgnoreCase));
-            }
-
-            return true;
-        }
-
-        private static bool TryFindEquivalentRoomObjectTarget(List<RoomObjectTarget> targets, InteractableObj candidate, string label, out RoomObjectTarget equivalentTarget)
-        {
-            equivalentTarget = null;
-            if (targets == null || candidate == null)
-                return false;
-
-            string candidateIdentityKey = GetRoomObjectIdentityKey(candidate);
-            for (int i = 0; i < targets.Count; i++)
-            {
-                RoomObjectTarget existingTarget = targets[i];
-                if (existingTarget == null || existingTarget.Interactable == null)
-                    continue;
-
-                if (!string.Equals(existingTarget.Label, label, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                string existingIdentityKey = GetRoomObjectIdentityKey(existingTarget.Interactable);
-                if (!string.Equals(existingIdentityKey, candidateIdentityKey, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                equivalentTarget = existingTarget;
-                return true;
-            }
-
-            return false;
-        }
-
-        private static string GetRoomObjectIdentityKey(InteractableObj interactable)
-        {
-            if (interactable == null)
-                return null;
-
-            string internalName = NormalizeText(interactable.InternalName());
-            if (!string.IsNullOrEmpty(internalName))
-                return internalName;
-
-            string sceneName = NormalizeIdentifierName(interactable.name);
-            if (!string.IsNullOrEmpty(sceneName))
-                return sceneName;
-
-            return NormalizeText(interactable.Id);
-        }
-
-        private static bool IsUsableRoomObjectLabel(string label)
-        {
-            label = NormalizeText(label);
-            if (string.IsNullOrEmpty(label))
-                return false;
-
-            if (label.StartsWith("Default hover text for", StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            if (string.Equals(label, "Main Camera", StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            return true;
         }
 
         private static FacingRelativeDirection GetFacingRelativeDirection(Vector3 targetPosition)
