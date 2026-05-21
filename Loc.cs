@@ -254,30 +254,6 @@ namespace DateEverythingAccess
             Add("navigation_target_awakened", "Geweckt", "Awakened");
             Add("navigation_autowalk_started", "Auto-Lauf begonnen.", "Auto-walk started.");
             Add("navigation_autowalk_stopped", "Auto-Lauf gestoppt.", "Auto-walk stopped.");
-            Add("transition_sweep_started",
-                "Uebergangstestlauf gestartet. {0} Uebergaenge in der Warteschlange.",
-                "Transition sweep started. {0} transitions queued.");
-            Add("transition_sweep_complete",
-                "Uebergangstestlauf abgeschlossen. {0} Uebergaenge. {1} bestanden. {2} fehlgeschlagen.",
-                "Transition sweep complete. {0} transitions. {1} passed. {2} failed.");
-            Add("transition_sweep_stopped",
-                "Uebergangstestlauf gestoppt.",
-                "Transition sweep stopped.");
-            Add("transition_sweep_unavailable",
-                "Uebergangstestlauf ist hier gerade nicht verfuegbar.",
-                "Transition sweep is not available right now.");
-            Add("door_transition_sweep_started",
-                "Tuer-Uebergangstestlauf gestartet. {0} Uebergaenge in der Warteschlange.",
-                "Door transition sweep started. {0} transitions queued.");
-            Add("door_transition_sweep_complete",
-                "Tuer-Uebergangstestlauf abgeschlossen. {0} Uebergaenge. {1} bestanden. {2} fehlgeschlagen.",
-                "Door transition sweep complete. {0} transitions. {1} passed. {2} failed.");
-            Add("door_transition_sweep_stopped",
-                "Tuer-Uebergangstestlauf gestoppt.",
-                "Door transition sweep stopped.");
-            Add("door_transition_sweep_unavailable",
-                "Tuer-Uebergangstestlauf ist hier gerade nicht verfuegbar.",
-                "Door transition sweep is not available right now.");
         }
     }
 }
