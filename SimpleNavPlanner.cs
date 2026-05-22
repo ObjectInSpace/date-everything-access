@@ -18,8 +18,20 @@ namespace DateEverythingAccess
         private const string BakeFileName = "navigable_region.bake.json";
         private const char NavigableChar = 'N';
         private const float CornerWaypointDeg = 30f;
-        private const float DoorTagRadiusM = 0.8f;
-        private const float MaxInteractionRadiusM = 2.0f;
+        // Door is tagged on a segment if its XZ is within this radius of the segment.
+        // 0.8m was too tight: a 5-waypoint route to Doors_Bedroom had the door 1.97m
+        // from the final segment because the planner approaches the door's interaction
+        // area, not its hinge. See [[project-navigation-door-tag-radius]].
+        private const float DoorTagRadiusM = 2.5f;
+        // Goal-disc radius bounds. The game's InteractableObj.InteractionRadius (default 7.5m)
+        // is the range at which the player can date OR interact with an object — the check in
+        // BetterPlayerControl is `Distance(camera, ClosestPointOnBounds) < InteractionRadius`
+        // plus a forward raycast. Since the planner can't distinguish whether the user will
+        // interact or just date, it uses the full radius so unreachable-by-2m targets still
+        // succeed. A* picks the cheapest goal cell, which is typically the closest reachable
+        // one, so stopping farther only happens when closer cells are blocked.
+        // Floor sets a minimum so degenerate radii (0) still produce at least a few cells.
+        private const float MaxInteractionRadiusM = 7.5f;
         private const float MinInteractionRadiusM = 0.5f;
         private const float NearestNavigableSearchM = 4.0f;
         private const float FloorMatchToleranceM = 2.0f;
@@ -94,7 +106,7 @@ namespace DateEverythingAccess
             }
 
             List<NodeKey> waypoints = SmoothPath(path);
-            List<List<string>> segmentDoorNames = TagDoors(waypoints);
+            List<List<string>> segmentDoorNames = TagDoors(waypoints, targetName, targetPos);
 
             SimpleNavRoute route = new SimpleNavRoute();
             route.TargetName = targetName;
@@ -506,7 +518,13 @@ namespace DateEverythingAccess
 
         // Cached live-door catalogue, rebuilt on each Plan() call since Door instances can be
         // destroyed/spawned across scene changes. Cheap: ~25 Doors in the house scene.
-        private static List<List<string>> TagDoors(List<NodeKey> waypoints)
+        //
+        // When the navigation target is itself a Door, the destination's Door is force-tagged
+        // on the final segment regardless of distance. The planner stops inside the target's
+        // interaction radius (clamped to 0.5–7.5m), which is typically farther than the static
+        // DoorTagRadiusM, so distance-based tagging would otherwise miss it.
+        // See [[project-navigation-door-tag-radius]].
+        private static List<List<string>> TagDoors(List<NodeKey> waypoints, string targetName, Vector3 targetPos)
         {
             List<List<string>> segs = new List<List<string>>(Mathf.Max(0, waypoints.Count - 1));
             Door[] doors = UnityEngine.Object.FindObjectsOfType<Door>();
@@ -533,6 +551,24 @@ namespace DateEverythingAccess
                     }
                 }
                 segs.Add(tagged);
+            }
+
+            // Force-tag the destination door on the final segment when the target is a Door.
+            // Match by GameObject name against the target name. If found and not already
+            // tagged on the final segment, append it.
+            if (segs.Count > 0 && !string.IsNullOrEmpty(targetName))
+            {
+                for (int d = 0; d < doors.Length; d++)
+                {
+                    Door door = doors[d];
+                    if (door == null) continue;
+                    string dn = door.gameObject.name;
+                    if (dn != targetName) continue;
+                    List<string> last = segs[segs.Count - 1];
+                    if (!last.Contains(dn))
+                        last.Add(dn);
+                    break;
+                }
             }
             return segs;
         }
