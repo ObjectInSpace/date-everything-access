@@ -1556,5 +1556,75 @@
         "........................................................................................................................................................................................................................................................................................................................................................................................................."
       ]
     }
-  ]
+  ],
+  "inter_floor_edges": {
+    "stair_ramp": [
+      {
+        "kind": "stairs",
+        "source_path": "===SCENE===/House/Hallway/Stairs",
+        "source_slope_kind": "stairs",
+        "source_area_sqm": 131.42,
+        "source_bottom_y": -1.119,
+        "source_top_y": 15.615,
+        "footprint_xz": [
+          -8.104,
+          -5.825,
+          13.51,
+          0.255
+        ],
+        "ground": {
+          "cell": [
+            180,
+            327
+          ],
+          "world_xz": [
+            2.787,
+            -2.739
+          ],
+          "floor_y": -0.5
+        },
+        "upper": {
+          "cell": [
+            180,
+            161
+          ],
+          "world_xz": [
+            2.783,
+            -2.702
+          ],
+          "floor_y": 12.5
+        },
+        "cost_m": 13.0
+      }
+    ],
+    "stair_ramp_rejected": [],
+    "teleporter": [
+      {
+        "kind": "teleporter",
+        "source_name": "CrawlspaceLadder",
+        "down": {
+          "world_xyz": [
+            -1.617,
+            -9.59,
+            25.008
+          ],
+          "note": "crawlspace floor not in walkable bake; endpoint deferred"
+        },
+        "up": {
+          "world_xyz": [
+            2.397,
+            -0.396,
+            24.891
+          ]
+        },
+        "cost_m": 0.0,
+        "note": "executor triggers teleporter interaction; distance not walked"
+      }
+    ],
+    "params": {
+      "max_stair_area_sqm": 200.0,
+      "min_stair_area_sqm": 1.0,
+      "floor_touch_tolerance_m": 1.5
+    }
+  }
 }
