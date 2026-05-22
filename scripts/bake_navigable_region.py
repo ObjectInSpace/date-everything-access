@@ -3,7 +3,7 @@
 For each named floor band (ground, upper):
   1. Pick representative floor Y from the walkable export (area-weighted flat/step-up peaks).
   2. Rasterize at 0.2m cells across XZ extent of the floor's walkable footprint.
-  3. Cell is walkable iff a walkable surface within the floor band covers it.
+  3. Cell is walkable iff a walkable surface (VExt <= 1m slab) within the floor band covers it.
   4. Cell is blocked iff a blocker AABB intersects [floorY - STEP_UP_TOL, floorY + capsuleH] at that cell.
   5. Dilate blocked region by capsule radius (0.4m / 2 cells at 0.2m).
   6. Navigable = walkable AND NOT dilated-blocked.
@@ -21,6 +21,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 WALK = REPO / "artifacts/navigation/thirdpersongreybox-walkable.json"
 BLOCK = REPO / "artifacts/navigation/thirdpersongreybox-blockers.json"
+INTER = REPO / "artifacts/navigation/thirdpersongreybox-interactables.json"
 OUT_JSON = REPO / "artifacts/navigation/navigable_region.bake.json"
 OUT_PNG_DIR = REPO / "artifacts/navigation"
 
@@ -29,6 +30,19 @@ CAPSULE_H = 2.50
 STEP_UP_TOL = 0.25
 CELL = 0.20  # rasterization resolution
 DILATE_CELLS = int(math.ceil(CAPSULE_R / CELL))  # 2 cells
+# Surface vertical extent above which we treat the surface as a column/prop
+# (not a floor slab). Lets SM_Ceiling_* slabs through while keeping lightbulbs,
+# daemons, and plant pots out. Tall props that pass blocker selection re-block
+# themselves; this gate only filters the walkable side.
+MAX_FLOOR_SLAB_EXTENT = 1.0
+# Door-position carve radius (meters). Several wall meshes have asymmetric
+# doorway cuts -- the opening is only modeled on one face of the wall, so
+# dilation re-seals the opening. Doors are first-class passages in the planner
+# model; carve a disc at each Doors_* interactable position to guarantee the
+# bake reflects that. 0.4m matches the capsule radius -- minimum needed to let
+# the capsule through. Smallest authored doorway clearance is ~1.14m, so a
+# 0.8m-diameter disc fits even the narrowest door.
+DOOR_CARVE_RADIUS = 0.40
 
 # Floor bands: (label, target_Y, Y_tolerance_for_walkable_inclusion)
 # Tolerance is ± around target_Y for which walkable TopY values count as "on this floor".
@@ -94,14 +108,14 @@ def _rasterize_segment(blocked_bm, ax, az, bx, bz, minx, minz, nx, nz, cell):
             t_next_z += dt_z
 
 
-def bake_floor(floor, walkables, blockers, mesh_colliders):
+def bake_floor(floor, walkables, blockers, mesh_colliders, doors):
     fy = floor["y"]
     ytol = floor["y_tol"]
     floor_walks = [
         w for w in walkables
         if in_scene(w["Footprint"]["CenterX"], w["Footprint"]["CenterZ"])
         and abs(w["TopY"] - fy) <= ytol
-        and w["SlopeKind"] in ("flat", "step-up")
+        and w["VerticalExtent"] <= MAX_FLOOR_SLAB_EXTENT
     ]
     if not floor_walks:
         return {"error": "no walkable surfaces", "floor": floor}
@@ -211,6 +225,27 @@ def bake_floor(floor, walkables, blockers, mesh_colliders):
     else:
         dilated = blocked_bm
 
+    # Door-position carve: undo dilation in a disc around each door on this
+    # floor. Several wall meshes cut doorways on only one face; dilation
+    # re-seals them. Doors are explicit passages in the planner -- the bake
+    # should reflect their authored presence.
+    door_carves = 0
+    cr = int(math.ceil(DOOR_CARVE_RADIUS / CELL))
+    carve_offsets = [(dx, dz) for dx in range(-cr, cr+1) for dz in range(-cr, cr+1)
+                     if dx*dx + dz*dz <= cr*cr]
+    for d in doors:
+        dy = d["y"]
+        if abs(dy - fy) > 2.0: continue  # different floor
+        dx_w, dz_w = d["x"], d["z"]
+        ix = int((dx_w - minx) / CELL)
+        iz = int((dz_w - minz) / CELL)
+        for dx, dz in carve_offsets:
+            jx = ix + dx; jz = iz + dz
+            if jx < 0 or jx >= nx or jz < 0 or jz >= nz: continue
+            if dilated[jx][jz]:
+                dilated[jx][jz] = False
+                door_carves += 1
+
     # Navigable = walkable AND NOT dilated
     navigable_bm = [[walkable_bm[ix][iz] and not dilated[ix][iz]
                      for iz in range(nz)] for ix in range(nx)]
@@ -234,6 +269,7 @@ def bake_floor(floor, walkables, blockers, mesh_colliders):
         "blocker_hits": blocker_hits,
         "wall_meshes_rasterized": wall_meshes_used,
         "wall_segments_rasterized": wall_segments_rasterized,
+        "door_carves": door_carves,
         "cells": {
             "walkable": walk_count,
             "blocked_raw": block_count,
@@ -296,6 +332,19 @@ def main():
     blockers = blok["NavigationBlockers"]
     mesh_colliders = blok.get("MeshColliders", [])
 
+    # Doors from interactables. Each entry: {x, y, z, name}. Used to carve
+    # navigability discs that survive wall-mesh asymmetric-cut artifacts.
+    doors = []
+    if INTER.exists():
+        inter = json.load(open(INTER, encoding="utf-8"))
+        recs = inter.get("Interactables") or inter.get("Records") or []
+        for it in recs:
+            name = it.get("GameObjectName") or it.get("Name") or ""
+            if not name.startswith("Doors_"): continue
+            pos = it.get("WorldPosition") or it.get("Position") or {}
+            doors.append({"name": name, "x": pos.get("x", 0.0),
+                          "y": pos.get("y", 0.0), "z": pos.get("z", 0.0)})
+
     report = {
         "params": {
             "capsule_radius_m": CAPSULE_R,
@@ -308,7 +357,7 @@ def main():
     }
     for floor in FLOORS:
         print(f"Baking floor: {floor['label']} (Y={floor['y']})...")
-        result = bake_floor(floor, walkables, blockers, mesh_colliders)
+        result = bake_floor(floor, walkables, blockers, mesh_colliders, doors)
         report["floors"].append(result)
         if "error" in result:
             print(f"  ERROR: {result['error']}")
@@ -319,7 +368,8 @@ def main():
         print(f"  walkable={c['walkable']}  blocked_raw={c['blocked_raw']}  "
               f"blocked_dilated={c['blocked_dilated']}  navigable={c['navigable']}")
         print(f"  wall_meshes_rasterized={result['wall_meshes_rasterized']}  "
-              f"wall_segments_rasterized={result['wall_segments_rasterized']}")
+              f"wall_segments_rasterized={result['wall_segments_rasterized']}  "
+              f"door_carves={result['door_carves']}")
         png_path = OUT_PNG_DIR / f"navigable_region.{floor['label']}.ppm"
         write_png(result, png_path)
         print(f"  debug image: {png_path}")

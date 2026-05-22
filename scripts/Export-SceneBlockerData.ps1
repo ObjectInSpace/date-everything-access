@@ -22,11 +22,14 @@ param(
     [double]$MinimumFootprintRadius = 0.15,
 
     # Mesh slice planes (world Y). Each plane intersects the mesh and contributes
-    # to its 2D footprint. Defaults cover the player capsule band on both floors:
-    # ground at ~Y=-0.5 -> slice at 0.1, 1.0; upper at ~Y=12.5 -> slice at 13.1, 14.0.
-    # See [[project-navigation-step-o2-outcome]] for the floor-band rationale.
+    # to its 2D footprint. One plane per floor at floor_Y + 1.0m, which sits
+    # squarely in the middle of the player capsule (r=0.4, h=2.5; center at
+    # floor + 1.25m). Lower slice planes (e.g. floor + 0.6m) catch doorway
+    # threshold geometry that seals the doorway in the bake even though the
+    # opening is clear at capsule-middle height; see the bedroom-door analysis
+    # in the slope-filter-retirement follow-up.
     [Parameter()]
-    [double[]]$MeshSlicePlanes = @(0.1, 1.0, 13.1, 14.0),
+    [double[]]$MeshSlicePlanes = @(0.5, 13.5),
 
     [Parameter()]
     [double]$MaxMeshFootprintAreaSqM = 25.0,
