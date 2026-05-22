@@ -52,6 +52,28 @@ param(
     [Parameter()]
     [double]$WallMaxThinDimension = 1.5,
 
+    # Thin-frame admission: catches doorframe/closet-door/perimeter-fence-shaped
+    # meshes whose AABBs span a doorway opening and would seal it. These pass
+    # under MaxMeshFootprintAreaSqM (so the wall-FAT path never sees them) but
+    # their AABBs still bridge across the opening. Signature: tall (vertical
+    # extent >= ThinFrameMinVerticalExtent), thin in one direction
+    # (min <= ThinFrameMaxThinDimension), spans the opening in the other
+    # (max >= ThinFrameMinSpanDimension), grounded enough to sit on a floor band
+    # (BottomY <= ThinFrameMaxBottomY), and has segments. When matched, the
+    # AABB is suppressed and the segments are rasterized by the bake. See
+    # [[project-navigation-bake-doorframe-gap]].
+    [Parameter()]
+    [double]$ThinFrameMinVerticalExtent = 5.0,
+
+    [Parameter()]
+    [double]$ThinFrameMaxThinDimension = 2.0,
+
+    [Parameter()]
+    [double]$ThinFrameMinSpanDimension = 2.5,
+
+    [Parameter()]
+    [double]$ThinFrameMaxBottomY = 14.0,
+
     [Parameter()]
     [int[]]$SkipMeshLayers = @(18, 31)
 )
@@ -666,13 +688,17 @@ function Get-MeshColliderRecord {
         TrianglePoints = New-Object System.Collections.Generic.List[System.Numerics.Vector3]
         IntersectedTriangleCount = 0
     }
+    # Triangle/slice-plane crossings come in pairs (the edge a triangle traces on a plane).
+    # Capture each pair as a segment so wall-shaped meshes can be rasterized as line traces
+    # instead of being collapsed to their useless convex-hull footprint.
+    $segments = New-Object System.Collections.Generic.List[object]
 
     $tris = $MeshData.Triangles
     $triCount = [int]($tris.Length / 3)
     $slicePlanes = @($SlicePlanes.Where({ $_ -ge $minY -and $_ -le $maxY }))
     if ($slicePlanes.Count -eq 0 -and $minY -ge $MinTopY -and $minY -le $MaxBottomY) {
         # Whole mesh sits inside the band but neither slice plane clips it (very thin object).
-        # Use vertex projection as fallback.
+        # Use vertex projection as fallback. No segments emitted in this branch.
         foreach ($v in $worldVerts) {
             if ($v.Y -ge $MinTopY -and $v.Y -le $MaxBottomY) {
                 $pointBag.Points.Add([System.Numerics.Vector2]::new([float]$v.X, [float]$v.Z))
@@ -686,7 +712,19 @@ function Get-MeshColliderRecord {
                 $c = $worldVerts[$tris[$t * 3 + 2]]
                 $before = $pointBag.Points.Count
                 Get-TrianglePlaneIntersections -A $a -B $b -C $c -PlaneY $plane -Out $pointBag.Points
-                if ($pointBag.Points.Count -gt $before) { $pointBag.IntersectedTriangleCount++ }
+                $added = $pointBag.Points.Count - $before
+                if ($added -gt 0) { $pointBag.IntersectedTriangleCount++ }
+                if ($added -eq 2) {
+                    $p0 = $pointBag.Points[$before]
+                    $p1 = $pointBag.Points[$before + 1]
+                    $segments.Add([ordered]@{
+                        AX = [Math]::Round([double]$p0.X, 4)
+                        AZ = [Math]::Round([double]$p0.Y, 4)
+                        BX = [Math]::Round([double]$p1.X, 4)
+                        BZ = [Math]::Round([double]$p1.Y, 4)
+                        PlaneY = [Math]::Round([double]$plane, 4)
+                    })
+                }
             }
         }
     }
@@ -745,19 +783,25 @@ function Get-MeshColliderRecord {
         }
     }
 
+    $footprint = [ordered]@{
+        Kind = "ConvexHull2D"
+        Center = Convert-Vector3ToObject $worldCenter
+        Vertices = $hullArray.ToArray()
+        AreaSqM = [Math]::Round($area, 6)
+        IntersectedTriangleCount = $pointBag.IntersectedTriangleCount
+        SegmentCount = $segments.Count
+    }
+    if ($segments.Count -gt 0) {
+        $footprint.Segments = $segments.ToArray()
+    }
+
     $record = New-ColliderRecord -Component $componentForRecord `
         -ColliderType "MeshCollider" `
         -GameObject $GameObject `
         -Path $Path `
         -WorldTransform $WorldTransform `
         -Points $points3D `
-        -Footprint ([ordered]@{
-            Kind = "ConvexHull2D"
-            Center = Convert-Vector3ToObject $worldCenter
-            Vertices = $hullArray.ToArray()
-            AreaSqM = [Math]::Round($area, 6)
-            IntersectedTriangleCount = $pointBag.IntersectedTriangleCount
-        })
+        -Footprint $footprint
 
     return $record
 }
@@ -1238,7 +1282,31 @@ if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($
         $meshColliderRecords.Add($record)
 
         $reason = $null
-        if ($record.TopY -lt $MinimumBlockingTopY) { $reason = "BelowBlockingHeight" }
+        $isWallLikeFatVictim = $false
+
+        # Thin-frame check (evaluated before the area cap): doorframes / closet
+        # doors / perimeter fences fall under the area cap but their AABBs
+        # still seal doorway openings. When the signature matches, suppress
+        # the AABB and flag the record for segment-trace rasterization. See
+        # [[project-navigation-bake-doorframe-gap]].
+        if ($null -ne $record.Bounds2D -and [int]$record.Footprint.SegmentCount -gt 0) {
+            $verticalExtent = [double]$record.TopY - [double]$record.BottomY
+            $thinDim = [Math]::Min([double]$record.Bounds2D.Width, [double]$record.Bounds2D.Depth)
+            $spanDim = [Math]::Max([double]$record.Bounds2D.Width, [double]$record.Bounds2D.Depth)
+            $isThinFrame = ($verticalExtent -ge $ThinFrameMinVerticalExtent) -and `
+                ($thinDim -le $ThinFrameMaxThinDimension) -and `
+                ($spanDim -ge $ThinFrameMinSpanDimension) -and `
+                ([double]$record.BottomY -le $ThinFrameMaxBottomY)
+            if ($isThinFrame) {
+                $reason = "ThinFrameAABBSuppressed"
+                $isWallLikeFatVictim = $true
+            }
+        }
+
+        if ($null -ne $reason) {
+            # Fall through to the shared victim emission path below.
+        }
+        elseif ($record.TopY -lt $MinimumBlockingTopY) { $reason = "BelowBlockingHeight" }
         elseif ($record.BottomY -gt $MaximumBlockingBottomY) { $reason = "AbovePlayerBand" }
         elseif ($null -eq $record.Bounds2D) { $reason = "MissingFootprintBounds" }
         elseif ([double]$record.Footprint.AreaSqM -gt $MaxMeshFootprintAreaSqM) {
@@ -1248,11 +1316,37 @@ if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($
             # whole room interior; admitting them blocks routes inside the room.
             $verticalExtent = [double]$record.TopY - [double]$record.BottomY
             $thinDim = [Math]::Min([double]$record.Bounds2D.Width, [double]$record.Bounds2D.Depth)
-            $isWallLike = ($verticalExtent -ge $WallMinVerticalExtent) -and `
+            $isGroundedTallCapped = ($verticalExtent -ge $WallMinVerticalExtent) -and `
                 ([double]$record.BottomY -le $WallMaxBottomY) -and `
-                ([double]$record.TopY -le $WallMaxTopY) -and `
-                ($thinDim -le $WallMaxThinDimension)
-            if (-not $isWallLike) { $reason = "FootprintAreaExceedsMax" }
+                ([double]$record.TopY -le $WallMaxTopY)
+            $isWallLike = $isGroundedTallCapped -and ($thinDim -le $WallMaxThinDimension)
+            if (-not $isWallLike) {
+                $reason = "FootprintAreaExceedsMax"
+                # Wall-like-FAT victim: combined-room wall meshes whose slice
+                # traces should rasterize into the bake bitmap. Three gates:
+                # (1) TopY clusters at a known ceiling/roof band — ~12.5m
+                #     (ground walls) or 25-33m (upper / full-height / roof).
+                #     Filters out furniture/dateable colliders (Monitor 18.0,
+                #     Body 6.0, Sofa 3.1, Bed 17.1, HVAC 20.1).
+                # (2) Vertical extent <= 22m — filters trees (whose foliage
+                #     extends well above the ceiling, vertical extent 26m+).
+                #     Largest legitimate wall is SM_Walls_Attic at 19.4m.
+                # (3) Must have produced at least one slice-plane segment.
+                # The clusters are data-driven for this scene; if the mod is
+                # re-targeted at another Unity scene the bands need to be
+                # re-derived from that scene's ceiling Y values. See
+                # [[project-navigation-bake-blocker-scope-2026-05-21]].
+                $topY = [double]$record.TopY
+                $inGroundCeilingBand = ($topY -ge 12.0 -and $topY -le 13.5)
+                $inUpperCeilingBand  = ($topY -ge 25.0 -and $topY -le 33.0)
+                $verticalReasonable  = ($verticalExtent -le 22.0)
+                $verticalOk          = ($verticalExtent -ge $WallMinVerticalExtent)
+                if ($verticalOk -and $verticalReasonable -and `
+                    ($inGroundCeilingBand -or $inUpperCeilingBand) -and `
+                    [int]$record.Footprint.SegmentCount -gt 0) {
+                    $isWallLikeFatVictim = $true
+                }
+            }
             else {
                 $flatRadius = [Math]::Max([double]$record.Bounds2D.Width, [double]$record.Bounds2D.Depth) / 2.0
                 if ($flatRadius -lt $MinimumFootprintRadius) { $reason = "TinyFootprint" }
@@ -1264,6 +1358,8 @@ if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($
         }
 
         if ($null -ne $reason) {
+            $record.Footprint.RejectionReason = $reason
+            $record.Footprint.IsWallLikeFatVictim = $isWallLikeFatVictim
             Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason $reason
             continue
         }
@@ -1350,6 +1446,10 @@ $result = [ordered]@{
         WallMaxBottomY = [Math]::Round($WallMaxBottomY, 4)
         WallMaxTopY = [Math]::Round($WallMaxTopY, 4)
         WallMaxThinDimension = [Math]::Round($WallMaxThinDimension, 4)
+        ThinFrameMinVerticalExtent = [Math]::Round($ThinFrameMinVerticalExtent, 4)
+        ThinFrameMaxThinDimension = [Math]::Round($ThinFrameMaxThinDimension, 4)
+        ThinFrameMinSpanDimension = [Math]::Round($ThinFrameMinSpanDimension, 4)
+        ThinFrameMaxBottomY = [Math]::Round($ThinFrameMaxBottomY, 4)
         SkipMeshLayers = @($SkipMeshLayers | ForEach-Object { [int]$_ })
         TerrainCollidersUnsupported = $true
     }

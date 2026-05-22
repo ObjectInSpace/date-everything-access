@@ -45,7 +45,56 @@ def in_scene(x, z):
     return abs(x) < SCENE_MAX_ABS and abs(z) < SCENE_MAX_ABS
 
 
-def bake_floor(floor, walkables, blockers):
+def _rasterize_segment(blocked_bm, ax, az, bx, bz, minx, minz, nx, nz, cell):
+    """Mark every cell that segment (A,B) crosses. Supercover variant of
+    Bresenham — guarantees no diagonal pass-throughs that would let a
+    rasterized wall leak."""
+    # Convert to cell coordinates.
+    fx0 = (ax - minx) / cell
+    fz0 = (az - minz) / cell
+    fx1 = (bx - minx) / cell
+    fz1 = (bz - minz) / cell
+    dx = abs(fx1 - fx0)
+    dz = abs(fz1 - fz0)
+    ix = int(math.floor(fx0))
+    iz = int(math.floor(fz0))
+    n = 1
+    if dx == 0:
+        x_inc = 0
+        t_next_x = math.inf
+    elif fx1 > fx0:
+        x_inc = 1
+        n += int(math.floor(fx1)) - ix
+        t_next_x = (math.floor(fx0) + 1 - fx0) / dx
+    else:
+        x_inc = -1
+        n += ix - int(math.floor(fx1))
+        t_next_x = (fx0 - math.floor(fx0)) / dx
+    if dz == 0:
+        z_inc = 0
+        t_next_z = math.inf
+    elif fz1 > fz0:
+        z_inc = 1
+        n += int(math.floor(fz1)) - iz
+        t_next_z = (math.floor(fz0) + 1 - fz0) / dz
+    else:
+        z_inc = -1
+        n += iz - int(math.floor(fz1))
+        t_next_z = (fz0 - math.floor(fz0)) / dz
+    dt_x = (1.0 / dx) if dx > 0 else math.inf
+    dt_z = (1.0 / dz) if dz > 0 else math.inf
+    for _ in range(n):
+        if 0 <= ix < nx and 0 <= iz < nz:
+            blocked_bm[ix][iz] = True
+        if t_next_x < t_next_z:
+            ix += x_inc
+            t_next_x += dt_x
+        else:
+            iz += z_inc
+            t_next_z += dt_z
+
+
+def bake_floor(floor, walkables, blockers, mesh_colliders):
     fy = floor["y"]
     ytol = floor["y_tol"]
     floor_walks = [
@@ -110,20 +159,55 @@ def bake_floor(floor, walkables, blockers):
             for iz in range(iz0, iz1):
                 row[iz] = True
 
-    # Dilate blocked by capsule radius (Chebyshev for simplicity at this resolution)
+    # Wall-mesh segment pass: combined-room wall meshes (SM_Walls_Living etc.)
+    # are rejected from NavigationBlockers by the wall-like thinness gate (their
+    # AABBs span room interiors). Their MeshSlicePlanes triangle-clipped segments
+    # trace the actual walls — rasterize those directly. See
+    # [[project-navigation-bake-blocker-gap]] and [[project-navigation-bake-blocker-scope-2026-05-21]].
+    wall_meshes_used = 0
+    wall_segments_rasterized = 0
+    for m in mesh_colliders:
+        fp = m.get("Footprint") or {}
+        if not fp.get("IsWallLikeFatVictim"): continue
+        # Per-floor band intersection (same Y test as the AABB pass).
+        if m["TopY"] < y_lo or m["BottomY"] > y_hi: continue
+        segs = fp.get("Segments")
+        if not segs: continue
+        mesh_had_in_band_segment = False
+        for s in segs:
+            # Only rasterize segments whose source slice plane is inside the
+            # floor's Y band. This prevents ground-floor wall slice traces from
+            # leaking onto the upper floor for walls whose AABB barely
+            # straddles both bands (e.g. SM_Walls_Living TopY=12.55).
+            py = s.get("PlaneY")
+            if py is not None and (py < y_lo or py > y_hi): continue
+            ax = s["AX"]; az = s["AZ"]; bx = s["BX"]; bz = s["BZ"]
+            if not (in_scene(ax, az) or in_scene(bx, bz)): continue
+            _rasterize_segment(blocked_bm, ax, az, bx, bz, minx, minz, nx, nz, CELL)
+            wall_segments_rasterized += 1
+            mesh_had_in_band_segment = True
+        if mesh_had_in_band_segment:
+            wall_meshes_used += 1
+
+    # Dilate blocked by capsule radius. Use Euclidean disc instead of
+    # Chebyshev box: a 2-cell box gives 0.57m corner reach (sqrt(2)*0.4m)
+    # and overshrinks doorway gaps for wall-segment rasterizations; the
+    # Euclidean disc respects the actual capsule radius (0.4m) in all
+    # directions, freeing diagonal corners and recovering 0.8m doorways.
     if DILATE_CELLS > 0:
         dilated = [[False] * nz for _ in range(nx)]
         d = DILATE_CELLS
+        offsets = [(dx, dz) for dx in range(-d, d+1) for dz in range(-d, d+1)
+                   if dx*dx + dz*dz <= d*d]
         for ix in range(nx):
             for iz in range(nz):
                 if not blocked_bm[ix][iz]: continue
-                for dx in range(-d, d+1):
+                for dx, dz in offsets:
                     jx = ix + dx
                     if jx < 0 or jx >= nx: continue
-                    for dz in range(-d, d+1):
-                        jz = iz + dz
-                        if jz < 0 or jz >= nz: continue
-                        dilated[jx][jz] = True
+                    jz = iz + dz
+                    if jz < 0 or jz >= nz: continue
+                    dilated[jx][jz] = True
     else:
         dilated = blocked_bm
 
@@ -148,6 +232,8 @@ def bake_floor(floor, walkables, blockers):
         },
         "walkable_surface_count": len(floor_walks),
         "blocker_hits": blocker_hits,
+        "wall_meshes_rasterized": wall_meshes_used,
+        "wall_segments_rasterized": wall_segments_rasterized,
         "cells": {
             "walkable": walk_count,
             "blocked_raw": block_count,
@@ -208,6 +294,7 @@ def main():
     blok = json.load(open(BLOCK, encoding="utf-8"))
     walkables = walk["WalkableSurfaces"]
     blockers = blok["NavigationBlockers"]
+    mesh_colliders = blok.get("MeshColliders", [])
 
     report = {
         "params": {
@@ -221,7 +308,7 @@ def main():
     }
     for floor in FLOORS:
         print(f"Baking floor: {floor['label']} (Y={floor['y']})...")
-        result = bake_floor(floor, walkables, blockers)
+        result = bake_floor(floor, walkables, blockers, mesh_colliders)
         report["floors"].append(result)
         if "error" in result:
             print(f"  ERROR: {result['error']}")
@@ -231,6 +318,8 @@ def main():
         print(f"  grid: {f['nx']}x{f['nz']} cells ({f['nx']*f['nz']} total)")
         print(f"  walkable={c['walkable']}  blocked_raw={c['blocked_raw']}  "
               f"blocked_dilated={c['blocked_dilated']}  navigable={c['navigable']}")
+        print(f"  wall_meshes_rasterized={result['wall_meshes_rasterized']}  "
+              f"wall_segments_rasterized={result['wall_segments_rasterized']}")
         png_path = OUT_PNG_DIR / f"navigable_region.{floor['label']}.ppm"
         write_png(result, png_path)
         print(f"  debug image: {png_path}")
