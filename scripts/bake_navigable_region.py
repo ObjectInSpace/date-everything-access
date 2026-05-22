@@ -13,8 +13,12 @@ Crawlspace floor is missing from the walkable export (no slab at Y≈-9.6); skip
 
 Run from repo root:
   python scripts/bake_navigable_region.py
+
+This script also runs the O3 inter-floor derivation post-pass before exiting,
+so future bake regenerations do not silently drop stair / teleporter edges.
 """
 from __future__ import annotations
+import importlib.util
 import json, math
 from pathlib import Path
 
@@ -325,6 +329,22 @@ def write_png(floor_result, path):
             f.write(bytes(line))
 
 
+def append_inter_floor_edges():
+    """Run the O3 post-pass against the freshly-written bake."""
+    script_path = Path(__file__).resolve().with_name("derive_inter_floor_edges.py")
+    spec = importlib.util.spec_from_file_location("derive_inter_floor_edges", script_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load {script_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.main()
+
+    refreshed = json.load(open(OUT_JSON, encoding="utf-8"))
+    if len(refreshed.get("floors", [])) > 1 and "inter_floor_edges" not in refreshed:
+        raise RuntimeError("Bake has multiple floors but no inter_floor_edges after O3 derivation")
+
+
 def main():
     walk = json.load(open(WALK, encoding="utf-8"))
     blok = json.load(open(BLOCK, encoding="utf-8"))
@@ -377,6 +397,7 @@ def main():
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUT_JSON.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"\nWrote {OUT_JSON}")
+    append_inter_floor_edges()
 
 
 if __name__ == "__main__":
