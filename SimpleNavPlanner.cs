@@ -35,6 +35,24 @@ namespace DateEverythingAccess
         private const float MinInteractionRadiusM = 0.5f;
         private const float NearestNavigableSearchM = 4.0f;
         private const float FloorMatchToleranceM = 2.0f;
+        // Player-capsule + safety margin from the target's collider face. Goal cells whose
+        // player-capsule center is closer than this become invalid (overlap), and cells further
+        // than ColliderBandOuterM become invalid (too far to interact reliably). The result is
+        // a narrow band around the target so A* terminates near the collider rather than
+        // anywhere in the InteractionRadius disc.
+        private const float TargetColliderClearanceM = 0.5f;
+        // Outer edge of the collider band. Just under the game's 7.5m InteractionRadius, with
+        // headroom for camera-vs-cell-XZ Y-component slop. If the target's collider has no
+        // nav-eligible cells inside this band (e.g. tiny prop in a tight space), the planner
+        // falls back to the standard disc.
+        private const float TargetColliderBandOuterM = 1.5f;
+        // Door-specific hinge-distance band. The inner edge must clear the door's swing arc
+        // (panel ~0.9m wide, plus player capsule radius ~0.4m, plus margin): if the player
+        // stands inside the arc the game's Door.OnCollisionEnter latches collidedWithPlayer
+        // and refuses to open/close the door. Outer edge sits just inside the game's interact
+        // forward-raycast reach so the player can still interact after arrival.
+        private const float DoorHingeBandInnerM = 1.5f;
+        private const float DoorHingeBandOuterM = 3.0f;
 
         private static BakeDoc _bake;
         private static List<Floor> _floors;
@@ -44,6 +62,21 @@ namespace DateEverythingAccess
         private static float _minInterFloorCost;
         private static bool _loadAttempted;
         private static bool _loadOk;
+
+        // Failure reasons surfaced by the most recent Plan() call. Read by the watcher to
+        // announce *why* a route couldn't be built instead of silently dropping. Cleared at
+        // the top of every Plan() invocation.
+        public enum PlanFailure
+        {
+            None,
+            NotReady,
+            StartOffBake,
+            TargetOffBake,
+            StartUnreachable,
+            TargetUnreachable,
+            NoPath,
+        }
+        public static PlanFailure LastFailure { get; private set; } = PlanFailure.None;
 
         /// <summary>
         /// Plan a route from the player's current world position to the target object's world
@@ -59,18 +92,25 @@ namespace DateEverythingAccess
             bool targetIsDatable = false,
             string targetInkFileName = null)
         {
-            if (!EnsureLoaded()) return null;
+            LastFailure = PlanFailure.None;
+            if (!EnsureLoaded())
+            {
+                LastFailure = PlanFailure.NotReady;
+                return null;
+            }
 
             Floor startFloor = FloorForY(startPos.y);
             Floor goalFloor = FloorForTargetY(targetPos.y);
             if (startFloor == null)
             {
                 if (Main.Log != null) Main.Log.LogWarning("SimpleNavPlanner.Plan: start Y=" + startPos.y + " not on a baked floor");
+                LastFailure = PlanFailure.StartOffBake;
                 return null;
             }
             if (goalFloor == null)
             {
                 if (Main.Log != null) Main.Log.LogWarning("SimpleNavPlanner.Plan: target Y=" + targetPos.y + " not on a baked floor");
+                LastFailure = PlanFailure.TargetOffBake;
                 return null;
             }
 
@@ -78,6 +118,7 @@ namespace DateEverythingAccess
             if (!startFloor.NearestNavigable(startPos.x, startPos.z, NearestNavigableSearchM, out sIx, out sIz))
             {
                 if (Main.Log != null) Main.Log.LogWarning("SimpleNavPlanner.Plan: no navigable cell near start (" + startPos.x + "," + startPos.z + ") on " + startFloor.Label);
+                LastFailure = PlanFailure.StartUnreachable;
                 return null;
             }
             NodeKey startNode = new NodeKey(startFloor.Label, sIx, sIz);
@@ -92,9 +133,62 @@ namespace DateEverythingAccess
                 if (!goalFloor.NearestNavigable(targetPos.x, targetPos.z, NearestNavigableSearchM, out gIx, out gIz))
                 {
                     if (Main.Log != null) Main.Log.LogWarning("SimpleNavPlanner.Plan: no navigable cell near target (" + targetPos.x + "," + targetPos.z + ") on " + goalFloor.Label);
+                    LastFailure = PlanFailure.TargetUnreachable;
                     return null;
                 }
                 goals.Add(new NodeKey(goalFloor.Label, gIx, gIz));
+            }
+
+            // Narrow goal cells to a band around the target so A* terminates *near* the
+            // interactable instead of anywhere in the 7.5m InteractionRadius disc.
+            //
+            // Two anchor strategies:
+            //   - Door targets: distance measured from targetPos (the hinge). A door's
+            //     Collider AABB sweeps along the panel rotation, so ClosestPointOnBounds
+            //     reports cells 5m down a hallway as "near the collider" when the door is
+            //     85deg open. Hinge-distance is invariant to rotation.
+            //   - Non-door targets: distance measured from the target's Collider via
+            //     ClosestPointOnBounds, which hugs prop geometry better than the hinge would.
+            //
+            // Cells in the [TargetColliderClearanceM, TargetColliderBandOuterM] band are
+            // kept; A* picks the cheapest-from-start. Falls back to the unfiltered disc
+            // if the band has no nav-eligible cells.
+            // See [[project-navigation-collider-band-filter]].
+            Door targetDoor = ResolveTargetDoor(targetGameObjectId);
+            Collider targetCollider = targetDoor == null ? ResolveTargetCollider(targetGameObjectId) : null;
+            if (targetDoor != null || targetCollider != null)
+            {
+                List<NodeKey> filtered = new List<NodeKey>(goals.Count);
+                float innerM = targetDoor != null ? DoorHingeBandInnerM : TargetColliderClearanceM;
+                float outerM = targetDoor != null ? DoorHingeBandOuterM : TargetColliderBandOuterM;
+                float innerSq = innerM * innerM;
+                float outerSq = outerM * outerM;
+                for (int i = 0; i < goals.Count; i++)
+                {
+                    NodeKey g = goals[i];
+                    Vector2 xz = goalFloor.CellToWorld(g.Ix, g.Iz);
+                    Vector3 cellWorld = new Vector3(xz.x, goalFloor.FloorY + 1.0f, xz.y);
+                    float dx, dz;
+                    if (targetDoor != null)
+                    {
+                        dx = targetPos.x - cellWorld.x;
+                        dz = targetPos.z - cellWorld.z;
+                    }
+                    else
+                    {
+                        Vector3 nearest = targetCollider.ClosestPointOnBounds(cellWorld);
+                        dx = nearest.x - cellWorld.x;
+                        dz = nearest.z - cellWorld.z;
+                    }
+                    float d2 = dx * dx + dz * dz;
+                    if (d2 >= innerSq && d2 <= outerSq)
+                        filtered.Add(g);
+                }
+                if (filtered.Count > 0) goals = filtered;
+                else if (Main.Log != null)
+                    Main.Log.LogInfo("SimpleNavPlanner.Plan: goal band empty for target=" +
+                        (targetName ?? "<null>") + " anchor=" + (targetDoor != null ? "door-hinge" : "collider") +
+                        "; keeping unfiltered goals=" + goals.Count);
             }
 
             List<NodeKey> path;
@@ -102,6 +196,7 @@ namespace DateEverythingAccess
             if (!AStar(startNode, goals, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost))
             {
                 if (Main.Log != null) Main.Log.LogWarning("SimpleNavPlanner.Plan: no_path target=" + (targetName ?? "<null>") + "#" + targetGameObjectId);
+                LastFailure = PlanFailure.NoPath;
                 return null;
             }
 
@@ -524,6 +619,38 @@ namespace DateEverythingAccess
         // interaction radius (clamped to 0.5–7.5m), which is typically farther than the static
         // DoorTagRadiusM, so distance-based tagging would otherwise miss it.
         // See [[project-navigation-door-tag-radius]].
+        // Resolve the GameObject's primary Collider for the collider-clearance goal filter.
+        // Matches the GameObject by InstanceID against all live InteractableObj components.
+        // Returns null if no match or the object has no collider.
+        // Find the Door component for a target GameObject (by InstanceID), if any. Used to
+        // exempt door targets from the collider-band goal-cell filter.
+        private static Door ResolveTargetDoor(int targetGameObjectId)
+        {
+            if (targetGameObjectId == 0) return null;
+            Door[] all = UnityEngine.Object.FindObjectsOfType<Door>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                Door d = all[i];
+                if (d == null || d.gameObject == null) continue;
+                if (d.gameObject.GetInstanceID() == targetGameObjectId) return d;
+            }
+            return null;
+        }
+
+        private static Collider ResolveTargetCollider(int targetGameObjectId)
+        {
+            if (targetGameObjectId == 0) return null;
+            InteractableObj[] all = UnityEngine.Object.FindObjectsOfType<InteractableObj>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                InteractableObj io = all[i];
+                if (io == null || io.gameObject == null) continue;
+                if (io.gameObject.GetInstanceID() != targetGameObjectId) continue;
+                return io.GetComponent<Collider>();
+            }
+            return null;
+        }
+
         private static List<List<string>> TagDoors(List<NodeKey> waypoints, string targetName, Vector3 targetPos)
         {
             List<List<string>> segs = new List<List<string>>(Mathf.Max(0, waypoints.Count - 1));
