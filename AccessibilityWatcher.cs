@@ -667,6 +667,7 @@ namespace DateEverythingAccess
                         return; // hold position and keep turning until aligned
                     }
                 }
+
                 ApplyNavigationInput(Vector3.zero, Vector3.zero);
                 StopNavigationWithAnnouncement("navigation_arrived");
                 return;
@@ -1755,11 +1756,13 @@ namespace DateEverythingAccess
             if (!SimpleNavPlanner.IsReady)
             {
                 if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: SimpleNavPlanner not ready, skipping route install");
+                ScreenReader.Say(Loc.Get("navigation_planner_not_ready"));
                 return;
             }
             if (!TryGetTrackedInteractable(out InteractableObj target) || target == null || target.gameObject == null)
             {
                 if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: no tracked interactable for route planning");
+                ScreenReader.Say(Loc.Get("navigation_no_objective"));
                 return;
             }
             if (BetterPlayerControl.Instance == null)
@@ -1773,11 +1776,14 @@ namespace DateEverythingAccess
             int goId = target.gameObject.GetInstanceID();
             string goName = target.gameObject.name;
             float radius = target.InteractionRadius;
+            string label = _navigationTargetLabel ?? goName;
 
             SimpleNavRoute route = SimpleNavPlanner.Plan(startPos, targetPos, radius, goName, goId);
             if (route == null)
             {
-                if (Main.Log != null) Main.Log.LogInfo("ToggleAutoWalk: planner returned no route for target=" + goName);
+                SimpleNavPlanner.PlanFailure why = SimpleNavPlanner.LastFailure;
+                if (Main.Log != null) Main.Log.LogInfo("ToggleAutoWalk: planner returned no route for target=" + goName + " reason=" + why);
+                ScreenReader.Say(Loc.Get("navigation_no_path", label) + " (" + why + ")");
                 return;
             }
             SimpleNavBridge.BeginRoute(route);

@@ -330,9 +330,37 @@ namespace DateEverythingAccess
         /// True when the active route's door is currently animating its swing. The autowalk
         /// should hold the player in place while this is true.
         /// </summary>
-        public static bool IsActiveDoorMoving()
+        public static bool IsActiveDoorMoving() => IsDoorMoving(_activeDoor);
+
+        /// <summary>
+        /// True when the door's <c>collidedWithPlayer</c> flag is latched. This is the game's
+        /// own "player is in the swing arc" check (see <c>Door.OnCollisionEnter</c> and the
+        /// early-returns in <c>OpenDoor</c>/<c>CloseDoor</c>/<c>changeDoorRot</c>): when true,
+        /// the door will refuse to open or will halt mid-swing. Used by the watcher to back the
+        /// player off when an Interact() call doesn't take effect.
+        /// </summary>
+        public static bool IsDoorCollidedWithPlayer(Door door)
         {
-            Door door = _activeDoor;
+            if (door == null) return false;
+            FieldInfo fi = GetDoorCollidedField();
+            if (fi == null) return false;
+            try
+            {
+                object v = fi.GetValue(door);
+                return v is bool b && b;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// True while the given door's swing animation is in flight (Door.moving = true).
+        /// Reflected read; returns false if reflection failed.
+        /// </summary>
+        public static bool IsDoorMoving(Door door)
+        {
             if (door == null) return false;
             FieldInfo fi = GetDoorMovingField();
             if (fi == null) return false;
@@ -369,7 +397,17 @@ namespace DateEverythingAccess
 
         public static bool TryOpenActiveDoorIfNeeded(Vector3 playerPos)
         {
-            Door door = _activeDoor;
+            return TryOpenDoorIfNeeded(_activeDoor, playerPos);
+        }
+
+        /// <summary>
+        /// Interact with the given <paramref name="door"/> when the player is in range and the
+        /// door isn't already open. Used both for segment-tagged doors (via the
+        /// <see cref="TryOpenActiveDoorIfNeeded"/> wrapper) and for routes whose target is
+        /// itself a door (via <see cref="GetRouteTargetDoor"/>).
+        /// </summary>
+        public static bool TryOpenDoorIfNeeded(Door door, Vector3 playerPos)
+        {
             string skipReason = null;
             float dist = -1f;
             float visualRotDelta = -1f;
