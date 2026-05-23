@@ -281,6 +281,7 @@ namespace DateEverythingAccess
         private int _lastHateCount = -1;
         private int _lastRealizedCount = -1;
         private float _nextPollTime;
+        private float _nextSimpleRouteDiagnosticTime;
         private float _suppressDateADexSelectionUntil;
         private float _suppressPopupSelectionUntil;
         private float _suppressUIDialogSelectionUntil;
@@ -587,7 +588,7 @@ namespace DateEverythingAccess
                 return;
             }
 
-            if (IsTrackedObjectReached())
+            if (!SimpleNavBridge.HasActiveRoute && IsTrackedObjectReached())
             {
                 StopNavigationWithAnnouncement("navigation_arrived");
                 return;
@@ -653,19 +654,26 @@ namespace DateEverythingAccess
             // goal cell inside this disc, so this matches the goal-cell expansion in O4.
             if (SimpleNavBridge.HasArrivedAtRouteTarget(playerPos))
             {
-                // Face the target object before stopping. World-space facing (decided 2026-05-19).
-                Vector3 toTarget = route.TargetPosition - playerPos;
-                toTarget.y = 0f;
-                if (toTarget.sqrMagnitude > 0.0001f)
+                if (IsSimpleRouteDoorTargetComplete(route))
                 {
-                    Vector3 desiredDir = toTarget.normalized;
-                    float turnDegrees = Vector3.SignedAngle(playerTransform.forward, desiredDir, Vector3.up);
-                    if (Mathf.Abs(turnDegrees) > 5f)
+                    ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                    StopNavigationWithAnnouncement("navigation_arrived");
+                    return;
+                }
+
+                if (!IsSimpleRouteTargetSelected(route))
+                {
+                    Vector3 lookInput = GetLookInputTowardRouteTarget(playerTransform, route.TargetPosition);
+                    if (lookInput.sqrMagnitude <= 0.0001f)
                     {
-                        Vector3 lookInput = new Vector3(Mathf.Clamp(turnDegrees / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
-                        ApplyNavigationInput(Vector3.zero, lookInput);
-                        return; // hold position and keep turning until aligned
+                        // If the camera is nominally pointed at the target but the game's
+                        // raycast still has not selected it, keep searching instead of
+                        // reporting proximity-only arrival.
+                        lookInput = new Vector3(0.2f, 0f, 0f);
                     }
+
+                    ApplyNavigationInput(Vector3.zero, lookInput);
+                    return;
                 }
 
                 ApplyNavigationInput(Vector3.zero, Vector3.zero);
@@ -710,6 +718,8 @@ namespace DateEverythingAccess
                 return;
             }
 
+            LogSimpleRouteFrameDiagnostic(route, playerTransform, playerPos, target, move, look, waitingForDoorSwing);
+
             SimpleNavBridge.RecordFrameProgress(playerPos);
 
             if (waitingForDoorSwing)
@@ -734,6 +744,159 @@ namespace DateEverythingAccess
                     " runtimeBlocker=" + (runtimeBlocker ?? "<none>"));
                 StopNavigationBlocked("simple-nav route progress timeout target=" + (route.TargetName ?? "<null>") +
                     " runtimeBlocker=" + (runtimeBlocker ?? "<none>"));
+            }
+        }
+
+        private static bool IsSimpleRouteTargetSelected(SimpleNavRoute route)
+        {
+            if (route == null)
+                return false;
+
+            InteractableManager manager = Singleton<InteractableManager>.Instance;
+            if (manager == null || manager.activeObject == null || !manager.IsPlayerInRange)
+                return false;
+
+            return manager.activeObject.gameObject != null &&
+                manager.activeObject.gameObject.GetInstanceID() == route.TargetGameObjectId;
+        }
+
+        private static bool IsSimpleRouteDoorTargetComplete(SimpleNavRoute route)
+        {
+            Door door = FindSimpleRouteTargetDoor(route);
+            if (door == null)
+                return false;
+
+            if (door.open && !SimpleNavBridge.IsDoorMoving(door))
+                return true;
+
+            return IsSimpleRouteTargetSelected(route);
+        }
+
+        private static Door FindSimpleRouteTargetDoor(SimpleNavRoute route)
+        {
+            if (route == null || route.TargetGameObjectId == 0)
+                return null;
+
+            Door[] doors = FindObjectsOfType<Door>();
+            for (int i = 0; i < doors.Length; i++)
+            {
+                Door door = doors[i];
+                if (door == null || door.gameObject == null)
+                    continue;
+
+                if (door.gameObject.GetInstanceID() == route.TargetGameObjectId)
+                    return door;
+            }
+
+            return null;
+        }
+
+        private static Vector3 GetLookInputTowardRouteTarget(Transform playerTransform, Vector3 targetPosition)
+        {
+            Vector3 toTarget = targetPosition - playerTransform.position;
+            Vector3 flatTarget = toTarget;
+            flatTarget.y = 0f;
+
+            float yaw = 0f;
+            if (flatTarget.sqrMagnitude > 0.0001f)
+            {
+                yaw = Mathf.Clamp(
+                    Vector3.SignedAngle(playerTransform.forward, flatTarget.normalized, Vector3.up) /
+                    AutoWalkLookScaleDegrees,
+                    -1f,
+                    1f);
+            }
+
+            float pitch = 0f;
+            Camera cam = Camera.main;
+            if (cam != null && toTarget.sqrMagnitude > 0.0001f)
+            {
+                pitch = Mathf.Clamp(
+                    Vector3.SignedAngle(cam.transform.forward, toTarget.normalized, -cam.transform.right) /
+                    AutoWalkLookScaleDegrees,
+                    -1f,
+                    1f);
+            }
+
+            if (Mathf.Abs(yaw) < 0.05f) yaw = 0f;
+            if (Mathf.Abs(pitch) < 0.05f) pitch = 0f;
+            return new Vector3(yaw, 0f, pitch);
+        }
+
+        private void LogSimpleRouteFrameDiagnostic(
+            SimpleNavRoute route,
+            Transform playerTransform,
+            Vector3 playerPos,
+            Vector3 waypoint,
+            Vector3 move,
+            Vector3 look,
+            bool waitingForDoorSwing)
+        {
+            if (Time.unscaledTime < _nextSimpleRouteDiagnosticTime)
+                return;
+
+            _nextSimpleRouteDiagnosticTime = Time.unscaledTime + 1.0f;
+
+            Rigidbody rb = playerTransform != null ? playerTransform.GetComponent<Rigidbody>() : null;
+            Vector3 velocity = rb != null ? rb.velocity : Vector3.zero;
+            Vector3 reflectedMove = Vector3.zero;
+            Vector3 reflectedLook = Vector3.zero;
+            bool reflectedOk = false;
+
+            try
+            {
+                EnsureReflectionCache();
+                if (_betterPlayerControlMoveField != null && _betterPlayerControlLookField != null && BetterPlayerControl.Instance != null)
+                {
+                    object rawMove = _betterPlayerControlMoveField.GetValue(BetterPlayerControl.Instance);
+                    object rawLook = _betterPlayerControlLookField.GetValue(BetterPlayerControl.Instance);
+                    if (rawMove is Vector3 rm && rawLook is Vector3 rl)
+                    {
+                        reflectedMove = rm;
+                        reflectedLook = rl;
+                        reflectedOk = true;
+                    }
+                }
+            }
+            catch
+            {
+                reflectedOk = false;
+            }
+
+            InteractableManager manager = Singleton<InteractableManager>.Instance;
+            string activeName = "<none>";
+            bool inRange = false;
+            if (manager != null)
+            {
+                inRange = manager.IsPlayerInRange;
+                if (manager.activeObject != null && manager.activeObject.gameObject != null)
+                    activeName = manager.activeObject.gameObject.name + "#" + manager.activeObject.gameObject.GetInstanceID();
+            }
+
+            string state = BetterPlayerControl.Instance != null ? BetterPlayerControl.Instance.STATE.ToString() : "<no player>";
+            string view = Singleton<GameController>.Instance != null ? Singleton<GameController>.Instance.viewState.ToString() : "<no game controller>";
+            float waypointDistance = GetFlatDistance(playerPos, waypoint);
+            float targetDistance = route != null ? GetFlatDistance(playerPos, route.TargetPosition) : 0f;
+            SimpleNavWaypoint activeWaypoint = SimpleNavBridge.ActiveWaypoint;
+
+            if (Main.Log != null)
+            {
+                Main.Log.LogInfo("SimpleNav route frame target=" + (route != null ? route.TargetName : "<null>") +
+                    " player=" + FormatVector3(playerPos) +
+                    " waypoint=" + FormatVector3(waypoint) +
+                    " waypointKind=" + (activeWaypoint != null ? activeWaypoint.Kind.ToString() : "<none>") +
+                    " waypointDoor=" + (activeWaypoint != null && !string.IsNullOrEmpty(activeWaypoint.DoorName) ? activeWaypoint.DoorName : "<none>") +
+                    " waypointDist=" + waypointDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " targetDist=" + targetDistance.ToString("0.00", CultureInfo.InvariantCulture) +
+                    " moveCmd=" + FormatVector3(move) +
+                    " lookCmd=" + FormatVector3(look) +
+                    " reflected=" + (reflectedOk ? FormatVector3(reflectedMove) + "/" + FormatVector3(reflectedLook) : "<unavailable>") +
+                    " velocity=" + FormatVector3(velocity) +
+                    " state=" + state +
+                    " view=" + view +
+                    " active=" + activeName +
+                    " inRange=" + inRange +
+                    " waitingDoor=" + waitingForDoorSwing);
             }
         }
 
@@ -790,6 +953,7 @@ namespace DateEverythingAccess
             }
 
             ResetAutoWalkProgress();
+            _nextSimpleRouteDiagnosticTime = 0f;
             _isNavigationActive = true;
             return true;
         }
@@ -815,6 +979,7 @@ namespace DateEverythingAccess
             _isNavigationActive = false;
             _isAutoWalking = false;
             _lastAutoWalkProgressTime = 0f;
+            _nextSimpleRouteDiagnosticTime = 0f;
             _lastNavigationTargetDebugSnapshot = null;
             _lastNavigationAutoWalkDebugSnapshot = null;
             _lastNavigationTransitionDebugSnapshot = null;
@@ -1778,7 +1943,8 @@ namespace DateEverythingAccess
             float radius = target.InteractionRadius;
             string label = _navigationTargetLabel ?? goName;
 
-            SimpleNavRoute route = SimpleNavPlanner.Plan(startPos, targetPos, radius, goName, goId);
+            bool isDatable = !string.IsNullOrWhiteSpace(target.inkFileName);
+            SimpleNavRoute route = SimpleNavPlanner.Plan(startPos, targetPos, radius, goName, goId, isDatable, target.inkFileName);
             if (route == null)
             {
                 SimpleNavPlanner.PlanFailure why = SimpleNavPlanner.LastFailure;

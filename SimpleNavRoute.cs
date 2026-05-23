@@ -7,6 +7,29 @@ using UnityEngine;
 
 namespace DateEverythingAccess
 {
+    internal enum SimpleNavWaypointKind
+    {
+        Navigation,
+        DoorApproach,
+        DoorOpening,
+        DoorExit,
+        Target
+    }
+
+    internal sealed class SimpleNavWaypoint
+    {
+        public Vector3 Position;
+        public SimpleNavWaypointKind Kind;
+        public string DoorName;
+
+        public SimpleNavWaypoint(Vector3 position, SimpleNavWaypointKind kind = SimpleNavWaypointKind.Navigation, string doorName = null)
+        {
+            Position = position;
+            Kind = kind;
+            DoorName = doorName;
+        }
+    }
+
     // Object-first navigation route (O4 output, consumed by the O5 executor).
     //
     // One Route = one plan from a start cell to a target interactable. The Route owns:
@@ -29,7 +52,13 @@ namespace DateEverythingAccess
         public string TargetInkFileName;
 
         // Polyline. waypoints[0] is the start cell, waypoints[N-1] is the goal cell.
+        // Kept as the compatibility surface for sweep/reporting code.
         public List<Vector3> Waypoints = new List<Vector3>();
+
+        // Semantic contract consumed by the route executor. This mirrors Waypoints by index but
+        // carries the reason a point exists, so door-opening points are not treated as ordinary
+        // planner corners.
+        public List<SimpleNavWaypoint> SemanticWaypoints = new List<SimpleNavWaypoint>();
 
         // Door tags, keyed by segment index (0 = waypoints[0]→waypoints[1], etc.). Multiple
         // doors per segment are possible at door-clusters (front door / vestibule); the
@@ -37,6 +66,34 @@ namespace DateEverythingAccess
         public List<List<string>> SegmentDoorNames = new List<List<string>>();
 
         public int SegmentCount => SegmentDoorNames.Count;
+
+        public void AddWaypoint(Vector3 position, SimpleNavWaypointKind kind = SimpleNavWaypointKind.Navigation, string doorName = null)
+        {
+            Waypoints.Add(position);
+            SemanticWaypoints.Add(new SimpleNavWaypoint(position, kind, doorName));
+        }
+
+        public void EnsureSemanticWaypoints()
+        {
+            if (SemanticWaypoints == null)
+                SemanticWaypoints = new List<SimpleNavWaypoint>();
+
+            if (SemanticWaypoints.Count == Waypoints.Count)
+            {
+                if (SemanticWaypoints.Count > 0)
+                    SemanticWaypoints[SemanticWaypoints.Count - 1].Kind = SimpleNavWaypointKind.Target;
+                return;
+            }
+
+            SemanticWaypoints.Clear();
+            for (int i = 0; i < Waypoints.Count; i++)
+            {
+                SimpleNavWaypointKind kind = i == Waypoints.Count - 1
+                    ? SimpleNavWaypointKind.Target
+                    : SimpleNavWaypointKind.Navigation;
+                SemanticWaypoints.Add(new SimpleNavWaypoint(Waypoints[i], kind));
+            }
+        }
 
         /// <summary>
         /// Load a route from a JSON file produced by plan_object_route.py. Returns null on any
@@ -92,8 +149,9 @@ namespace DateEverythingAccess
             {
                 RouteNode w = doc.waypoints[i];
                 if (w == null) continue;
-                route.Waypoints.Add(new Vector3(w.wx, w.floor_y, w.wz));
+                route.AddWaypoint(new Vector3(w.wx, w.floor_y, w.wz));
             }
+            route.EnsureSemanticWaypoints();
 
             // Segments are emitted by the planner as (waypoints.Length - 1) entries. Each carries
             // a doors[] list; we keep only the GameObject names (the executor resolves them live).

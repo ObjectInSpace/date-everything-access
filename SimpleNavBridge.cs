@@ -22,6 +22,8 @@ namespace DateEverythingAccess
         // Waypoint sequence for the active route. _activeTarget mirrors _waypoints[_waypointIndex].
         private static readonly System.Collections.Generic.List<Vector3> _waypoints =
             new System.Collections.Generic.List<Vector3>(8);
+        private static readonly System.Collections.Generic.List<SimpleNavWaypoint> _semanticWaypoints =
+            new System.Collections.Generic.List<SimpleNavWaypoint>(8);
         private static int _waypointIndex;
 
         // O5 route-driven mode (object-first navigation). When non-null, the bridge is driving
@@ -29,7 +31,8 @@ namespace DateEverythingAccess
         private static SimpleNavRoute _activeRoute;
         private static int _activeRouteSegment;
         // Player must come within this XZ distance of the active waypoint before we advance.
-        private const float WaypointArrivalRadius = 1.0f;
+        private const float WaypointArrivalRadius = 1.35f;
+        private const float DoorOpeningArrivalRadius = 0.65f;
 
         // Telemetry recorded per active route. Used by RecordFrameProgress so failures can be
         // diagnosed without log scraping.
@@ -57,6 +60,7 @@ namespace DateEverythingAccess
             _activeRoute = null;
             _activeRouteSegment = 0;
             _waypoints.Clear();
+            _semanticWaypoints.Clear();
             _waypointIndex = 0;
             _nextDoorInteractTime = 0f;
             _minDistanceToTarget = float.PositiveInfinity;
@@ -72,6 +76,7 @@ namespace DateEverythingAccess
             _activeRoute = null;
             _activeRouteSegment = 0;
             _waypoints.Clear();
+            _semanticWaypoints.Clear();
             _waypointIndex = 0;
             _minDistanceToTarget = float.PositiveInfinity;
             _appliedFrameCount = 0;
@@ -98,9 +103,12 @@ namespace DateEverythingAccess
 
             BeginStep("route:" + (route.TargetName ?? "<unnamed>") + "#" + route.TargetGameObjectId);
             _activeRoute = route;
+            route.EnsureSemanticWaypoints();
             _activeRouteSegment = 0;
             _waypoints.Clear();
+            _semanticWaypoints.Clear();
             _waypoints.AddRange(route.Waypoints);
+            _semanticWaypoints.AddRange(route.SemanticWaypoints);
             // Skip the start waypoint (player's own position) — drive toward index 1 first.
             _waypointIndex = 1;
             _activeTarget = _waypoints[_waypointIndex];
@@ -119,14 +127,23 @@ namespace DateEverythingAccess
         public static bool HasArrivedAtRouteTarget(Vector3 playerPos)
         {
             if (_activeRoute == null) return false;
+            if (!_activeTargetValid || _waypoints.Count == 0) return false;
+            if (_waypointIndex < _waypoints.Count - 1) return false;
+
+            Vector3 finalWaypoint = _waypoints[_waypoints.Count - 1];
+            float wdx = finalWaypoint.x - playerPos.x;
+            float wdz = finalWaypoint.z - playerPos.z;
+            if (wdx * wdx + wdz * wdz > WaypointArrivalRadius * WaypointArrivalRadius)
+                return false;
+
             Vector3 t = _activeRoute.TargetPosition;
             float dx = t.x - playerPos.x;
             float dz = t.z - playerPos.z;
             float r = _activeRoute.TargetInteractionRadius;
             if (r < 0.5f) r = 0.5f;
-            // Clamp absurdly large interaction radii (some props publish 7.5m). Matches the
-            // planner's same clamp so arrival lines up with the goal-cell expansion.
-            if (r > 2.0f) r = 2.0f;
+            // Match InteractableObj.InteractionRadius bounds used by the planner. Arrival is
+            // still finalized only after the game selects the target in first-person.
+            if (r > 7.5f) r = 7.5f;
             return (dx * dx + dz * dz) <= r * r;
         }
 
@@ -150,6 +167,16 @@ namespace DateEverythingAccess
         /// The Door for the current route segment, when the route has a door tag. Null otherwise.
         /// </summary>
         public static Door ActiveDoor => _activeDoor;
+
+        public static SimpleNavWaypoint ActiveWaypoint
+        {
+            get
+            {
+                if (_waypointIndex < 0 || _waypointIndex >= _semanticWaypoints.Count)
+                    return null;
+                return _semanticWaypoints[_waypointIndex];
+            }
+        }
 
         // Fallback radius used when the door has no InteractableObj component (or we can't read
         // it). Matches InteractableObj.InteractionRadius default in the decompiled source.
@@ -534,7 +561,8 @@ namespace DateEverythingAccess
             Vector3 cur = _waypoints[_waypointIndex];
             float dx = cur.x - playerPos.x;
             float dz = cur.z - playerPos.z;
-            if (dx * dx + dz * dz > WaypointArrivalRadius * WaypointArrivalRadius) return false;
+            float arrivalRadius = GetActiveWaypointArrivalRadius();
+            if (dx * dx + dz * dz > arrivalRadius * arrivalRadius) return false;
             _waypointIndex++;
             _activeTarget = _waypoints[_waypointIndex];
             if (_activeRoute != null)
@@ -548,9 +576,28 @@ namespace DateEverythingAccess
             if (Main.Log != null)
                 Main.Log.LogInfo("SimpleNavBridge advance step=" + (_activeStepKey ?? "<null>") +
                     " waypoint=" + _waypointIndex + "/" + (_waypoints.Count - 1) +
+                    " kind=" + (ActiveWaypoint != null ? ActiveWaypoint.Kind.ToString() : "<none>") +
                     (_activeRoute != null ? (" segment=" + _activeRouteSegment +
                         " door=" + (_activeDoor != null && _activeDoor.gameObject != null ? _activeDoor.gameObject.name : "<none>")) : ""));
             return true;
+        }
+
+        private static float GetActiveWaypointArrivalRadius()
+        {
+            SimpleNavWaypoint waypoint = ActiveWaypoint;
+            if (waypoint == null)
+                return WaypointArrivalRadius;
+
+            switch (waypoint.Kind)
+            {
+                case SimpleNavWaypointKind.DoorOpening:
+                    return DoorOpeningArrivalRadius;
+                case SimpleNavWaypointKind.DoorApproach:
+                case SimpleNavWaypointKind.DoorExit:
+                    return 0.9f;
+                default:
+                    return WaypointArrivalRadius;
+            }
         }
     }
 }
