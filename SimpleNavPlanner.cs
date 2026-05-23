@@ -16,6 +16,7 @@ namespace DateEverythingAccess
     internal static class SimpleNavPlanner
     {
         private const string BakeFileName = "navigable_region.bake.json";
+        private const string SceneNavigationDataFileName = "thirdpersongreybox-navigation-data.json";
         private const char NavigableChar = 'N';
         private const float CornerWaypointDeg = 30f;
         // Door is tagged on a segment if its XZ is within this radius of the segment.
@@ -53,6 +54,11 @@ namespace DateEverythingAccess
         // forward-raycast reach so the player can still interact after arrival.
         private const float DoorHingeBandInnerM = 1.5f;
         private const float DoorHingeBandOuterM = 3.0f;
+        // Door portal waypoints are semantic, not just geometric corners. The executor should
+        // approach the opening, cross it, then clear the far side instead of aiming a long
+        // segment through the live open door panel.
+        private const float DoorOpeningApproachDistanceM = 1.15f;
+        private const float DoorOpeningMinimumSpacingSqM = 0.36f;
 
         private static BakeDoc _bake;
         private static List<Floor> _floors;
@@ -62,6 +68,8 @@ namespace DateEverythingAccess
         private static float _minInterFloorCost;
         private static bool _loadAttempted;
         private static bool _loadOk;
+        private static bool _doorOpeningsLoadAttempted;
+        private static Dictionary<string, Vector3> _doorOpeningByName;
 
         // Failure reasons surfaced by the most recent Plan() call. Read by the watcher to
         // announce *why* a route couldn't be built instead of silently dropping. Cleared at
@@ -138,6 +146,7 @@ namespace DateEverythingAccess
                 }
                 goals.Add(new NodeKey(goalFloor.Label, gIx, gIz));
             }
+            List<NodeKey> unfilteredGoals = new List<NodeKey>(goals);
 
             // Narrow goal cells to a band around the target so A* terminates *near* the
             // interactable instead of anywhere in the 7.5m InteractionRadius disc.
@@ -195,9 +204,20 @@ namespace DateEverythingAccess
             float totalCost;
             if (!AStar(startNode, goals, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost))
             {
-                if (Main.Log != null) Main.Log.LogWarning("SimpleNavPlanner.Plan: no_path target=" + (targetName ?? "<null>") + "#" + targetGameObjectId);
-                LastFailure = PlanFailure.NoPath;
-                return null;
+                if (goals.Count != unfilteredGoals.Count &&
+                    AStar(startNode, unfilteredGoals, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost))
+                {
+                    goals = unfilteredGoals;
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNavPlanner.Plan: retried with full interaction radius for target=" +
+                            (targetName ?? "<null>") + "#" + targetGameObjectId);
+                }
+                else
+                {
+                    if (Main.Log != null) Main.Log.LogWarning("SimpleNavPlanner.Plan: no_path target=" + (targetName ?? "<null>") + "#" + targetGameObjectId);
+                    LastFailure = PlanFailure.NoPath;
+                    return null;
+                }
             }
 
             List<NodeKey> waypoints = SmoothPath(path);
@@ -210,15 +230,17 @@ namespace DateEverythingAccess
             route.TargetInteractionRadius = radius;
             route.TargetIsDatable = targetIsDatable;
             route.TargetInkFileName = targetInkFileName;
+            List<Vector3> rawRouteWaypoints = new List<Vector3>(waypoints.Count);
             for (int i = 0; i < waypoints.Count; i++)
             {
                 NodeKey w = waypoints[i];
                 Floor f = FloorByLabel(w.Floor);
                 if (f == null) continue;
                 Vector2 xz = f.CellToWorld(w.Ix, w.Iz);
-                route.Waypoints.Add(new Vector3(xz.x, f.FloorY, xz.y));
+                rawRouteWaypoints.Add(new Vector3(xz.x, f.FloorY, xz.y));
             }
-            route.SegmentDoorNames.AddRange(segmentDoorNames);
+            AddDoorOpeningWaypoints(rawRouteWaypoints, segmentDoorNames, route);
+            route.EnsureSemanticWaypoints();
             while (route.SegmentDoorNames.Count < route.Waypoints.Count - 1)
                 route.SegmentDoorNames.Add(new List<string>(0));
 
@@ -236,7 +258,13 @@ namespace DateEverythingAccess
                 for (int i = 0; i < route.Waypoints.Count; i++)
                 {
                     Vector3 w = route.Waypoints[i];
+                    SimpleNavWaypoint semantic = i < route.SemanticWaypoints.Count ? route.SemanticWaypoints[i] : null;
                     Main.Log.LogInfo("  wp[" + i + "]=(" + w.x.ToString("F2") + ", " + w.y.ToString("F2") + ", " + w.z.ToString("F2") + ")");
+                    if (semantic != null && semantic.Kind != SimpleNavWaypointKind.Navigation)
+                    {
+                        Main.Log.LogInfo("    semantic kind=" + semantic.Kind +
+                            " door=" + (string.IsNullOrEmpty(semantic.DoorName) ? "<none>" : semantic.DoorName));
+                    }
                 }
             }
             return route;
@@ -587,26 +615,42 @@ namespace DateEverythingAccess
             return f == null ? (Vector2?)null : f.CellToWorld(n.Ix, n.Iz);
         }
 
-        // Bresenham line walk through cells; all must be navigable.
+        // Dense line walk through cells; all touched cells must be navigable. The original
+        // Bresenham walk could miss cells that a long diagonal segment grazed, which allowed
+        // smoothing to create routes that skimmed wall-like blockers such as the living-room
+        // fireplace. Sampling at half-cell spacing is deliberately conservative and only affects
+        // waypoint smoothing, not A* graph connectivity.
         private static bool SegmentIsClear(NodeKey a, NodeKey b)
         {
             if (a.Floor != b.Floor || IsVirtual(a)) return false;
             Floor floor = FloorByLabel(a.Floor);
             if (floor == null) return false;
-            int ix0 = a.Ix, iz0 = a.Iz, ix1 = b.Ix, iz1 = b.Iz;
-            int dx = Mathf.Abs(ix1 - ix0), dz = Mathf.Abs(iz1 - iz0);
-            int sx = ix0 < ix1 ? 1 : -1;
-            int sz = iz0 < iz1 ? 1 : -1;
-            int err = dx - dz;
-            int ix = ix0, iz = iz0;
-            while (true)
+
+            Vector2 start = floor.CellToWorld(a.Ix, a.Iz);
+            Vector2 end = floor.CellToWorld(b.Ix, b.Iz);
+            float dist = Vector2.Distance(start, end);
+            float sampleStep = Mathf.Max(0.05f, floor.CellSize * 0.5f);
+            int steps = Mathf.Max(1, Mathf.CeilToInt(dist / sampleStep));
+            int lastIx = int.MinValue;
+            int lastIz = int.MinValue;
+
+            for (int i = 0; i <= steps; i++)
             {
-                if (!floor.Navigable(ix, iz)) return false;
-                if (ix == ix1 && iz == iz1) return true;
-                int e2 = 2 * err;
-                if (e2 > -dz) { err -= dz; ix += sx; }
-                if (e2 < dx) { err += dx; iz += sz; }
+                float t = i / (float)steps;
+                float wx = Mathf.Lerp(start.x, end.x, t);
+                float wz = Mathf.Lerp(start.y, end.y, t);
+                floor.WorldToCell(wx, wz, out int ix, out int iz);
+                if (ix == lastIx && iz == lastIz)
+                    continue;
+
+                if (!floor.Navigable(ix, iz))
+                    return false;
+
+                lastIx = ix;
+                lastIz = iz;
             }
+
+            return true;
         }
 
         // ---- door tagging ----
@@ -646,9 +690,51 @@ namespace DateEverythingAccess
                 InteractableObj io = all[i];
                 if (io == null || io.gameObject == null) continue;
                 if (io.gameObject.GetInstanceID() != targetGameObjectId) continue;
-                return io.GetComponent<Collider>();
+                return SelectBestTargetCollider(io);
             }
             return null;
+        }
+
+        private static Collider SelectBestTargetCollider(InteractableObj interactable)
+        {
+            if (interactable == null || interactable.gameObject == null)
+                return null;
+
+            Collider best = null;
+            float bestScore = float.PositiveInfinity;
+            Vector3 anchor = interactable.transform.position;
+
+            ConsiderTargetColliders(interactable.GetComponents<Collider>(), anchor, 0f, ref best, ref bestScore);
+            ConsiderTargetColliders(interactable.GetComponentsInChildren<Collider>(includeInactive: false), anchor, 1f, ref best, ref bestScore);
+            ConsiderTargetColliders(interactable.GetComponentsInParent<Collider>(includeInactive: false), anchor, 2f, ref best, ref bestScore);
+
+            return best;
+        }
+
+        private static void ConsiderTargetColliders(
+            Collider[] colliders,
+            Vector3 anchor,
+            float penalty,
+            ref Collider best,
+            ref float bestScore)
+        {
+            if (colliders == null)
+                return;
+
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                Collider c = colliders[i];
+                if (c == null || c.isTrigger || !c.enabled || c.gameObject == null || !c.gameObject.activeInHierarchy)
+                    continue;
+
+                Vector3 nearest = c.ClosestPointOnBounds(anchor);
+                float score = (nearest - anchor).sqrMagnitude + penalty;
+                if (score >= bestScore)
+                    continue;
+
+                best = c;
+                bestScore = score;
+            }
         }
 
         private static List<List<string>> TagDoors(List<NodeKey> waypoints, string targetName, Vector3 targetPos)
@@ -698,6 +784,155 @@ namespace DateEverythingAccess
                 }
             }
             return segs;
+        }
+
+        private static void AddDoorOpeningWaypoints(
+            List<Vector3> rawWaypoints,
+            List<List<string>> rawSegmentDoors,
+            SimpleNavRoute route)
+        {
+            if (rawWaypoints == null || rawWaypoints.Count == 0)
+                return;
+
+            route.AddWaypoint(rawWaypoints[0], SimpleNavWaypointKind.Navigation);
+            for (int i = 0; i < rawWaypoints.Count - 1; i++)
+            {
+                Vector3 a = rawWaypoints[i];
+                Vector3 b = rawWaypoints[i + 1];
+                List<string> doors = i < rawSegmentDoors.Count && rawSegmentDoors[i] != null
+                    ? rawSegmentDoors[i]
+                    : new List<string>(0);
+
+                string doorName;
+                if (TryGetDoorOpeningWaypoints(doors, a, b, out doorName, out Vector3 approach, out Vector3 opening, out Vector3 exit))
+                {
+                    AddSemanticDoorWaypoint(route, doors, approach, SimpleNavWaypointKind.DoorApproach, doorName);
+                    AddSemanticDoorWaypoint(route, doors, opening, SimpleNavWaypointKind.DoorOpening, doorName);
+                    AddSemanticDoorWaypoint(route, doors, exit, SimpleNavWaypointKind.DoorExit, doorName);
+                    AddSemanticDoorWaypoint(route, doors, b, i == rawWaypoints.Count - 2 ? SimpleNavWaypointKind.Target : SimpleNavWaypointKind.Navigation, null);
+                }
+                else
+                {
+                    AddSemanticDoorWaypoint(route, doors, b, i == rawWaypoints.Count - 2 ? SimpleNavWaypointKind.Target : SimpleNavWaypointKind.Navigation, null);
+                }
+            }
+        }
+
+        private static void AddSemanticDoorWaypoint(
+            SimpleNavRoute route,
+            List<string> doors,
+            Vector3 waypoint,
+            SimpleNavWaypointKind kind,
+            string doorName)
+        {
+            if (route.Waypoints.Count > 0 &&
+                FlatDistanceSq(route.Waypoints[route.Waypoints.Count - 1], waypoint) <= 0.04f)
+                return;
+
+            route.SegmentDoorNames.Add(new List<string>(doors ?? new List<string>(0)));
+            route.AddWaypoint(waypoint, kind, doorName);
+        }
+
+        private static bool TryGetDoorOpeningWaypoints(
+            List<string> doorNames,
+            Vector3 segmentStart,
+            Vector3 segmentEnd,
+            out string doorName,
+            out Vector3 approach,
+            out Vector3 opening,
+            out Vector3 exit)
+        {
+            doorName = null;
+            approach = Vector3.zero;
+            opening = Vector3.zero;
+            exit = Vector3.zero;
+            if (doorNames == null || doorNames.Count == 0)
+                return false;
+
+            for (int i = 0; i < doorNames.Count; i++)
+            {
+                if (!TryGetExportedDoorOpening(doorNames[i], out Vector3 center))
+                    continue;
+
+                center.y = (segmentStart.y + segmentEnd.y) * 0.5f;
+                Vector3 segment = segmentEnd - segmentStart;
+                segment.y = 0f;
+                if (segment.sqrMagnitude <= 0.0001f)
+                    continue;
+
+                Vector3 direction = segment.normalized;
+                Vector3 candidateApproach = center - direction * DoorOpeningApproachDistanceM;
+                Vector3 candidateExit = center + direction * DoorOpeningApproachDistanceM;
+                candidateApproach.y = center.y;
+                candidateExit.y = center.y;
+
+                if (FlatDistanceSq(segmentStart, candidateApproach) <= DoorOpeningMinimumSpacingSqM ||
+                    FlatDistanceSq(candidateApproach, center) <= DoorOpeningMinimumSpacingSqM ||
+                    FlatDistanceSq(center, candidateExit) <= DoorOpeningMinimumSpacingSqM ||
+                    FlatDistanceSq(candidateExit, segmentEnd) <= DoorOpeningMinimumSpacingSqM)
+                    continue;
+
+                doorName = doorNames[i];
+                approach = candidateApproach;
+                opening = center;
+                exit = candidateExit;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryGetExportedDoorOpening(string doorName, out Vector3 center)
+        {
+            center = Vector3.zero;
+            EnsureDoorOpeningsLoaded();
+            return _doorOpeningByName != null &&
+                !string.IsNullOrEmpty(doorName) &&
+                _doorOpeningByName.TryGetValue(doorName, out center);
+        }
+
+        private static void EnsureDoorOpeningsLoaded()
+        {
+            if (_doorOpeningsLoadAttempted)
+                return;
+
+            _doorOpeningsLoadAttempted = true;
+            _doorOpeningByName = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+            string path = Path.Combine(Paths.PluginPath, SceneNavigationDataFileName);
+            if (!File.Exists(path))
+                return;
+
+            try
+            {
+                using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(File.ReadAllText(path))))
+                {
+                    var serializer = new DataContractJsonSerializer(typeof(SceneNavigationDataDoc));
+                    SceneNavigationDataDoc doc = serializer.ReadObject(stream) as SceneNavigationDataDoc;
+                    if (doc == null || doc.OcclusionPortals == null)
+                        return;
+
+                    for (int i = 0; i < doc.OcclusionPortals.Length; i++)
+                    {
+                        ScenePortalRecord portal = doc.OcclusionPortals[i];
+                        if (portal == null || string.IsNullOrEmpty(portal.ParentDoorName) || portal.Center == null)
+                            continue;
+
+                        _doorOpeningByName[portal.ParentDoorName] = new Vector3(portal.Center.x, portal.Center.y, portal.Center.z);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Main.Log != null)
+                    Main.Log.LogWarning("SimpleNavPlanner: failed to load door opening portals from " + path + " ex=" + ex.Message);
+            }
+        }
+
+        private static float FlatDistanceSq(Vector3 a, Vector3 b)
+        {
+            float dx = a.x - b.x;
+            float dz = a.z - b.z;
+            return dx * dx + dz * dz;
         }
 
         private static float PointSegmentDistance(float px, float pz, float ax, float az, float bx, float bz)
@@ -942,6 +1177,27 @@ namespace DateEverythingAccess
         private class TeleporterEndpoint
         {
             [DataMember] public float[] world_xyz;
+        }
+
+        [DataContract]
+        private class SceneNavigationDataDoc
+        {
+            [DataMember] public ScenePortalRecord[] OcclusionPortals;
+        }
+
+        [DataContract]
+        private class ScenePortalRecord
+        {
+            [DataMember] public string ParentDoorName;
+            [DataMember] public SceneVector3 Center;
+        }
+
+        [DataContract]
+        private class SceneVector3
+        {
+            [DataMember] public float x;
+            [DataMember] public float y;
+            [DataMember] public float z;
         }
 #pragma warning restore CS0649
     }
