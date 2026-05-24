@@ -16,6 +16,9 @@ if (-not (Test-Path -LiteralPath $mainSourcePath)) {
 $mainSource = Get-Content -LiteralPath $mainSourcePath -Raw
 $versionMatch = [regex]::Match($mainSource, 'BepInPlugin\(".*?",\s*".*?",\s*"(?<version>[^"]+)"\)')
 if (-not $versionMatch.Success) {
+    $versionMatch = [regex]::Match($mainSource, 'internal\s+const\s+string\s+Version\s*=\s*"(?<version>[^"]+)"')
+}
+if (-not $versionMatch.Success) {
     Write-Error "Could not determine plugin version from Main.cs"
     exit 1
 }
