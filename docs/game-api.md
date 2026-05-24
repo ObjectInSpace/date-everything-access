@@ -888,15 +888,26 @@ Important consequence:
   - it drives objective text such as `Start your new job at your computer`, `Check the delivery at the front door.`, `Awaken your phone.`, `Locate the magnifying glass to Awaken it.`, and `Talk to Skylar Specs.`
 - `TutorialController`
   - private `computer` field stores the tutorial computer anchor `GameObject`
+  - private `giftBox` field stores the active Dateviators delivery box / Skylar Specs package `GameObject`
   - private `frontDoor` field stores the tutorial front-door anchor `GameObject`
+  - private `triggerZones` array is populated from `FindObjectsOfType<TutorialTriggerZone>(includeInactive: true)` in `Start()`
+- `TutorialTriggerZone.OnTriggerEnter(Collider other)`
+  - for `EventType.TriggerDrone`, it calls `TutorialController.DeliverGiftBox()`
+- `TutorialController.DeliverGiftBox0()`
+  - enables the `TriggerDrone` tutorial trigger zones and clears tutorial text after the first Thiscord/phone step
+- `TutorialController.UnpauseAndGoToGift()`
+  - unlocks office doors, breaks the front door moving dateable, activates `giftBox`, unpauses the player, and sets the next tutorial text
 
 Important consequence:
 
 - Objective tracking should prefer the live tutorial signpost text over reconstructed save-state guesses when both are available.
-- Computer and front-door tracking can anchor directly from those serialized `TutorialController` object references before falling back to generic interactable-name heuristics.
+- Computer, gift-box delivery, and front-door exit tracking can anchor directly from those serialized `TutorialController` object references before falling back to generic interactable-name heuristics.
+- `Check the delivery at the front door.` is a gift-box/Skylar package objective, not a door-particle objective. Runtime proof on 2026-05-24 showed routing to a door particle here caused `No path found to door particle`; the accessibility objective resolver should prefer active `giftBox` for `FrontDoor` while it exists, then fall back to `frontDoor` if the box is inactive or cannot resolve to a navigable zone.
+- The first computer objective should use `TutorialController.computer` as its source of truth. In the scene this serialized reference is `ComputerMovingDateable`; its active `mac_computer` monitor child is the expected interactable surface. If that anchor cannot resolve at runtime, only then fall back to a broader computer-like interactable search. For computer targets, plan to the interactable's collider/renderer bounds center instead of blindly using `transform.position`.
 - `TutorialController.SetTutorialText(...)` also emits generic prompts such as `Continue to awaken dateable objects.` and `Realize Dateable Objects.` that do not name a single character directly.
 - For those generic prompts, accessibility objective tracking needs a fallback policy such as picking the nearest valid unmet or not-yet-realized dateable interactable instead of returning `No current objective.`
 - The `tutorialSignpostTMP` text can still hold the current objective even when the signpost object itself is hidden, so objective readers should key off the text field, not only the signpost object's active state.
+- `Leave the office and reflect on your life choices.` does not name an interactable. The actual progression is entering the active `TutorialTriggerZone.EventType.TriggerDrone` volume enabled by `DeliverGiftBox0()`, which starts the drone cutscene and eventually activates `giftBox`; objective tracking should route to the live trigger zone world coordinate rather than to the office door.
 - Maggie’s tutorial progression uses mixed identifiers: save-state checks use `maggie_mglass`, while the tutorial interaction gate checks `obj.InternalName() != "maggie"`, so tracker matching should tolerate both names plus visible labels like `Maggie` or `Magnifying`.
 
 ### Hotkey overlap

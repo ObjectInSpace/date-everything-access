@@ -223,6 +223,7 @@ namespace DateEverythingAccess
             Add("navigation_arrived", "Ziel erreicht.", "Arrived at target.");
             Add("navigation_blocked", "Navigation blockiert oder unterbrochen.", "Navigation blocked or interrupted.");
             Add("navigation_no_path", "Kein Weg zu {0} gefunden.", "No path found to {0}.");
+            Add("navigation_tutorial_gift_delivery_trigger", "Geschenk-Lieferausloeser", "Gift delivery trigger");
             Add("navigation_planner_not_ready", "Navigationsdaten noch nicht bereit.", "Navigation data not ready yet.");
             Add("navigation_select_target_title", "Navigationsziel waehlen", "Select navigation target");
             Add("navigation_room_list_title", "Raeume im Haus", "Rooms in house");
