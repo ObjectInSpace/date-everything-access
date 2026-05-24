@@ -663,7 +663,8 @@ namespace DateEverythingAccess
 
                 if (!IsSimpleRouteTargetSelected(route))
                 {
-                    Vector3 lookInput = GetLookInputTowardRouteTarget(playerTransform, route.TargetPosition);
+                    Vector3 lookPoint = ResolveSimpleRouteTargetLookPoint(route);
+                    Vector3 lookInput = GetLookInputTowardRouteTarget(playerTransform, lookPoint);
                     if (lookInput.sqrMagnitude <= 0.0001f)
                     {
                         // If the camera is nominally pointed at the target but the game's
@@ -673,6 +674,7 @@ namespace DateEverythingAccess
                     }
 
                     ApplyNavigationInput(Vector3.zero, lookInput);
+                    LogSimpleRouteFrameDiagnostic(route, playerTransform, playerPos, lookPoint, Vector3.zero, lookInput, false);
                     return;
                 }
 
@@ -756,8 +758,66 @@ namespace DateEverythingAccess
             if (manager == null || manager.activeObject == null || !manager.IsPlayerInRange)
                 return false;
 
-            return manager.activeObject.gameObject != null &&
-                manager.activeObject.gameObject.GetInstanceID() == route.TargetGameObjectId;
+            return IsSameOrRelatedSimpleRouteTarget(route, manager.activeObject.gameObject);
+        }
+
+        private static bool IsSameOrRelatedSimpleRouteTarget(SimpleNavRoute route, GameObject activeObject)
+        {
+            if (route == null || activeObject == null)
+                return false;
+
+            if (activeObject.GetInstanceID() == route.TargetGameObjectId)
+                return true;
+
+            GameObject routeTarget = FindSimpleRouteTargetObject(route);
+            if (routeTarget == null)
+                return false;
+
+            Transform activeTransform = activeObject.transform;
+            Transform targetTransform = routeTarget.transform;
+            return activeTransform.IsChildOf(targetTransform) || targetTransform.IsChildOf(activeTransform);
+        }
+
+        private static Vector3 ResolveSimpleRouteTargetLookPoint(SimpleNavRoute route)
+        {
+            if (route == null)
+                return Vector3.zero;
+
+            GameObject targetObject = FindSimpleRouteTargetObject(route);
+            if (targetObject == null)
+                return route.TargetPosition;
+
+            Collider collider = targetObject.GetComponent<Collider>();
+            if (collider == null)
+                collider = targetObject.GetComponentInChildren<Collider>();
+
+            if (collider == null)
+                return targetObject.transform.position;
+
+            Camera cam = Camera.main;
+            if (cam != null)
+                return collider.ClosestPointOnBounds(cam.transform.position);
+
+            return collider.bounds.center;
+        }
+
+        private static GameObject FindSimpleRouteTargetObject(SimpleNavRoute route)
+        {
+            if (route == null || route.TargetGameObjectId == 0)
+                return null;
+
+            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
+            for (int i = 0; i < interactables.Length; i++)
+            {
+                InteractableObj interactable = interactables[i];
+                if (interactable == null || interactable.gameObject == null)
+                    continue;
+
+                if (interactable.gameObject.GetInstanceID() == route.TargetGameObjectId)
+                    return interactable.gameObject;
+            }
+
+            return null;
         }
 
         private static bool IsSimpleRouteDoorTargetComplete(SimpleNavRoute route)
@@ -811,11 +871,13 @@ namespace DateEverythingAccess
             Camera cam = Camera.main;
             if (cam != null && toTarget.sqrMagnitude > 0.0001f)
             {
-                pitch = Mathf.Clamp(
-                    Vector3.SignedAngle(cam.transform.forward, toTarget.normalized, -cam.transform.right) /
-                    AutoWalkLookScaleDegrees,
-                    -1f,
-                    1f);
+                Vector3 cameraLocalTarget = cam.transform.InverseTransformDirection(targetPosition - cam.transform.position);
+                if (cameraLocalTarget.sqrMagnitude > 0.0001f)
+                {
+                    float forward = Mathf.Max(0.001f, new Vector2(cameraLocalTarget.x, cameraLocalTarget.z).magnitude);
+                    float pitchDegrees = Mathf.Atan2(cameraLocalTarget.y, forward) * Mathf.Rad2Deg;
+                    pitch = Mathf.Clamp(pitchDegrees / AutoWalkLookScaleDegrees, -1f, 1f);
+                }
             }
 
             if (Mathf.Abs(yaw) < 0.05f) yaw = 0f;
@@ -985,6 +1047,7 @@ namespace DateEverythingAccess
             _lastNavigationTransitionDebugSnapshot = null;
             _lastNavigationBlockedDetail = null;
             ObjectTracker.StopTracking();
+            SimpleNavBridge.EndStep();
             ApplyNavigationInput(Vector3.zero, Vector3.zero);
         }
 
@@ -1628,9 +1691,14 @@ namespace DateEverythingAccess
             if (!BeginNavigation(targetZone, targetLabel))
                 return;
 
-            TryPlanAndInstallSimpleNavRoute();
-            if (SimpleNavBridge.HasActiveRoute)
+            if (TryPlanAndInstallSimpleNavRoute())
+            {
                 ObjectTracker.StartTracking(SimpleNavBridge.LastResolvedTarget, requiresInteraction: false);
+            }
+            else
+            {
+                StopNavigationRuntime();
+            }
         }
 
         // Ctrl+Shift+F6 known-objects picker. Flat house-wide list of every active InteractableObj
@@ -1904,36 +1972,41 @@ namespace DateEverythingAccess
                 return;
             }
 
+            if (!TryPlanAndInstallSimpleNavRoute())
+            {
+                StopNavigationRuntime();
+                return;
+            }
+
             _isAutoWalking = true;
             _lastAutoWalkPosition = BetterPlayerControl.Instance != null ? BetterPlayerControl.Instance.transform.position : Vector3.zero;
             _lastAutoWalkProgressTime = Time.unscaledTime;
-
-            TryPlanAndInstallSimpleNavRoute();
-
             ScreenReader.Say(Loc.Get("navigation_autowalk_started"));
         }
 
         // Plan a SimpleNavRoute from the player's current position to the tracked interactable,
-        // and install it on SimpleNavBridge. Silent no-op if the planner isn't ready, the
-        // interactable isn't resolvable, or the planner returns null (no path).
-        private void TryPlanAndInstallSimpleNavRoute()
+        // and install it on SimpleNavBridge. Returns false after announcing the user-visible
+        // failure reason when the planner is unavailable, the target is missing, or no path exists.
+        private bool TryPlanAndInstallSimpleNavRoute()
         {
+            SimpleNavBridge.EndStep();
+
             if (!SimpleNavPlanner.IsReady)
             {
                 if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: SimpleNavPlanner not ready, skipping route install");
                 ScreenReader.Say(Loc.Get("navigation_planner_not_ready"));
-                return;
+                return false;
             }
             if (!TryGetTrackedInteractable(out InteractableObj target) || target == null || target.gameObject == null)
             {
                 if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: no tracked interactable for route planning");
                 ScreenReader.Say(Loc.Get("navigation_no_objective"));
-                return;
+                return false;
             }
             if (BetterPlayerControl.Instance == null)
             {
                 if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: no BetterPlayerControl for route planning");
-                return;
+                return false;
             }
 
             Vector3 startPos = BetterPlayerControl.Instance.transform.position;
@@ -1950,9 +2023,10 @@ namespace DateEverythingAccess
                 SimpleNavPlanner.PlanFailure why = SimpleNavPlanner.LastFailure;
                 if (Main.Log != null) Main.Log.LogInfo("ToggleAutoWalk: planner returned no route for target=" + goName + " reason=" + why);
                 ScreenReader.Say(Loc.Get("navigation_no_path", label) + " (" + why + ")");
-                return;
+                return false;
             }
             SimpleNavBridge.BeginRoute(route);
+            return true;
         }
 
 

@@ -1,0 +1,309 @@
+{
+  "status": "ok",
+  "target": {
+    "GameObjectId": 12018,
+    "Name": "Table_Dining",
+    "Path": "===SCENE===/House/DiningRoom/Table_Dining",
+    "Position": {
+      "x": -24.532045,
+      "y": 0.966287,
+      "z": -1.524251
+    },
+    "IsDatable": true,
+    "InkFileName": "abel_table.dining_table",
+    "InteractionRadius": 7.5
+  },
+  "start": {
+    "floor": "upper",
+    "cell": [
+      180,
+      161
+    ],
+    "world_xz": [
+      2.7828,
+      -2.7017
+    ],
+    "wx": 2.7828,
+    "wz": -2.7017,
+    "floor_y": 12.5
+  },
+  "goal_cell_count": 3088,
+  "path_length_cells": 197,
+  "waypoint_count": 6,
+  "total_cost_m": 53.408,
+  "waypoints": [
+    {
+      "floor": "upper",
+      "cell": [
+        180,
+        161
+      ],
+      "world_xz": [
+        2.7828,
+        -2.7017
+      ],
+      "wx": 2.7828,
+      "wz": -2.7017,
+      "floor_y": 12.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        180,
+        327
+      ],
+      "world_xz": [
+        2.787,
+        -2.739
+      ],
+      "wx": 2.787,
+      "wz": -2.739,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        224,
+        337
+      ],
+      "world_xz": [
+        11.587,
+        -0.739
+      ],
+      "wx": 11.587,
+      "wz": -0.739,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        227,
+        340
+      ],
+      "world_xz": [
+        12.187,
+        -0.139
+      ],
+      "wx": 12.187,
+      "wz": -0.139,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        223,
+        344
+      ],
+      "world_xz": [
+        11.387,
+        0.661
+      ],
+      "wx": 11.387,
+      "wz": 0.661,
+      "floor_y": -0.5
+    },
+    {
+      "floor": "ground",
+      "cell": [
+        79,
+        344
+      ],
+      "world_xz": [
+        -17.413,
+        0.661
+      ],
+      "wx": -17.413,
+      "wz": 0.661,
+      "floor_y": -0.5
+    }
+  ],
+  "segments": [
+    {
+      "from": {
+        "floor": "upper",
+        "cell": [
+          180,
+          161
+        ],
+        "world_xz": [
+          2.7828,
+          -2.7017
+        ],
+        "wx": 2.7828,
+        "wz": -2.7017,
+        "floor_y": 12.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          180,
+          327
+        ],
+        "world_xz": [
+          2.787,
+          -2.739
+        ],
+        "wx": 2.787,
+        "wz": -2.739,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          180,
+          327
+        ],
+        "world_xz": [
+          2.787,
+          -2.739
+        ],
+        "wx": 2.787,
+        "wz": -2.739,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          224,
+          337
+        ],
+        "world_xz": [
+          11.587,
+          -0.739
+        ],
+        "wx": 11.587,
+        "wz": -0.739,
+        "floor_y": -0.5
+      },
+      "doors": [
+        {
+          "id": 21623,
+          "name": "Stairs",
+          "distance_m": 0.686
+        }
+      ]
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          224,
+          337
+        ],
+        "world_xz": [
+          11.587,
+          -0.739
+        ],
+        "wx": 11.587,
+        "wz": -0.739,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          227,
+          340
+        ],
+        "world_xz": [
+          12.187,
+          -0.139
+        ],
+        "wx": 12.187,
+        "wz": -0.139,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          227,
+          340
+        ],
+        "world_xz": [
+          12.187,
+          -0.139
+        ],
+        "wx": 12.187,
+        "wz": -0.139,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          223,
+          344
+        ],
+        "world_xz": [
+          11.387,
+          0.661
+        ],
+        "wx": 11.387,
+        "wz": 0.661,
+        "floor_y": -0.5
+      },
+      "doors": []
+    },
+    {
+      "from": {
+        "floor": "ground",
+        "cell": [
+          223,
+          344
+        ],
+        "world_xz": [
+          11.387,
+          0.661
+        ],
+        "wx": 11.387,
+        "wz": 0.661,
+        "floor_y": -0.5
+      },
+      "to": {
+        "floor": "ground",
+        "cell": [
+          79,
+          344
+        ],
+        "world_xz": [
+          -17.413,
+          0.661
+        ],
+        "wx": -17.413,
+        "wz": 0.661,
+        "floor_y": -0.5
+      },
+      "doors": [
+        {
+          "id": 13949,
+          "name": "Door_Front_BrokenGlass_MODEL_UPDATE",
+          "distance_m": 0.661
+        },
+        {
+          "id": 5579,
+          "name": "OfficeDoorsCloset",
+          "distance_m": 0.67
+        },
+        {
+          "id": 12511,
+          "name": "SM_Doorframe_Big_1",
+          "distance_m": 0.073
+        }
+      ]
+    }
+  ],
+  "edge_kinds_used": [
+    "stairs",
+    "walk"
+  ],
+  "params": {
+    "cell_size_m": 0.2,
+    "interaction_radius_used_m": 7.5,
+    "corner_waypoint_deg": 30.0,
+    "door_tag_radius_m": 0.8
+  }
+}

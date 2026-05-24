@@ -32,6 +32,7 @@ namespace DateEverythingAccess
         private static int _activeRouteSegment;
         // Player must come within this XZ distance of the active waypoint before we advance.
         private const float WaypointArrivalRadius = 1.35f;
+        private const float DoorWaypointArrivalRadius = 2.2f;
         private const float DoorOpeningArrivalRadius = 0.65f;
 
         // Telemetry recorded per active route. Used by RecordFrameProgress so failures can be
@@ -586,7 +587,10 @@ namespace DateEverythingAccess
         {
             SimpleNavWaypoint waypoint = ActiveWaypoint;
             if (waypoint == null)
-                return WaypointArrivalRadius;
+                return _activeDoor != null ? DoorWaypointArrivalRadius : WaypointArrivalRadius;
+
+            if (_activeDoor != null)
+                return DoorWaypointArrivalRadius;
 
             switch (waypoint.Kind)
             {

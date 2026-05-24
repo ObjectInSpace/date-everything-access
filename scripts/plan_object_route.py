@@ -34,6 +34,8 @@ NAVDATA = REPO / "artifacts/navigation/thirdpersongreybox-navigation-data.json"
 NAVIGABLE_CHAR = "N"
 CORNER_WAYPOINT_DEG = 30.0       # smoothing: keep vertices with turn > this
 DOOR_TAG_RADIUS_M = 0.8          # segment tagged with door if door XZ is within this distance of the segment
+MIN_INTERACTION_RADIUS_M = 0.5
+MAX_INTERACTION_RADIUS_M = 7.5
 
 
 # ---------- bake loading + cell/world conversions ----------
@@ -456,8 +458,7 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
     if tfloor is None:
         raise SystemExit(f"target Y={ty} not on a baked floor")
     radius = interaction_radius_override or target.get("InteractionRadius", 1.0)
-    # Clamp absurd radii (some props publish 7.5m — too generous for goal-cell expansion).
-    radius = min(radius, 2.0)
+    radius = max(MIN_INTERACTION_RADIUS_M, min(radius, MAX_INTERACTION_RADIUS_M))
     goals = goal_cells_around(planner.floors[tfloor], tx, tz, radius)
     if not goals:
         # Fall back to the nearest navigable cell.
