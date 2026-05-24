@@ -452,6 +452,43 @@ function Get-GameObjectPath {
     return [string]::Join("/", $pathSegments)
 }
 
+function Test-GameObjectDescendsFromAny {
+    param(
+        [Parameter(Mandatory = $true)]
+        [long]$GameObjectId,
+
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Generic.HashSet[long]]$AncestorGameObjectIds,
+
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Generic.Dictionary[long, object]]$TransformByGameObjectId,
+
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Generic.Dictionary[long, object]]$TransformsById
+    )
+
+    $currentGameObjectId = $GameObjectId
+    while ($currentGameObjectId -ne 0) {
+        if ($AncestorGameObjectIds.Contains($currentGameObjectId)) {
+            return $true
+        }
+
+        if (-not $TransformByGameObjectId.ContainsKey($currentGameObjectId)) {
+            return $false
+        }
+
+        $transformInfo = $TransformByGameObjectId[$currentGameObjectId]
+        if ($transformInfo.ParentTransformId -eq 0 -or -not $TransformsById.ContainsKey($transformInfo.ParentTransformId)) {
+            return $false
+        }
+
+        $parentTransform = $TransformsById[$transformInfo.ParentTransformId]
+        $currentGameObjectId = $parentTransform.GameObjectId
+    }
+
+    return $false
+}
+
 function New-ReasonCounter {
     return [System.Collections.Generic.Dictionary[string, int]]::new([System.StringComparer]::OrdinalIgnoreCase)
 }
@@ -1145,8 +1182,8 @@ foreach ($component in $primitiveColliderComponents) {
         $rigidbodyIsKinematic = $rigidbodyByGameObjectId[$gameObject.Id].IsKinematic
     }
     $component | Add-Member -NotePropertyName TransformId -NotePropertyValue $transformInfo.Id -Force
-    $component | Add-Member -NotePropertyName IsDoorConnector -NotePropertyValue ($doorGameObjectIds.Contains($gameObject.Id)) -Force
-    $component | Add-Member -NotePropertyName IsTeleporterConnector -NotePropertyValue ($teleporterGameObjectIds.Contains($gameObject.Id)) -Force
+    $component | Add-Member -NotePropertyName IsDoorConnector -NotePropertyValue (Test-GameObjectDescendsFromAny -GameObjectId $gameObject.Id -AncestorGameObjectIds $doorGameObjectIds -TransformByGameObjectId $transformByGameObjectId -TransformsById $transformsById) -Force
+    $component | Add-Member -NotePropertyName IsTeleporterConnector -NotePropertyValue (Test-GameObjectDescendsFromAny -GameObjectId $gameObject.Id -AncestorGameObjectIds $teleporterGameObjectIds -TransformByGameObjectId $transformByGameObjectId -TransformsById $transformsById) -Force
     $component | Add-Member -NotePropertyName HasRigidbody -NotePropertyValue ($rigidbodyByGameObjectId.ContainsKey($gameObject.Id)) -Force
     $component | Add-Member -NotePropertyName RigidbodyIsKinematic -NotePropertyValue $rigidbodyIsKinematic -Force
 
@@ -1239,8 +1276,8 @@ if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($
         $rigidbodyIsKinematic = $false
         if ($rigidbodyByGameObjectId.ContainsKey($gameObject.Id)) { $rigidbodyIsKinematic = $rigidbodyByGameObjectId[$gameObject.Id].IsKinematic }
         $component | Add-Member -NotePropertyName TransformId -NotePropertyValue $transformInfo.Id -Force
-        $component | Add-Member -NotePropertyName IsDoorConnector -NotePropertyValue ($doorGameObjectIds.Contains($gameObject.Id)) -Force
-        $component | Add-Member -NotePropertyName IsTeleporterConnector -NotePropertyValue ($teleporterGameObjectIds.Contains($gameObject.Id)) -Force
+        $component | Add-Member -NotePropertyName IsDoorConnector -NotePropertyValue (Test-GameObjectDescendsFromAny -GameObjectId $gameObject.Id -AncestorGameObjectIds $doorGameObjectIds -TransformByGameObjectId $transformByGameObjectId -TransformsById $transformsById) -Force
+        $component | Add-Member -NotePropertyName IsTeleporterConnector -NotePropertyValue (Test-GameObjectDescendsFromAny -GameObjectId $gameObject.Id -AncestorGameObjectIds $teleporterGameObjectIds -TransformByGameObjectId $transformByGameObjectId -TransformsById $transformsById) -Force
         $component | Add-Member -NotePropertyName HasRigidbody -NotePropertyValue ($rigidbodyByGameObjectId.ContainsKey($gameObject.Id)) -Force
         $component | Add-Member -NotePropertyName RigidbodyIsKinematic -NotePropertyValue $rigidbodyIsKinematic -Force
 

@@ -4,7 +4,9 @@ For each named floor band (ground, upper):
   1. Pick representative floor Y from the walkable export (area-weighted flat/step-up peaks).
   2. Rasterize at 0.2m cells across XZ extent of the floor's walkable footprint.
   3. Cell is walkable iff a walkable surface (VExt <= 1m slab) within the floor band covers it.
-  4. Cell is blocked iff a blocker AABB intersects [floorY - STEP_UP_TOL, floorY + capsuleH] at that cell.
+  4. Cell is blocked iff the player capsule cannot stand there:
+     primitive colliders use their 2D bounds; mesh colliders use exported
+     player-height triangle-slice segments when available.
   5. Dilate blocked region by capsule radius (0.4m / 2 cells at 0.2m).
   6. Navigable = walkable AND NOT dilated-blocked.
 Emits one bitmap per floor + debug PNG.
@@ -29,7 +31,11 @@ INTER = REPO / "artifacts/navigation/thirdpersongreybox-interactables.json"
 OUT_JSON = REPO / "artifacts/navigation/navigable_region.bake.json"
 OUT_PNG_DIR = REPO / "artifacts/navigation"
 
-CAPSULE_R = 0.40
+# Player local CapsuleCollider radius is 0.4, but the exported Player object
+# has 2x world scale and runtime proof showed collision at ~0.44m from the
+# fireplace. Use a conservative standing-clearance radius that catches those
+# near-grazes without immediately doubling every doorway clearance.
+CAPSULE_R = 0.50
 CAPSULE_H = 2.50
 STEP_UP_TOL = 0.25
 CELL = 0.20  # rasterization resolution
@@ -112,6 +118,168 @@ def _rasterize_segment(blocked_bm, ax, az, bx, bz, minx, minz, nx, nz, cell):
             t_next_z += dt_z
 
 
+def _rasterize_bounds(blocked_bm, bb, minx, minz, nx, nz, cell):
+    ix0 = max(0, int(math.floor((bb["MinX"] - minx) / cell)))
+    ix1 = min(nx, int(math.ceil((bb["MaxX"] - minx) / cell)))
+    iz0 = max(0, int(math.floor((bb["MinZ"] - minz) / cell)))
+    iz1 = min(nz, int(math.ceil((bb["MaxZ"] - minz) / cell)))
+    if ix0 >= ix1 or iz0 >= iz1:
+        return False
+    for ix in range(ix0, ix1):
+        row = blocked_bm[ix]
+        for iz in range(iz0, iz1):
+            row[iz] = True
+    return True
+
+
+def _is_structural_mesh(record):
+    text = f"{record.get('Name', '')} {record.get('Path', '')}".lower()
+    structural_markers = (
+        "/walls/",
+        "/wall/",
+        "/doors/",
+        "sm_walls",
+        "sm_wall",
+        "sm_doorframe",
+        "doorframe",
+        "fence",
+        "exterior",
+    )
+    return any(marker in text for marker in structural_markers)
+
+
+def _rasterize_closed_segment_regions(blocked_bm, segments, minx, minz, nx, nz, cell):
+    """Fill areas enclosed by a mesh's slice segments.
+
+    Segment traces alone represent only the collider surface. For solid furniture
+    with closed slice loops, the interior must be blocked too or the planner can
+    thread a path through the object.
+    """
+    if not segments:
+        return 0
+
+    sx0 = min(min(s["AX"], s["BX"]) for s in segments)
+    sx1 = max(max(s["AX"], s["BX"]) for s in segments)
+    sz0 = min(min(s["AZ"], s["BZ"]) for s in segments)
+    sz1 = max(max(s["AZ"], s["BZ"]) for s in segments)
+    ix0 = max(0, int(math.floor((sx0 - minx) / cell)) - 2)
+    ix1 = min(nx, int(math.ceil((sx1 - minx) / cell)) + 3)
+    iz0 = max(0, int(math.floor((sz0 - minz) / cell)) - 2)
+    iz1 = min(nz, int(math.ceil((sz1 - minz) / cell)) + 3)
+    lx = ix1 - ix0
+    lz = iz1 - iz0
+    if lx <= 2 or lz <= 2:
+        return 0
+
+    local = [[False] * lz for _ in range(lx)]
+    local_minx = minx + ix0 * cell
+    local_minz = minz + iz0 * cell
+    for s in segments:
+        _rasterize_segment(
+            local,
+            s["AX"], s["AZ"],
+            s["BX"], s["BZ"],
+            local_minx, local_minz, lx, lz, cell,
+        )
+
+    outside = [[False] * lz for _ in range(lx)]
+    queue = []
+    for ix in range(lx):
+        for iz in (0, lz - 1):
+            if not local[ix][iz] and not outside[ix][iz]:
+                outside[ix][iz] = True
+                queue.append((ix, iz))
+    for iz in range(lz):
+        for ix in (0, lx - 1):
+            if not local[ix][iz] and not outside[ix][iz]:
+                outside[ix][iz] = True
+                queue.append((ix, iz))
+
+    head = 0
+    while head < len(queue):
+        ix, iz = queue[head]
+        head += 1
+        for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            jx = ix + dx
+            jz = iz + dz
+            if jx < 0 or jx >= lx or jz < 0 or jz >= lz:
+                continue
+            if local[jx][jz] or outside[jx][jz]:
+                continue
+            outside[jx][jz] = True
+            queue.append((jx, jz))
+
+    filled = 0
+    for ix in range(lx):
+        for iz in range(lz):
+            if local[ix][iz] or outside[ix][iz]:
+                continue
+            gx = ix0 + ix
+            gz = iz0 + iz
+            if not blocked_bm[gx][gz]:
+                filled += 1
+            blocked_bm[gx][gz] = True
+    return filled
+
+
+def _rasterize_footprint_perimeter(blocked_bm, record, minx, minz, nx, nz, cell):
+    fp = record.get("Footprint") or {}
+    vertices = fp.get("Vertices") or []
+    if len(vertices) < 2:
+        return 0
+
+    hits_before = 0
+    for ix in range(nx):
+        hits_before += sum(1 for blocked in blocked_bm[ix] if blocked)
+
+    for i, a in enumerate(vertices):
+        b = vertices[(i + 1) % len(vertices)]
+        ax = a.get("x")
+        az = a.get("z")
+        bx = b.get("x")
+        bz = b.get("z")
+        if ax is None or az is None or bx is None or bz is None:
+            continue
+        if not (in_scene(ax, az) or in_scene(bx, bz)):
+            continue
+        _rasterize_segment(blocked_bm, ax, az, bx, bz, minx, minz, nx, nz, cell)
+
+    hits_after = 0
+    for ix in range(nx):
+        hits_after += sum(1 for blocked in blocked_bm[ix] if blocked)
+    return max(0, hits_after - hits_before)
+
+
+def _is_solid_blocker(record):
+    if record.get("IsTrigger"):
+        return False
+    if record.get("IsDoorConnector") or record.get("IsTeleporterConnector"):
+        return False
+    if record.get("Enabled") is False:
+        return False
+    if record.get("IsActive") is False:
+        return False
+    return True
+
+
+def _segments_in_floor_band(mesh_record, y_lo, y_hi):
+    fp = mesh_record.get("Footprint") or {}
+    segs = fp.get("Segments") or []
+    if not segs:
+        return []
+    result = []
+    for segment in segs:
+        py = segment.get("PlaneY")
+        if py is not None and (py < y_lo or py > y_hi):
+            continue
+        ax = segment["AX"]; az = segment["AZ"]
+        bx = segment["BX"]; bz = segment["BZ"]
+        if not (in_scene(ax, az) or in_scene(bx, bz)):
+            continue
+        result.append(segment)
+    return result
+
+
 def bake_floor(floor, walkables, blockers, mesh_colliders, doors):
     fy = floor["y"]
     ytol = floor["y_tol"]
@@ -157,55 +325,87 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors):
 
     blocked_bm = [[False] * nz for _ in range(nx)]
     blocker_hits = 0
+    primitive_blocker_hits = 0
+    mesh_bounds_fallback_hits = 0
+    mesh_segment_blocker_hits = 0
+    mesh_segments_rasterized = 0
+    mesh_closed_region_blocker_hits = 0
+    mesh_closed_region_cells = 0
+    mesh_footprint_edge_blocker_hits = 0
+    mesh_footprint_edge_cells = 0
+    mesh_records_by_id = {
+        m.get("ComponentId"): m
+        for m in mesh_colliders
+        if m.get("ComponentId") is not None
+    }
+    mesh_records_with_segments = set()
+
+    # Mesh collider pass: this is the 2.5D capsule-clearance approximation.
+    # Any active, enabled, non-trigger mesh collider that has player-height
+    # triangle-slice segments contributes its actual surface traces, regardless
+    # of whether it is a wall, fireplace, table, counter, bookshelf, etc.
+    # Dilation below expands those traces by the player capsule radius.
+    for m in mesh_colliders:
+        if not _is_solid_blocker(m):
+            continue
+        if m["TopY"] < y_lo or m["BottomY"] > y_hi:
+            continue
+        segments = _segments_in_floor_band(m, y_lo, y_hi)
+        if not segments:
+            continue
+        mesh_records_with_segments.add(m.get("ComponentId"))
+        mesh_had_segment = False
+        for s in segments:
+            _rasterize_segment(
+                blocked_bm,
+                s["AX"], s["AZ"],
+                s["BX"], s["BZ"],
+                minx, minz, nx, nz, CELL,
+            )
+            mesh_segments_rasterized += 1
+            mesh_had_segment = True
+        if mesh_had_segment:
+            mesh_segment_blocker_hits += 1
+            if not _is_structural_mesh(m):
+                edge_cells = _rasterize_footprint_perimeter(
+                    blocked_bm,
+                    m,
+                    minx, minz, nx, nz, CELL,
+                )
+                if edge_cells > 0:
+                    mesh_footprint_edge_blocker_hits += 1
+                    mesh_footprint_edge_cells += edge_cells
+                filled = _rasterize_closed_segment_regions(
+                    blocked_bm,
+                    segments,
+                    minx, minz, nx, nz, CELL,
+                )
+                if filled > 0:
+                    mesh_closed_region_blocker_hits += 1
+                    mesh_closed_region_cells += filled
+
     for b in blockers:
-        # IsTrigger blockers don't physically block walking; skip
-        if b.get("IsTrigger"): continue
-        # Door / teleporter connectors are not impassable obstacles for the planner
-        if b.get("IsDoorConnector") or b.get("IsTeleporterConnector"): continue
+        if not _is_solid_blocker(b): continue
         if b["TopY"] < y_lo or b["BottomY"] > y_hi: continue
         bb = b.get("Bounds2D")
         if not bb: continue
         if not in_scene((bb["MinX"]+bb["MaxX"])/2, (bb["MinZ"]+bb["MaxZ"])/2): continue
-        ix0 = max(0, int(math.floor((bb["MinX"] - minx) / CELL)))
-        ix1 = min(nx, int(math.ceil((bb["MaxX"] - minx) / CELL)))
-        iz0 = max(0, int(math.floor((bb["MinZ"] - minz) / CELL)))
-        iz1 = min(nz, int(math.ceil((bb["MaxZ"] - minz) / CELL)))
-        if ix0 >= ix1 or iz0 >= iz1: continue
-        blocker_hits += 1
-        for ix in range(ix0, ix1):
-            row = blocked_bm[ix]
-            for iz in range(iz0, iz1):
-                row[iz] = True
 
-    # Wall-mesh segment pass: combined-room wall meshes (SM_Walls_Living etc.)
-    # are rejected from NavigationBlockers by the wall-like thinness gate (their
-    # AABBs span room interiors). Their MeshSlicePlanes triangle-clipped segments
-    # trace the actual walls — rasterize those directly. See
-    # [[project-navigation-bake-blocker-gap]] and [[project-navigation-bake-blocker-scope-2026-05-21]].
-    wall_meshes_used = 0
-    wall_segments_rasterized = 0
-    for m in mesh_colliders:
-        fp = m.get("Footprint") or {}
-        if not fp.get("IsWallLikeFatVictim"): continue
-        # Per-floor band intersection (same Y test as the AABB pass).
-        if m["TopY"] < y_lo or m["BottomY"] > y_hi: continue
-        segs = fp.get("Segments")
-        if not segs: continue
-        mesh_had_in_band_segment = False
-        for s in segs:
-            # Only rasterize segments whose source slice plane is inside the
-            # floor's Y band. This prevents ground-floor wall slice traces from
-            # leaking onto the upper floor for walls whose AABB barely
-            # straddles both bands (e.g. SM_Walls_Living TopY=12.55).
-            py = s.get("PlaneY")
-            if py is not None and (py < y_lo or py > y_hi): continue
-            ax = s["AX"]; az = s["AZ"]; bx = s["BX"]; bz = s["BZ"]
-            if not (in_scene(ax, az) or in_scene(bx, bz)): continue
-            _rasterize_segment(blocked_bm, ax, az, bx, bz, minx, minz, nx, nz, CELL)
-            wall_segments_rasterized += 1
-            mesh_had_in_band_segment = True
-        if mesh_had_in_band_segment:
-            wall_meshes_used += 1
+        # Mesh colliders with slice segments already used actual collider
+        # surface traces above. Falling back to their AABB would reintroduce
+        # the over-blocking that the capsule-clearance pass is replacing.
+        if b.get("ColliderType") == "MeshCollider":
+            mesh_record = mesh_records_by_id.get(b.get("ComponentId"))
+            if mesh_record is not None and b.get("ComponentId") in mesh_records_with_segments:
+                continue
+            if _rasterize_bounds(blocked_bm, bb, minx, minz, nx, nz, CELL):
+                blocker_hits += 1
+                mesh_bounds_fallback_hits += 1
+            continue
+
+        if _rasterize_bounds(blocked_bm, bb, minx, minz, nx, nz, CELL):
+            blocker_hits += 1
+            primitive_blocker_hits += 1
 
     # Dilate blocked by capsule radius. Use Euclidean disc instead of
     # Chebyshev box: a 2-cell box gives 0.57m corner reach (sqrt(2)*0.4m)
@@ -271,8 +471,18 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors):
         },
         "walkable_surface_count": len(floor_walks),
         "blocker_hits": blocker_hits,
-        "wall_meshes_rasterized": wall_meshes_used,
-        "wall_segments_rasterized": wall_segments_rasterized,
+        "primitive_blocker_hits": primitive_blocker_hits,
+        "mesh_bounds_fallback_hits": mesh_bounds_fallback_hits,
+        "mesh_segment_blocker_hits": mesh_segment_blocker_hits,
+        "mesh_segments_rasterized": mesh_segments_rasterized,
+        "mesh_closed_region_blocker_hits": mesh_closed_region_blocker_hits,
+        "mesh_closed_region_cells": mesh_closed_region_cells,
+        "mesh_footprint_edge_blocker_hits": mesh_footprint_edge_blocker_hits,
+        "mesh_footprint_edge_cells": mesh_footprint_edge_cells,
+        # Legacy metric names retained for older diagnostics. These now mean
+        # all mesh segment traces, not only path/name-classified walls.
+        "wall_meshes_rasterized": mesh_segment_blocker_hits,
+        "wall_segments_rasterized": mesh_segments_rasterized,
         "door_carves": door_carves,
         "cells": {
             "walkable": walk_count,
@@ -387,8 +597,12 @@ def main():
         print(f"  grid: {f['nx']}x{f['nz']} cells ({f['nx']*f['nz']} total)")
         print(f"  walkable={c['walkable']}  blocked_raw={c['blocked_raw']}  "
               f"blocked_dilated={c['blocked_dilated']}  navigable={c['navigable']}")
-        print(f"  wall_meshes_rasterized={result['wall_meshes_rasterized']}  "
-              f"wall_segments_rasterized={result['wall_segments_rasterized']}  "
+        print(f"  primitive_blockers={result['primitive_blocker_hits']}  "
+              f"mesh_segment_blockers={result['mesh_segment_blocker_hits']}  "
+              f"mesh_segments={result['mesh_segments_rasterized']}  "
+              f"mesh_footprint_edges={result['mesh_footprint_edge_blocker_hits']}  "
+              f"mesh_closed_regions={result['mesh_closed_region_blocker_hits']}  "
+              f"mesh_bounds_fallback={result['mesh_bounds_fallback_hits']}  "
               f"door_carves={result['door_carves']}")
         png_path = OUT_PNG_DIR / f"navigable_region.{floor['label']}.ppm"
         write_png(result, png_path)

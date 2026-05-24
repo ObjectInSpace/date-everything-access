@@ -1,0 +1,106 @@
+{
+  "status": "ok",
+  "target": {
+    "GameObjectId": 2934,
+    "Name": "SM_Light_Recessed_18 (1)",
+    "Path": "PV_Lighting_Morning/Lights_Hallway/Lights_Hallway_OFF/SM_Light_Recessed_18 (1)",
+    "Position": {
+      "x": -3.102395,
+      "y": 12.239091,
+      "z": 2.665318
+    },
+    "IsDatable": true,
+    "InkFileName": "lux_lamp",
+    "InteractionRadius": 7.5
+  },
+  "start": {
+    "floor": "upper",
+    "cell": [
+      180,
+      161
+    ],
+    "world_xz": [
+      2.7828,
+      -2.7017
+    ],
+    "wx": 2.7828,
+    "wz": -2.7017,
+    "floor_y": 12.5
+  },
+  "goal_cell_count": 3157,
+  "path_length_cells": 3,
+  "waypoint_count": 2,
+  "total_cost_m": 0.566,
+  "waypoints": [
+    {
+      "floor": "upper",
+      "cell": [
+        180,
+        161
+      ],
+      "world_xz": [
+        2.7828,
+        -2.7017
+      ],
+      "wx": 2.7828,
+      "wz": -2.7017,
+      "floor_y": 12.5
+    },
+    {
+      "floor": "upper",
+      "cell": [
+        178,
+        163
+      ],
+      "world_xz": [
+        2.3828,
+        -2.3017
+      ],
+      "wx": 2.3828,
+      "wz": -2.3017,
+      "floor_y": 12.5
+    }
+  ],
+  "segments": [
+    {
+      "from": {
+        "floor": "upper",
+        "cell": [
+          180,
+          161
+        ],
+        "world_xz": [
+          2.7828,
+          -2.7017
+        ],
+        "wx": 2.7828,
+        "wz": -2.7017,
+        "floor_y": 12.5
+      },
+      "to": {
+        "floor": "upper",
+        "cell": [
+          178,
+          163
+        ],
+        "world_xz": [
+          2.3828,
+          -2.3017
+        ],
+        "wx": 2.3828,
+        "wz": -2.3017,
+        "floor_y": 12.5
+      },
+      "doors": []
+    }
+  ],
+  "edge_kinds_used": [
+    "walk"
+  ],
+  "params": {
+    "cell_size_m": 0.2,
+    "interaction_radius_used_m": 7.5,
+    "corner_waypoint_deg": 30.0,
+    "door_tag_radius_m": 0.8
+  }
+}

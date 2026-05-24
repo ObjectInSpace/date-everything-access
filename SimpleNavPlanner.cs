@@ -239,7 +239,7 @@ namespace DateEverythingAccess
                 Vector2 xz = f.CellToWorld(w.Ix, w.Iz);
                 rawRouteWaypoints.Add(new Vector3(xz.x, f.FloorY, xz.y));
             }
-            AddDoorOpeningWaypoints(rawRouteWaypoints, segmentDoorNames, route);
+            AddRouteWaypoints(rawRouteWaypoints, segmentDoorNames, route);
             route.EnsureSemanticWaypoints();
             while (route.SegmentDoorNames.Count < route.Waypoints.Count - 1)
                 route.SegmentDoorNames.Add(new List<string>(0));
@@ -786,7 +786,7 @@ namespace DateEverythingAccess
             return segs;
         }
 
-        private static void AddDoorOpeningWaypoints(
+        private static void AddRouteWaypoints(
             List<Vector3> rawWaypoints,
             List<List<string>> rawSegmentDoors,
             SimpleNavRoute route)
@@ -797,24 +797,11 @@ namespace DateEverythingAccess
             route.AddWaypoint(rawWaypoints[0], SimpleNavWaypointKind.Navigation);
             for (int i = 0; i < rawWaypoints.Count - 1; i++)
             {
-                Vector3 a = rawWaypoints[i];
                 Vector3 b = rawWaypoints[i + 1];
                 List<string> doors = i < rawSegmentDoors.Count && rawSegmentDoors[i] != null
                     ? rawSegmentDoors[i]
                     : new List<string>(0);
-
-                string doorName;
-                if (TryGetDoorOpeningWaypoints(doors, a, b, out doorName, out Vector3 approach, out Vector3 opening, out Vector3 exit))
-                {
-                    AddSemanticDoorWaypoint(route, doors, approach, SimpleNavWaypointKind.DoorApproach, doorName);
-                    AddSemanticDoorWaypoint(route, doors, opening, SimpleNavWaypointKind.DoorOpening, doorName);
-                    AddSemanticDoorWaypoint(route, doors, exit, SimpleNavWaypointKind.DoorExit, doorName);
-                    AddSemanticDoorWaypoint(route, doors, b, i == rawWaypoints.Count - 2 ? SimpleNavWaypointKind.Target : SimpleNavWaypointKind.Navigation, null);
-                }
-                else
-                {
-                    AddSemanticDoorWaypoint(route, doors, b, i == rawWaypoints.Count - 2 ? SimpleNavWaypointKind.Target : SimpleNavWaypointKind.Navigation, null);
-                }
+                AddSemanticDoorWaypoint(route, doors, b, i == rawWaypoints.Count - 2 ? SimpleNavWaypointKind.Target : SimpleNavWaypointKind.Navigation, null);
             }
         }
 
@@ -861,6 +848,12 @@ namespace DateEverythingAccess
                     continue;
 
                 Vector3 direction = segment.normalized;
+                Vector3 toCenter = center - segmentStart;
+                toCenter.y = 0f;
+                float projection = Vector3.Dot(toCenter, segment) / segment.sqrMagnitude;
+                if (projection < 0.05f || projection > 0.95f)
+                    continue;
+
                 Vector3 candidateApproach = center - direction * DoorOpeningApproachDistanceM;
                 Vector3 candidateExit = center + direction * DoorOpeningApproachDistanceM;
                 candidateApproach.y = center.y;
