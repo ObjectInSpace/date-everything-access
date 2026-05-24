@@ -83,6 +83,15 @@ New-Item -ItemType Directory -Path (Join-Path $packageRoot "BepInEx\core") -Forc
 New-Item -ItemType Directory -Path (Join-Path $packageRoot "BepInEx\plugins") -Force | Out-Null
 
 Copy-Item -LiteralPath $outputDllPath -Destination (Join-Path $packageRoot "BepInEx\plugins\DateEverythingAccess.dll") -Force
+foreach ($supportFile in @(
+    "navigable_region.bake.json",
+    "thirdpersongreybox-navigation-data.json"
+)) {
+    $supportPath = Join-Path (Split-Path -Parent $outputDllPath) $supportFile
+    if (Test-Path -LiteralPath $supportPath) {
+        Copy-Item -LiteralPath $supportPath -Destination (Join-Path $packageRoot "BepInEx\plugins\$supportFile") -Force
+    }
+}
 Copy-Item -LiteralPath $coreSourcePath -Destination (Join-Path $packageRoot "BepInEx") -Recurse -Force
 
 foreach ($requiredFile in $requiredGameFiles) {
