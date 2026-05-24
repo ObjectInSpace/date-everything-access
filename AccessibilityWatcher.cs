@@ -96,6 +96,7 @@ namespace DateEverythingAccess
         {
             None,
             Computer,
+            OfficeExit,
             FrontDoor,
             HouseExit,
             Dorian,
@@ -191,8 +192,10 @@ namespace DateEverythingAccess
         private static FieldInfo _tutorialSignpostField;
         private static FieldInfo _tutorialSignpostTextField;
         private static FieldInfo _tutorialSubtitleTextField;
+        private static FieldInfo _tutorialGiftBoxField;
         private static FieldInfo _tutorialFrontDoorField;
         private static FieldInfo _tutorialComputerField;
+        private static FieldInfo _tutorialTriggerZonesField;
         private static FieldInfo _engagementTitleField;
         private static FieldInfo _engagementStateField;
         private static FieldInfo _specStatTooltipsField;
@@ -300,6 +303,9 @@ namespace DateEverythingAccess
         private Vector3 _lastAutoWalkPosition;
         private Vector3 _trackedInteractableApproachReferencePosition;
         private Vector3 _trackedInteractableApproachTarget;
+        private Vector3 _navigationWorldTarget;
+        private float _navigationWorldTargetRadius;
+        private bool _hasNavigationWorldTarget;
         private bool _isNavigationActive;
         private bool _isAutoWalking;
 
@@ -1046,6 +1052,7 @@ namespace DateEverythingAccess
             _lastNavigationAutoWalkDebugSnapshot = null;
             _lastNavigationTransitionDebugSnapshot = null;
             _lastNavigationBlockedDetail = null;
+            ClearNavigationWorldTarget();
             ObjectTracker.StopTracking();
             SimpleNavBridge.EndStep();
             ApplyNavigationInput(Vector3.zero, Vector3.zero);
@@ -1078,6 +1085,16 @@ namespace DateEverythingAccess
 
         private bool TryEnsureNavigationTarget(out string targetZone, out string targetLabel)
         {
+            if (_hasNavigationWorldTarget)
+            {
+                targetZone = _navigationTargetZone;
+                targetLabel = _navigationTargetLabel;
+                LogNavigationTargetDebug(
+                    "Navigation target source=stored world target=" + _navigationWorldTarget +
+                    " label=" + (targetLabel ?? "<null>"));
+                return true;
+            }
+
             if (TryGetTrackedInteractable(out InteractableObj trackedInteractable) &&
                 TryGetTrackedInteractableZone(trackedInteractable, out targetZone))
             {
@@ -1100,6 +1117,14 @@ namespace DateEverythingAccess
                     targetLabel = BuildNavigationTargetLabel(targetZone, GetCurrentZoneNameInternal());
                 LogNavigationTargetDebug(
                     "Navigation target source=stored zone=" + targetZone +
+                    " label=" + (targetLabel ?? "<null>"));
+                return true;
+            }
+
+            if (TryResolveCurrentObjectiveWorldTarget(out targetZone, out targetLabel))
+            {
+                LogNavigationTargetDebug(
+                    "Navigation target source=objective world target=" + _navigationWorldTarget +
                     " label=" + (targetLabel ?? "<null>"));
                 return true;
             }
@@ -1147,6 +1172,25 @@ namespace DateEverythingAccess
 
             if (!TryResolveNavigableInteractable(interactable, out InteractableObj resolvedInteractable, out targetZone))
             {
+                if (objectiveKind == TutorialObjectiveKind.FrontDoor &&
+                    TryResolveTutorialFrontDoorAnchorInteractable(out InteractableObj fallbackInteractable) &&
+                    fallbackInteractable != interactable &&
+                    TryResolveNavigableInteractable(fallbackInteractable, out resolvedInteractable, out targetZone))
+                {
+                    interactable = resolvedInteractable;
+                    targetLabel = GetTrackedInteractableLabel(interactable);
+                    DebugLogger.Log(
+                        LogCategory.State,
+                        "AccessibilityWatcher",
+                        "Objective resolve success: objectiveKind=" + objectiveKind +
+                        " signpostText=" + (objectiveText ?? "<null>") +
+                        " label=" + (targetLabel ?? "<null>") +
+                        " zone=" + targetZone +
+                        " interactable=" + DescribeInteractable(interactable) +
+                        " fallback=frontDoor");
+                    return !string.IsNullOrEmpty(targetLabel);
+                }
+
                 DebugLogger.Log(
                     LogCategory.State,
                     "AccessibilityWatcher",
@@ -1169,6 +1213,43 @@ namespace DateEverythingAccess
                 " zone=" + targetZone +
                 " interactable=" + DescribeInteractable(interactable));
             return !string.IsNullOrEmpty(targetLabel);
+        }
+
+        private bool TryResolveCurrentObjectiveWorldTarget(out string targetZone, out string targetLabel)
+        {
+            targetZone = null;
+            targetLabel = null;
+            string objectiveText = null;
+            TryGetCurrentTutorialObjectiveText(out objectiveText);
+
+            if (!TryResolveTutorialObjectiveKind(out TutorialObjectiveKind objectiveKind) ||
+                objectiveKind != TutorialObjectiveKind.OfficeExit)
+            {
+                return false;
+            }
+
+            if (!TryResolveActiveDroneTriggerWorldTarget(out Vector3 target, out float radius))
+            {
+                DebugLogger.Log(
+                    LogCategory.State,
+                    "AccessibilityWatcher",
+                    "Objective resolve failed: objectiveKind=" + objectiveKind +
+                    " signpostText=" + (objectiveText ?? "<null>") +
+                    " reason=no active drone trigger zone");
+                return false;
+            }
+
+            SetNavigationWorldTarget(target, radius, Loc.Get("navigation_tutorial_gift_delivery_trigger"));
+            targetZone = _navigationTargetZone;
+            targetLabel = _navigationTargetLabel;
+            DebugLogger.Log(
+                LogCategory.State,
+                "AccessibilityWatcher",
+                "Objective resolve success: objectiveKind=" + objectiveKind +
+                " signpostText=" + (objectiveText ?? "<null>") +
+                " label=" + (targetLabel ?? "<null>") +
+                " worldTarget=" + _navigationWorldTarget);
+            return true;
         }
 
         private static bool TryResolveTutorialObjectiveKind(out TutorialObjectiveKind objectiveKind)
@@ -1332,6 +1413,13 @@ namespace DateEverythingAccess
                 return true;
             }
 
+            if (ContainsToken(objectiveText, "leave the office and reflect on your life choices") ||
+                ContainsToken(objectiveText, "leave the office and contemplate your life choices"))
+            {
+                objectiveKind = TutorialObjectiveKind.OfficeExit;
+                return true;
+            }
+
             if (ContainsToken(objectiveText, "check the message on your phone") ||
                 ContainsToken(objectiveText, "awaken your phone"))
             {
@@ -1408,6 +1496,12 @@ namespace DateEverythingAccess
             if (TryResolveTutorialObjectiveAnchorInteractable(objectiveKind, out interactable))
                 return true;
 
+            if (objectiveKind == TutorialObjectiveKind.Computer &&
+                TryFindNearestComputerInteractable(out interactable))
+            {
+                return true;
+            }
+
             InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
             float bestScore = float.MinValue;
             for (int i = 0; i < interactables.Length; i++)
@@ -1425,6 +1519,109 @@ namespace DateEverythingAccess
             }
 
             return interactable != null;
+        }
+
+        private static bool TryFindNearestComputerInteractable(out InteractableObj interactable)
+        {
+            interactable = null;
+            Vector3 playerPosition = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform.position
+                : Vector3.zero;
+            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
+            float bestScore = float.MinValue;
+
+            for (int i = 0; i < interactables.Length; i++)
+            {
+                InteractableObj candidate = interactables[i];
+                if (candidate == null || candidate.gameObject == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                if (!IsComputerInteractable(candidate))
+                    continue;
+
+                string label = GetObjectFacingDisplayName(candidate);
+                string sceneName = NormalizeIdentifierName(candidate.name);
+                Vector3 candidatePosition = GetInteractablePlanningPosition(candidate);
+                float flatDistance = GetFlatDistance(playerPosition, candidatePosition);
+                float verticalDistance = Mathf.Abs(playerPosition.y - candidatePosition.y);
+
+                float score = 1000f;
+                if (ContainsToken(label, "monitor") || ContainsToken(sceneName, "monitor"))
+                    score += 1000f;
+                if (ContainsToken(label, "computer") || ContainsToken(sceneName, "computer"))
+                    score += 200f;
+                if (ContainsToken(sceneName, "pc"))
+                    score -= 100f;
+                score -= flatDistance * 10f;
+                score -= verticalDistance * 100f;
+
+                if (score <= bestScore)
+                    continue;
+
+                bestScore = score;
+                interactable = candidate;
+            }
+
+            return interactable != null;
+        }
+
+        private static bool TryResolveComputerAnchorInteractable(GameObject anchorObject, out InteractableObj interactable)
+        {
+            interactable = null;
+            if (anchorObject == null)
+                return false;
+
+            InteractableObj[] candidates = anchorObject.GetComponentsInChildren<InteractableObj>(includeInactive: true);
+            float bestScore = float.MinValue;
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                InteractableObj candidate = candidates[i];
+                if (candidate == null || candidate.gameObject == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                if (!IsComputerInteractable(candidate))
+                    continue;
+
+                string label = GetObjectFacingDisplayName(candidate);
+                string sceneName = NormalizeIdentifierName(candidate.name);
+                float score = 1000f;
+                if (ContainsToken(label, "monitor") || ContainsToken(sceneName, "monitor"))
+                    score += 2000f;
+                if (ContainsToken(label, "computer") || ContainsToken(sceneName, "computer"))
+                    score += 200f;
+                score -= Vector3.Distance(GetInteractablePlanningPosition(candidate), anchorObject.transform.position);
+
+                if (score <= bestScore)
+                    continue;
+
+                bestScore = score;
+                interactable = candidate;
+            }
+
+            return interactable != null;
+        }
+
+        private static bool IsComputerInteractable(InteractableObj interactable)
+        {
+            if (interactable == null)
+                return false;
+
+            string inkFileName = NormalizeIdentifierName(interactable.inkFileName);
+            string internalName = NormalizeIdentifierName(interactable.InternalName());
+            return ContainsToken(inkFileName, "mac computer") ||
+                ContainsToken(inkFileName, "mac_computer") ||
+                ContainsToken(internalName, "mac");
+        }
+
+        private static Vector3 GetInteractablePlanningPosition(InteractableObj interactable)
+        {
+            if (interactable == null)
+                return Vector3.zero;
+
+            if (TryGetInteractableNavigationBounds(interactable, out Bounds bounds))
+                return bounds.center;
+
+            return interactable.transform.position;
         }
 
         private static bool TryFindNearestDateableInteractable(bool requireUnmet, bool requireUnrealized, out InteractableObj interactable)
@@ -1477,6 +1674,16 @@ namespace DateEverythingAccess
             return interactable != null;
         }
 
+        private static bool TryResolveTutorialFrontDoorAnchorInteractable(out InteractableObj interactable)
+        {
+            interactable = null;
+            EnsureReflectionCache();
+            GameObject anchorObject = _tutorialFrontDoorField != null && TutorialController.Instance != null
+                ? _tutorialFrontDoorField.GetValue(TutorialController.Instance) as GameObject
+                : null;
+            return TryResolveInteractableFromTutorialAnchor(anchorObject, out interactable);
+        }
+
         private static bool TryResolveTutorialObjectiveAnchorInteractable(TutorialObjectiveKind objectiveKind, out InteractableObj interactable)
         {
             interactable = null;
@@ -1492,6 +1699,20 @@ namespace DateEverythingAccess
                     break;
 
                 case TutorialObjectiveKind.FrontDoor:
+                    EnsureReflectionCache();
+                    anchorObject = _tutorialGiftBoxField != null && TutorialController.Instance != null
+                        ? _tutorialGiftBoxField.GetValue(TutorialController.Instance) as GameObject
+                        : null;
+                    if (anchorObject != null && !anchorObject.activeInHierarchy)
+                        anchorObject = null;
+                    if (anchorObject != null)
+                        break;
+
+                    anchorObject = _tutorialFrontDoorField != null && TutorialController.Instance != null
+                        ? _tutorialFrontDoorField.GetValue(TutorialController.Instance) as GameObject
+                        : null;
+                    break;
+
                 case TutorialObjectiveKind.HouseExit:
                     EnsureReflectionCache();
                     anchorObject = _tutorialFrontDoorField != null && TutorialController.Instance != null
@@ -1500,6 +1721,21 @@ namespace DateEverythingAccess
                     break;
             }
 
+            if (anchorObject == null)
+                return false;
+
+            if (objectiveKind == TutorialObjectiveKind.Computer &&
+                TryResolveComputerAnchorInteractable(anchorObject, out interactable))
+            {
+                return true;
+            }
+
+            return TryResolveInteractableFromTutorialAnchor(anchorObject, out interactable);
+        }
+
+        private static bool TryResolveInteractableFromTutorialAnchor(GameObject anchorObject, out InteractableObj interactable)
+        {
+            interactable = null;
             if (anchorObject == null)
                 return false;
 
@@ -1528,6 +1764,62 @@ namespace DateEverythingAccess
             }
 
             return interactable != null;
+        }
+
+        private static bool TryResolveActiveDroneTriggerWorldTarget(out Vector3 target, out float radius)
+        {
+            target = Vector3.zero;
+            radius = 1.25f;
+            EnsureReflectionCache();
+
+            TutorialTriggerZone[] triggerZones = _tutorialTriggerZonesField != null && TutorialController.Instance != null
+                ? _tutorialTriggerZonesField.GetValue(TutorialController.Instance) as TutorialTriggerZone[]
+                : null;
+
+            if (triggerZones == null || triggerZones.Length == 0)
+                triggerZones = FindObjectsOfType<TutorialTriggerZone>(includeInactive: true);
+
+            TutorialTriggerZone bestTriggerZone = null;
+            float bestDistance = float.MaxValue;
+            Vector3 playerPosition = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform.position
+                : Vector3.zero;
+
+            for (int i = 0; i < triggerZones.Length; i++)
+            {
+                TutorialTriggerZone triggerZone = triggerZones[i];
+                if (triggerZone == null ||
+                    triggerZone.eventType != TutorialTriggerZone.EventType.TriggerDrone ||
+                    triggerZone.gameObject == null ||
+                    !triggerZone.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                float distance = Vector3.Distance(playerPosition, triggerZone.transform.position);
+                if (distance >= bestDistance)
+                    continue;
+
+                bestDistance = distance;
+                bestTriggerZone = triggerZone;
+            }
+
+            if (bestTriggerZone == null)
+                return false;
+
+            Collider triggerCollider = bestTriggerZone.GetComponent<Collider>();
+            if (triggerCollider != null)
+            {
+                Bounds bounds = triggerCollider.bounds;
+                target = bounds.center;
+                float horizontalExtent = Mathf.Max(bounds.extents.x, bounds.extents.z);
+                if (horizontalExtent > 0.01f)
+                    radius = Mathf.Clamp(horizontalExtent * 0.5f, 1f, 2.5f);
+                return true;
+            }
+
+            target = bestTriggerZone.transform.position;
+            return true;
         }
 
         private static float ScoreTutorialObjectiveInteractable(TutorialObjectiveKind objectiveKind, InteractableObj interactable)
@@ -1846,8 +2138,11 @@ namespace DateEverythingAccess
                     continue;
                 }
 
-                if (!IsInteractableKnownToPlayer(candidate))
+                if (!IsDatedInteractable(candidate) &&
+                    !IsDoorInteractable(candidate))
+                {
                     continue;
+                }
 
                 Vector3 candidatePos = candidate.transform.position;
                 float distance = playerTransform != null
@@ -1945,6 +2240,49 @@ namespace DateEverythingAccess
             return saveData != null && saveData.hasNormalInteracted;
         }
 
+        private static bool IsDatedInteractable(InteractableObj interactable)
+        {
+            if (interactable == null || string.IsNullOrEmpty(interactable.inkFileName))
+                return false;
+
+            Save save = null;
+            try { save = Singleton<Save>.Instance; }
+            catch { save = null; }
+            if (save == null)
+                return false;
+
+            string internalName = interactable.InternalName();
+            if (string.IsNullOrEmpty(internalName))
+                return false;
+
+            try
+            {
+                return save.GetDateStatus(internalName) != RelationshipStatus.Unmet;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsDoorInteractable(InteractableObj interactable)
+        {
+            if (interactable == null || interactable.gameObject == null)
+                return false;
+
+            if (interactable.gameObject.GetComponent<Door>() != null ||
+                interactable.gameObject.GetComponentInParent<Door>() != null ||
+                interactable.gameObject.GetComponentInChildren<Door>() != null ||
+                interactable.gameObject.GetComponent<SlidingDoor>() != null ||
+                interactable.gameObject.GetComponentInParent<SlidingDoor>() != null ||
+                interactable.gameObject.GetComponentInChildren<SlidingDoor>() != null)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
         private void ToggleAutoWalk()
         {
             Loc.RefreshLanguage();
@@ -1997,6 +2335,36 @@ namespace DateEverythingAccess
                 ScreenReader.Say(Loc.Get("navigation_planner_not_ready"));
                 return false;
             }
+            if (_hasNavigationWorldTarget)
+            {
+                if (BetterPlayerControl.Instance == null)
+                {
+                    if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: no BetterPlayerControl for world-target route planning");
+                    return false;
+                }
+
+                Vector3 worldStartPos = BetterPlayerControl.Instance.transform.position;
+                string worldLabel = _navigationTargetLabel ?? Loc.Get("navigation_tutorial_gift_delivery_trigger");
+                SimpleNavRoute worldRoute = SimpleNavPlanner.Plan(
+                    worldStartPos,
+                    _navigationWorldTarget,
+                    _navigationWorldTargetRadius > 0f ? _navigationWorldTargetRadius : 1.25f,
+                    worldLabel,
+                    0,
+                    targetIsDatable: false,
+                    targetInkFileName: null);
+                if (worldRoute == null)
+                {
+                    SimpleNavPlanner.PlanFailure why = SimpleNavPlanner.LastFailure;
+                    if (Main.Log != null) Main.Log.LogInfo("ToggleAutoWalk: planner returned no route for world target=" + _navigationWorldTarget + " reason=" + why);
+                    ScreenReader.Say(Loc.Get("navigation_no_path", worldLabel) + " (" + why + ")");
+                    return false;
+                }
+
+                SimpleNavBridge.BeginRoute(worldRoute);
+                return true;
+            }
+
             if (!TryGetTrackedInteractable(out InteractableObj target) || target == null || target.gameObject == null)
             {
                 if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: no tracked interactable for route planning");
@@ -2010,7 +2378,9 @@ namespace DateEverythingAccess
             }
 
             Vector3 startPos = BetterPlayerControl.Instance.transform.position;
-            Vector3 targetPos = target.transform.position;
+            Vector3 targetPos = IsComputerInteractable(target)
+                ? GetInteractablePlanningPosition(target)
+                : target.transform.position;
             int goId = target.gameObject.GetInstanceID();
             string goName = target.gameObject.name;
             float radius = target.InteractionRadius;
@@ -2311,6 +2681,7 @@ namespace DateEverythingAccess
 
         private void SetTrackedInteractable(InteractableObj interactable, string targetZone, string targetLabel)
         {
+            ClearNavigationWorldTarget();
             _trackedInteractable = interactable;
             _trackedInteractableId = interactable != null ? interactable.Id : null;
             _trackedInteractableZone = targetZone;
@@ -2322,6 +2693,27 @@ namespace DateEverythingAccess
                 "SetTrackedInteractable interactable=" + DescribeInteractable(interactable) +
                 " zone=" + (targetZone ?? "<null>") +
                 " label=" + (targetLabel ?? "<null>"));
+        }
+
+        private void SetNavigationWorldTarget(Vector3 target, float radius, string targetLabel)
+        {
+            _trackedInteractable = null;
+            _trackedInteractableId = null;
+            _trackedInteractableZone = null;
+            _trackedInteractableLabel = null;
+            ResetTrackedInteractableApproachTarget();
+            _hasNavigationWorldTarget = true;
+            _navigationWorldTarget = target;
+            _navigationWorldTargetRadius = radius;
+            _navigationTargetZone = null;
+            _navigationTargetLabel = targetLabel;
+        }
+
+        private void ClearNavigationWorldTarget()
+        {
+            _hasNavigationWorldTarget = false;
+            _navigationWorldTarget = Vector3.zero;
+            _navigationWorldTargetRadius = 0f;
         }
 
         private bool TryGetTrackedInteractable(out InteractableObj interactable)
@@ -6174,8 +6566,10 @@ namespace DateEverythingAccess
             _tutorialSignpostField = typeof(TutorialController).GetField("tutorialSignpost", flags);
             _tutorialSignpostTextField = typeof(TutorialController).GetField("tutorialSignpostTMP", flags);
             _tutorialSubtitleTextField = typeof(TutorialController).GetField("SubtitleText", flags);
+            _tutorialGiftBoxField = typeof(TutorialController).GetField("giftBox", flags);
             _tutorialFrontDoorField = typeof(TutorialController).GetField("frontDoor", flags);
             _tutorialComputerField = typeof(TutorialController).GetField("computer", flags);
+            _tutorialTriggerZonesField = typeof(TutorialController).GetField("triggerZones", flags);
             _specStatTooltipsField = typeof(SpecStatMain).GetField("statTooltips", flags);
             _specStatMainKeyButtonField = typeof(SpecStatMain).GetField("keyButton", flags);
             _specStatMainAutoSelectFallbackField = typeof(SpecStatMain).GetField("autoSelectFallback", flags);
