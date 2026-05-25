@@ -138,7 +138,6 @@ class Planner:
             meta = {"kind": "teleporter", "name": t["source_name"]}
             self.edges_from.setdefault(up_node, []).append((down_node, t["cost_m"], meta))
             self.edges_from.setdefault(down_node, []).append((up_node, t["cost_m"], meta))
-
     def _floor_for_y(self, y):
         best, bestd = None, math.inf
         for label, f in self.floors.items():
@@ -193,8 +192,14 @@ class Planner:
         open_heap = [(self.heuristic(start_node, goal_floor, goal_wx, goal_wz), 0.0, start_node)]
         came_from = {start_node: (None, None)}  # node → (prev_node, edge_meta)
         gscore = {start_node: 0.0}
+        closed = set()
         while open_heap:
             _, g, node = heapq.heappop(open_heap)
+            if g > gscore.get(node, math.inf):
+                continue
+            if node in closed:
+                continue
+            closed.add(node)
             if node in goal_set:
                 # Reconstruct.
                 path, edges = [], []
@@ -207,8 +212,6 @@ class Planner:
                     cur = prev
                 path.reverse(); edges.reverse()
                 return path, g, edges
-            if g > gscore.get(node, math.inf):
-                continue
             for nbr, cost, meta in self.neighbors(node):
                 ng = g + cost
                 if ng < gscore.get(nbr, math.inf):

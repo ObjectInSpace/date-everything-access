@@ -336,9 +336,7 @@ namespace DateEverythingAccess
             _minInterFloorCost = float.PositiveInfinity;
 
             InterFloorEdges ife = _bake.inter_floor_edges;
-            if (ife == null) return;
-
-            if (ife.stair_ramp != null)
+            if (ife != null && ife.stair_ramp != null)
             {
                 for (int i = 0; i < ife.stair_ramp.Length; i++)
                 {
@@ -357,7 +355,7 @@ namespace DateEverythingAccess
             // Teleporter: down endpoint is off-bake (no walkable in crawlspace yet); model as
             // virtual node "@teleporter:<name>" connected to the nearest navigable cell at the
             // up endpoint, with cost 0 (teleport, not walked).
-            if (ife.teleporter != null)
+            if (ife != null && ife.teleporter != null)
             {
                 for (int i = 0; i < ife.teleporter.Length; i++)
                 {
@@ -476,6 +474,7 @@ namespace DateEverythingAccess
             var open = new MinHeap();
             var came = new Dictionary<NodeKey, NodeKey>();
             var gScore = new Dictionary<NodeKey, float>();
+            var closed = new HashSet<NodeKey>();
             gScore[start] = 0f;
             open.Push(new HeapItem(Heuristic(start, goalFloorLabel, goalWx, goalWz), 0f, start));
 
@@ -483,6 +482,10 @@ namespace DateEverythingAccess
             {
                 HeapItem cur = open.Pop();
                 NodeKey node = cur.Node;
+                if (cur.G > gScore[node] + 1e-6f) continue;
+                if (!closed.Add(node))
+                    continue;
+
                 if (goalSet.Contains(node))
                 {
                     // Reconstruct.
@@ -499,8 +502,6 @@ namespace DateEverythingAccess
                     totalCost = cur.G;
                     return true;
                 }
-                if (cur.G > gScore[node] + 1e-6f) continue;
-
                 foreach (var (nbr, cost) in Neighbors(node))
                 {
                     float ng = cur.G + cost;

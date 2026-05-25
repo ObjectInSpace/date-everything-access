@@ -28,6 +28,7 @@ REPO = Path(__file__).resolve().parents[1]
 WALK = REPO / "artifacts/navigation/thirdpersongreybox-walkable.json"
 BLOCK = REPO / "artifacts/navigation/thirdpersongreybox-blockers.json"
 INTER = REPO / "artifacts/navigation/thirdpersongreybox-interactables.json"
+NAVDATA = REPO / "artifacts/navigation/thirdpersongreybox-navigation-data.json"
 OUT_JSON = REPO / "artifacts/navigation/navigable_region.bake.json"
 OUT_PNG_DIR = REPO / "artifacts/navigation"
 
@@ -53,6 +54,10 @@ MAX_FLOOR_SLAB_EXTENT = 1.0
 # the capsule through. Smallest authored doorway clearance is ~1.14m, so a
 # 0.8m-diameter disc fits even the narrowest door.
 DOOR_CARVE_RADIUS = 0.40
+# Wider carve for real Door components exported from scene navigation data. This
+# repairs doorway component splits caused by wall/doorframe dilation without
+# widening every name-only door-like object.
+DOOR_COMPONENT_CARVE_RADIUS = 1.50
 
 # Floor bands: (label, target_Y, Y_tolerance_for_walkable_inclusion)
 # Tolerance is ± around target_Y for which walkable TopY values count as "on this floor".
@@ -434,15 +439,16 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors):
     # re-seals them. Doors are explicit passages in the planner -- the bake
     # should reflect their authored presence.
     door_carves = 0
-    cr = int(math.ceil(DOOR_CARVE_RADIUS / CELL))
-    carve_offsets = [(dx, dz) for dx in range(-cr, cr+1) for dz in range(-cr, cr+1)
-                     if dx*dx + dz*dz <= cr*cr]
     for d in doors:
         dy = d["y"]
         if abs(dy - fy) > 2.0: continue  # different floor
         dx_w, dz_w = d["x"], d["z"]
         ix = int((dx_w - minx) / CELL)
         iz = int((dz_w - minz) / CELL)
+        radius = d.get("radius", DOOR_CARVE_RADIUS)
+        cr = int(math.ceil(radius / CELL))
+        carve_offsets = [(dx, dz) for dx in range(-cr, cr+1) for dz in range(-cr, cr+1)
+                         if dx*dx + dz*dz <= cr*cr]
         for dx, dz in carve_offsets:
             jx = ix + dx; jz = iz + dz
             if jx < 0 or jx >= nx or jz < 0 or jz >= nz: continue
@@ -565,6 +571,29 @@ def main():
     # Doors from interactables. Each entry: {x, y, z, name}. Used to carve
     # navigability discs that survive wall-mesh asymmetric-cut artifacts.
     doors = []
+    door_keys = set()
+    if NAVDATA.exists():
+        nav = json.load(open(NAVDATA, encoding="utf-8-sig"))
+        for door in nav.get("DoorObjects", []):
+            component = door.get("DoorComponent")
+            if not component:
+                continue
+
+            name = door.get("Name") or ""
+            if not name.startswith("Doors_"):
+                continue
+
+            pos = door.get("Position") or {}
+            key = (name, round(pos.get("x", 0.0), 3), round(pos.get("y", 0.0), 3), round(pos.get("z", 0.0), 3))
+            door_keys.add(key)
+            doors.append({
+                "name": name,
+                "x": pos.get("x", 0.0),
+                "y": pos.get("y", 0.0),
+                "z": pos.get("z", 0.0),
+                "radius": DOOR_COMPONENT_CARVE_RADIUS,
+            })
+
     if INTER.exists():
         inter = json.load(open(INTER, encoding="utf-8"))
         recs = inter.get("Interactables") or inter.get("Records") or []
@@ -572,8 +601,16 @@ def main():
             name = it.get("GameObjectName") or it.get("Name") or ""
             if not name.startswith("Doors_"): continue
             pos = it.get("WorldPosition") or it.get("Position") or {}
-            doors.append({"name": name, "x": pos.get("x", 0.0),
-                          "y": pos.get("y", 0.0), "z": pos.get("z", 0.0)})
+            key = (name, round(pos.get("x", 0.0), 3), round(pos.get("y", 0.0), 3), round(pos.get("z", 0.0), 3))
+            if key in door_keys:
+                continue
+            doors.append({
+                "name": name,
+                "x": pos.get("x", 0.0),
+                "y": pos.get("y", 0.0),
+                "z": pos.get("z", 0.0),
+                "radius": DOOR_CARVE_RADIUS,
+            })
 
     report = {
         "params": {
@@ -582,6 +619,7 @@ def main():
             "step_up_tolerance_m": STEP_UP_TOL,
             "cell_size_m": CELL,
             "dilation_cells": DILATE_CELLS,
+            "door_component_carve_radius_m": DOOR_COMPONENT_CARVE_RADIUS,
         },
         "floors": [],
     }
