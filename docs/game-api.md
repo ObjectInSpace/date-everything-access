@@ -433,6 +433,7 @@ Important consequence:
   - Each list row is a `DexEntryButton`
     - `numberText`
     - `nameText`
+  - `DateADex.OnEntryFocused(ListBox prevFocusingBox, ListBox curFocusingBox)` updates preview art and collectable count for the focused row
   - The main bio pane uses direct `TextMeshProUGUI` fields
     - `Item`
     - `Desc`
@@ -457,6 +458,7 @@ Important consequence:
   - Important consequence:
     - Accessibility should not read the full bio payload blindly from `Item`, `Desc`, `VoActor`, `Likes`, `Dislikes`, and `Pronouns`
     - Those text blocks need to be filtered against `DescScroll.viewport` so speech matches only the portions currently visible on screen
+    - Future Date A Dex fixes should be split into one behavior at a time: list focus speech, entry-open bio speech, and keyboard focus semantics should not be bundled in one change
 
 - Chat apps: `Wrkspace`, `Canopy`, `Thiscord`
   - Chat list rows are `ChatButton`
@@ -994,6 +996,8 @@ Good Harmony targets for future feature work:
   - `OpenEntry(int)` populates `MainEntryScreen`, hides `RecipeScreen`, fills `Item`, `Desc`, `VoActor`, `Likes`, and `Dislikes`, resets `DescScroll`, and refreshes collectables before focus later lands on `CollectableButton`
   - accessibility implication:
     - the initial Date A Dex bio announcement is more reliable from an `OpenEntry(int)` postfix than from focus polling alone, because the game commits the entry data before the default button focus takes over
+    - the postfix should pass the opened `DateADexEntry` into the pending bio announcement; do not rely only on later UI text extraction, because focus can land on the Back button before the bio text is readable to the accessibility layer
+    - `CollectableButton` focus is the normal opened-entry focus target; when the bio pane is visible, its accessibility selection speech should prefer the entry-detail announcement, which already includes the collectable count
 
 - `BetterPlayerControl.Update()`
   - only for carefully scoped observation; avoid heavy patching here unless needed

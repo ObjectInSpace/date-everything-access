@@ -172,6 +172,7 @@ namespace DateEverythingAccess
             Add("dateadex_dislikes", "Mag nicht: {0}", "Dislikes: {0}");
             Add("dateadex_pronouns", "Pronomen: {0}", "Pronouns: {0}");
             Add("dateadex_collectables", "Sammelstuecke: {0}", "Collectables: {0}");
+            Add("dateadex_unmet_description", "Du hast diese Person noch nicht getroffen.", "You haven't met this character yet.");
             Add("dateadex_button_collectables", "Sammelstuecke", "Collectables");
             Add("dateadex_button_collectables_value", "Sammelstuecke. {0}", "Collectables. {0}");
             Add("dateadex_button_sort", "Sortierung", "Sort");
