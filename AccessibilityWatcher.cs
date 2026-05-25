@@ -168,6 +168,8 @@ namespace DateEverythingAccess
         private const float TransitionFacingAlignmentMinimumAngleDegrees = 8f;
         private const float UnityNavMeshFallbackSampleDistance = 3.5f;
         private const float UnityNavMeshFallbackAdvanceDistance = 0.5f;
+        private const float TutorialGiftApproachRadius = 1.25f;
+        private const float SimpleNavDoorTargetRadius = 3f;
         private const int AutoWalkMaxRecoveryAttempts = 2;
         private const int DoorCommittedSourceWatchdogLoopTripsBeforeRetry = 2;
         private const int DoorCommittedSourceWatchdogMaxInteractionRetries = 1;
@@ -196,6 +198,8 @@ namespace DateEverythingAccess
         private static FieldInfo _tutorialFrontDoorField;
         private static FieldInfo _tutorialComputerField;
         private static FieldInfo _tutorialTriggerZonesField;
+        private static FieldInfo _roomersCurrentEntryField;
+        private static FieldInfo _roomersEntriesField;
         private static FieldInfo _engagementTitleField;
         private static FieldInfo _engagementStateField;
         private static FieldInfo _specStatTooltipsField;
@@ -316,6 +320,7 @@ namespace DateEverythingAccess
             public float Distance;
         }
 
+        private static readonly HashSet<string> _examinedObjectKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private List<KnownObjectTarget> _knownObjectTargets;
         private int _knownObjectSelectionIndex = -1;
         private bool _isKnownObjectPickerOpen;
@@ -395,6 +400,35 @@ namespace DateEverythingAccess
             _pendingDateADexEntryAnnouncementNotBefore = Time.unscaledTime + 0.05f;
             _pendingDateADexEntryAnnouncementExpiresAt = Time.unscaledTime + 1.5f;
             _suppressDateADexOpenEntrySelectionUntil = Time.unscaledTime + DateADexOpenEntryInitialSuppressionSeconds;
+        }
+
+        internal static void RememberExaminedObject(ObjectExamine examine)
+        {
+            if (examine == null)
+                return;
+
+            AddExaminedObjectKey(examine.InkNode);
+            if (examine.gameObject != null)
+                AddExaminedObjectKey(examine.gameObject.name);
+
+            InteractableObj interactable = examine.GetComponentInParent<InteractableObj>();
+            if (interactable == null)
+                interactable = examine.GetComponentInChildren<InteractableObj>();
+
+            if (interactable == null)
+                return;
+
+            AddExaminedObjectKey(interactable.Id);
+            AddExaminedObjectKey(interactable.name);
+            AddExaminedObjectKey(interactable.InternalName());
+            AddExaminedObjectKey(interactable.inkFileName);
+        }
+
+        private static void AddExaminedObjectKey(string value)
+        {
+            string key = BuildComparisonKey(value);
+            if (!string.IsNullOrEmpty(key))
+                _examinedObjectKeys.Add(key);
         }
 
         private void Update()
@@ -594,7 +628,7 @@ namespace DateEverythingAccess
                 return;
             }
 
-            if (!SimpleNavBridge.HasActiveRoute && IsTrackedObjectReached())
+            if (_isAutoWalking && !SimpleNavBridge.HasActiveRoute && IsTrackedObjectReached())
             {
                 StopNavigationWithAnnouncement("navigation_arrived");
                 return;
@@ -649,6 +683,12 @@ namespace DateEverythingAccess
             Vector3 target = SimpleNavBridge.LastResolvedTarget;
             if (SimpleNavBridge.TryAdvanceWaypoint(playerPos))
                 target = SimpleNavBridge.LastResolvedTarget;
+            if (IsWorldRouteTarget(route) &&
+                SimpleNavBridge.ActiveWaypoint != null &&
+                SimpleNavBridge.ActiveWaypoint.Kind == SimpleNavWaypointKind.Target)
+            {
+                target = route.TargetPosition;
+            }
 
             // Drive the audible tone source from the current next-waypoint so the player hears
             // where they're being walked. The legacy executor does this via UpdateNavigationTracker;
@@ -660,6 +700,13 @@ namespace DateEverythingAccess
             // goal cell inside this disc, so this matches the goal-cell expansion in O4.
             if (SimpleNavBridge.HasArrivedAtRouteTarget(playerPos))
             {
+                if (IsWorldRouteTarget(route))
+                {
+                    ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                    StopNavigationWithAnnouncement("navigation_arrived");
+                    return;
+                }
+
                 if (IsSimpleRouteDoorTargetComplete(route))
                 {
                     ApplyNavigationInput(Vector3.zero, Vector3.zero);
@@ -689,8 +736,7 @@ namespace DateEverythingAccess
                 return;
             }
 
-            // Open the segment's tagged door if needed. Cheap; no-op when there's no door or it's
-            // already open. The bridge's TryOpenActiveDoorIfNeeded already gates by range/cooldown.
+            // Open the segment's tagged door if needed.
             bool segmentHasDoor = SimpleNavBridge.ActiveDoor != null;
             if (segmentHasDoor)
                 SimpleNavBridge.TryOpenActiveDoorIfNeeded(playerPos);
@@ -767,6 +813,11 @@ namespace DateEverythingAccess
             return IsSameOrRelatedSimpleRouteTarget(route, manager.activeObject.gameObject);
         }
 
+        private static bool IsWorldRouteTarget(SimpleNavRoute route)
+        {
+            return route != null && route.TargetGameObjectId == 0;
+        }
+
         private static bool IsSameOrRelatedSimpleRouteTarget(SimpleNavRoute route, GameObject activeObject)
         {
             if (route == null || activeObject == null)
@@ -781,6 +832,19 @@ namespace DateEverythingAccess
 
             Transform activeTransform = activeObject.transform;
             Transform targetTransform = routeTarget.transform;
+            return IsSameOrRelatedInteractableTarget(targetTransform.gameObject, activeTransform.gameObject);
+        }
+
+        private static bool IsSameOrRelatedInteractableTarget(GameObject targetObject, GameObject activeObject)
+        {
+            if (targetObject == null || activeObject == null)
+                return false;
+
+            if (activeObject.GetInstanceID() == targetObject.GetInstanceID())
+                return true;
+
+            Transform activeTransform = activeObject.transform;
+            Transform targetTransform = targetObject.transform;
             return activeTransform.IsChildOf(targetTransform) || targetTransform.IsChildOf(activeTransform);
         }
 
@@ -1150,15 +1214,47 @@ namespace DateEverythingAccess
             targetLabel = null;
             string objectiveText = null;
             TryGetCurrentTutorialObjectiveText(out objectiveText);
+            string hallwayFallbackLabel = null;
 
             if (!TryResolveTutorialObjectiveKind(out TutorialObjectiveKind objectiveKind) ||
                 objectiveKind == TutorialObjectiveKind.None)
             {
+                if (TryResolveCurrentRoomersEntryInteractable(out interactable, out targetZone, out targetLabel))
+                {
+                    DebugLogger.Log(
+                        LogCategory.State,
+                        "AccessibilityWatcher",
+                        "Objective resolve success: source=Roomers fallback" +
+                        " signpostText=" + (objectiveText ?? "<null>") +
+                        " label=" + (targetLabel ?? "<null>") +
+                        " zone=" + (targetZone ?? "<null>") +
+                        " interactable=" + DescribeInteractable(interactable));
+                    return !string.IsNullOrEmpty(targetLabel);
+                }
+
                 DebugLogger.Log(LogCategory.State, "AccessibilityWatcher", "Objective resolve failed: no tutorial objective kind. signpostText=" + (objectiveText ?? "<null>"));
                 return false;
             }
 
-            if (!TryFindTutorialObjectiveInteractable(objectiveKind, out interactable) ||
+            if (objectiveKind == TutorialObjectiveKind.FrontDoor)
+            {
+                if (TryResolveTutorialGiftBoxInteractable(out InteractableObj giftBoxInteractable) &&
+                    TryResolveNavigableInteractable(giftBoxInteractable, out InteractableObj resolvedGiftBox, out targetZone))
+                {
+                    interactable = resolvedGiftBox;
+                }
+                else
+                {
+                    DebugLogger.Log(
+                        LogCategory.State,
+                        "AccessibilityWatcher",
+                        "Objective resolve failed: objectiveKind=" + objectiveKind +
+                        " signpostText=" + (objectiveText ?? "<null>") +
+                        " reason=gift box is not active or not navigable");
+                    return false;
+                }
+            }
+            else if (!TryFindTutorialObjectiveInteractable(objectiveKind, out interactable) ||
                 interactable == null)
             {
                 DebugLogger.Log(
@@ -1172,25 +1268,6 @@ namespace DateEverythingAccess
 
             if (!TryResolveNavigableInteractable(interactable, out InteractableObj resolvedInteractable, out targetZone))
             {
-                if (objectiveKind == TutorialObjectiveKind.FrontDoor &&
-                    TryResolveTutorialFrontDoorAnchorInteractable(out InteractableObj fallbackInteractable) &&
-                    fallbackInteractable != interactable &&
-                    TryResolveNavigableInteractable(fallbackInteractable, out resolvedInteractable, out targetZone))
-                {
-                    interactable = resolvedInteractable;
-                    targetLabel = GetTrackedInteractableLabel(interactable);
-                    DebugLogger.Log(
-                        LogCategory.State,
-                        "AccessibilityWatcher",
-                        "Objective resolve success: objectiveKind=" + objectiveKind +
-                        " signpostText=" + (objectiveText ?? "<null>") +
-                        " label=" + (targetLabel ?? "<null>") +
-                        " zone=" + targetZone +
-                        " interactable=" + DescribeInteractable(interactable) +
-                        " fallback=frontDoor");
-                    return !string.IsNullOrEmpty(targetLabel);
-                }
-
                 DebugLogger.Log(
                     LogCategory.State,
                     "AccessibilityWatcher",
@@ -1203,7 +1280,9 @@ namespace DateEverythingAccess
 
             interactable = resolvedInteractable;
 
-            targetLabel = GetTrackedInteractableLabel(interactable);
+            targetLabel = !string.IsNullOrEmpty(hallwayFallbackLabel)
+                ? hallwayFallbackLabel
+                : GetTrackedInteractableLabel(interactable);
             DebugLogger.Log(
                 LogCategory.State,
                 "AccessibilityWatcher",
@@ -1222,11 +1301,24 @@ namespace DateEverythingAccess
             string objectiveText = null;
             TryGetCurrentTutorialObjectiveText(out objectiveText);
 
-            if (!TryResolveTutorialObjectiveKind(out TutorialObjectiveKind objectiveKind) ||
-                objectiveKind != TutorialObjectiveKind.OfficeExit)
+            if (!TryResolveTutorialObjectiveKind(out TutorialObjectiveKind objectiveKind))
             {
                 return false;
             }
+
+            if (objectiveKind == TutorialObjectiveKind.FrontDoor)
+            {
+                DebugLogger.Log(
+                    LogCategory.State,
+                    "AccessibilityWatcher",
+                    "Objective world-target skipped: objectiveKind=" + objectiveKind +
+                    " signpostText=" + (objectiveText ?? "<null>") +
+                    " reason=front-door delivery uses package or hallway object fallback, not coordinate fallback");
+                return false;
+            }
+
+            if (objectiveKind != TutorialObjectiveKind.OfficeExit)
+                return false;
 
             if (!TryResolveActiveDroneTriggerWorldTarget(out Vector3 target, out float radius))
             {
@@ -1235,7 +1327,7 @@ namespace DateEverythingAccess
                     "AccessibilityWatcher",
                     "Objective resolve failed: objectiveKind=" + objectiveKind +
                     " signpostText=" + (objectiveText ?? "<null>") +
-                    " reason=no active drone trigger zone");
+                    " reason=no active TutorialTriggerZone.EventType.TriggerDrone");
                 return false;
             }
 
@@ -1521,6 +1613,200 @@ namespace DateEverythingAccess
             return interactable != null;
         }
 
+        private static bool TryResolveCurrentRoomersEntryInteractable(out InteractableObj interactable, out string targetZone, out string targetLabel)
+        {
+            interactable = null;
+            targetZone = null;
+            targetLabel = null;
+
+            if (!TryGetCurrentRoomersEntry(out Save.RoomersStruct entry) ||
+                !TryFindRoomersEntryInteractable(entry, out InteractableObj candidate))
+            {
+                return false;
+            }
+
+            if (!TryResolveNavigableInteractable(candidate, out InteractableObj resolvedInteractable, out targetZone))
+                return false;
+
+            interactable = resolvedInteractable;
+            targetLabel = BuildRoomersEntryNavigationLabel(entry, interactable);
+            return !string.IsNullOrEmpty(targetLabel);
+        }
+
+        private static bool TryGetCurrentRoomersEntry(out Save.RoomersStruct entry)
+        {
+            entry = null;
+
+            if (Roomers.Instance == null ||
+                Roomers.Instance.RoomersWindow == null ||
+                !Roomers.Instance.RoomersWindow.activeInHierarchy)
+            {
+                return false;
+            }
+
+            GameObject selectedObject = GetCurrentSelectedObject();
+            RoomersEntryButton selectedEntryButton = selectedObject != null
+                ? selectedObject.GetComponentInParent<RoomersEntryButton>()
+                : null;
+            if (selectedEntryButton != null && selectedEntryButton.roomersEntry != null)
+            {
+                entry = selectedEntryButton.roomersEntry;
+                return true;
+            }
+
+            EnsureReflectionCache();
+            if (_roomersCurrentEntryField == null || _roomersEntriesField == null)
+                return false;
+
+            int currentEntry = (int)_roomersCurrentEntryField.GetValue(Roomers.Instance);
+            List<GameObject> entries = _roomersEntriesField.GetValue(Roomers.Instance) as List<GameObject>;
+            if (entries == null || currentEntry < 0 || currentEntry >= entries.Count || entries[currentEntry] == null)
+                return false;
+
+            RoomersEntryButton currentEntryButton = entries[currentEntry].GetComponent<RoomersEntryButton>();
+            entry = currentEntryButton != null ? currentEntryButton.roomersEntry : null;
+            return entry != null;
+        }
+
+        private static bool TryFindRoomersEntryInteractable(Save.RoomersStruct entry, out InteractableObj interactable)
+        {
+            interactable = null;
+            if (entry == null)
+                return false;
+
+            string entryInternalKey = BuildComparisonKey(entry.character);
+            string entryNameKey = BuildComparisonKey(GetRoomersCharacterDisplayName(entry.character));
+            string entryObjectKey = BuildComparisonKey(GetRoomersCharacterObjectName(entry.character));
+            if (string.IsNullOrEmpty(entryInternalKey) &&
+                string.IsNullOrEmpty(entryNameKey) &&
+                string.IsNullOrEmpty(entryObjectKey))
+            {
+                return false;
+            }
+
+            Vector3 playerPosition = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform.position
+                : Vector3.zero;
+            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
+            float bestScore = float.MinValue;
+            for (int i = 0; i < interactables.Length; i++)
+            {
+                InteractableObj candidate = interactables[i];
+                if (candidate == null || candidate.gameObject == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                float score = ScoreRoomersEntryInteractable(entryInternalKey, entryNameKey, entryObjectKey, candidate);
+                if (score <= 0f)
+                    continue;
+
+                score -= GetFlatDistance(playerPosition, GetInteractablePlanningPosition(candidate));
+                if (score <= bestScore)
+                    continue;
+
+                bestScore = score;
+                interactable = candidate;
+            }
+
+            return interactable != null;
+        }
+
+        private static float ScoreRoomersEntryInteractable(string entryInternalKey, string entryNameKey, string entryObjectKey, InteractableObj interactable)
+        {
+            string candidateInternalKey = BuildComparisonKey(interactable.InternalName());
+            string candidateInkKey = BuildComparisonKey(interactable.inkFileName);
+            string candidateLabelKey = BuildComparisonKey(GetObjectFacingDisplayName(interactable));
+            string candidateObjectKey = BuildComparisonKey(interactable.name);
+            float score = 0f;
+
+            score += ScoreRoomersKeyMatch(entryInternalKey, candidateInternalKey, 5000f);
+            score += ScoreRoomersKeyMatch(entryInternalKey, candidateInkKey, 4000f);
+            score += ScoreRoomersKeyMatch(entryNameKey, candidateLabelKey, 1500f);
+            score += ScoreRoomersKeyMatch(entryNameKey, candidateObjectKey, 800f);
+            score += ScoreRoomersKeyMatch(entryObjectKey, candidateLabelKey, 1200f);
+            score += ScoreRoomersKeyMatch(entryObjectKey, candidateObjectKey, 700f);
+            if (!string.IsNullOrEmpty(interactable.inkFileName))
+                score += 100f;
+
+            return score;
+        }
+
+        private static float ScoreRoomersKeyMatch(string entryKey, string candidateKey, float exactScore)
+        {
+            if (string.IsNullOrEmpty(entryKey) || string.IsNullOrEmpty(candidateKey))
+                return 0f;
+
+            if (string.Equals(candidateKey, entryKey, StringComparison.OrdinalIgnoreCase))
+                return exactScore;
+
+            if (candidateKey.StartsWith(entryKey, StringComparison.OrdinalIgnoreCase) ||
+                entryKey.StartsWith(candidateKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return exactScore * 0.75f;
+            }
+
+            if (candidateKey.IndexOf(entryKey, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                entryKey.IndexOf(candidateKey, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return exactScore * 0.5f;
+            }
+
+            return 0f;
+        }
+
+        private static string BuildRoomersEntryNavigationLabel(Save.RoomersStruct entry, InteractableObj interactable)
+        {
+            string entryName = NormalizeIdentifierName(entry != null ? GetRoomersCharacterDisplayName(entry.character) : null);
+            string entryObject = NormalizeIdentifierName(entry != null ? GetRoomersCharacterObjectName(entry.character) : null);
+            if (!string.IsNullOrEmpty(entryName) && !string.IsNullOrEmpty(entryObject))
+                return entryName + ", " + entryObject;
+
+            if (!string.IsNullOrEmpty(entryName))
+                return entryName;
+
+            string label = GetObjectFacingDisplayName(interactable);
+            if (!string.IsNullOrEmpty(label))
+                return label;
+
+            return NormalizeIdentifierName(entry != null ? entry.character : null);
+        }
+
+        private static string GetRoomersCharacterDisplayName(string internalName)
+        {
+            if (string.IsNullOrWhiteSpace(internalName))
+                return null;
+
+            if (Singleton<Save>.Instance != null &&
+                Singleton<Save>.Instance.TryGetNameByInternalName(internalName, out string displayName) &&
+                !string.IsNullOrWhiteSpace(displayName))
+            {
+                return displayName;
+            }
+
+            DateADexEntry entry = DateADex.Instance != null ? DateADex.Instance.GetEntry(internalName) : null;
+            return entry != null ? entry.CharName : internalName;
+        }
+
+        private static string GetRoomersCharacterObjectName(string internalName)
+        {
+            if (string.IsNullOrWhiteSpace(internalName) || DateADex.Instance == null)
+                return null;
+
+            DateADexEntry entry = DateADex.Instance.GetEntry(internalName);
+            if (entry == null && string.Equals(internalName, "curt", StringComparison.OrdinalIgnoreCase))
+                entry = DateADex.Instance.GetEntry("curtrod");
+
+            return entry != null ? entry.CharObj : null;
+        }
+
+        private static string BuildComparisonKey(string value)
+        {
+            value = NormalizeIdentifierName(value);
+            if (string.IsNullOrEmpty(value))
+                return null;
+
+            return Regex.Replace(value, "[^A-Za-z0-9]", "").ToLowerInvariant();
+        }
+
         private static bool TryFindNearestComputerInteractable(out InteractableObj interactable)
         {
             interactable = null;
@@ -1676,12 +1962,35 @@ namespace DateEverythingAccess
 
         private static bool TryResolveTutorialFrontDoorAnchorInteractable(out InteractableObj interactable)
         {
+            return TryResolveTutorialFrontDoorInteractable(out interactable);
+        }
+
+        private static bool TryResolveTutorialGiftBoxInteractable(out InteractableObj interactable)
+        {
+            interactable = null;
+            EnsureReflectionCache();
+            GameObject anchorObject = _tutorialGiftBoxField != null && TutorialController.Instance != null
+                ? _tutorialGiftBoxField.GetValue(TutorialController.Instance) as GameObject
+                : null;
+
+            if (anchorObject == null || !anchorObject.activeInHierarchy)
+                return false;
+
+            return TryResolveInteractableFromTutorialAnchor(anchorObject, out interactable);
+        }
+
+        private static bool TryResolveTutorialFrontDoorInteractable(out InteractableObj interactable)
+        {
             interactable = null;
             EnsureReflectionCache();
             GameObject anchorObject = _tutorialFrontDoorField != null && TutorialController.Instance != null
                 ? _tutorialFrontDoorField.GetValue(TutorialController.Instance) as GameObject
                 : null;
-            return TryResolveInteractableFromTutorialAnchor(anchorObject, out interactable);
+
+            if (TryFindBestFrontDoorInteractable(anchorObject, out interactable))
+                return true;
+
+            return TryFindBestFrontDoorInteractable(null, out interactable);
         }
 
         private static bool TryResolveTutorialObjectiveAnchorInteractable(TutorialObjectiveKind objectiveKind, out InteractableObj interactable)
@@ -1700,18 +2009,7 @@ namespace DateEverythingAccess
 
                 case TutorialObjectiveKind.FrontDoor:
                     EnsureReflectionCache();
-                    anchorObject = _tutorialGiftBoxField != null && TutorialController.Instance != null
-                        ? _tutorialGiftBoxField.GetValue(TutorialController.Instance) as GameObject
-                        : null;
-                    if (anchorObject != null && !anchorObject.activeInHierarchy)
-                        anchorObject = null;
-                    if (anchorObject != null)
-                        break;
-
-                    anchorObject = _tutorialFrontDoorField != null && TutorialController.Instance != null
-                        ? _tutorialFrontDoorField.GetValue(TutorialController.Instance) as GameObject
-                        : null;
-                    break;
+                    return TryResolveTutorialGiftBoxInteractable(out interactable);
 
                 case TutorialObjectiveKind.HouseExit:
                     EnsureReflectionCache();
@@ -1766,6 +2064,140 @@ namespace DateEverythingAccess
             return interactable != null;
         }
 
+        private static bool TryFindBestFrontDoorInteractable(GameObject anchorObject, out InteractableObj interactable)
+        {
+            interactable = null;
+            InteractableObj[] candidates = anchorObject != null
+                ? anchorObject.GetComponentsInChildren<InteractableObj>(includeInactive: true)
+                : FindObjectsOfType<InteractableObj>();
+
+            if (candidates == null || candidates.Length == 0)
+                return false;
+
+            float bestScore = float.MinValue;
+            Vector3 anchorPosition = anchorObject != null ? anchorObject.transform.position : Vector3.zero;
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                InteractableObj candidate = candidates[i];
+                if (candidate == null || candidate.gameObject == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                float score = ScoreFrontDoorCandidate(candidate);
+                if (score <= 0f)
+                    continue;
+
+                if (anchorObject != null)
+                    score -= Vector3.Distance(candidate.transform.position, anchorPosition);
+
+                if (score <= bestScore)
+                    continue;
+
+                bestScore = score;
+                interactable = candidate;
+            }
+
+            return interactable != null;
+        }
+
+        private static float ScoreFrontDoorCandidate(InteractableObj interactable)
+        {
+            if (interactable == null)
+                return 0f;
+
+            string objectName = NormalizeIdentifierName(interactable.name);
+            string label = GetObjectFacingDisplayName(interactable);
+            string sceneText = GetInteractableHierarchyText(interactable);
+            string sceneKey = BuildComparisonKey(sceneText);
+
+            if (ContainsTutorialExcludedObjectName(objectName) ||
+                ContainsTutorialExcludedObjectName(label) ||
+                ContainsToken(sceneText, "particle") ||
+                ContainsToken(sceneText, "frame") ||
+                ContainsToken(sceneText, "knob") ||
+                ContainsToken(sceneText, "cam"))
+            {
+                return 0f;
+            }
+
+            if (!ContainsToken(sceneText, "frontdoor") && !ContainsToken(sceneText, "front door"))
+                return 0f;
+
+            if (string.Equals(sceneKey, "doorfrontmodelupdate", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(sceneKey, "doorfrontbrokenglassmodelupdate", StringComparison.OrdinalIgnoreCase))
+            {
+                return 500f;
+            }
+
+            if (string.Equals(BuildComparisonKey(objectName), "doorfrontmodelupdate", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(BuildComparisonKey(objectName), "doorfrontbrokenglassmodelupdate", StringComparison.OrdinalIgnoreCase))
+            {
+                return 450f;
+            }
+
+            if (ContainsToken(label, "front door"))
+                return 300f;
+
+            return ContainsToken(objectName, "door front") ? 200f : 0f;
+        }
+
+        private static bool TryResolveTutorialHallwayFallbackInteractable(out InteractableObj interactable)
+        {
+            interactable = null;
+            InteractableObj[] candidates = FindObjectsOfType<InteractableObj>();
+            if (candidates == null || candidates.Length == 0)
+                return false;
+
+            InteractableObj stairsFallback = null;
+            InteractableObj bathroomDoorFallback = null;
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                InteractableObj candidate = candidates[i];
+                if (candidate == null || candidate.gameObject == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                string sceneText = GetInteractableHierarchyText(candidate);
+                string sceneKey = BuildComparisonKey(sceneText);
+                string objectKey = BuildComparisonKey(candidate.name);
+
+                if (string.Equals(objectKey, "doorsbathroom1", StringComparison.OrdinalIgnoreCase) ||
+                    sceneKey.IndexOf("doorsbathroom1", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    bathroomDoorFallback = candidate;
+                    continue;
+                }
+
+                if (stairsFallback == null &&
+                    (string.Equals(objectKey, "stairs", StringComparison.OrdinalIgnoreCase) ||
+                    sceneKey.IndexOf("househallwaystairs", StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    stairsFallback = candidate;
+                }
+            }
+
+            interactable = stairsFallback ?? bathroomDoorFallback;
+            return interactable != null;
+        }
+
+        private static string GetTutorialHallwayFallbackLabel(InteractableObj interactable)
+        {
+            if (IsTutorialHallwayStairsFallback(interactable))
+                return Loc.Get("navigation_tutorial_hallway_stairs");
+
+            return Loc.Get("navigation_tutorial_hallway_bathroom_door");
+        }
+
+        private static bool IsTutorialHallwayStairsFallback(InteractableObj interactable)
+        {
+            if (interactable == null || interactable.gameObject == null)
+                return false;
+
+            string sceneKey = BuildComparisonKey(GetInteractableHierarchyText(interactable));
+            string objectKey = BuildComparisonKey(interactable.name);
+            return string.Equals(objectKey, "stairs", StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(sceneKey) &&
+                sceneKey.IndexOf("househallwaystairs", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
         private static bool TryResolveActiveDroneTriggerWorldTarget(out Vector3 target, out float radius)
         {
             target = Vector3.zero;
@@ -1814,12 +2246,104 @@ namespace DateEverythingAccess
                 target = bounds.center;
                 float horizontalExtent = Mathf.Max(bounds.extents.x, bounds.extents.z);
                 if (horizontalExtent > 0.01f)
-                    radius = Mathf.Clamp(horizontalExtent * 0.5f, 1f, 2.5f);
+                    radius = Mathf.Clamp(horizontalExtent, 1f, 3.5f);
                 return true;
             }
 
             target = bestTriggerZone.transform.position;
             return true;
+        }
+
+        private static bool TryResolveActiveDroneThresholdWorldTarget(out Vector3 target, out float radius)
+        {
+            target = Vector3.zero;
+            radius = 1.25f;
+
+            TutorialThreshold[] thresholds = FindObjectsOfType<TutorialThreshold>(includeInactive: true);
+            if (thresholds == null || thresholds.Length == 0)
+                return false;
+
+            TutorialThreshold bestThreshold = null;
+            float bestDistance = float.MaxValue;
+            Vector3 playerPosition = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform.position
+                : Vector3.zero;
+
+            for (int i = 0; i < thresholds.Length; i++)
+            {
+                TutorialThreshold threshold = thresholds[i];
+                if (threshold == null ||
+                    !threshold.isDroneThreshold ||
+                    threshold.gameObject == null ||
+                    !threshold.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                float distance = Vector3.Distance(playerPosition, threshold.transform.position);
+                if (distance >= bestDistance)
+                    continue;
+
+                bestDistance = distance;
+                bestThreshold = threshold;
+            }
+
+            if (bestThreshold == null)
+                return false;
+
+            Collider thresholdCollider = bestThreshold.GetComponent<Collider>();
+            if (thresholdCollider != null)
+            {
+                Bounds bounds = thresholdCollider.bounds;
+                target = bounds.center;
+                float horizontalExtent = Mathf.Max(bounds.extents.x, bounds.extents.z);
+                if (horizontalExtent > 0.01f)
+                    radius = Mathf.Clamp(horizontalExtent, 1f, 3.5f);
+                return true;
+            }
+
+            target = bestThreshold.transform.position;
+            return true;
+        }
+
+        private static bool CanPlanToInteractable(InteractableObj interactable)
+        {
+            if (interactable == null ||
+                interactable.gameObject == null ||
+                BetterPlayerControl.Instance == null ||
+                !SimpleNavPlanner.IsReady)
+            {
+                return false;
+            }
+
+            Vector3 start = BetterPlayerControl.Instance.transform.position;
+            Vector3 target = GetInteractablePlanningPosition(interactable);
+            float radius = GetInteractableRouteRadius(interactable);
+            SimpleNavRoute route = SimpleNavPlanner.Plan(
+                start,
+                target,
+                radius,
+                interactable.gameObject.name,
+                interactable.gameObject.GetInstanceID(),
+                targetIsDatable: !string.IsNullOrEmpty(interactable.inkFileName),
+                targetInkFileName: interactable.inkFileName);
+            return route != null;
+        }
+
+        private static bool CanPlanToWorldTarget(Vector3 target, float radius, string label)
+        {
+            if (BetterPlayerControl.Instance == null || !SimpleNavPlanner.IsReady)
+                return false;
+
+            SimpleNavRoute route = SimpleNavPlanner.Plan(
+                BetterPlayerControl.Instance.transform.position,
+                target,
+                radius > 0f ? radius : 1.25f,
+                label ?? "World target",
+                0,
+                targetIsDatable: false,
+                targetInkFileName: null);
+            return route != null;
         }
 
         private static float ScoreTutorialObjectiveInteractable(TutorialObjectiveKind objectiveKind, InteractableObj interactable)
@@ -1845,6 +2369,12 @@ namespace DateEverythingAccess
 
                 case TutorialObjectiveKind.FrontDoor:
                 case TutorialObjectiveKind.HouseExit:
+                    if (ContainsTutorialExcludedObjectName(sceneName) ||
+                        ContainsTutorialExcludedObjectName(objectLabel))
+                    {
+                        return 0f;
+                    }
+
                     if (ContainsToken(objectLabel, "front door"))
                         score += 140f;
                     if (ContainsToken(sceneName, "front door") || ContainsToken(sceneName, "frontdoor"))
@@ -1965,6 +2495,12 @@ namespace DateEverythingAccess
         {
             Loc.RefreshLanguage();
 
+            if (TryResolveCurrentObjectiveWorldTarget(out string worldTargetZone, out string worldTargetLabel))
+            {
+                BeginNavigationAndStartTrackerTone(worldTargetZone, worldTargetLabel);
+                return;
+            }
+
             if (!TryResolveCurrentObjectiveInteractable(out InteractableObj interactable, out string targetZone, out string targetLabel))
             {
                 ScreenReader.Say(Loc.Get("navigation_no_objective"));
@@ -1985,7 +2521,7 @@ namespace DateEverythingAccess
 
             if (TryPlanAndInstallSimpleNavRoute())
             {
-                ObjectTracker.StartTracking(SimpleNavBridge.LastResolvedTarget, requiresInteraction: false);
+                ObjectTracker.StartTracking(ResolveInitialNavigationTrackerTarget(), requiresInteraction: false);
             }
             else
             {
@@ -1993,9 +2529,23 @@ namespace DateEverythingAccess
             }
         }
 
-        // Ctrl+Shift+F6 known-objects picker. Flat house-wide list of every active InteractableObj
-        // the player has previously noticed (datables: status != Unmet; non-datables:
-        // hasNormalInteracted), deduped by identity, sorted by current XZ distance ascending.
+        private Vector3 ResolveInitialNavigationTrackerTarget()
+        {
+            if (SimpleNavBridge.HasActiveRoute)
+                return SimpleNavBridge.LastResolvedTarget;
+
+            if (_hasNavigationWorldTarget)
+                return _navigationWorldTarget;
+
+            if (TryGetTrackedInteractable(out InteractableObj interactable) && interactable != null)
+                return GetInteractablePlanningPosition(interactable);
+
+            return SimpleNavBridge.LastResolvedTarget;
+        }
+
+        // Ctrl+Shift+F6 known-objects picker. The office door is seeded at game start;
+        // every other entry comes from save/runtime evidence that the player has met,
+        // interacted with, or examined the object.
         // Up/Down move selection; Enter selects (drives the same nav-tone flow as Ctrl+F6);
         // Escape closes.
         private void OpenKnownObjectPicker()
@@ -2138,8 +2688,8 @@ namespace DateEverythingAccess
                     continue;
                 }
 
-                if (!IsDatedInteractable(candidate) &&
-                    !IsDoorInteractable(candidate))
+                if (!IsStartupOfficeDoorObject(candidate, label) &&
+                    !IsEncounteredKnownObject(candidate))
                 {
                     continue;
                 }
@@ -2170,6 +2720,44 @@ namespace DateEverythingAccess
 
             targets.Sort((a, b) => a.Distance.CompareTo(b.Distance));
             return targets.Count > 0;
+        }
+
+        private static bool IsStartupOfficeDoorObject(InteractableObj interactable, string label)
+        {
+            if (interactable == null)
+                return false;
+
+            string sceneText = GetInteractableHierarchyText(interactable);
+            string objectName = NormalizeIdentifierName(interactable.name);
+
+            if (ContainsTutorialExcludedObjectName(objectName) ||
+                ContainsTutorialExcludedObjectName(label) ||
+                ContainsTutorialExcludedObjectName(sceneText))
+            {
+                return false;
+            }
+
+            if (!IsDoorInteractable(interactable))
+                return false;
+
+            string sceneKey = BuildComparisonKey(sceneText);
+            return string.Equals(BuildComparisonKey(objectName), "doorsoffice", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(BuildComparisonKey(objectName), "doorsofficeunlocked", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(BuildComparisonKey(objectName), "doorsofficelocked", StringComparison.OrdinalIgnoreCase) ||
+                sceneKey.IndexOf("doorsoffice", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                sceneKey.IndexOf("officedoorsdoorsoffice", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool ContainsTutorialExcludedObjectName(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return false;
+
+            return ContainsToken(value, "particle") ||
+                ContainsToken(value, "closet") ||
+                ContainsToken(value, "bathroom") ||
+                ContainsToken(value, "rug") ||
+                ContainsToken(value, "hidden");
         }
 
         private static bool TryFindEquivalentKnownObjectTarget(
@@ -2211,33 +2799,82 @@ namespace DateEverythingAccess
 
         private static bool IsInteractableKnownToPlayer(InteractableObj interactable)
         {
+            return IsEncounteredKnownObject(interactable);
+        }
+
+        private static bool IsEncounteredKnownObject(InteractableObj interactable)
+        {
             if (interactable == null)
                 return false;
+
+            if (IsDatedInteractable(interactable))
+                return true;
+
+            ObjectSaveData saveData = interactable.objSaveData;
+            if (saveData != null && saveData.hasNormalInteracted)
+                return true;
+
+            return IsExaminedInteractable(interactable);
+        }
+
+        private static bool IsExaminedInteractable(InteractableObj interactable)
+        {
+            if (interactable == null)
+                return false;
+
+            if (HasRememberedExaminedObjectKey(interactable.Id) ||
+                HasRememberedExaminedObjectKey(interactable.name) ||
+                HasRememberedExaminedObjectKey(interactable.InternalName()) ||
+                HasRememberedExaminedObjectKey(interactable.inkFileName))
+            {
+                return true;
+            }
+
+            ObjectExamine[] childExamines = interactable.GetComponentsInChildren<ObjectExamine>(includeInactive: true);
+            if (childExamines != null)
+            {
+                for (int i = 0; i < childExamines.Length; i++)
+                {
+                    if (IsRememberedOrSavedExamine(childExamines[i]))
+                        return true;
+                }
+            }
+
+            return IsRememberedOrSavedExamine(interactable.GetComponentInParent<ObjectExamine>());
+        }
+
+        private static bool IsRememberedOrSavedExamine(ObjectExamine examine)
+        {
+            if (examine == null)
+                return false;
+
+            if (HasRememberedExaminedObjectKey(examine.InkNode) ||
+                (examine.gameObject != null && HasRememberedExaminedObjectKey(examine.gameObject.name)))
+            {
+                return true;
+            }
 
             Save save = null;
             try { save = Singleton<Save>.Instance; }
             catch { save = null; }
-            if (save == null)
-                return true;
+            if (save == null || string.IsNullOrWhiteSpace(examine.InkNode))
+                return false;
 
-            bool isDatable = !string.IsNullOrEmpty(interactable.inkFileName);
-            string internalName = interactable.InternalName();
-
-            if (isDatable && !string.IsNullOrEmpty(internalName))
+            try
             {
-                try
-                {
-                    RelationshipStatus status = save.GetDateStatus(internalName);
-                    return status != RelationshipStatus.Unmet;
-                }
-                catch
-                {
-                    return false;
-                }
+                Dictionary<string, int> examinedBoxes = save.GetBoxExamenData();
+                return examinedBoxes != null && examinedBoxes.ContainsKey(examine.InkNode);
             }
+            catch
+            {
+                return false;
+            }
+        }
 
-            ObjectSaveData saveData = interactable.objSaveData;
-            return saveData != null && saveData.hasNormalInteracted;
+        private static bool HasRememberedExaminedObjectKey(string value)
+        {
+            string key = BuildComparisonKey(value);
+            return !string.IsNullOrEmpty(key) && _examinedObjectKeys.Contains(key);
         }
 
         private static bool IsDatedInteractable(InteractableObj interactable)
@@ -2383,7 +3020,7 @@ namespace DateEverythingAccess
                 : target.transform.position;
             int goId = target.gameObject.GetInstanceID();
             string goName = target.gameObject.name;
-            float radius = target.InteractionRadius;
+            float radius = GetInteractableRouteRadius(target);
             string label = _navigationTargetLabel ?? goName;
 
             bool isDatable = !string.IsNullOrWhiteSpace(target.inkFileName);
@@ -2397,6 +3034,33 @@ namespace DateEverythingAccess
             }
             SimpleNavBridge.BeginRoute(route);
             return true;
+        }
+
+        private static bool IsTutorialSkylarGiftTarget(InteractableObj interactable)
+        {
+            if (interactable == null)
+                return false;
+
+            return string.Equals(interactable.inkFileName, "skylar_specs", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(interactable.InternalName(), "skylar", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static float GetInteractableRouteRadius(InteractableObj interactable)
+        {
+            if (interactable == null)
+                return 7.5f;
+
+            if (IsTutorialSkylarGiftTarget(interactable))
+                return TutorialGiftApproachRadius;
+
+            float radius = interactable.InteractionRadius > 0f
+                ? interactable.InteractionRadius
+                : 7.5f;
+
+            if (IsDoorInteractable(interactable) && radius > SimpleNavDoorTargetRadius)
+                return SimpleNavDoorTargetRadius;
+
+            return radius;
         }
 
 
@@ -4364,6 +5028,12 @@ namespace DateEverythingAccess
             if (TryBuildSpecsSelectionAnnouncement(selectedObject, out specialAnnouncement, out branch))
                 return specialAnnouncement;
 
+            if (TryBuildRoomersSelectionAnnouncement(selectedObject, out specialAnnouncement))
+            {
+                branch = "roomers";
+                return specialAnnouncement;
+            }
+
             if (TryBuildDateADexSelectionAnnouncement(selectedObject, out specialAnnouncement))
             {
                 branch = "dateadex";
@@ -4868,6 +5538,58 @@ namespace DateEverythingAccess
             }
 
             return false;
+        }
+
+        private static bool TryBuildRoomersSelectionAnnouncement(GameObject selectedObject, out string announcement)
+        {
+            announcement = null;
+
+            if (selectedObject == null ||
+                Roomers.Instance == null ||
+                Roomers.Instance.RoomersWindow == null ||
+                !Roomers.Instance.RoomersWindow.activeInHierarchy)
+            {
+                return false;
+            }
+
+            RoomersEntryButton entryButton = selectedObject.GetComponentInParent<RoomersEntryButton>();
+            if (entryButton == null || entryButton.roomersEntry == null)
+                return false;
+
+            announcement = BuildRoomersEntryAnnouncement(entryButton.roomersEntry);
+            return !string.IsNullOrEmpty(announcement);
+        }
+
+        private static string BuildRoomersEntryAnnouncement(Save.RoomersStruct entry)
+        {
+            if (entry == null)
+                return null;
+
+            var parts = new List<string>();
+            AddAnnouncementPart(parts, NormalizeText(entry.questName));
+            AddAnnouncementPart(parts, BuildLabeledValue("roomers_character", GetRoomersCharacterDisplayName(entry.character)));
+            AddAnnouncementPart(parts, BuildLabeledValue("roomers_location", GetRoomersCharacterObjectName(entry.character)));
+            AddAnnouncementPart(parts, NormalizeText(entry.description));
+
+            if (entry.skylarTipIsFound && !string.IsNullOrWhiteSpace(entry.skylar))
+            {
+                AddAnnouncementPart(parts, Loc.Get("roomers_character", "Skylar"));
+                AddAnnouncementPart(parts, NormalizeText(entry.skylar));
+            }
+            else if (entry.tips != null)
+            {
+                for (int i = 0; i < entry.tips.Count; i++)
+                {
+                    Save.RoomersTipStruct tip = entry.tips[i];
+                    if (tip == null || !tip.isFound)
+                        continue;
+
+                    AddAnnouncementPart(parts, NormalizeText(tip.tipNameAfterValidation));
+                    AddAnnouncementPart(parts, NormalizeText(tip.tipInfoAfterValidation));
+                }
+            }
+
+            return JoinAnnouncementParts(parts);
         }
 
         private static bool TryBuildChatSelectionAnnouncement(GameObject selectedObject, out string announcement)
@@ -6402,6 +7124,24 @@ namespace DateEverythingAccess
             return string.IsNullOrEmpty(displayName) ? Loc.Get("unknown_object") : displayName;
         }
 
+        private static string GetInteractableHierarchyText(InteractableObj interactable)
+        {
+            if (interactable == null || interactable.transform == null)
+                return string.Empty;
+
+            List<string> names = new List<string>();
+            Transform current = interactable.transform;
+            int depth = 0;
+            while (current != null && depth < 12)
+            {
+                names.Add(current.name);
+                current = current.parent;
+                depth++;
+            }
+
+            return string.Join(" ", names.ToArray());
+        }
+
         private static string GetInteractableDisplayName(InteractableObj interactable)
         {
             if (interactable == null)
@@ -6570,6 +7310,8 @@ namespace DateEverythingAccess
             _tutorialFrontDoorField = typeof(TutorialController).GetField("frontDoor", flags);
             _tutorialComputerField = typeof(TutorialController).GetField("computer", flags);
             _tutorialTriggerZonesField = typeof(TutorialController).GetField("triggerZones", flags);
+            _roomersCurrentEntryField = typeof(Roomers).GetField("currentEntry", flags);
+            _roomersEntriesField = typeof(Roomers).GetField("RoomersEntries", flags);
             _specStatTooltipsField = typeof(SpecStatMain).GetField("statTooltips", flags);
             _specStatMainKeyButtonField = typeof(SpecStatMain).GetField("keyButton", flags);
             _specStatMainAutoSelectFallbackField = typeof(SpecStatMain).GetField("autoSelectFallback", flags);

@@ -33,7 +33,8 @@ namespace DateEverythingAccess
         // Player must come within this XZ distance of the active waypoint before we advance.
         private const float WaypointArrivalRadius = 1.35f;
         private const float DoorWaypointArrivalRadius = 2.2f;
-        private const float DoorOpeningArrivalRadius = 0.65f;
+        private const float DoorOpeningArrivalRadius = 0.9f;
+        private const float WorldTargetArrivalRadius = 0.45f;
 
         // Telemetry recorded per active route. Used by RecordFrameProgress so failures can be
         // diagnosed without log scraping.
@@ -95,7 +96,7 @@ namespace DateEverythingAccess
         /// </summary>
         public static void BeginRoute(SimpleNavRoute route)
         {
-            if (route == null || route.Waypoints == null || route.Waypoints.Count < 2)
+            if (route == null || route.Waypoints == null || route.Waypoints.Count < 1)
             {
                 if (Main.Log != null) Main.Log.LogWarning("SimpleNavBridge.BeginRoute: empty/short route");
                 EndStep();
@@ -110,8 +111,11 @@ namespace DateEverythingAccess
             _semanticWaypoints.Clear();
             _waypoints.AddRange(route.Waypoints);
             _semanticWaypoints.AddRange(route.SemanticWaypoints);
-            // Skip the start waypoint (player's own position) — drive toward index 1 first.
-            _waypointIndex = 1;
+            // Skip the start waypoint when a route has at least one segment. Single-waypoint
+            // routes happen when the planner's start cell is already inside the goal disc; keep
+            // them active so arrival/proximity handling can complete instead of starting a
+            // navigation with no active route.
+            _waypointIndex = route.Waypoints.Count > 1 ? 1 : 0;
             _activeTarget = _waypoints[_waypointIndex];
             _activeTargetValid = true;
             ResolveActiveDoorForSegment(_activeRouteSegment);
@@ -130,6 +134,14 @@ namespace DateEverythingAccess
             if (_activeRoute == null) return false;
             if (!_activeTargetValid || _waypoints.Count == 0) return false;
             if (_waypointIndex < _waypoints.Count - 1) return false;
+
+            if (_activeRoute.TargetGameObjectId == 0)
+            {
+                Vector3 worldTarget = _activeRoute.TargetPosition;
+                float tdx = worldTarget.x - playerPos.x;
+                float tdz = worldTarget.z - playerPos.z;
+                return (tdx * tdx + tdz * tdz) <= WorldTargetArrivalRadius * WorldTargetArrivalRadius;
+            }
 
             Vector3 finalWaypoint = _waypoints[_waypoints.Count - 1];
             float wdx = finalWaypoint.x - playerPos.x;
@@ -563,7 +575,11 @@ namespace DateEverythingAccess
             float dx = cur.x - playerPos.x;
             float dz = cur.z - playerPos.z;
             float arrivalRadius = GetActiveWaypointArrivalRadius();
-            if (dx * dx + dz * dz > arrivalRadius * arrivalRadius) return false;
+            if (dx * dx + dz * dz > arrivalRadius * arrivalRadius &&
+                !HasPassedActiveDoorWaypoint(playerPos, dx * dx + dz * dz))
+            {
+                return false;
+            }
             _waypointIndex++;
             _activeTarget = _waypoints[_waypointIndex];
             if (_activeRoute != null)
@@ -583,14 +599,37 @@ namespace DateEverythingAccess
             return true;
         }
 
+        private static bool HasPassedActiveDoorWaypoint(Vector3 playerPos, float currentDistSq)
+        {
+            SimpleNavWaypoint waypoint = ActiveWaypoint;
+            if (waypoint == null ||
+                (waypoint.Kind != SimpleNavWaypointKind.DoorOpening && waypoint.Kind != SimpleNavWaypointKind.DoorExit) ||
+                _waypointIndex >= _waypoints.Count - 1)
+            {
+                return false;
+            }
+
+            if (_activeDoor != null && !_activeDoor.open)
+                return false;
+
+            Vector3 next = _waypoints[_waypointIndex + 1];
+            float ndx = next.x - playerPos.x;
+            float ndz = next.z - playerPos.z;
+            float nextDistSq = ndx * ndx + ndz * ndz;
+            if (nextDistSq >= currentDistSq)
+                return false;
+
+            float currentDist = Mathf.Sqrt(currentDistSq);
+            float nextDist = Mathf.Sqrt(nextDistSq);
+            float margin = waypoint.Kind == SimpleNavWaypointKind.DoorOpening ? 0.75f : 0.25f;
+            return nextDist + margin < currentDist;
+        }
+
         private static float GetActiveWaypointArrivalRadius()
         {
             SimpleNavWaypoint waypoint = ActiveWaypoint;
             if (waypoint == null)
                 return _activeDoor != null ? DoorWaypointArrivalRadius : WaypointArrivalRadius;
-
-            if (_activeDoor != null)
-                return DoorWaypointArrivalRadius;
 
             switch (waypoint.Kind)
             {
@@ -600,6 +639,8 @@ namespace DateEverythingAccess
                 case SimpleNavWaypointKind.DoorExit:
                     return 0.9f;
                 default:
+                    if (_activeDoor != null)
+                        return DoorWaypointArrivalRadius;
                     return WaypointArrivalRadius;
             }
         }

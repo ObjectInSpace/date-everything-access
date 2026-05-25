@@ -224,6 +224,10 @@ namespace DateEverythingAccess
             Add("navigation_blocked", "Navigation blockiert oder unterbrochen.", "Navigation blocked or interrupted.");
             Add("navigation_no_path", "Kein Weg zu {0} gefunden.", "No path found to {0}.");
             Add("navigation_tutorial_gift_delivery_trigger", "Geschenk-Lieferausloeser", "Gift delivery trigger");
+            Add("navigation_tutorial_drone_threshold", "Drohne im vorderen Flur", "Drone in front hall");
+            Add("navigation_tutorial_hallway_bathroom_door", "Badezimmertuer im Flur", "Hallway bathroom door");
+            Add("navigation_tutorial_hallway_stairs", "Treppe im Flur", "Hallway stairs");
+            Add("navigation_tutorial_office_hallway_clear", "Buerotuer zum Flur", "Office doorway to hall");
             Add("navigation_planner_not_ready", "Navigationsdaten noch nicht bereit.", "Navigation data not ready yet.");
             Add("navigation_select_target_title", "Navigationsziel waehlen", "Select navigation target");
             Add("navigation_room_list_title", "Raeume im Haus", "Rooms in house");
