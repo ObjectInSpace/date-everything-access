@@ -234,6 +234,7 @@ namespace DateEverythingAccess
         private static float _pendingDateADexEntryAnnouncementNotBefore;
         private static float _pendingDateADexEntryAnnouncementExpiresAt;
         private static float _suppressDateADexOpenEntrySelectionUntil;
+        private static DateADexEntry _pendingDateADexDetailEntry;
         private static float _suppressInitialSpecsAnnouncementsUntil;
         private static bool _awaitingSpecsTutorialDialogs;
         private static bool _choiceUpWasDown;
@@ -394,8 +395,9 @@ namespace DateEverythingAccess
 
         private static int _coverageSweepRequested;
 
-        internal static void RequestDateADexEntryAnnouncement()
+        internal static void RequestDateADexEntryAnnouncement(DateADexEntry entry)
         {
+            _pendingDateADexDetailEntry = entry;
             Interlocked.Exchange(ref _pendingDateADexEntryAnnouncementRequested, 1);
             _pendingDateADexEntryAnnouncementNotBefore = Time.unscaledTime + 0.05f;
             _pendingDateADexEntryAnnouncementExpiresAt = Time.unscaledTime + 1.5f;
@@ -507,13 +509,15 @@ namespace DateEverythingAccess
             if (Time.unscaledTime > _pendingDateADexEntryAnnouncementExpiresAt)
             {
                 Interlocked.Exchange(ref _pendingDateADexEntryAnnouncementRequested, 0);
+                _pendingDateADexDetailEntry = null;
                 return;
             }
 
-            if (!TryBuildDateADexDetailAnnouncement(out string announcement) || string.IsNullOrEmpty(announcement))
+            if (!TryBuildDateADexDetailAnnouncement(out string announcement, _pendingDateADexDetailEntry) || string.IsNullOrEmpty(announcement))
                 return;
 
             Interlocked.Exchange(ref _pendingDateADexEntryAnnouncementRequested, 0);
+            _pendingDateADexDetailEntry = null;
             _lastDateADexDetail = announcement;
             float openEntrySuppressionSeconds = EstimateSpeechSuppressionSeconds(
                 announcement,
@@ -5501,6 +5505,15 @@ namespace DateEverythingAccess
             string value;
             if (IsWithin(selectedObject, DateADex.Instance.CollectableButton, null, null, out value))
             {
+                if (TryBuildDateADexDetailAnnouncement(out string entryAnnouncement, _pendingDateADexDetailEntry) &&
+                    !string.IsNullOrEmpty(entryAnnouncement))
+                {
+                    Interlocked.Exchange(ref _pendingDateADexEntryAnnouncementRequested, 0);
+                    _pendingDateADexDetailEntry = null;
+                    announcement = entryAnnouncement;
+                    return true;
+                }
+
                 announcement = string.IsNullOrEmpty(value)
                     ? Loc.Get("dateadex_button_collectables")
                     : Loc.Get("dateadex_button_collectables_value", value);
@@ -5865,6 +5878,11 @@ namespace DateEverythingAccess
 
         private static bool TryBuildDateADexDetailAnnouncement(out string announcement)
         {
+            return TryBuildDateADexDetailAnnouncement(out announcement, null);
+        }
+
+        private static bool TryBuildDateADexDetailAnnouncement(out string announcement, DateADexEntry entryOverride)
+        {
             announcement = null;
 
             if (DateADex.Instance == null || DateADex.Instance.DateADexWindow == null || !DateADex.Instance.DateADexWindow.activeInHierarchy)
@@ -5902,6 +5920,21 @@ namespace DateEverythingAccess
             string recipe = isRecipeVisible
                 ? ExtractTextFromObject(DateADex.Instance.RecipeScreen)
                 : null;
+
+            if (isEntryVisible && entryOverride != null)
+            {
+                bool isMet = entryOverride.isAwakened;
+                if (string.IsNullOrEmpty(item))
+                    item = isMet ? NormalizeText(entryOverride.CharObj) : "???";
+                if (string.IsNullOrEmpty(description))
+                    description = isMet ? NormalizeText(entryOverride.CharDYK) : Loc.Get("dateadex_unmet_description");
+                if (string.IsNullOrEmpty(voiceActor))
+                    voiceActor = isMet ? NormalizeText(entryOverride.VoActor) : null;
+                if (string.IsNullOrEmpty(likes))
+                    likes = isMet ? NormalizeText(entryOverride.CharLikes) : null;
+                if (string.IsNullOrEmpty(dislikes))
+                    dislikes = isMet ? NormalizeText(entryOverride.CharDislikes) : null;
+            }
 
             var parts = new List<string>();
             AddAnnouncementPart(parts, item);

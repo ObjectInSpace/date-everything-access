@@ -7,9 +7,10 @@ namespace DateEverythingAccess
     {
         [HarmonyPatch("OpenEntry", new[] { typeof(int) })]
         [HarmonyPostfix]
-        private static void OnOpenEntry()
+        private static void OnOpenEntry(int id)
         {
-            AccessibilityWatcher.RequestDateADexEntryAnnouncement();
+            DateADexEntry entry = DateADex.Instance != null ? DateADex.Instance.GetEntry(id) : null;
+            AccessibilityWatcher.RequestDateADexEntryAnnouncement(entry);
         }
     }
 }
