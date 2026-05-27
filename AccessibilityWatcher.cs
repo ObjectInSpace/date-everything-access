@@ -1091,31 +1091,37 @@ namespace DateEverythingAccess
         // at two heights because doorframe sills and door-bottom colliders sit below the chest
         // height the player capsule normally encounters. Returns "chest=<a> ankle=<b>" with
         // either side filled with "<clear>" when that probe is unblocked, or null if both clear.
+        // Also stamps RuntimeBlockerProbe.Last so the coverage sweep can pick up structured data.
         private static string ProbeRuntimeBlocker(Vector3 playerPos, Vector3 target)
         {
             Vector3 toward = target - playerPos;
             toward.y = 0f;
             float dist = toward.magnitude;
-            if (dist < 0.1f) return null;
+            if (dist < 0.1f) { RuntimeBlockerProbe.Last = null; return null; }
             Vector3 dir = toward / dist;
             float castDist = dist + 0.5f;
 
-            string chestLabel = ProbeOne(playerPos + new Vector3(0f, 1.0f, 0f), dir, castDist);
-            string ankleLabel = ProbeOne(playerPos + new Vector3(0f, 0.2f, 0f), dir, castDist);
-            if (chestLabel == null && ankleLabel == null) return null;
-            return "chest=" + (chestLabel ?? "<clear>") + " ankle=" + (ankleLabel ?? "<clear>");
+            RuntimeBlockerProbe.Hit chest = ProbeOne(playerPos + new Vector3(0f, 1.0f, 0f), dir, castDist);
+            RuntimeBlockerProbe.Hit ankle = ProbeOne(playerPos + new Vector3(0f, 0.2f, 0f), dir, castDist);
+            if (chest == null && ankle == null) { RuntimeBlockerProbe.Last = null; return null; }
+            var probe = new RuntimeBlockerProbe { Chest = chest, Ankle = ankle, PlayerPos = playerPos, Waypoint = target };
+            RuntimeBlockerProbe.Last = probe;
+            return "chest=" + (chest?.Format() ?? "<clear>") + " ankle=" + (ankle?.Format() ?? "<clear>");
         }
 
-        private static string ProbeOne(Vector3 origin, Vector3 dir, float maxDist)
+        private static RuntimeBlockerProbe.Hit ProbeOne(Vector3 origin, Vector3 dir, float maxDist)
         {
             if (!Physics.SphereCast(origin, 0.35f, dir, out RaycastHit hit, maxDist,
                     Physics.AllLayers, QueryTriggerInteraction.Ignore))
                 return null;
-            string name = hit.collider != null && hit.collider.gameObject != null
-                ? hit.collider.gameObject.name
-                : "<unknown>";
-            int layer = hit.collider != null ? hit.collider.gameObject.layer : -1;
-            return name + " layer=" + layer + " dist=" + hit.distance.ToString("0.00");
+            GameObject go = hit.collider != null ? hit.collider.gameObject : null;
+            return new RuntimeBlockerProbe.Hit
+            {
+                Name = go != null ? go.name : "<unknown>",
+                Path = go != null ? RuntimeBlockerProbe.PathOf(go) : "<unknown>",
+                Layer = go != null ? go.layer : -1,
+                Distance = hit.distance,
+            };
         }
 
 

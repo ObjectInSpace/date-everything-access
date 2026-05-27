@@ -52,7 +52,29 @@ namespace DateEverythingAccess
             Teleporting,
             Running,
             WritingResults,
+            // Walk-mode phases: one continuous traversal hitting every reachable cell.
+            WalkPickLeg,        // pick next unvisited reachable cell, plan a leg to it.
+            WalkRunningLeg,     // leg's autowalk is in flight; same detectors as Running.
         }
+
+        // Walk-mode per-cell state. 0=untested, 1=walkable (player stood on it), 2=impassable.
+        // Stored row-major (ix * nz + iz) per floor, parallel to the manifest's reachable bitmap.
+        private const byte CellUntested = 0;
+        private const byte CellWalkable = 1;
+        private const byte CellImpassable = 2;
+        private static readonly Dictionary<string, byte[]> _walkState =
+            new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, bool[]> _walkReachable =
+            new Dictionary<string, bool[]>(StringComparer.OrdinalIgnoreCase);
+        private static List<ImpassRecord> _impassRecords;
+        private static int _walkLegIndex;
+        private static string _walkTargetFloor;
+        private static int _walkTargetIx;
+        private static int _walkTargetIz;
+        // Cell-snap radius around the current player position. After arriving at a leg target,
+        // every cell within this many cells of the player counts as walkable too. Same shape as
+        // the StampCoverage 4-neighbour ring; bumped to 8-neighbour for walk mode.
+        private const int WalkVerifyRadiusCells = 1;
 
         private static Phase _phase = Phase.Idle;
         private static SweepManifest _manifest;
@@ -114,6 +136,8 @@ namespace DateEverythingAccess
                     case Phase.Teleporting:           StepTeleporting(); break;
                     case Phase.Running:               StepRunning(); break;
                     case Phase.WritingResults:        /* handled in finish */ break;
+                    case Phase.WalkPickLeg:           WalkStepPickLeg(); break;
+                    case Phase.WalkRunningLeg:        WalkStepRunningLeg(); break;
                 }
             }
             catch (Exception ex)
@@ -162,10 +186,64 @@ namespace DateEverythingAccess
 
             _results = new List<RouteResult>(_manifest.entries.Length);
             _entryIndex = 0;
+
+            bool walkMode = string.Equals(_manifest.mode, "walk", StringComparison.OrdinalIgnoreCase);
+            if (walkMode)
+            {
+                InitWalkMode();
+                _phase = Phase.WalkPickLeg;
+                if (Main.Log != null) Main.Log.LogInfo("SimpleNavCoverageSweep: walk-mode started, reachable cells per floor: " + DescribeReachable());
+                ScreenReader.Say("Coverage walk-sweep started", remember: false);
+                _nextActionTime = 0f;
+                return;
+            }
+
             _phase = Phase.BetweenRoutes;
             _nextActionTime = 0f;
             if (Main.Log != null) Main.Log.LogInfo("SimpleNavCoverageSweep: started, entries=" + _manifest.entries.Length);
             ScreenReader.Say("Coverage sweep started, " + _manifest.entries.Length + " routes", remember: false);
+        }
+
+        private static void InitWalkMode()
+        {
+            _walkState.Clear();
+            _walkReachable.Clear();
+            _impassRecords = new List<ImpassRecord>(64);
+            _walkLegIndex = 0;
+            if (_manifest.reachable_bitmap_rows == null || _manifest.floor_frames == null) return;
+            foreach (var kv in _manifest.floor_frames)
+            {
+                FloorFrame frame = kv.Value;
+                int cells = frame.nx * frame.nz;
+                _walkState[kv.Key] = new byte[cells];
+                bool[] reachable = new bool[cells];
+                string[] rows = _manifest.reachable_bitmap_rows.ForFloor(kv.Key);
+                if (rows != null && rows.Length == frame.nx)
+                {
+                    for (int ix = 0; ix < frame.nx; ix++)
+                    {
+                        string row = rows[ix];
+                        if (row == null) continue;
+                        int rowBase = ix * frame.nz;
+                        int upper = Math.Min(row.Length, frame.nz);
+                        for (int iz = 0; iz < upper; iz++)
+                            if (row[iz] == '1') reachable[rowBase + iz] = true;
+                    }
+                }
+                _walkReachable[kv.Key] = reachable;
+            }
+        }
+
+        private static string DescribeReachable()
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var kv in _walkReachable)
+            {
+                int n = 0; for (int i = 0; i < kv.Value.Length; i++) if (kv.Value[i]) n++;
+                if (sb.Length > 0) sb.Append(", ");
+                sb.Append(kv.Key); sb.Append('='); sb.Append(n);
+            }
+            return sb.ToString();
         }
 
         private static void AbortSweep(string reason)
@@ -174,6 +252,7 @@ namespace DateEverythingAccess
             // If a route was in flight, stop the autowalk cleanly.
             try { SimpleNavBridge.EndStep(); } catch { }
             FlushResults();
+            FlushWalkResults();
             _phase = Phase.Idle;
             _manifest = null;
             _currentRoute = null;
@@ -181,6 +260,10 @@ namespace DateEverythingAccess
             _verified.Clear();
             _failed.Clear();
             _failedSkipCounts.Clear();
+            _walkState.Clear();
+            _walkReachable.Clear();
+            _impassRecords = null;
+            _walkStartTeleported = false;
             ScreenReader.Say("Coverage sweep stopped", remember: false);
         }
 
@@ -436,7 +519,7 @@ namespace DateEverythingAccess
                 : Vector3.zero;
             float displacement = Vector3.Distance(new Vector3(startPos.x, 0, startPos.z),
                                                   new Vector3(endPos.x, 0, endPos.z));
-            _results.Add(new RouteResult
+            var result = new RouteResult
             {
                 manifest_index = _currentManifestIndex,
                 floor = entry.floor,
@@ -444,7 +527,22 @@ namespace DateEverythingAccess
                 outcome = outcome,
                 cost_m = entry.cost_m,
                 elapsed_s = Time.unscaledTime - _routeStartUnscaledTime,
-            });
+            };
+            if (outcome != "arrived")
+            {
+                RuntimeBlockerProbe probe = RuntimeBlockerProbe.Last;
+                RuntimeBlockerProbe.Hit hit = probe?.Nearest();
+                if (hit != null)
+                {
+                    result.blocker_path = hit.Path;
+                    result.blocker_layer = hit.Layer;
+                    result.blocker_distance = hit.Distance;
+                    result.blocker_mode = ClassifyBlockerMode(hit);
+                }
+                // Probe is one-shot; clear so the next route doesn't see a stale value.
+                RuntimeBlockerProbe.Last = null;
+            }
+            _results.Add(result);
             if (Main.Log != null)
                 Main.Log.LogInfo("SimpleNavCoverageSweep result idx=" + _currentManifestIndex +
                     " floor=" + entry.floor + " cell=(" + entry.cell[0] + "," + entry.cell[1] + ")" +
@@ -645,6 +743,36 @@ namespace DateEverythingAccess
             return true;
         }
 
+        // Three failure modes for a runtime stall:
+        //   "state"          — door / state-wall the bake modelled in one pose; live state diverges.
+        //   "classification" — collider on a layer the bake skips (e.g. Mirror=18, layer 31).
+        //                       Bake's classification rule rejected the geometry, runtime did not.
+        //   "footprint"      — default: mesh footprint and collider footprint disagree. The bake
+        //                       rasterized something narrower/elsewhere than the real collider.
+        // The mode is a triage hint, not a verdict — offline tooling looks up the specific rule.
+        private static string ClassifyBlockerMode(RuntimeBlockerProbe.Hit hit)
+        {
+            if (hit == null) return "unknown";
+
+            // Classification mode: layer the bake explicitly skips.
+            if (hit.Layer == 18 || hit.Layer == 31) return "classification";
+
+            // State mode: name match against known state-bearing colliders. Cheap heuristic;
+            // the offline triage tool can refine with the full GameObject path.
+            string n = hit.Name ?? string.Empty;
+            string p = hit.Path ?? string.Empty;
+            if (n.StartsWith("Doors_", StringComparison.OrdinalIgnoreCase)) return "state";
+            if (n.IndexOf("Door", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                (n.IndexOf("Panel", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 n.IndexOf("Slide", StringComparison.OrdinalIgnoreCase) >= 0))
+                return "state";
+            if (n.IndexOf("DaemonWall", StringComparison.OrdinalIgnoreCase) >= 0) return "state";
+            if (n.IndexOf("DresserWall", StringComparison.OrdinalIgnoreCase) >= 0) return "state";
+            if (p.IndexOf("/Doors/", StringComparison.OrdinalIgnoreCase) >= 0) return "state";
+
+            return "footprint";
+        }
+
         private static void ForceCloseAllDoors()
         {
             Door[] doors = UnityEngine.Object.FindObjectsOfType<Door>();
@@ -655,6 +783,485 @@ namespace DateEverythingAccess
                 if (!d.open && !SimpleNavBridge.IsActiveDoorMoving()) continue;
                 try { SimpleNavBridge.ForceDoorClosed(d); } catch { }
             }
+        }
+
+        // ---- Walk-mode loop ---------------------------------------------------------------
+        // Single continuous traversal: pick the nearest untested reachable cell, plan a leg,
+        // walk it. On arrival mark the target (and the 8-neighbourhood) walkable. On stall
+        // mark the target impassable with a full diagnostic record. Either way, the cell is
+        // never re-tested in the same sweep.
+
+        private static bool _walkStartTeleported;
+
+        private static void WalkStepPickLeg()
+        {
+            // Make sure the prior leg, if any, is fully torn down.
+            try { SimpleNavBridge.EndStep(); } catch { }
+
+            // On the very first leg of the sweep: teleport to the manifest start and close every
+            // door exactly once. Subsequent legs run continuously from wherever the player ended
+            // up, exercising natural door interactions along the way.
+            if (!_walkStartTeleported)
+            {
+                if (!TeleportToWalkStart()) { AbortSweep("walk: cannot resolve start"); return; }
+                ForceCloseAllDoors();
+                _walkStartTeleported = true;
+                _nextActionTime = Time.unscaledTime + WaitAfterTeleportSeconds;
+                return;
+            }
+            if (Time.unscaledTime < _nextActionTime) return;
+
+            Vector3 playerPos = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform.position
+                : Vector3.zero;
+            if (BetterPlayerControl.Instance == null) { AbortSweep("walk: no player"); return; }
+
+            // Stamp the cell the player is standing on as walkable — we're here, so it works.
+            StampWalkable(playerPos);
+
+            if (!PickNearestUntested(playerPos, out string floor, out int ix, out int iz))
+            {
+                FinishWalkSweep();
+                return;
+            }
+
+            // Plan a route to the cell centre.
+            if (!_manifest.floor_frames.TryGetValue(floor, out FloorFrame frame))
+            {
+                MarkImpassable(floor, ix, iz, playerPos, "no_path", Vector3.zero, null);
+                return;
+            }
+            float wx = frame.origin_x + ix * frame.cell_size + frame.cell_size * 0.5f;
+            float wz = frame.origin_z + iz * frame.cell_size + frame.cell_size * 0.5f;
+            Vector3 targetPos = new Vector3(wx, frame.floor_y, wz);
+            // 0.5m interaction radius: arrival means "within one cell of the target centre."
+            SimpleNavRoute route = SimpleNavPlanner.Plan(
+                playerPos, targetPos, 0.5f,
+                targetName: "walk_cell:" + floor + ":" + ix + ":" + iz,
+                targetGameObjectId: 0);
+            if (route == null)
+            {
+                MarkImpassable(floor, ix, iz, playerPos, "no_path", targetPos, null);
+                return;
+            }
+
+            _currentRoute = route;
+            _walkTargetFloor = floor;
+            _walkTargetIx = ix;
+            _walkTargetIz = iz;
+            _routeStartUnscaledTime = Time.unscaledTime;
+            _routeBudgetSeconds = ComputeBudgetSeconds(route);
+            _loopWindow.Clear();
+            _nextLoopSampleTime = Time.unscaledTime + LoopSampleIntervalSeconds;
+            _doorCloseObservedSince = 0f;
+            if (!AccessibilityWatcher.TryStartCoverageSweepRoute(route, out string detail))
+            {
+                MarkImpassable(floor, ix, iz, playerPos, "input_failed:" + detail, targetPos, null);
+                return;
+            }
+            _phase = Phase.WalkRunningLeg;
+        }
+
+        private static void WalkStepRunningLeg()
+        {
+            if (BetterPlayerControl.Instance == null) { AbortSweep("walk: no player"); return; }
+            Vector3 playerPos = BetterPlayerControl.Instance.transform.position;
+            StampWalkable(playerPos);  // stamp every frame so back-tracks credit cells
+
+            bool arrived = SimpleNavBridge.HasArrivedAtRouteTarget(playerPos);
+            if (arrived) { FinishWalkLegArrived(); return; }
+            if (!SimpleNavBridge.HasActiveRoute) { FinishWalkLegFailure("stalled", playerPos); return; }
+
+            // Door-open failure (same logic as the dispersed path).
+            if (SimpleNavBridge.ActiveDoor != null)
+            {
+                Door door = SimpleNavBridge.ActiveDoor;
+                bool open = door.open;
+                bool moving = SimpleNavBridge.IsActiveDoorMoving();
+                if (!open && !moving)
+                {
+                    if (_doorCloseObservedSince <= 0f) _doorCloseObservedSince = Time.unscaledTime;
+                    else if (Time.unscaledTime - _doorCloseObservedSince > DoorOpenTimeoutSeconds)
+                    {
+                        string dname = door.gameObject != null ? door.gameObject.name : "<null>";
+                        FinishWalkLegFailure("door_failed:" + dname, playerPos);
+                        return;
+                    }
+                }
+                else _doorCloseObservedSince = 0f;
+            }
+            else _doorCloseObservedSince = 0f;
+
+            if (Time.unscaledTime >= _nextLoopSampleTime)
+            {
+                _nextLoopSampleTime = Time.unscaledTime + LoopSampleIntervalSeconds;
+                _loopWindow.Enqueue(new Vector3(playerPos.x, 0f, playerPos.z));
+                while (_loopWindow.Count > LoopSampleWindow) _loopWindow.Dequeue();
+                if (_loopWindow.Count == LoopSampleWindow && AllSamplesWithinRadius(_loopWindow, LoopRadiusMeters))
+                {
+                    FinishWalkLegFailure("looped", playerPos);
+                    return;
+                }
+            }
+
+            if (Time.unscaledTime - _routeStartUnscaledTime > _routeBudgetSeconds)
+            {
+                FinishWalkLegFailure("budget", playerPos);
+            }
+        }
+
+        private static void FinishWalkLegArrived()
+        {
+            _walkLegIndex++;
+            if (Main.Log != null)
+                Main.Log.LogInfo("SimpleNavCoverageSweep walk-leg " + _walkLegIndex +
+                    " arrived target=(" + _walkTargetFloor + "," + _walkTargetIx + "," + _walkTargetIz + ")");
+            try { AccessibilityWatcher.StopCoverageSweepRoute(); } catch { }
+            try { SimpleNavBridge.EndStep(); } catch { }
+            // Mark target + neighbourhood walkable.
+            MarkWalkableNeighbourhood(_walkTargetFloor, _walkTargetIx, _walkTargetIz);
+            _currentRoute = null;
+            _phase = Phase.WalkPickLeg;
+            _nextActionTime = 0f;
+            // Flush periodically.
+            if ((_walkLegIndex % 20) == 0) FlushWalkResults();
+        }
+
+        private static void FinishWalkLegFailure(string outcome, Vector3 playerPos)
+        {
+            _walkLegIndex++;
+            // Compute target world coords for the record.
+            Vector3 targetPos = Vector3.zero;
+            if (_manifest.floor_frames.TryGetValue(_walkTargetFloor, out FloorFrame frame))
+            {
+                targetPos = new Vector3(
+                    frame.origin_x + _walkTargetIx * frame.cell_size + frame.cell_size * 0.5f,
+                    frame.floor_y,
+                    frame.origin_z + _walkTargetIz * frame.cell_size + frame.cell_size * 0.5f);
+            }
+            // Stash the bridge state we'll need for the record before we tear it down.
+            string activeDoorName = SimpleNavBridge.ActiveDoor != null && SimpleNavBridge.ActiveDoor.gameObject != null
+                ? SimpleNavBridge.ActiveDoor.gameObject.name : null;
+            string segmentDoorName = null;
+            if (SimpleNavBridge.ActiveWaypoint != null)
+            {
+                // Best-effort tag from the current waypoint.
+                segmentDoorName = SimpleNavBridge.ActiveWaypoint.DoorName;
+            }
+            try { AccessibilityWatcher.StopCoverageSweepRoute(); } catch { }
+            try { SimpleNavBridge.EndStep(); } catch { }
+            MarkImpassable(_walkTargetFloor, _walkTargetIx, _walkTargetIz, playerPos, outcome, targetPos,
+                activeDoorName, segmentDoorName);
+            _currentRoute = null;
+            _phase = Phase.WalkPickLeg;
+            _nextActionTime = 0f;
+            if ((_walkLegIndex % 20) == 0) FlushWalkResults();
+        }
+
+        private static void MarkWalkableNeighbourhood(string floor, int ix, int iz)
+        {
+            if (!_manifest.floor_frames.TryGetValue(floor, out FloorFrame frame)) return;
+            if (!_walkState.TryGetValue(floor, out byte[] state)) return;
+            int r = WalkVerifyRadiusCells;
+            for (int dx = -r; dx <= r; dx++)
+            {
+                int x = ix + dx; if (x < 0 || x >= frame.nx) continue;
+                for (int dz = -r; dz <= r; dz++)
+                {
+                    int z = iz + dz; if (z < 0 || z >= frame.nz) continue;
+                    int k = x * frame.nz + z;
+                    // Don't overwrite an impassable verdict — that would mask a real bug.
+                    if (state[k] == CellUntested) state[k] = CellWalkable;
+                }
+            }
+        }
+
+        private static void StampWalkable(Vector3 worldPos)
+        {
+            string floor = FloorForY(worldPos.y);
+            if (floor == null) return;
+            if (!_manifest.floor_frames.TryGetValue(floor, out FloorFrame frame)) return;
+            if (!_walkState.TryGetValue(floor, out byte[] state)) return;
+            int ix = (int)Mathf.Floor((worldPos.x - frame.origin_x) / frame.cell_size);
+            int iz = (int)Mathf.Floor((worldPos.z - frame.origin_z) / frame.cell_size);
+            MarkWalkableNeighbourhood(floor, ix, iz);
+        }
+
+        private static void MarkImpassable(
+            string floor, int ix, int iz, Vector3 playerPos, string outcome, Vector3 targetPos,
+            string activeDoorName, string segmentDoorName = null)
+        {
+            if (_manifest.floor_frames.TryGetValue(floor, out FloorFrame frame) &&
+                _walkState.TryGetValue(floor, out byte[] state) &&
+                ix >= 0 && ix < frame.nx && iz >= 0 && iz < frame.nz)
+            {
+                state[ix * frame.nz + iz] = CellImpassable;
+            }
+            // Pull probe data while it's fresh.
+            RuntimeBlockerProbe probe = RuntimeBlockerProbe.Last;
+            RuntimeBlockerProbe.Hit chest = probe?.Chest;
+            RuntimeBlockerProbe.Hit ankle = probe?.Ankle;
+            RuntimeBlockerProbe.Hit nearest = probe?.Nearest();
+            Vector3 waypoint = probe != null ? probe.Waypoint : Vector3.zero;
+            RuntimeBlockerProbe.Last = null;
+
+            string playerFloor = FloorForY(playerPos.y);
+            ImpassRecord rec = new ImpassRecord
+            {
+                leg_index = _walkLegIndex,
+                target_floor = floor,
+                target_ix = ix,
+                target_iz = iz,
+                target_wx = targetPos.x,
+                target_wz = targetPos.z,
+                player_floor = playerFloor,
+                player_wx = playerPos.x,
+                player_wy = playerPos.y,
+                player_wz = playerPos.z,
+                outcome = outcome,
+                waypoint_wx = waypoint.x,
+                waypoint_wz = waypoint.z,
+                blocker_mode = nearest != null ? ClassifyBlockerMode(nearest) : "unknown",
+                chest_path = chest?.Path,
+                chest_layer = chest != null ? chest.Layer : -1,
+                chest_distance = chest != null ? chest.Distance : 0f,
+                ankle_path = ankle?.Path,
+                ankle_layer = ankle != null ? ankle.Layer : -1,
+                ankle_distance = ankle != null ? ankle.Distance : 0f,
+                active_door_name = activeDoorName,
+                segment_door_name = segmentDoorName,
+                elapsed_s = Time.unscaledTime - _routeStartUnscaledTime,
+            };
+            _impassRecords.Add(rec);
+            if (Main.Log != null)
+                Main.Log.LogInfo("SimpleNavCoverageSweep walk-leg " + _walkLegIndex +
+                    " IMPASS target=(" + floor + "," + ix + "," + iz + ")" +
+                    " outcome=" + outcome +
+                    " mode=" + (rec.blocker_mode ?? "?") +
+                    " chest=" + (rec.chest_path ?? "<clear>") +
+                    " ankle=" + (rec.ankle_path ?? "<clear>"));
+        }
+
+        private static bool PickNearestUntested(Vector3 playerPos, out string floor, out int ix, out int iz)
+        {
+            // Spiral search on the player's current floor first; fall back to scanning every
+            // floor for the absolute nearest if the current floor has nothing left.
+            string preferred = FloorForY(playerPos.y) ?? "ground";
+            if (TryPickNearestOnFloor(preferred, playerPos, out ix, out iz))
+            {
+                floor = preferred;
+                return true;
+            }
+            // Try the other floors.
+            foreach (var kv in _walkReachable)
+            {
+                if (string.Equals(kv.Key, preferred, StringComparison.OrdinalIgnoreCase)) continue;
+                if (TryPickNearestOnFloor(kv.Key, playerPos, out ix, out iz))
+                {
+                    floor = kv.Key;
+                    return true;
+                }
+            }
+            floor = null; ix = 0; iz = 0;
+            return false;
+        }
+
+        private static bool TryPickNearestOnFloor(string floor, Vector3 playerPos, out int ix, out int iz)
+        {
+            ix = 0; iz = 0;
+            if (!_manifest.floor_frames.TryGetValue(floor, out FloorFrame frame)) return false;
+            if (!_walkReachable.TryGetValue(floor, out bool[] reachable)) return false;
+            if (!_walkState.TryGetValue(floor, out byte[] state)) return false;
+            int pIx = (int)Mathf.Floor((playerPos.x - frame.origin_x) / frame.cell_size);
+            int pIz = (int)Mathf.Floor((playerPos.z - frame.origin_z) / frame.cell_size);
+            // Brute-force linear scan — nx*nz is ~100k per floor and we run this once per leg.
+            // A real spiral would be ~10x faster but ~50x more code; revisit if profiling demands.
+            int bestD2 = int.MaxValue;
+            int bestIx = -1, bestIz = -1;
+            for (int x = 0; x < frame.nx; x++)
+            {
+                int rowBase = x * frame.nz;
+                for (int z = 0; z < frame.nz; z++)
+                {
+                    int k = rowBase + z;
+                    if (!reachable[k]) continue;
+                    if (state[k] != CellUntested) continue;
+                    int dx = x - pIx, dz = z - pIz;
+                    int d2 = dx * dx + dz * dz;
+                    if (d2 < bestD2) { bestD2 = d2; bestIx = x; bestIz = z; }
+                }
+            }
+            if (bestIx < 0) return false;
+            ix = bestIx; iz = bestIz;
+            return true;
+        }
+
+        private static bool TeleportToWalkStart()
+        {
+            if (BetterPlayerControl.Instance == null) return false;
+            ManifestStart s = _manifest.start;
+            if (s == null) return false;
+            Vector3 startWorld = new Vector3(s.wx, s.floor_y, s.wz);
+            Transform pt = BetterPlayerControl.Instance.transform;
+            pt.position = startWorld;
+            Rigidbody rb = BetterPlayerControl.Instance.GetComponent<Rigidbody>();
+            if (rb != null) { rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+            return true;
+        }
+
+        private static void FinishWalkSweep()
+        {
+            FlushWalkResults();
+            int walked = 0, impass = 0, untested = 0;
+            foreach (var kv in _walkState)
+            {
+                byte[] s = kv.Value;
+                bool[] r = _walkReachable[kv.Key];
+                for (int i = 0; i < s.Length; i++)
+                {
+                    if (!r[i]) continue;
+                    if (s[i] == CellWalkable) walked++;
+                    else if (s[i] == CellImpassable) impass++;
+                    else untested++;
+                }
+            }
+            if (Main.Log != null)
+                Main.Log.LogInfo("SimpleNavCoverageSweep walk done legs=" + _walkLegIndex +
+                    " walkable=" + walked + " impassable=" + impass + " untested=" + untested);
+            ScreenReader.Say("Walk-sweep complete: " + walked + " walkable, " + impass + " blocked", remember: false);
+            _phase = Phase.Idle;
+            _manifest = null;
+            _impassRecords = null;
+            _walkState.Clear();
+            _walkReachable.Clear();
+            _walkStartTeleported = false;
+        }
+
+        private static void FlushWalkResults()
+        {
+            if (_impassRecords == null || _runDir == null) return;
+            try
+            {
+                string path = Path.Combine(_runDir, "walk_results.json");
+                var ci = CultureInfo.InvariantCulture;
+                using (var sw = new StreamWriter(path, false, System.Text.Encoding.UTF8))
+                {
+                    sw.Write("{\"run_id\":\"");
+                    sw.Write(JsonEscape(_manifest?.run_id ?? "default"));
+                    sw.Write("\",\"legs\":");
+                    sw.Write(_walkLegIndex);
+                    sw.Write(",\"impassable_count\":");
+                    sw.Write(_impassRecords.Count);
+                    sw.Write(",\"impassable\":[");
+                    for (int i = 0; i < _impassRecords.Count; i++)
+                    {
+                        var r = _impassRecords[i];
+                        if (i > 0) sw.Write(",");
+                        sw.Write("{\"leg\":"); sw.Write(r.leg_index);
+                        sw.Write(",\"target_floor\":\""); sw.Write(JsonEscape(r.target_floor ?? ""));
+                        sw.Write("\",\"target_cell\":["); sw.Write(r.target_ix); sw.Write(","); sw.Write(r.target_iz); sw.Write("]");
+                        sw.Write(",\"target_world\":["); sw.Write(r.target_wx.ToString("0.000", ci)); sw.Write(","); sw.Write(r.target_wz.ToString("0.000", ci)); sw.Write("]");
+                        sw.Write(",\"player_floor\":\""); sw.Write(JsonEscape(r.player_floor ?? ""));
+                        sw.Write("\",\"player_world\":["); sw.Write(r.player_wx.ToString("0.000", ci)); sw.Write(","); sw.Write(r.player_wy.ToString("0.000", ci)); sw.Write(","); sw.Write(r.player_wz.ToString("0.000", ci)); sw.Write("]");
+                        sw.Write(",\"outcome\":\""); sw.Write(JsonEscape(r.outcome ?? ""));
+                        sw.Write("\",\"waypoint\":["); sw.Write(r.waypoint_wx.ToString("0.000", ci)); sw.Write(","); sw.Write(r.waypoint_wz.ToString("0.000", ci)); sw.Write("]");
+                        sw.Write(",\"blocker_mode\":\""); sw.Write(JsonEscape(r.blocker_mode ?? "unknown"));
+                        sw.Write("\",\"chest\":{\"path\":\""); sw.Write(JsonEscape(r.chest_path ?? ""));
+                        sw.Write("\",\"layer\":"); sw.Write(r.chest_layer);
+                        sw.Write(",\"distance\":"); sw.Write(r.chest_distance.ToString("0.000", ci));
+                        sw.Write("},\"ankle\":{\"path\":\""); sw.Write(JsonEscape(r.ankle_path ?? ""));
+                        sw.Write("\",\"layer\":"); sw.Write(r.ankle_layer);
+                        sw.Write(",\"distance\":"); sw.Write(r.ankle_distance.ToString("0.000", ci));
+                        sw.Write("},\"active_door\":\""); sw.Write(JsonEscape(r.active_door_name ?? ""));
+                        sw.Write("\",\"segment_door\":\""); sw.Write(JsonEscape(r.segment_door_name ?? ""));
+                        sw.Write("\",\"elapsed_s\":"); sw.Write(r.elapsed_s.ToString("0.000", ci));
+                        sw.Write("}");
+                    }
+                    sw.Write("],\"groups\":[");
+                    WriteWalkGroups(sw, ci);
+                    sw.Write("]}");
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Main.Log != null) Main.Log.LogWarning("SimpleNavCoverageSweep FlushWalkResults threw: " + ex.Message);
+            }
+        }
+
+        // Bucket impass records by (floor, chest.path, ankle.path). One bucket = one bake-side
+        // bug to chase. Each bucket reports: cell count, the (ix,iz) bounding box, the blocker
+        // mode, layers, the smallest distances seen, and the leg index of the first occurrence
+        // so you can cross-ref the raw impassable[] list.
+        private static void WriteWalkGroups(StreamWriter sw, CultureInfo ci)
+        {
+            if (_impassRecords == null || _impassRecords.Count == 0) return;
+            var buckets = new Dictionary<string, WalkGroup>(StringComparer.Ordinal);
+            for (int i = 0; i < _impassRecords.Count; i++)
+            {
+                var r = _impassRecords[i];
+                string key = (r.target_floor ?? "") + "|" + (r.chest_path ?? "") + "|" + (r.ankle_path ?? "");
+                if (!buckets.TryGetValue(key, out WalkGroup g))
+                {
+                    g = new WalkGroup
+                    {
+                        Floor = r.target_floor,
+                        ChestPath = r.chest_path,
+                        AnklePath = r.ankle_path,
+                        ChestLayer = r.chest_layer,
+                        AnkleLayer = r.ankle_layer,
+                        Mode = r.blocker_mode,
+                        FirstLeg = r.leg_index,
+                        MinIx = r.target_ix, MaxIx = r.target_ix,
+                        MinIz = r.target_iz, MaxIz = r.target_iz,
+                        MinChestDist = r.chest_distance,
+                        MinAnkleDist = r.ankle_distance,
+                    };
+                    buckets[key] = g;
+                }
+                g.Count++;
+                if (r.target_ix < g.MinIx) g.MinIx = r.target_ix;
+                if (r.target_ix > g.MaxIx) g.MaxIx = r.target_ix;
+                if (r.target_iz < g.MinIz) g.MinIz = r.target_iz;
+                if (r.target_iz > g.MaxIz) g.MaxIz = r.target_iz;
+                if (r.chest_distance < g.MinChestDist) g.MinChestDist = r.chest_distance;
+                if (r.ankle_distance < g.MinAnkleDist) g.MinAnkleDist = r.ankle_distance;
+            }
+            // Sort by count desc so the worst offender is on top.
+            var list = new List<WalkGroup>(buckets.Values);
+            list.Sort((a, b) => b.Count.CompareTo(a.Count));
+            for (int i = 0; i < list.Count; i++)
+            {
+                WalkGroup g = list[i];
+                if (i > 0) sw.Write(",");
+                sw.Write("{\"floor\":\""); sw.Write(JsonEscape(g.Floor ?? ""));
+                sw.Write("\",\"chest_path\":\""); sw.Write(JsonEscape(g.ChestPath ?? ""));
+                sw.Write("\",\"ankle_path\":\""); sw.Write(JsonEscape(g.AnklePath ?? ""));
+                sw.Write("\",\"chest_layer\":"); sw.Write(g.ChestLayer);
+                sw.Write(",\"ankle_layer\":"); sw.Write(g.AnkleLayer);
+                sw.Write(",\"mode\":\""); sw.Write(JsonEscape(g.Mode ?? "unknown"));
+                sw.Write("\",\"count\":"); sw.Write(g.Count);
+                sw.Write(",\"bbox\":["); sw.Write(g.MinIx); sw.Write(","); sw.Write(g.MinIz);
+                sw.Write(","); sw.Write(g.MaxIx); sw.Write(","); sw.Write(g.MaxIz); sw.Write("]");
+                sw.Write(",\"min_chest_distance\":"); sw.Write(g.MinChestDist.ToString("0.000", ci));
+                sw.Write(",\"min_ankle_distance\":"); sw.Write(g.MinAnkleDist.ToString("0.000", ci));
+                sw.Write(",\"first_leg\":"); sw.Write(g.FirstLeg);
+                sw.Write("}");
+            }
+        }
+
+        private sealed class WalkGroup
+        {
+            public string Floor;
+            public string ChestPath;
+            public string AnklePath;
+            public int ChestLayer;
+            public int AnkleLayer;
+            public string Mode;
+            public int Count;
+            public int FirstLeg;
+            public int MinIx, MaxIx, MinIz, MaxIz;
+            public float MinChestDist;
+            public float MinAnkleDist;
         }
 
         private static void FlushResults()
@@ -682,6 +1289,14 @@ namespace DateEverythingAccess
                         sw.Write("],\"outcome\":\""); sw.Write(JsonEscape(r.outcome ?? ""));
                         sw.Write("\",\"cost_m\":"); sw.Write(r.cost_m.ToString("0.000", ci));
                         sw.Write(",\"elapsed_s\":"); sw.Write(r.elapsed_s.ToString("0.000", ci));
+                        if (!string.IsNullOrEmpty(r.blocker_path))
+                        {
+                            sw.Write(",\"blocker\":{\"path\":\""); sw.Write(JsonEscape(r.blocker_path));
+                            sw.Write("\",\"layer\":"); sw.Write(r.blocker_layer);
+                            sw.Write(",\"distance\":"); sw.Write(r.blocker_distance.ToString("0.000", ci));
+                            sw.Write(",\"mode\":\""); sw.Write(JsonEscape(r.blocker_mode ?? "unknown"));
+                            sw.Write("\"}");
+                        }
                         sw.Write("}");
                     }
                     sw.Write("]}");
@@ -746,8 +1361,35 @@ namespace DateEverythingAccess
         private class SweepManifestDoc
         {
             [DataMember] public string run_id;
+            [DataMember] public string mode;             // "walk" or null/"dispersed"
             [DataMember] public ManifestFloorFrames floor_frames;
             [DataMember] public ManifestEntry[] entries;
+            [DataMember] public ManifestStart start;
+            [DataMember] public WalkBitmaps reachable_bitmap_rows;
+        }
+
+        [DataContract]
+        private class ManifestStart
+        {
+            [DataMember] public string floor;
+            [DataMember] public int[] cell;
+            [DataMember] public float wx;
+            [DataMember] public float wz;
+            [DataMember] public float floor_y;
+        }
+
+        [DataContract]
+        private class WalkBitmaps
+        {
+            // Each floor's bitmap is a string[]: rows[ix][iz] == '1' iff cell is reachable.
+            [DataMember] public string[] ground;
+            [DataMember] public string[] upper;
+            public string[] ForFloor(string label)
+            {
+                if (string.Equals(label, "ground", StringComparison.OrdinalIgnoreCase)) return ground;
+                if (string.Equals(label, "upper", StringComparison.OrdinalIgnoreCase)) return upper;
+                return null;
+            }
         }
 
         // DataContractJsonSerializer's UseSimpleDictionaryAsObject reads a JSON object of
@@ -803,8 +1445,11 @@ namespace DateEverythingAccess
         private class SweepManifest
         {
             public string run_id;
+            public string mode;
             public ManifestFloorFrames floor_frames;
             public ManifestEntry[] entries;
+            public ManifestStart start;
+            public WalkBitmaps reachable_bitmap_rows;
         }
 
         private struct RouteResult
@@ -814,6 +1459,51 @@ namespace DateEverythingAccess
             public int[] cell;
             public string outcome;
             public float cost_m;
+            public float elapsed_s;
+            // Populated only for non-arrival outcomes when ProbeRuntimeBlocker found a collider.
+            // Mode is one of "footprint" | "state" | "classification" | "unknown" — a coarse
+            // triage hint, not a final verdict. See RuntimeBlockerProbe + the offline triage tool.
+            public string blocker_path;
+            public int blocker_layer;
+            public float blocker_distance;
+            public string blocker_mode;
+        }
+
+        // One per walk-mode impassable verdict. Fields are filled to be self-contained — the
+        // offline triage tool reads these JSON-side without consulting any other artifact.
+        private struct ImpassRecord
+        {
+            public int leg_index;
+            public string target_floor;
+            public int target_ix;
+            public int target_iz;
+            public float target_wx;
+            public float target_wz;
+            // Where the player actually was when we declared the leg impassable.
+            public string player_floor;
+            public float player_wx;
+            public float player_wy;
+            public float player_wz;
+            // Why the leg failed. One of: "no_path" (planner refused), "stalled", "looped",
+            // "door_failed", "budget", "input_failed", "exception".
+            public string outcome;
+            // The waypoint the player was trying to reach when blocked.
+            public float waypoint_wx;
+            public float waypoint_wz;
+            // Triage hint: footprint / state / classification / unknown.
+            public string blocker_mode;
+            // Chest- and ankle-height probes are reported separately because the underlying
+            // collider may sit at one height only (doorframe sill, low planter, etc.).
+            public string chest_path;
+            public int chest_layer;
+            public float chest_distance;
+            public string ankle_path;
+            public int ankle_layer;
+            public float ankle_distance;
+            // The Door object the autowalk was opening, if any, when the leg failed.
+            public string active_door_name;
+            // Active route's tagged door for the segment we were on.
+            public string segment_door_name;
             public float elapsed_s;
         }
 
@@ -831,8 +1521,11 @@ namespace DateEverythingAccess
                 return new SweepManifest
                 {
                     run_id = doc.run_id,
+                    mode = doc.mode,
                     floor_frames = doc.floor_frames,
                     entries = doc.entries ?? Array.Empty<ManifestEntry>(),
+                    start = doc.start,
+                    reachable_bitmap_rows = doc.reachable_bitmap_rows,
                 };
             }
             catch (Exception ex)
