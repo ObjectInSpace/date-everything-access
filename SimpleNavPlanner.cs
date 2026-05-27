@@ -595,13 +595,19 @@ namespace DateEverythingAccess
             return bestD <= FloorMatchToleranceM ? best : null;
         }
 
-        // Pick the nearest floor at-or-below the target's world Y. Wall-mounted props (e.g. the
-        // MagnifyingGlass mount at Y=4.09 on the ground floor at Y=-0.5) sit *above* their floor,
-        // not near it. Allow a small upward slack so a target slightly below its floor's
-        // canonical Y (model-origin quirk) still matches that floor.
+        // Pick the floor a player stands on to interact with a target at world Y.
+        // Wall-mounted props (MagnifyingGlass mount at Y=4.09), table-top items
+        // (Y=1-3), upper-cupboard contents (Y=6-9), and recessed ceiling lights
+        // (Y=12.2 in the ground-floor ceiling) are all ground-accessed — the
+        // player looks up at them and interacts via beam/glasses. The rule
+        // picks the highest floor with floor_y - UpwardSlack <= y.
+        //
+        // UpwardSlack = 0.3m: tight enough that Y=12.2 (ground ceiling) falls
+        // below the upper-floor cutoff and routes to ground. The 0.3m absorbs
+        // floor-mesh-Y model quirks (ground SM_Floor mesh at -0.57 vs FloorY -0.5).
         private static Floor FloorForTargetY(float y)
         {
-            const float UpwardSlackM = 0.5f;
+            const float UpwardSlackM = 0.1f;
             Floor best = null;
             float bestDist = float.PositiveInfinity;
             for (int i = 0; i < _floors.Count; i++)

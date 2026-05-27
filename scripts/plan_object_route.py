@@ -253,6 +253,31 @@ class Planner:
                 bestd, best = d, label
         return best if bestd < 2.0 else None
 
+    def _floor_for_target_y(self, y):
+        """Pick the floor a player stands on to interact with a target at world Y.
+
+        Unlike `_floor_for_y` (which picks the closest baked floor), this picks
+        the floor *below* the target. A magnifying glass at Y=4 on a library
+        shelf, a clock at Y=7 on a kitchen wall, and food at Y=8 inside an
+        upper cupboard are all accessed from the ground floor — the player
+        looks up at them, hits them with the dateviator beam, etc. See
+        [[feedback-interaction-includes-look-and-glasses]].
+
+        Rule: target_floor = highest floor whose floor_y - APPROACH_TOL is
+        <= y. APPROACH_TOL=0.3m is tight on purpose — items mounted just
+        below the upper floor (e.g. recessed lights at Y=12.2 in the
+        ground-floor ceiling) need to route to ground, not upper. The 0.3m
+        slack absorbs floor-surface-Y model quirks (ground floor mesh is at
+        TopY=-0.57 vs floor_y=-0.5) without admitting near-ceiling props.
+        Falls back to the lowest floor when y is below all of them.
+        """
+        APPROACH_TOL_M = 0.1
+        ordered = sorted(self.floors.items(), key=lambda kv: -kv[1].floor_y)
+        for label, f in ordered:
+            if y >= f.floor_y - APPROACH_TOL_M:
+                return label
+        return ordered[-1][0]
+
     def world_of(self, node):
         floor, a, b = node
         if floor.startswith("@"):
@@ -579,7 +604,7 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
         raise SystemExit(f"no interactable matches {target_spec!r}")
 
     tx = target["Position"]["x"]; ty = target["Position"]["y"]; tz = target["Position"]["z"]
-    tfloor = planner._floor_for_y(ty)
+    tfloor = planner._floor_for_target_y(ty)
     if tfloor is None:
         raise SystemExit(f"target Y={ty} not on a baked floor")
     radius = interaction_radius_override or target.get("InteractionRadius", 1.0)
