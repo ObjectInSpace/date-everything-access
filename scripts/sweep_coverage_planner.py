@@ -142,6 +142,9 @@ def main():
                     help="Override the state-walls-open set; default releases every wall.")
     ap.add_argument("--state-walls-active", action="store_true",
                     help="Sweep with state-gated walls active (matches scene-load state).")
+    ap.add_argument("--mode", choices=("walk", "dispersed"), default="walk",
+                    help="walk: emit one reachable-cell bitmap, runtime walks a single continuous "
+                         "route hitting every unvisited cell. dispersed: legacy per-cell route catalogue.")
     args = ap.parse_args()
 
     bake = _mod.load_bake()
@@ -160,6 +163,12 @@ def main():
         state_walls_open = None
     elif args.state_walls_open is not None:
         state_walls_open = args.state_walls_open
+    elif args.mode == "walk":
+        # Walk-sweep default: every state-wall (DaemonWall, DresserWall, ...) closed.
+        # Those are the quest gates the user wants to exclude from the reachable set.
+        # Override with --state-walls-open or --state-walls-active=False semantics
+        # if a specific quest state is being tested.
+        state_walls_open = None
     else:
         state_walls_open = "all"
     planner = _mod.Planner(bake, doors_open=doors_open, state_walls_open=state_walls_open)
@@ -209,6 +218,10 @@ def main():
         },
         "entries": [],
     }
+
+    if args.mode == "walk":
+        _emit_walk_manifest(planner, start_node, manifest, out_dir, floors_to_sweep)
+        return
 
     counts = {"ok": 0, "no_path": 0, "trivially_at_target": 0, "target_not_navigable": 0}
     t0 = time.time()
@@ -286,6 +299,110 @@ def main():
 
     print(f"wrote {manifest_path}")
     print(f"counts: {counts}  elapsed: {manifest['elapsed_s']}s")
+
+
+def _emit_walk_manifest(planner, start_node, manifest, out_dir, floors_to_sweep):
+    """Walk-sweep mode. Computes the BFS-reachable cell set from the start with all
+    doors openable but all state-walls (DaemonWall, DresserWall, ...) closed — that
+    naturally excludes attic CCs, the Daemon bedroom pocket, and other quest-gated
+    regions without a hand-maintained list. Emits the set as a packed bitmap per
+    floor; the runtime walks one continuous route hitting every unvisited cell.
+
+    Run this with `--state-walls-active` to honor quest gates, or pass
+    `--state-walls-open <names>` to manually carve specific gates in.
+    """
+    # Force the gate-honoring configuration: doors all openable, state-walls closed.
+    # The user can override on the CLI; respect whatever the planner has now.
+    reachable = _bfs_reachable(planner, start_node, floors_to_sweep)
+    total_reachable = sum(len(v) for v in reachable.values())
+
+    # Per-floor packed bitmap (one byte per cell, '1' or '0'). The runtime decodes
+    # these into a bool[] alongside the existing floor_frames table.
+    floor_bitmaps = {}
+    for label in floors_to_sweep:
+        if label not in planner.floors:
+            continue
+        f = planner.floors[label]
+        cells = reachable.get(label, set())
+        # Row-major over X (rows=ix, cols=iz), matching the bake's row layout.
+        rows = []
+        for ix in range(f.nx):
+            row_chars = []
+            for iz in range(f.nz):
+                row_chars.append("1" if (ix, iz) in cells else "0")
+            rows.append("".join(row_chars))
+        floor_bitmaps[label] = rows
+
+    manifest["mode"] = "walk"
+    manifest["reachable_bitmap_rows"] = floor_bitmaps
+    manifest["reachable_counts"] = {label: len(reachable.get(label, set())) for label in floors_to_sweep}
+    manifest["reachable_total"] = total_reachable
+    # No per-route files in walk mode — drop the entries list to avoid confusion.
+    manifest["entries"] = []
+
+    manifest_path = out_dir / "sweep_manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    print(f"wrote {manifest_path}")
+    print(f"walk-mode reachable cells: {manifest['reachable_counts']}  total={total_reachable}")
+
+
+def _bfs_reachable(planner, start_node, floors_to_sweep):
+    """8-connected BFS from start across navigable cells, crossing inter-floor edges
+    (stairs + teleporters) wherever both endpoints are bake-resident. Doors that the
+    planner has opened contribute their freed_cells through `floor.navigable()`."""
+    from collections import deque
+    visited = {label: set() for label in floors_to_sweep if label in planner.floors}
+    if start_node[0] not in visited:
+        return visited
+    queue = deque([start_node])
+    visited[start_node[0]].add((start_node[1], start_node[2]))
+    while queue:
+        node = queue.popleft()
+        floor_label, ix, iz = node
+        if floor_label.startswith("@"):
+            # Virtual teleporter endpoint — fan out to its declared neighbors.
+            for nbr, _, _ in planner.edges_from.get(node, []):
+                if nbr[0].startswith("@"):
+                    continue
+                if nbr[0] not in visited:
+                    continue
+                key = (nbr[1], nbr[2])
+                if key in visited[nbr[0]]:
+                    continue
+                visited[nbr[0]].add(key)
+                queue.append(nbr)
+            continue
+        f = planner.floors[floor_label]
+        for dx, dz, _ in NEIGHBORS_8_LITE:
+            nx_, nz_ = ix + dx, iz + dz
+            if (nx_, nz_) in visited[floor_label]:
+                continue
+            if not f.navigable(nx_, nz_):
+                continue
+            visited[floor_label].add((nx_, nz_))
+            queue.append((floor_label, nx_, nz_))
+        # Inter-floor edges off this cell.
+        for nbr, _, _ in planner.edges_from.get(node, []):
+            if nbr[0].startswith("@"):
+                # Virtual teleporter node — let the @-branch above fan it out.
+                # Push it onto the queue with a dummy key so we don't revisit.
+                queue.append(nbr)
+                continue
+            if nbr[0] not in visited:
+                continue
+            key = (nbr[1], nbr[2])
+            if key in visited[nbr[0]]:
+                continue
+            visited[nbr[0]].add(key)
+            queue.append(nbr)
+    return visited
+
+
+NEIGHBORS_8_LITE = [
+    (-1, -1, 1), (-1, 0, 1), (-1, 1, 1),
+    ( 0, -1, 1),              ( 0, 1, 1),
+    ( 1, -1, 1), ( 1, 0, 1), ( 1, 1, 1),
+]
 
 
 if __name__ == "__main__":
