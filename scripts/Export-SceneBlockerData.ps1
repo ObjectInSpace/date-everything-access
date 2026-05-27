@@ -699,6 +699,97 @@ function Get-TrianglePlaneIntersections {
     }
 }
 
+function Get-MeshSegmentsAtPlanes {
+    # Slice mesh triangles at horizontal Y planes; emit one segment per
+    # triangle/plane crossing. Used both by Get-MeshColliderRecord and by the
+    # door open/closed pose slicing. Vertices are passed in world space.
+    param(
+        [Parameter(Mandatory = $true)][System.Numerics.Vector3[]]$WorldVerts,
+        [Parameter(Mandatory = $true)][int[]]$Triangles,
+        [Parameter(Mandatory = $true)][double[]]$SlicePlanes
+    )
+
+    $minY = [double]::PositiveInfinity
+    $maxY = [double]::NegativeInfinity
+    foreach ($v in $WorldVerts) {
+        if ($v.Y -lt $minY) { $minY = $v.Y }
+        if ($v.Y -gt $maxY) { $maxY = $v.Y }
+    }
+
+    $segments = New-Object System.Collections.Generic.List[object]
+    $planes = @($SlicePlanes.Where({ $_ -ge $minY -and $_ -le $maxY }))
+    if ($planes.Count -eq 0) { return ,$segments }
+
+    $triCount = [int]($Triangles.Length / 3)
+    foreach ($plane in $planes) {
+        for ($t = 0; $t -lt $triCount; $t++) {
+            $a = $WorldVerts[$Triangles[$t * 3]]
+            $b = $WorldVerts[$Triangles[$t * 3 + 1]]
+            $c = $WorldVerts[$Triangles[$t * 3 + 2]]
+            $tmp = New-Object System.Collections.Generic.List[System.Numerics.Vector2]
+            Get-TrianglePlaneIntersections -A $a -B $b -C $c -PlaneY $plane -Out $tmp
+            if ($tmp.Count -eq 2) {
+                $segments.Add([ordered]@{
+                    AX = [Math]::Round([double]$tmp[0].X, 4)
+                    AZ = [Math]::Round([double]$tmp[0].Y, 4)
+                    BX = [Math]::Round([double]$tmp[1].X, 4)
+                    BZ = [Math]::Round([double]$tmp[1].Y, 4)
+                    PlaneY = [Math]::Round([double]$plane, 4)
+                })
+            }
+        }
+    }
+    return ,$segments
+}
+
+function Transform-MeshVertsToWorld {
+    param(
+        [Parameter(Mandatory = $true)][object]$WorldTransform,
+        [Parameter(Mandatory = $true)][System.Numerics.Vector3[]]$LocalVerts
+    )
+    $out = New-Object System.Numerics.Vector3[] $LocalVerts.Length
+    for ($i = 0; $i -lt $LocalVerts.Length; $i++) {
+        $out[$i] = Transform-LocalPoint -WorldTransform $WorldTransform -LocalPoint $LocalVerts[$i]
+    }
+    return ,$out
+}
+
+function Get-EulerAnglesYXZ {
+    # Approximate Unity's Quaternion.eulerAngles (returns x,y,z in degrees, ZXY
+    # intrinsic). For door panels at non-extreme orientations this matches
+    # Unity to within a few decimal places, which is sufficient since we feed
+    # the angles right back into a quaternion via the same convention.
+    param([Parameter(Mandatory = $true)][System.Numerics.Quaternion]$Q)
+    $sinX = 2.0 * ($Q.W * $Q.X - $Q.Y * $Q.Z)
+    if ($sinX -gt 1.0) { $sinX = 1.0 }
+    if ($sinX -lt -1.0) { $sinX = -1.0 }
+    $x = [Math]::Asin($sinX)
+    $cosX = [Math]::Cos($x)
+    if ([Math]::Abs($cosX) -lt 1e-6) {
+        $y = [Math]::Atan2(-2.0 * ($Q.X * $Q.Z - $Q.W * $Q.Y), 1.0 - 2.0 * ($Q.Y * $Q.Y + $Q.Z * $Q.Z))
+        $z = 0.0
+    } else {
+        $y = [Math]::Atan2(2.0 * ($Q.W * $Q.Y + $Q.X * $Q.Z), 1.0 - 2.0 * ($Q.X * $Q.X + $Q.Y * $Q.Y))
+        $z = [Math]::Atan2(2.0 * ($Q.W * $Q.Z + $Q.X * $Q.Y), 1.0 - 2.0 * ($Q.X * $Q.X + $Q.Z * $Q.Z))
+    }
+    $rad2deg = 180.0 / [Math]::PI
+    return [System.Numerics.Vector3]::new([float]($x * $rad2deg), [float]($y * $rad2deg), [float]($z * $rad2deg))
+}
+
+function Get-QuaternionFromEulerYXZ {
+    # Build a quaternion from (x,y,z) degrees using Unity's ZXY (Z then X then
+    # Y) intrinsic order: q = Ry * Rx * Rz. Inverse of Get-EulerAnglesYXZ.
+    param([Parameter(Mandatory = $true)][System.Numerics.Vector3]$DegEuler)
+    $deg2rad = [Math]::PI / 180.0
+    $hx = [float]($DegEuler.X * $deg2rad * 0.5)
+    $hy = [float]($DegEuler.Y * $deg2rad * 0.5)
+    $hz = [float]($DegEuler.Z * $deg2rad * 0.5)
+    $qx = [System.Numerics.Quaternion]::new([float][Math]::Sin($hx), 0, 0, [float][Math]::Cos($hx))
+    $qy = [System.Numerics.Quaternion]::new(0, [float][Math]::Sin($hy), 0, [float][Math]::Cos($hy))
+    $qz = [System.Numerics.Quaternion]::new(0, 0, [float][Math]::Sin($hz), [float][Math]::Cos($hz))
+    return [System.Numerics.Quaternion]::Normalize($qy * $qx * $qz)
+}
+
 function Get-MeshColliderRecord {
     param(
         [Parameter(Mandatory = $true)][object]$Component,
@@ -1018,10 +1109,14 @@ $gameObjects = [System.Collections.Generic.Dictionary[long, object]]::new()
 $transformsById = [System.Collections.Generic.Dictionary[long, object]]::new()
 $transformByGameObjectId = [System.Collections.Generic.Dictionary[long, object]]::new()
 $doorGameObjectIds = New-Object System.Collections.Generic.HashSet[long]
+$doorComponents = New-Object System.Collections.Generic.List[object]
 $teleporterGameObjectIds = New-Object System.Collections.Generic.HashSet[long]
 $rigidbodyByGameObjectId = [System.Collections.Generic.Dictionary[long, object]]::new()
 $primitiveColliderComponents = New-Object System.Collections.Generic.List[object]
 $meshColliderComponents = New-Object System.Collections.Generic.List[object]
+# MeshFilter records (section type 33). Used as a fallback panel source for
+# doors whose visual panel has no collider (e.g. closet SlidingDoors).
+$meshFilterComponents = New-Object System.Collections.Generic.List[object]
 $terrainColliderCount = 0
 $currentHeader = $null
 $currentLines = [System.Collections.Generic.List[string]]::new()
@@ -1073,6 +1168,20 @@ function Process-SceneSection {
                 }
             }
         }
+        33 {
+            # MeshFilter — captures the visual mesh assigned to a GameObject.
+            # Most have a sibling MeshCollider that we already export, but
+            # collider-less panels (closet SlidingDoors) are visible only here.
+            $gameObjectIdText = Get-LineValue -Lines $linesArray -Pattern "^  m_GameObject: \{fileID: (\d+)\}$"
+            if ($null -ne $gameObjectIdText) {
+                $meshGuid = Get-LineValue -Lines $linesArray -Pattern "^  m_Mesh: \{fileID: -?\d+, guid: ([0-9a-f]+), type: \d+\}\s*$"
+                $script:meshFilterComponents.Add([pscustomobject]@{
+                    ComponentId = $sectionInfo.Id
+                    GameObjectId = [long]$gameObjectIdText
+                    MeshGuid = $meshGuid
+                })
+            }
+        }
         64 {
             $gameObjectIdText = Get-LineValue -Lines $linesArray -Pattern "^  m_GameObject: \{fileID: (\d+)\}$"
             if ($null -ne $gameObjectIdText) {
@@ -1102,7 +1211,50 @@ function Process-SceneSection {
             $gameObjectIdText = Get-LineValue -Lines $linesArray -Pattern "^  m_GameObject: \{fileID: (\d+)\}$"
             if ($null -eq $gameObjectIdText) { return }
             if ($linesArray -match "^  LocationDown: \{fileID: \d+\}$") { [void]$teleporterGameObjectIds.Add([long]$gameObjectIdText); return }
-            if ($linesArray -match "^  doorOpenType: ") { [void]$doorGameObjectIds.Add([long]$gameObjectIdText) }
+            if ($linesArray -match "^  doorOpenType: ") {
+                [void]$doorGameObjectIds.Add([long]$gameObjectIdText)
+                $doorComponents.Add([pscustomobject]@{
+                    Kind = "Door"
+                    ComponentId = $sectionInfo.Id
+                    GameObjectId = [long]$gameObjectIdText
+                    Enabled = ((Get-LineValue -Lines $linesArray -Pattern "^  m_Enabled: (\d+)$") -ne "0")
+                    Open = ((Get-LineValue -Lines $linesArray -Pattern "^  open: (\d+)$") -eq "1")
+                    Locked = ((Get-LineValue -Lines $linesArray -Pattern "^  locked: (\d+)$") -eq "1")
+                    OverrideNodeLock = ((Get-LineValue -Lines $linesArray -Pattern "^  overrideNodeLock: (\d+)$") -eq "1")
+                    NodeLockAlt = $(if ($nla = Get-LineValue -Lines $linesArray -Pattern "^  NodeLockAlt: (.*)$") { $nla } else { "" })
+                    Range = [double](Get-LineValueOrDefault -Lines $linesArray -Pattern "^  range: ([-0-9.eE+]+)$" -DefaultValue "85")
+                    DoorOpenType = [int](Get-LineValueOrDefault -Lines $linesArray -Pattern "^  doorOpenType: (\d+)$" -DefaultValue "0")
+                    BlockInteraction = ((Get-LineValue -Lines $linesArray -Pattern "^  blockInteraction: (\d+)$") -eq "1")
+                    StopOnCollision = ((Get-LineValue -Lines $linesArray -Pattern "^  stopOnCollision: (\d+)$") -eq "1")
+                    # SlidingDoor-only fields (left null for hinge doors)
+                    Dist = $null
+                    Sign = $null
+                    Axis = $null
+                })
+            }
+            # SlidingDoor MonoBehaviour: closet doors etc. Discriminated by
+            # serialized fields `dist`, `sign`, `axis` rather than by GUID so the
+            # rule survives an asset re-rip.
+            elseif ($linesArray -match "^  dist: " -and $linesArray -match "^  axis: " -and $linesArray -match "^  sign: ") {
+                [void]$doorGameObjectIds.Add([long]$gameObjectIdText)
+                $doorComponents.Add([pscustomobject]@{
+                    Kind = "SlidingDoor"
+                    ComponentId = $sectionInfo.Id
+                    GameObjectId = [long]$gameObjectIdText
+                    Enabled = ((Get-LineValue -Lines $linesArray -Pattern "^  m_Enabled: (\d+)$") -ne "0")
+                    Open = ((Get-LineValue -Lines $linesArray -Pattern "^  open: (\d+)$") -eq "1")
+                    Locked = ((Get-LineValue -Lines $linesArray -Pattern "^  locked: (\d+)$") -eq "1")
+                    OverrideNodeLock = ((Get-LineValue -Lines $linesArray -Pattern "^  overrideNodeLock: (\d+)$") -eq "1")
+                    NodeLockAlt = $(if ($nla2 = Get-LineValue -Lines $linesArray -Pattern "^  nodeLockAlt: (.*)$") { $nla2 } else { "" })
+                    Range = $null
+                    DoorOpenType = $null
+                    BlockInteraction = $false
+                    StopOnCollision = ((Get-LineValue -Lines $linesArray -Pattern "^  stopOnCollision: (\d+)$") -eq "1")
+                    Dist = [double](Get-LineValueOrDefault -Lines $linesArray -Pattern "^  dist: ([-0-9.eE+]+)$" -DefaultValue "0")
+                    Sign = [int](Get-LineValueOrDefault -Lines $linesArray -Pattern "^  sign: (-?\d+)$" -DefaultValue "1")
+                    Axis = [int](Get-LineValueOrDefault -Lines $linesArray -Pattern "^  axis: (\d+)$" -DefaultValue "0")
+                })
+            }
         }
         135 {
             $gameObjectIdText = Get-LineValue -Lines $linesArray -Pattern "^  m_GameObject: \{fileID: (\d+)\}$"
@@ -1469,6 +1621,372 @@ $layerInventoryArray = @(
     }
 )
 
+# Door panel discovery + per-pose slicing.
+#
+# For each Door / SlidingDoor MonoBehaviour, walk its transform's descendants
+# (including itself) and collect every panel-bearing GameObject: any that has a
+# MeshCollider or, failing that, a MeshFilter. The panel's mesh vertices are
+# resolved via the same GUID index used by the mesh-collider pass. We slice the
+# panel mesh in two world poses:
+#
+#   closed: each panel's current scene world transform (== closed pose, since
+#           we already verified Open=false for every door in the scene).
+#   open:   re-anchor each panel by computing its position/rotation in the
+#           door's local frame, then rebuilding world from the open-pose door
+#           transform:
+#             v_doorLocal = inv(doorWorldRot) * (v_world - doorWorldPos)
+#             v_worldOpen = doorWorldOpen.Pos + doorWorldOpen.Rot * v_doorLocal
+#
+# Hinge doors (Door.cs): transform.eulerAngles = startRot + correctUP * to
+#   where correctUP = (0,1,0) and to = startRot.z + (±range or 0). We compute
+#   open-pose eulers via Get-EulerAnglesYXZ/Get-QuaternionFromEulerYXZ. For
+#   BothWays we emit both signs as separate SegmentsOpen sets.
+#
+# SlidingDoors (SlidingDoor.cs Initialize() with open=false at scene load):
+#   openPos = closedPos + worldAxis * sign * dist
+#   where worldAxis is the SCENE-FRAME axis (right/up/forward), per the
+#   decompiled source.
+#
+# Sliced segments use the existing $MeshSlicePlanes — same slicing convention
+# as the regular MeshCollider pass so the bake can rasterize and diff with the
+# same code path.
+
+# Build child index: for each transform, list its child transform ids.
+$childrenByParentTransformId = [System.Collections.Generic.Dictionary[long, System.Collections.Generic.List[long]]]::new()
+foreach ($transformInfo in $transformsById.Values) {
+    $parentId = $transformInfo.ParentTransformId
+    if ($parentId -eq 0) { continue }
+    if (-not $childrenByParentTransformId.ContainsKey($parentId)) {
+        $childrenByParentTransformId[$parentId] = New-Object System.Collections.Generic.List[long]
+    }
+    [void]$childrenByParentTransformId[$parentId].Add($transformInfo.Id)
+}
+
+function Get-DescendantTransformIds {
+    param(
+        [Parameter(Mandatory = $true)][long]$RootTransformId,
+        [Parameter(Mandatory = $true)][System.Collections.Generic.Dictionary[long, System.Collections.Generic.List[long]]]$ChildIndex
+    )
+    $result = New-Object System.Collections.Generic.List[long]
+    $stack = New-Object System.Collections.Generic.Stack[long]
+    $stack.Push($RootTransformId)
+    while ($stack.Count -gt 0) {
+        $tid = $stack.Pop()
+        $result.Add($tid)
+        if ($ChildIndex.ContainsKey($tid)) {
+            foreach ($child in $ChildIndex[$tid]) {
+                $stack.Push($child)
+            }
+        }
+    }
+    return ,$result
+}
+
+# Index colliders and mesh-filters by GameObjectId so panel discovery can pick
+# the best mesh source per descendant (MeshCollider preferred; MeshFilter as
+# fallback for collider-less panels).
+$meshColliderByGameObjectId = [System.Collections.Generic.Dictionary[long, object]]::new()
+foreach ($mc in $meshColliderComponents) {
+    if (-not $meshColliderByGameObjectId.ContainsKey($mc.GameObjectId)) {
+        $meshColliderByGameObjectId[$mc.GameObjectId] = $mc
+    }
+}
+$meshFilterByGameObjectId = [System.Collections.Generic.Dictionary[long, object]]::new()
+foreach ($mf in $meshFilterComponents) {
+    if (-not $meshFilterByGameObjectId.ContainsKey($mf.GameObjectId)) {
+        $meshFilterByGameObjectId[$mf.GameObjectId] = $mf
+    }
+}
+
+function Compute-DoorOpenWorldTransform {
+    # Returns @($worldTransformOpen, ...) — one entry per open pose. BothWays
+    # hinge doors return two entries (positive and negative range); everything
+    # else returns one.
+    param(
+        [Parameter(Mandatory = $true)][object]$DoorComponent,
+        [Parameter(Mandatory = $true)][object]$DoorWorldClosed
+    )
+
+    $results = New-Object System.Collections.Generic.List[object]
+    if ($DoorComponent.Kind -eq "Door") {
+        $startEuler = Get-EulerAnglesYXZ -Q $DoorWorldClosed.Rotation
+        $range = [double]$DoorComponent.Range
+        $signs = switch ($DoorComponent.DoorOpenType) {
+            0 { @(1.0, -1.0) }   # BothWays — emit both
+            1 { @(1.0) }         # OnlyPositive
+            2 { @(-1.0) }        # OnlyNegative
+            default { @(1.0) }
+        }
+        foreach ($s in $signs) {
+            $signed = $range * $s
+            # transform.eulerAngles = startRot + correctUP * (startRot.z + signed)
+            $toY = [double]$startEuler.Z + $signed
+            $openEuler = [System.Numerics.Vector3]::new(
+                [float]$startEuler.X,
+                [float]([double]$startEuler.Y + $toY),
+                [float]$startEuler.Z
+            )
+            $openRot = Get-QuaternionFromEulerYXZ -DegEuler $openEuler
+            $results.Add([ordered]@{
+                Position = $DoorWorldClosed.Position
+                Rotation = $openRot
+                Scale = $DoorWorldClosed.Scale
+                Tag = $(if ($s -gt 0) { "Positive" } else { "Negative" })
+            })
+        }
+    } else {
+        # SlidingDoor — world-axis translation. Per decompiled Initialize() with
+        # open=false: openPos = closedPos + axisVec * sign * dist (world axis).
+        $axisVec = switch ($DoorComponent.Axis) {
+            0 { [System.Numerics.Vector3]::new(1, 0, 0) }
+            1 { [System.Numerics.Vector3]::new(0, 1, 0) }
+            2 { [System.Numerics.Vector3]::new(0, 0, 1) }
+            default { [System.Numerics.Vector3]::new(0, 0, 1) }
+        }
+        $delta = $axisVec * [float]([double]$DoorComponent.Sign * [double]$DoorComponent.Dist)
+        $results.Add([ordered]@{
+            Position = $DoorWorldClosed.Position + $delta
+            Rotation = $DoorWorldClosed.Rotation
+            Scale = $DoorWorldClosed.Scale
+            Tag = "Slide"
+        })
+    }
+    return ,$results
+}
+
+function Slice-PanelInDoorPose {
+    # Re-anchor panel verts from world (closed pose) into door-local space,
+    # then rebuild into world space using the open-pose door transform, then
+    # slice at the given Y planes. The door-local transform is the natural
+    # frame for panels because both hinge rotation and slider translation
+    # operate on the door's transform — children inherit automatically.
+    param(
+        [Parameter(Mandatory = $true)][System.Numerics.Vector3[]]$PanelWorldVertsClosed,
+        [Parameter(Mandatory = $true)][object]$DoorWorldClosed,
+        [Parameter(Mandatory = $true)][object]$DoorWorldOpen,
+        [Parameter(Mandatory = $true)][int[]]$Triangles,
+        [Parameter(Mandatory = $true)][double[]]$SlicePlanes
+    )
+
+    $invDoorRot = [System.Numerics.Quaternion]::Conjugate([System.Numerics.Quaternion]::Normalize($DoorWorldClosed.Rotation))
+    $doorPos = $DoorWorldClosed.Position
+    $openRot = [System.Numerics.Quaternion]::Normalize($DoorWorldOpen.Rotation)
+    $openPos = $DoorWorldOpen.Position
+
+    $n = $PanelWorldVertsClosed.Length
+    $worldOpen = New-Object System.Numerics.Vector3[] $n
+    for ($i = 0; $i -lt $n; $i++) {
+        $rel = $PanelWorldVertsClosed[$i] - $doorPos
+        $localToDoor = [System.Numerics.Vector3]::Transform($rel, $invDoorRot)
+        $worldOpen[$i] = $openPos + [System.Numerics.Vector3]::Transform($localToDoor, $openRot)
+    }
+
+    return ,(Get-MeshSegmentsAtPlanes -WorldVerts $worldOpen -Triangles $Triangles -SlicePlanes $SlicePlanes)
+}
+
+function Get-DoorPanels {
+    param(
+        [Parameter(Mandatory = $true)][long]$DoorTransformId,
+        [Parameter(Mandatory = $true)][object]$DoorComponent,
+        [Parameter(Mandatory = $true)][object]$DoorWorldClosed
+    )
+
+    $panels = New-Object System.Collections.Generic.List[object]
+    $descendantTransformIds = Get-DescendantTransformIds -RootTransformId $DoorTransformId -ChildIndex $childrenByParentTransformId
+
+    $openPoses = Compute-DoorOpenWorldTransform -DoorComponent $DoorComponent -DoorWorldClosed $DoorWorldClosed
+
+    foreach ($tid in $descendantTransformIds) {
+        if (-not $transformsById.ContainsKey($tid)) { continue }
+        $goId = $transformsById[$tid].GameObjectId
+        if (-not $gameObjects.ContainsKey($goId)) { continue }
+
+        $meshSourceKind = $null
+        $meshGuid = $null
+        $meshSourceComponentId = $null
+        if ($meshColliderByGameObjectId.ContainsKey($goId)) {
+            $mc = $meshColliderByGameObjectId[$goId]
+            if ($null -ne $mc.MeshGuid) {
+                $meshSourceKind = "MeshCollider"
+                $meshGuid = $mc.MeshGuid
+                $meshSourceComponentId = $mc.ComponentId
+            }
+        }
+        if ($null -eq $meshGuid -and $meshFilterByGameObjectId.ContainsKey($goId)) {
+            $mf = $meshFilterByGameObjectId[$goId]
+            if ($null -ne $mf.MeshGuid) {
+                $meshSourceKind = "MeshFilter"
+                $meshGuid = $mf.MeshGuid
+                $meshSourceComponentId = $mf.ComponentId
+            }
+        }
+        if ($null -eq $meshGuid) { continue }
+        if (-not $script:guidIndex.ContainsKey($meshGuid)) { continue }
+        if (-not $worldTransforms.ContainsKey($tid)) { continue }
+
+        $assetPath = $script:guidIndex[$meshGuid]
+        $meshData = $null
+        if ($script:meshCache.ContainsKey($assetPath)) {
+            $meshData = $script:meshCache[$assetPath]
+        } else {
+            try {
+                $meshData = Read-UnityMeshAsset -Path $assetPath
+                $script:meshCache[$assetPath] = $meshData
+            } catch {
+                $script:meshCache[$assetPath] = $null
+            }
+        }
+        if ($null -eq $meshData) { continue }
+
+        $panelWorld = $worldTransforms[$tid]
+        $worldVertsClosed = Transform-MeshVertsToWorld -WorldTransform $panelWorld -LocalVerts $meshData.Vertices
+
+        $segmentsClosed = Get-MeshSegmentsAtPlanes -WorldVerts $worldVertsClosed -Triangles $meshData.Triangles -SlicePlanes $MeshSlicePlanes
+
+        $openSliceSets = New-Object System.Collections.Generic.List[object]
+        foreach ($openPose in $openPoses) {
+            try {
+                $segs = Slice-PanelInDoorPose `
+                    -PanelWorldVertsClosed $worldVertsClosed `
+                    -DoorWorldClosed $DoorWorldClosed `
+                    -DoorWorldOpen $openPose `
+                    -Triangles $meshData.Triangles `
+                    -SlicePlanes $script:MeshSlicePlanes
+            } catch {
+                Write-Host ("Slice-PanelInDoorPose threw: {0}" -f $_.Exception.Message)
+                throw
+            }
+            if ($null -eq $segs) { $segs = New-Object System.Collections.Generic.List[object] }
+            $segsArr = $segs.ToArray()
+            $entry = [pscustomobject]@{
+                Tag = [string]$openPose["Tag"]
+                SegmentCount = $segsArr.Length
+                Segments = $segsArr
+            }
+            [void]$openSliceSets.Add($entry)
+        }
+
+        $panelPath = Get-GameObjectPath -GameObjectId $goId -GameObjects $gameObjects -TransformByGameObjectId $transformByGameObjectId -TransformsById $transformsById
+        $panelEntry = [pscustomobject]@{
+            GameObjectId = $goId
+            TransformId = $tid
+            Name = $gameObjects[$goId].Name
+            Path = $panelPath
+            MeshSourceKind = $meshSourceKind
+            MeshSourceComponentId = $meshSourceComponentId
+            MeshName = $meshData.Name
+            MeshGuid = $meshGuid
+            VertexCount = $meshData.VertexCount
+            TriangleCount = [int]($meshData.Triangles.Length / 3)
+            ClosedSegmentCount = $segmentsClosed.Count
+            SegmentsClosed = $segmentsClosed.ToArray()
+            OpenSegmentSets = $openSliceSets.ToArray()
+        }
+        [void]$panels.Add($panelEntry)
+    }
+    return ,$panels
+}
+
+# Door records: combine MonoBehaviour Door fields with GameObject name + world transform.
+# Consumers rotate the door's mesh by (range, doorOpenType, correctUP=Y) around the
+# door's world position to compute open-pose blocker cells. See Door.OpenDoor() in
+# decompiled source for the exact rotation rule.
+$doorRecordList = New-Object System.Collections.Generic.List[object]
+foreach ($doorComponent in $doorComponents) {
+    $gameObjectId = $doorComponent.GameObjectId
+    if (-not $gameObjects.ContainsKey($gameObjectId)) { continue }
+    if (-not $transformByGameObjectId.ContainsKey($gameObjectId)) { continue }
+    $gameObject = $gameObjects[$gameObjectId]
+    $transformInfo = $transformByGameObjectId[$gameObjectId]
+    if (-not $worldTransforms.ContainsKey($transformInfo.Id)) { continue }
+    $worldTransform = $worldTransforms[$transformInfo.Id]
+    $path = Get-GameObjectPath -GameObjectId $gameObjectId -GameObjects $gameObjects -TransformsById $transformsById -TransformByGameObjectId $transformByGameObjectId
+    $record = [ordered]@{
+        Kind = $doorComponent.Kind
+        Name = $gameObject.Name
+        Path = $path
+        GameObjectId = $gameObjectId
+        ComponentId = $doorComponent.ComponentId
+        TransformId = $transformInfo.Id
+        Enabled = $doorComponent.Enabled
+        IsActive = $gameObject.IsActive
+        Open = $doorComponent.Open
+        Locked = $doorComponent.Locked
+        OverrideNodeLock = $doorComponent.OverrideNodeLock
+        NodeLockAlt = $doorComponent.NodeLockAlt
+        BlockInteraction = $doorComponent.BlockInteraction
+        StopOnCollision = $doorComponent.StopOnCollision
+        WorldPosition = Convert-Vector3ToObject $worldTransform.Position
+        WorldRotation = Convert-QuaternionToObject $worldTransform.Rotation
+    }
+    if ($doorComponent.Kind -eq "Door") {
+        $record["Range"] = [Math]::Round($doorComponent.Range, 6)
+        $record["DoorOpenType"] = $doorComponent.DoorOpenType
+        $record["DoorOpenTypeName"] = @("BothWays", "OnlyPositive", "OnlyNegative")[$doorComponent.DoorOpenType]
+    } else {
+        # SlidingDoor: translation along world axis. closedPos = transform.position
+        # at scene load (Initialize() runs at Start), openPos = closedPos + axisVec * sign * dist.
+        $record["Dist"] = [Math]::Round($doorComponent.Dist, 6)
+        $record["Sign"] = $doorComponent.Sign
+        $record["Axis"] = $doorComponent.Axis
+        $record["AxisName"] = @("X", "Y", "Z")[$doorComponent.Axis]
+    }
+
+    # Panel discovery + per-pose slicing. Skipped if the mesh index is
+    # unavailable (no MeshAssetRoot). Each panel emits closed-pose segments
+    # and one open-pose segment set per open direction (two for BothWays).
+    if ($meshSupported) {
+        $panels = Get-DoorPanels -DoorTransformId $transformInfo.Id -DoorComponent $doorComponent -DoorWorldClosed $worldTransform
+        if ($null -eq $panels) { $panels = New-Object System.Collections.Generic.List[object] }
+        $panelsArr = $panels.ToArray()
+        $record["Panels"] = $panelsArr
+        $record["PanelCount"] = $panelsArr.Length
+    } else {
+        $record["Panels"] = @()
+        $record["PanelCount"] = 0
+    }
+
+    $doorRecordList.Add($record)
+}
+$doorRecordArray = $doorRecordList.ToArray()
+
+# State-gated walls. Currently one known mechanism:
+#   DresserWall (decompiled/DresserWall.cs): collider disabled when Ink variable
+#   leave_house_hint == true. Default scene-load state: hint=false ⇒ collider
+#   active ⇒ bedroom sealed. Detected by parent-path /MultiRoom/Walls/DaemonWall/
+#   AND name ending in "_Daemon" (sibling _no-suffix wall is architectural and
+#   stays permanent).
+#
+# Future state-gated mechanisms (MovingDateable Locked/Unlocked variants, etc.)
+# can be appended to this list with their own detector + release condition.
+$stateWallList = New-Object System.Collections.Generic.List[object]
+$dresserWallPathFragment = "/MultiRoom/Walls/DaemonWall/"
+foreach ($record in $navigationBlockerArray) {
+    $path = [string]$record.Path
+    $name = [string]$record.Name
+    if ($path.Contains($dresserWallPathFragment) -and $name.EndsWith("_Daemon")) {
+        $stateWallList.Add([ordered]@{
+            Name = $name
+            ComponentId = $record.ComponentId
+            GameObjectId = $record.GameObjectId
+            TransformId = $record.TransformId
+            Path = $path
+            ColliderType = $record.ColliderType
+            Bounds3D = $record.Bounds3D
+            Bounds2D = $record.Bounds2D
+            BottomY = $record.BottomY
+            TopY = $record.TopY
+            # Release condition. The C# component class that flips the collider
+            # off; bake/consumer logic uses this to decide whether the wall is
+            # currently active (and therefore whether the bedroom is sealed).
+            ReleaseMechanism = "DresserWall"
+            ReleaseCondition = "InkVariable:leave_house_hint==true"
+            DefaultActive = $true
+        })
+    }
+}
+$stateWallArray = $stateWallList.ToArray()
+
 $result = [ordered]@{
     ScenePath = $ScenePath
     MeshAssetRoot = $MeshAssetRoot
@@ -1515,6 +2033,8 @@ $result = [ordered]@{
     PrimitiveColliders = $primitiveColliderArray
     MeshColliders = $meshColliderArray
     NavigationBlockers = $navigationBlockerArray
+    Doors = $doorRecordArray
+    StateWalls = $stateWallArray
 }
 
 $result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $OutputPath

@@ -107,6 +107,12 @@ namespace DateEverythingAccess
                 return null;
             }
 
+            // Reflect live Door.open states into per-floor freed-cell overlays so A* can route
+            // through doors that are already open. Closed doors fall back to the bake's
+            // closed-pose blockers (which the door-tagging pass still flags so the executor
+            // opens them en route).
+            ApplyLiveDoorState();
+
             Floor startFloor = FloorForY(startPos.y);
             Floor goalFloor = FloorForTargetY(targetPos.y);
             if (startFloor == null)
@@ -214,9 +220,28 @@ namespace DateEverythingAccess
                 }
                 else
                 {
-                    if (Main.Log != null) Main.Log.LogWarning("SimpleNavPlanner.Plan: no_path target=" + (targetName ?? "<null>") + "#" + targetGameObjectId);
-                    LastFailure = PlanFailure.NoPath;
-                    return null;
+                    // Closed-state plan failed. Try a relaxed plan that assumes every door is
+                    // open and every state-wall released. If THAT succeeds, autowalk will open
+                    // doors as it crosses them via the segment door-tags from TagDoors().
+                    // Bedroom-from-bedroom is the canonical case: at scene load every door is
+                    // closed, so the closed-state planner finds nothing. Relax + tag gives the
+                    // player a single route that walks them to the first gating door, opens
+                    // it, continues, opens the next, etc.
+                    if (TryRelaxedPlan(startNode, goals, goalFloor.Label, targetPos,
+                                       unfilteredGoals, out path, out totalCost, out List<NodeKey> relaxedGoals))
+                    {
+                        goals = relaxedGoals;
+                        if (Main.Log != null)
+                            Main.Log.LogInfo("SimpleNavPlanner.Plan: retried with all-doors-open for target=" +
+                                (targetName ?? "<null>") + "#" + targetGameObjectId +
+                                " (autowalk will open gating doors en route)");
+                    }
+                    else
+                    {
+                        if (Main.Log != null) Main.Log.LogWarning("SimpleNavPlanner.Plan: no_path target=" + (targetName ?? "<null>") + "#" + targetGameObjectId);
+                        LastFailure = PlanFailure.NoPath;
+                        return null;
+                    }
                 }
             }
 
@@ -322,6 +347,7 @@ namespace DateEverythingAccess
             _cellSize = _floors[0].CellSize;
 
             BuildInterFloorEdges();
+            IndexDoorFreedCells();
             _loadOk = true;
             if (Main.Log != null)
                 Main.Log.LogInfo("SimpleNavPlanner: bake loaded floors=" + _floors.Count +
@@ -373,6 +399,167 @@ namespace DateEverythingAccess
             }
 
             if (float.IsPositiveInfinity(_minInterFloorCost)) _minInterFloorCost = 0f;
+        }
+
+        // Index per-door and per-state-wall freed_cells from the bake into each floor's
+        // name→cells maps. The planner does not enable any overlay at load time;
+        // ApplyLiveWorldState() (called at the top of every Plan()) installs the current set
+        // based on live Door.open / SlidingDoor.open / DresserWall.collider.enabled values.
+        private static void IndexDoorFreedCells()
+        {
+            if (_bake?.floors == null) return;
+            for (int fi = 0; fi < _bake.floors.Length; fi++)
+            {
+                BakeFloor raw = _bake.floors[fi];
+                if (raw == null) continue;
+                Floor floor = FloorByLabel(raw.label);
+                if (floor == null) continue;
+                if (raw.doors != null)
+                {
+                    for (int di = 0; di < raw.doors.Length; di++)
+                    {
+                        DoorRecord d = raw.doors[di];
+                        if (d == null || string.IsNullOrEmpty(d.name) || d.freed_cells == null) continue;
+                        HashSet<long> cells;
+                        if (!floor.DoorFreedByName.TryGetValue(d.name, out cells))
+                        {
+                            cells = new HashSet<long>();
+                            floor.DoorFreedByName[d.name] = cells;
+                        }
+                        for (int ci = 0; ci < d.freed_cells.Length; ci++)
+                        {
+                            int[] pair = d.freed_cells[ci];
+                            if (pair == null || pair.Length < 2) continue;
+                            cells.Add(Floor.PackCell(pair[0], pair[1]));
+                        }
+                    }
+                }
+                if (raw.state_walls != null)
+                {
+                    for (int wi = 0; wi < raw.state_walls.Length; wi++)
+                    {
+                        StateWallRecord w = raw.state_walls[wi];
+                        if (w == null || string.IsNullOrEmpty(w.name) || w.freed_cells == null) continue;
+                        HashSet<long> cells;
+                        if (!floor.StateWallFreedByName.TryGetValue(w.name, out cells))
+                        {
+                            cells = new HashSet<long>();
+                            floor.StateWallFreedByName[w.name] = cells;
+                        }
+                        for (int ci = 0; ci < w.freed_cells.Length; ci++)
+                        {
+                            int[] pair = w.freed_cells[ci];
+                            if (pair == null || pair.Length < 2) continue;
+                            cells.Add(Floor.PackCell(pair[0], pair[1]));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Mirror live Door + SlidingDoor + DresserWall states into each floor's
+        // ExtraNavigable set. Doors (hinges + sliders) expose `open`; state-gated walls
+        // (DresserWall) expose `collider.enabled`. Anything currently open / released
+        // contributes its bake record's freed cells. Unknown names (components without a
+        // matching bake record) are silently ignored.
+        private static void ApplyLiveDoorState()
+        {
+            for (int i = 0; i < _floors.Count; i++)
+                _floors[i].ExtraNavigable.Clear();
+
+            int totalDoorsFound = 0;
+            int totalDoorsOpen = 0;
+            int totalDoorsMatched = 0;
+            int totalDoorsUnmatched = 0;
+            int totalFreed = 0;
+
+            Door[] hinges = UnityEngine.Object.FindObjectsOfType<Door>();
+            for (int i = 0; i < hinges.Length; i++)
+            {
+                Door door = hinges[i];
+                if (door == null || door.gameObject == null) continue;
+                totalDoorsFound++;
+                if (!door.open) continue;
+                totalDoorsOpen++;
+                if (UnionDoorFreedForName(door.gameObject.name, ref totalFreed)) totalDoorsMatched++;
+                else totalDoorsUnmatched++;
+            }
+
+            SlidingDoor[] sliders = UnityEngine.Object.FindObjectsOfType<SlidingDoor>();
+            for (int i = 0; i < sliders.Length; i++)
+            {
+                SlidingDoor door = sliders[i];
+                if (door == null || door.gameObject == null) continue;
+                totalDoorsFound++;
+                if (!door.open) continue;
+                totalDoorsOpen++;
+                if (UnionDoorFreedForName(door.gameObject.name, ref totalFreed)) totalDoorsMatched++;
+                else totalDoorsUnmatched++;
+            }
+
+            // State-gated walls: collider disabled ⇒ released ⇒ freed cells contributed.
+            // Currently this is just DresserWall (the post-leave_house bedroom gate); future
+            // mechanisms (MovingDateable Locked/Unlocked variants) would slot in here.
+            int totalWallsFound = 0;
+            int totalWallsReleased = 0;
+            int totalWallsMatched = 0;
+            int totalWallsUnmatched = 0;
+            DresserWall[] dressers = UnityEngine.Object.FindObjectsOfType<DresserWall>();
+            for (int i = 0; i < dressers.Length; i++)
+            {
+                DresserWall dw = dressers[i];
+                if (dw == null || dw.gameObject == null || dw.collider == null) continue;
+                totalWallsFound++;
+                if (dw.collider.enabled) continue;
+                totalWallsReleased++;
+                // Bake records the wall by its collider's GameObject name (e.g.
+                // SM_Walls_Bedroom_2_Daemon), not the DresserWall component's owner.
+                string colliderName = dw.collider.gameObject != null ? dw.collider.gameObject.name : null;
+                if (UnionStateWallFreedForName(colliderName, ref totalFreed)) totalWallsMatched++;
+                else totalWallsUnmatched++;
+            }
+
+            if (Main.Log != null)
+                Main.Log.LogInfo("SimpleNavPlanner.ApplyLiveDoorState: doors=" + totalDoorsFound +
+                    " (hinges=" + hinges.Length + " sliders=" + sliders.Length + ")" +
+                    " open=" + totalDoorsOpen + " matched=" + totalDoorsMatched + " unmatched=" + totalDoorsUnmatched +
+                    " | stateWalls=" + totalWallsFound + " released=" + totalWallsReleased +
+                    " matched=" + totalWallsMatched + " unmatched=" + totalWallsUnmatched +
+                    " | freedCells=" + totalFreed);
+        }
+
+        private static bool UnionDoorFreedForName(string name, ref int totalFreed)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            bool anyMatch = false;
+            for (int fi = 0; fi < _floors.Count; fi++)
+            {
+                Floor f = _floors[fi];
+                if (f.DoorFreedByName.TryGetValue(name, out HashSet<long> cells))
+                {
+                    f.ExtraNavigable.UnionWith(cells);
+                    totalFreed += cells.Count;
+                    anyMatch = true;
+                }
+            }
+            return anyMatch;
+        }
+
+        private static bool UnionStateWallFreedForName(string name, ref int totalFreed)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            bool anyMatch = false;
+            for (int fi = 0; fi < _floors.Count; fi++)
+            {
+                Floor f = _floors[fi];
+                if (f.StateWallFreedByName.TryGetValue(name, out HashSet<long> cells))
+                {
+                    f.ExtraNavigable.UnionWith(cells);
+                    totalFreed += cells.Count;
+                    anyMatch = true;
+                }
+            }
+            return anyMatch;
         }
 
         private static void AddInterFloor(NodeKey from, NodeKey to, float cost, string kind)
@@ -455,6 +642,53 @@ namespace DateEverythingAccess
         private static readonly int[] NeighborDx = { -1, -1, -1, 0, 0, 1, 1, 1 };
         private static readonly int[] NeighborDz = { -1, 0, 1, -1, 1, -1, 0, 1 };
         private static readonly float Sqrt2 = Mathf.Sqrt(2f);
+
+        // Temporarily union every door's and state-wall's freed cells into ExtraNavigable
+        // and re-run A*. On exit, ExtraNavigable is restored to its prior contents (i.e. the
+        // live state from ApplyLiveDoorState). Caller treats a success here as "path exists
+        // assuming the player will open the right doors along the way" — segment door-tags
+        // (TagDoors) then handle the actual opening at runtime.
+        private static bool TryRelaxedPlan(NodeKey start, List<NodeKey> goals, string goalFloorLabel, Vector3 targetPos,
+            List<NodeKey> unfilteredGoals, out List<NodeKey> path, out float totalCost, out List<NodeKey> goalsUsed)
+        {
+            path = null;
+            totalCost = 0f;
+            goalsUsed = goals;
+
+            // Snapshot current state and union all known freed cells.
+            HashSet<long>[] saved = new HashSet<long>[_floors.Count];
+            for (int i = 0; i < _floors.Count; i++)
+            {
+                Floor f = _floors[i];
+                saved[i] = new HashSet<long>(f.ExtraNavigable);
+                foreach (var kvp in f.DoorFreedByName)
+                    f.ExtraNavigable.UnionWith(kvp.Value);
+                foreach (var kvp in f.StateWallFreedByName)
+                    f.ExtraNavigable.UnionWith(kvp.Value);
+            }
+
+            try
+            {
+                if (AStar(start, goals, goalFloorLabel, targetPos.x, targetPos.z, out path, out totalCost))
+                    return true;
+                if (goals.Count != unfilteredGoals.Count &&
+                    AStar(start, unfilteredGoals, goalFloorLabel, targetPos.x, targetPos.z, out path, out totalCost))
+                {
+                    goalsUsed = unfilteredGoals;
+                    return true;
+                }
+                return false;
+            }
+            finally
+            {
+                for (int i = 0; i < _floors.Count; i++)
+                {
+                    Floor f = _floors[i];
+                    f.ExtraNavigable.Clear();
+                    f.ExtraNavigable.UnionWith(saved[i]);
+                }
+            }
+        }
 
         private static bool AStar(NodeKey start, List<NodeKey> goals, string goalFloorLabel, float goalWx, float goalWz,
             out List<NodeKey> path, out float totalCost)
@@ -560,6 +794,7 @@ namespace DateEverythingAccess
             // Pass 1: greedy line-of-sight.
             List<NodeKey> los = new List<NodeKey> { path[0] };
             int i = 1;
+            int lastAnchorIdx = 0;
             while (i < path.Count)
             {
                 NodeKey node = path[i];
@@ -569,6 +804,7 @@ namespace DateEverythingAccess
                 {
                     if (!prev.Equals(los[los.Count - 1])) los.Add(prev);
                     if (!node.Equals(los[los.Count - 1])) los.Add(node);
+                    lastAnchorIdx = i;
                     i++;
                     continue;
                 }
@@ -577,7 +813,24 @@ namespace DateEverythingAccess
                     i++;
                     continue;
                 }
-                los.Add(prev);
+                // The straight segment from anchor to node isn't clear. Anchor the previous
+                // cell and continue searching from there. Guard against the pathological
+                // case where SegmentIsClear flickers (e.g. sampling a freed-cells overlay
+                // discretizes into a non-navigable cell between two A*-adjacent grid cells);
+                // if we'd be re-anchoring at the same index we already anchored from, force
+                // advance so the loop cannot spin.
+                if (i - 1 <= lastAnchorIdx)
+                {
+                    // Can't make progress by re-anchoring; force advance.
+                    los.Add(node);
+                    lastAnchorIdx = i;
+                    i++;
+                }
+                else
+                {
+                    los.Add(prev);
+                    lastAnchorIdx = i - 1;
+                }
             }
             if (!los[los.Count - 1].Equals(path[path.Count - 1])) los.Add(path[path.Count - 1]);
 
@@ -630,7 +883,7 @@ namespace DateEverythingAccess
             Vector2 start = floor.CellToWorld(a.Ix, a.Iz);
             Vector2 end = floor.CellToWorld(b.Ix, b.Iz);
             float dist = Vector2.Distance(start, end);
-            float sampleStep = Mathf.Max(0.05f, floor.CellSize * 0.5f);
+            float sampleStep = Mathf.Max(0.02f, floor.CellSize * 0.35f);
             int steps = Mathf.Max(1, Mathf.CeilToInt(dist / sampleStep));
             int lastIx = int.MinValue;
             int lastIz = int.MinValue;
@@ -1029,6 +1282,21 @@ namespace DateEverythingAccess
             public int Nx;
             public int Nz;
             public string[] Rows;
+            // Cells freed by currently-open doors (set per-Plan() from live Door.open state).
+            // Packed as (long)ix << 32 | (uint)iz so we can use a single HashSet.
+            public readonly HashSet<long> ExtraNavigable = new HashSet<long>();
+            // Per-door freed-cells indexed from the bake's doors[*].freed_cells. Multiple
+            // door records may share a GameObject name (different cupboards with identical
+            // names) — the indexer unions their cells.
+            public readonly Dictionary<string, HashSet<long>> DoorFreedByName =
+                new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
+            // Per-state-wall freed-cells, parallel to DoorFreedByName. State-gated walls
+            // (DresserWall and similar) contribute freed cells when their collider is
+            // disabled at runtime.
+            public readonly Dictionary<string, HashSet<long>> StateWallFreedByName =
+                new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
+
+            public static long PackCell(int ix, int iz) => ((long)ix << 32) | (uint)iz;
 
             public static Floor From(BakeFloor raw)
             {
@@ -1057,6 +1325,8 @@ namespace DateEverythingAccess
             public bool Navigable(int ix, int iz)
             {
                 if (!InBounds(ix, iz)) return false;
+                if (ExtraNavigable.Count > 0 && ExtraNavigable.Contains(PackCell(ix, iz)))
+                    return true;
                 string row = Rows[ix];
                 return row != null && iz < row.Length && row[iz] == NavigableChar;
             }
@@ -1123,6 +1393,23 @@ namespace DateEverythingAccess
             [DataMember] public float floor_y;
             [DataMember] public BakeFrame frame;
             [DataMember] public string[] bitmap_rows;
+            [DataMember] public DoorRecord[] doors;
+            [DataMember] public StateWallRecord[] state_walls;
+        }
+
+        [DataContract]
+        private class DoorRecord
+        {
+            [DataMember] public string name;
+            [DataMember] public int[][] freed_cells;
+        }
+
+        [DataContract]
+        private class StateWallRecord
+        {
+            [DataMember] public string name;
+            [DataMember] public string release_mechanism;
+            [DataMember] public int[][] freed_cells;
         }
 
         [DataContract]
