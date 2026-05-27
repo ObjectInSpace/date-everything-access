@@ -323,13 +323,18 @@ namespace DateEverythingAccess
         {
             if (Time.unscaledTime < _nextActionTime) return;
 
-            // Hand the route to the bridge and start the autowalk.
-            SimpleNavBridge.BeginRoute(_currentRoute);
+            // Hand the route to the bridge and start the route-driven autowalk.
             _routeStartUnscaledTime = Time.unscaledTime;
             _routeBudgetSeconds = ComputeBudgetSeconds(_currentRoute);
             _loopWindow.Clear();
             _nextLoopSampleTime = Time.unscaledTime + LoopSampleIntervalSeconds;
             _doorCloseObservedSince = 0f;
+            if (!AccessibilityWatcher.TryStartCoverageSweepRoute(_currentRoute, out string detail))
+            {
+                FinishRoute("input_failed:" + detail);
+                return;
+            }
+
             _phase = Phase.Running;
         }
 
@@ -456,7 +461,7 @@ namespace DateEverythingAccess
                 StampFailureCell(BetterPlayerControl.Instance.transform.position);
             }
 
-            try { SimpleNavBridge.EndStep(); } catch { }
+            try { AccessibilityWatcher.StopCoverageSweepRoute(); } catch { }
             AdvanceToNextEntry();
         }
 

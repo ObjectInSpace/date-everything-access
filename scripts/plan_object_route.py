@@ -60,6 +60,17 @@ class Floor:
         # Bitmap is row-major over X (rows=ix, cols=iz). Cache as list of bytes for O(1) lookup.
         self.rows = rows
         assert len(rows) == self.nx, f"{self.label}: expected {self.nx} rows, got {len(rows)}"
+        # Per-door freed-cells (populated by Planner when a doors-open set is set).
+        # Cells in this set are treated as navigable regardless of the bitmap.
+        self.extra_navigable = set()
+        # Per-door blocked cells (e.g. for forcing a door closed). Unused today
+        # but reserved so consumers can express both directions symmetrically.
+        self.extra_blocked = set()
+        # Raw per-door freed-cell map keyed by door name: {name: set((ix,iz))}.
+        # Planner builds this lazily for re-applying different doors-open sets.
+        self.doors_freed_by_name = {}
+        # Same shape, for state-gated walls (DresserWall and similar).
+        self.state_walls_freed_by_name = {}
 
     def in_bounds(self, ix, iz):
         return 0 <= ix < self.nx and 0 <= iz < self.nz
@@ -67,6 +78,10 @@ class Floor:
     def navigable(self, ix, iz):
         if not self.in_bounds(ix, iz):
             return False
+        if (ix, iz) in self.extra_blocked:
+            return False
+        if (ix, iz) in self.extra_navigable:
+            return True
         return self.rows[ix][iz] == NAVIGABLE_CHAR
 
     def cell_to_world(self, ix, iz):
@@ -111,10 +126,45 @@ NEIGHBORS_8 = [
 
 
 class Planner:
-    def __init__(self, bake):
+    def __init__(self, bake, doors_open=None, state_walls_open=None):
         self.bake = bake
         self.floors = {f["label"]: Floor(f) for f in bake["floors"]}
         self.cell_size = next(iter(self.floors.values())).cell_size
+        # Active overlay names. Sources stored separately so applying one set
+        # doesn't wipe another's effect.
+        self._open_doors = set()
+        self._open_state_walls = set()
+        # Index per-door freed-cells from the bake into each floor.
+        for f_raw in bake["floors"]:
+            floor = self.floors[f_raw["label"]]
+            for door in f_raw.get("doors", []):
+                name = door.get("name")
+                if not name:
+                    continue
+                cells = {tuple(c) for c in door.get("freed_cells", [])}
+                if not cells:
+                    continue
+                # Multiple door records may share a name (different cupboards
+                # with identical GameObjectName) — union their freed cells.
+                if name in floor.doors_freed_by_name:
+                    floor.doors_freed_by_name[name] |= cells
+                else:
+                    floor.doors_freed_by_name[name] = cells
+            for wall in f_raw.get("state_walls", []):
+                name = wall.get("name")
+                if not name:
+                    continue
+                cells = {tuple(c) for c in wall.get("freed_cells", [])}
+                if not cells:
+                    continue
+                if name in floor.state_walls_freed_by_name:
+                    floor.state_walls_freed_by_name[name] |= cells
+                else:
+                    floor.state_walls_freed_by_name[name] = cells
+        if doors_open:
+            self.apply_doors_open(doors_open)
+        if state_walls_open:
+            self.apply_state_walls_open(state_walls_open)
         # Inter-floor edges: keyed by (floor, ix, iz) → list of (other_node, cost, edge_meta).
         # other_node is (floor', ix', iz') or a virtual ('@', name) tuple for off-bake endpoints.
         self.edges_from = {}
@@ -138,6 +188,63 @@ class Planner:
             meta = {"kind": "teleporter", "name": t["source_name"]}
             self.edges_from.setdefault(up_node, []).append((down_node, t["cost_m"], meta))
             self.edges_from.setdefault(down_node, []).append((up_node, t["cost_m"], meta))
+    def apply_doors_open(self, doors_open):
+        """Set the doors-open set. `doors_open` is an iterable of door names; or
+        the literal string "all" to open every known door. Pass `None` to clear.
+        Replaces any prior doors-open state but preserves state_walls_open.
+        Unknown names are silently ignored so callers can pass a static list
+        across scenes."""
+        if doors_open is None:
+            self._open_doors = set()
+        elif isinstance(doors_open, str) and doors_open == "all":
+            self._open_doors = None  # sentinel: "all known"
+        else:
+            self._open_doors = set(doors_open)
+        self._rebuild_extra_navigable()
+
+    def apply_state_walls_open(self, state_walls_open):
+        """Set the state-walls-open set. Same convention as apply_doors_open.
+        Walls in this set are treated as released (e.g. DresserWall after the
+        `leave_house` Ink command). Replaces any prior state-walls state but
+        preserves doors_open."""
+        if state_walls_open is None:
+            self._open_state_walls = set()
+        elif isinstance(state_walls_open, str) and state_walls_open == "all":
+            self._open_state_walls = None
+        else:
+            self._open_state_walls = set(state_walls_open)
+        self._rebuild_extra_navigable()
+
+    def _rebuild_extra_navigable(self):
+        # _open_doors / _open_state_walls semantics:
+        #   None      = "all known" (include every entry)
+        #   set()     = "none open" (skip every entry)
+        #   set(...)  = include only entries matching a name in the set
+        for floor in self.floors.values():
+            extra = set()
+            for name, cells in floor.doors_freed_by_name.items():
+                if self._open_doors is None or name in self._open_doors:
+                    extra |= cells
+            for name, cells in floor.state_walls_freed_by_name.items():
+                if self._open_state_walls is None or name in self._open_state_walls:
+                    extra |= cells
+            floor.extra_navigable = extra
+
+    def door_names(self):
+        """Every door that has freed-cells on at least one floor. Useful for
+        diagnostics and constructing CLI defaults."""
+        names = set()
+        for floor in self.floors.values():
+            names.update(floor.doors_freed_by_name.keys())
+        return names
+
+    def state_wall_names(self):
+        """Every state-wall with freed-cells data on at least one floor."""
+        names = set()
+        for floor in self.floors.values():
+            names.update(floor.state_walls_freed_by_name.keys())
+        return names
+
     def _floor_for_y(self, y):
         best, bestd = None, math.inf
         for label, f in self.floors.items():
@@ -224,33 +331,40 @@ class Planner:
 
 # ---------- polyline smoothing + door tagging ----------
 
+_SEGMENT_SAMPLE_STEP_FACTOR = 0.35
+
+
 def _segment_is_clear(planner, a, b):
-    """True iff the straight line of cells from node a to node b is navigable on a's
-    floor. Same-floor only; cross-floor and virtual-node segments are conservatively
-    treated as non-clear so they always carry an explicit waypoint."""
+    """True iff every cell along the straight world-space segment from a to b is
+    navigable on a's floor. Same-floor only; cross-floor and virtual-node segments
+    are conservatively treated as non-clear so they always carry an explicit
+    waypoint.
+
+    Uses supercover-style sampling at ~0.35 cells per step. Earlier versions used
+    Bresenham, which steps in (sx, sz) independently and could slip diagonally
+    between two blocked cells that share only a corner, producing routes that
+    visibly cross walls. The offline validator's segment check uses the same
+    sampling, so planner and validator now agree by construction."""
     if a[0] != b[0] or a[0].startswith("@"):
         return False
     floor = planner.floors[a[0]]
-    ix0, iz0 = a[1], a[2]
-    ix1, iz1 = b[1], b[2]
-    # Bresenham-style line walk on the cell grid.
-    dx = abs(ix1 - ix0); dz = abs(iz1 - iz0)
-    sx = 1 if ix0 < ix1 else -1
-    sz = 1 if iz0 < iz1 else -1
-    err = dx - dz
-    ix, iz = ix0, iz0
-    while True:
-        if not floor.navigable(ix, iz):
+    ax, az = floor.cell_to_world(a[1], a[2])
+    bx, bz = floor.cell_to_world(b[1], b[2])
+    distance = math.hypot(bx - ax, bz - az)
+    step = max(floor.cell_size * _SEGMENT_SAMPLE_STEP_FACTOR, 0.02)
+    samples = max(1, int(math.ceil(distance / step)))
+    last_cell = None
+    for i in range(samples + 1):
+        t = i / samples
+        wx = ax + (bx - ax) * t
+        wz = az + (bz - az) * t
+        cell = floor.world_to_cell(wx, wz)
+        if cell == last_cell:
+            continue
+        last_cell = cell
+        if not floor.navigable(cell[0], cell[1]):
             return False
-        if ix == ix1 and iz == iz1:
-            return True
-        e2 = 2 * err
-        if e2 > -dz:
-            err -= dz
-            ix += sx
-        if e2 < dx:
-            err += dx
-            iz += sz
+    return True
 
 
 def smooth_path(path, planner):
@@ -294,8 +408,16 @@ def smooth_path(path, planner):
             i += 1
             continue
         # Otherwise the previous cell was the last clear endpoint; anchor it.
-        los.append(prev)
-        last_anchor_idx = i - 1
+        # Guard: if we'd re-anchor at the same index we already anchored from
+        # (segment-clear sampling flickered on a freed-cells overlay), force
+        # advance so the loop cannot spin.
+        if i - 1 <= last_anchor_idx:
+            los.append(node)
+            last_anchor_idx = i
+            i += 1
+        else:
+            los.append(prev)
+            last_anchor_idx = i - 1
     # Always end at the final node.
     if los[-1] != path[-1]:
         los.append(path[-1])

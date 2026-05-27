@@ -134,10 +134,35 @@ def main():
                     help="Comma-separated floor labels to sweep (default ground,upper).")
     ap.add_argument("--run-id", default="default",
                     help="Subdirectory name under artifacts/navigation/sweep/.")
+    ap.add_argument("--doors-open", nargs="*", metavar="NAME",
+                    help="Override the doors-open set; default opens every door.")
+    ap.add_argument("--doors-closed", action="store_true",
+                    help="Sweep with every door closed (matches scene-load state).")
+    ap.add_argument("--state-walls-open", nargs="*", metavar="NAME",
+                    help="Override the state-walls-open set; default releases every wall.")
+    ap.add_argument("--state-walls-active", action="store_true",
+                    help="Sweep with state-gated walls active (matches scene-load state).")
     args = ap.parse_args()
 
     bake = _mod.load_bake()
-    planner = _mod.Planner(bake)
+    # Sweep precondition: every door is open AND every state-wall released.
+    # The sweep verifies max-coverage routing — "could the planner reach this
+    # target if every door it needs were unlocked and every story-gate cleared."
+    # Per-route door state is tagged in the artifact via tag_doors(), so
+    # consumers can still see which doors a route requires.
+    if args.doors_closed:
+        doors_open = None
+    elif args.doors_open is not None:
+        doors_open = args.doors_open
+    else:
+        doors_open = "all"
+    if args.state_walls_active:
+        state_walls_open = None
+    elif args.state_walls_open is not None:
+        state_walls_open = args.state_walls_open
+    else:
+        state_walls_open = "all"
+    planner = _mod.Planner(bake, doors_open=doors_open, state_walls_open=state_walls_open)
 
     start_node = resolve_start(planner, args.start_xz, args.start_floor)
     start_world = planner.floors[start_node[0]].cell_to_world(start_node[1], start_node[2])

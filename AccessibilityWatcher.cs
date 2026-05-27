@@ -393,6 +393,57 @@ namespace DateEverythingAccess
             Interlocked.Exchange(ref _coverageSweepRequested, 1);
         }
 
+        internal static bool TryStartCoverageSweepRoute(SimpleNavRoute route, out string detail)
+        {
+            detail = null;
+
+            if (_instance == null)
+            {
+                detail = "no-watcher";
+                return false;
+            }
+
+            if (route == null || route.Waypoints == null || route.Waypoints.Count == 0)
+            {
+                detail = "empty-route";
+                return false;
+            }
+
+            if (!CanUseNavigationNow())
+            {
+                detail = GetNavigationUnavailableReason();
+                return false;
+            }
+
+            if (!ApplyNavigationInput(Vector3.zero, Vector3.zero))
+            {
+                detail = "input-application-failed";
+                return false;
+            }
+
+            SimpleNavBridge.EndStep();
+            SimpleNavBridge.BeginRoute(route);
+            _instance._isAutoWalking = true;
+            _instance._lastAutoWalkPosition = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform.position
+                : Vector3.zero;
+            _instance._lastAutoWalkProgressTime = Time.unscaledTime;
+            _instance.ClearNavigationBlockedDetail();
+            return true;
+        }
+
+        internal static void StopCoverageSweepRoute()
+        {
+            if (_instance != null)
+            {
+                ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                _instance._isAutoWalking = false;
+                _instance.ClearNavigationBlockedDetail();
+            }
+
+            SimpleNavBridge.EndStep();
+        }
+
         private static int _coverageSweepRequested;
 
         internal static void RequestDateADexEntryAnnouncement(DateADexEntry entry)
