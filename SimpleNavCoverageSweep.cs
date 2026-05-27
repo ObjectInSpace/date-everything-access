@@ -164,9 +164,21 @@ namespace DateEverythingAccess
             }
 
             _manifest = LoadManifest(manifestPath);
-            if (_manifest == null || _manifest.entries == null || _manifest.entries.Length == 0)
+            if (_manifest == null)
             {
-                ScreenReader.Say("Coverage sweep manifest empty or unreadable", remember: false);
+                ScreenReader.Say("Coverage sweep manifest unreadable", remember: false);
+                return;
+            }
+            bool walkMode = string.Equals(_manifest.mode, "walk", StringComparison.OrdinalIgnoreCase);
+            // Dispersed mode requires an entries list; walk mode requires a reachable bitmap.
+            if (!walkMode && (_manifest.entries == null || _manifest.entries.Length == 0))
+            {
+                ScreenReader.Say("Coverage sweep manifest empty", remember: false);
+                return;
+            }
+            if (walkMode && _manifest.reachable_bitmap_rows == null)
+            {
+                ScreenReader.Say("Coverage walk-sweep manifest has no reachable bitmap", remember: false);
                 return;
             }
 
@@ -184,10 +196,9 @@ namespace DateEverythingAccess
                 }
             }
 
-            _results = new List<RouteResult>(_manifest.entries.Length);
+            _results = new List<RouteResult>(_manifest.entries?.Length ?? 0);
             _entryIndex = 0;
 
-            bool walkMode = string.Equals(_manifest.mode, "walk", StringComparison.OrdinalIgnoreCase);
             if (walkMode)
             {
                 InitWalkMode();
