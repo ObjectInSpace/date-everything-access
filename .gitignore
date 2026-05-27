@@ -45,3 +45,7 @@ artifacts/navigation/mesh_guid_index.cache.json
 
 # Coverage-sweep harness output (reproducible from sweep_coverage_planner.py)
 artifacts/navigation/sweep/
+
+# Local debug spew from exporter / reachability probe runs
+artifacts/navigation/_*.log
+artifacts/navigation/_*.txt
