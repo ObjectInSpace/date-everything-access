@@ -71,6 +71,15 @@ namespace DateEverythingAccess
         private static bool _doorOpeningsLoadAttempted;
         private static Dictionary<string, Vector3> _doorOpeningByName;
 
+        // Names of doors and state-walls treated as open during the last
+        // ApplyLiveDoorState call. Captured here so the route-capture path can
+        // record overlay state without re-querying the live scene (which may
+        // have changed by the time we serialize).
+        private static List<string> _lastOpenDoorNames = new List<string>();
+        private static List<string> _lastOpenStateWallNames = new List<string>();
+        // Monotonic counter for capture filenames. Restarted at process start.
+        private static int _captureSeq;
+
         // Failure reasons surfaced by the most recent Plan() call. Read by the watcher to
         // announce *why* a route couldn't be built instead of silently dropping. Cleared at
         // the top of every Plan() invocation.
@@ -269,6 +278,9 @@ namespace DateEverythingAccess
             while (route.SegmentDoorNames.Count < route.Waypoints.Count - 1)
                 route.SegmentDoorNames.Add(new List<string>(0));
 
+            if (ModConfig.CaptureNavRoutes)
+                TryCaptureRoute(startPos, targetPos, radius, targetName, startFloor.Label, route, totalCost);
+
             if (Main.Log != null)
             {
                 int doorSegs = 0;
@@ -293,6 +305,97 @@ namespace DateEverythingAccess
                 }
             }
             return route;
+        }
+
+        // ---- runtime capture for offline planner-parity check ----
+        //
+        // Writes each successful Plan() output to BepInEx/plugins/c_sharp_routes/
+        // route_<unix>_<seq>.json when ModConfig.CaptureNavRoutes is true. The
+        // file shape matches what scripts/check_planner_parity.py expects:
+        // target name/position/radius, start position/floor, the live overlay
+        // door+wall name sets, and the final waypoint sequence. Failures here
+        // are swallowed — capture is diagnostic and must never break gameplay.
+        private static void TryCaptureRoute(
+            Vector3 startPos, Vector3 targetPos, float radius, string targetName,
+            string startFloorLabel, SimpleNavRoute route, float totalCost)
+        {
+            try
+            {
+                string dir = Path.Combine(Paths.PluginPath, "c_sharp_routes");
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                long unix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                int seq = System.Threading.Interlocked.Increment(ref _captureSeq);
+                string path = Path.Combine(dir, "route_" + unix + "_" + seq + ".json");
+
+                var sb = new System.Text.StringBuilder(512);
+                sb.Append("{\n");
+                sb.Append("  \"target_name\": ").Append(JsonString(targetName)).Append(",\n");
+                sb.Append("  \"target_position\": [")
+                    .Append(targetPos.x.ToString("F4")).Append(", ")
+                    .Append(targetPos.y.ToString("F4")).Append(", ")
+                    .Append(targetPos.z.ToString("F4")).Append("],\n");
+                sb.Append("  \"target_interaction_radius\": ").Append(radius.ToString("F4")).Append(",\n");
+                sb.Append("  \"start_position\": [")
+                    .Append(startPos.x.ToString("F4")).Append(", ")
+                    .Append(startPos.y.ToString("F4")).Append(", ")
+                    .Append(startPos.z.ToString("F4")).Append("],\n");
+                sb.Append("  \"start_floor\": ").Append(JsonString(startFloorLabel)).Append(",\n");
+                sb.Append("  \"doors_open\": ").Append(JsonStringArray(_lastOpenDoorNames)).Append(",\n");
+                sb.Append("  \"state_walls_open\": ").Append(JsonStringArray(_lastOpenStateWallNames)).Append(",\n");
+                sb.Append("  \"cost_m\": ").Append(totalCost.ToString("F4")).Append(",\n");
+                sb.Append("  \"waypoints\": [\n");
+                for (int i = 0; i < route.Waypoints.Count; i++)
+                {
+                    Vector3 w = route.Waypoints[i];
+                    sb.Append("    [")
+                        .Append(w.x.ToString("F4")).Append(", ")
+                        .Append(w.y.ToString("F4")).Append(", ")
+                        .Append(w.z.ToString("F4")).Append("]");
+                    if (i < route.Waypoints.Count - 1) sb.Append(",");
+                    sb.Append("\n");
+                }
+                sb.Append("  ]\n");
+                sb.Append("}\n");
+                File.WriteAllText(path, sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                if (Main.Log != null)
+                    Main.Log.LogWarning("SimpleNavPlanner.TryCaptureRoute failed: " + ex.Message);
+            }
+        }
+
+        private static string JsonString(string s)
+        {
+            if (s == null) return "null";
+            var sb = new System.Text.StringBuilder(s.Length + 2);
+            sb.Append('"');
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (c == '"' || c == '\\') { sb.Append('\\').Append(c); }
+                else if (c == '\n') sb.Append("\\n");
+                else if (c == '\r') sb.Append("\\r");
+                else if (c == '\t') sb.Append("\\t");
+                else if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("X4"));
+                else sb.Append(c);
+            }
+            sb.Append('"');
+            return sb.ToString();
+        }
+
+        private static string JsonStringArray(List<string> items)
+        {
+            if (items == null || items.Count == 0) return "[]";
+            var sb = new System.Text.StringBuilder();
+            sb.Append("[");
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (i > 0) sb.Append(", ");
+                sb.Append(JsonString(items[i]));
+            }
+            sb.Append("]");
+            return sb.ToString();
         }
 
         /// <summary>Returns true if the bake is loaded and the planner is ready.</summary>
@@ -466,6 +569,8 @@ namespace DateEverythingAccess
         {
             for (int i = 0; i < _floors.Count; i++)
                 _floors[i].ExtraNavigable.Clear();
+            _lastOpenDoorNames.Clear();
+            _lastOpenStateWallNames.Clear();
 
             int totalDoorsFound = 0;
             int totalDoorsOpen = 0;
@@ -481,6 +586,7 @@ namespace DateEverythingAccess
                 totalDoorsFound++;
                 if (!door.open) continue;
                 totalDoorsOpen++;
+                _lastOpenDoorNames.Add(door.gameObject.name);
                 if (UnionDoorFreedForName(door.gameObject.name, ref totalFreed)) totalDoorsMatched++;
                 else totalDoorsUnmatched++;
             }
@@ -493,6 +599,7 @@ namespace DateEverythingAccess
                 totalDoorsFound++;
                 if (!door.open) continue;
                 totalDoorsOpen++;
+                _lastOpenDoorNames.Add(door.gameObject.name);
                 if (UnionDoorFreedForName(door.gameObject.name, ref totalFreed)) totalDoorsMatched++;
                 else totalDoorsUnmatched++;
             }
@@ -515,6 +622,8 @@ namespace DateEverythingAccess
                 // Bake records the wall by its collider's GameObject name (e.g.
                 // SM_Walls_Bedroom_2_Daemon), not the DresserWall component's owner.
                 string colliderName = dw.collider.gameObject != null ? dw.collider.gameObject.name : null;
+                if (!string.IsNullOrEmpty(colliderName))
+                    _lastOpenStateWallNames.Add(colliderName);
                 if (UnionStateWallFreedForName(colliderName, ref totalFreed)) totalWallsMatched++;
                 else totalWallsUnmatched++;
             }

@@ -49,6 +49,7 @@ namespace DateEverythingAccess
         private static ConfigEntry<bool> _readRoomChanges;
         private static ConfigEntry<bool> _readNearbyObjects;
         private static ConfigEntry<bool> _readStatusChanges;
+        private static ConfigEntry<bool> _captureNavRoutes;
         private static InputModeHandle _inputModeHandle;
         private static volatile bool _menuOpen;
         private static int _currentSettingIndex;
@@ -125,7 +126,17 @@ namespace DateEverythingAccess
             _readRoomChanges = config.Bind("Accessibility", "ReadRoomChanges", true, "Speak room changes while exploring.");
             _readNearbyObjects = config.Bind("Accessibility", "ReadNearbyObjects", true, "Speak nearby interactables.");
             _readStatusChanges = config.Bind("Accessibility", "ReadStatusChanges", true, "Speak Dateviators, time, and progression changes.");
+            _captureNavRoutes = config.Bind("Diagnostics", "CaptureNavRoutes", false,
+                "When true, every successful SimpleNavPlanner.Plan output is written to " +
+                "BepInEx/plugins/c_sharp_routes/route_<unix>_<idx>.json. Used by " +
+                "scripts/check_planner_parity.py to compare runtime planning against the " +
+                "Python planner. Off by default — turn on briefly to gather captures, then off.");
         }
+
+        /// <summary>
+        /// When true, SimpleNavPlanner writes each plan output to disk for the offline parity check.
+        /// </summary>
+        public static bool CaptureNavRoutes => _captureNavRoutes != null && _captureNavRoutes.Value;
 
         /// <summary>
         /// Opens or closes the spoken settings menu.
