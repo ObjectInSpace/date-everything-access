@@ -78,6 +78,18 @@ param(
     [double]$ThinFrameMaxBottomY = 14.0,
 
     [Parameter()]
+    # Layer 31 = 3DUI (UI elements, not physical). Layer 18 = Mirror; in this
+    # scene only PF_PlanarReflection (reflection-probe helper, no MeshCollider)
+    # and /House/Hallway/Stairs use it. We experimented with admitting the
+    # Stairs MeshCollider (removing 18 from this list) so the player would
+    # route AROUND the staircase instead of through it. Result: the Stairs
+    # mesh slice-segments at Y=0.5 form a wall across X=11.18-13.51 Z=-5.83
+    # to +0.25, which after dilation seals the front hallway from the rest of
+    # the ground floor (reachable 2320→1809). The Stairs IS a player-collidable
+    # mesh, but slicing it at floor height captures the SLOPE the player walks
+    # on, not just the side faces — so we can't admit it whole. Future fix
+    # would need per-cell slope-aware blocking (the slope is passable when
+    # approached from the bottom, not the side). For now, exclude.
     [int[]]$SkipMeshLayers = @(18, 31)
 )
 
