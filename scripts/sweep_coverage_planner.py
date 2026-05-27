@@ -241,61 +241,41 @@ def main():
                 entry["edge_kinds"] = result["edge_kinds_used"]
             manifest["entries"].append(entry)
 
-    # Banded sort + dispersion within each band.
+    # Global farthest-point dispersion (no cost bands).
     #
-    # The "longest routes first" principle from the original sort: long routes traverse many
-    # cells in one pass, so successful long routes credit a lot of coverage cheaply. But pure
-    # cost-descending clusters routes by start area — if a wall bug pins the first ~50 attempts
-    # at the same chokepoint, you get zero spatial signal. So instead:
-    #   1. Bucket entries by cost into BAND_M-wide bands (longest cost → first band).
-    #   2. Within each band, apply farthest-point traversal: pick the entry whose target is
-    #      farthest from the centroid of already-picked entries in this band. This spreads
-    #      consecutive routes across the house so a single failure cluster doesn't burn the
-    #      early signal.
+    # Banding by cost clusters early attempts in whichever region happens to host the
+    # longest routes, so a single wall bug there burns dozens of attempts before any
+    # other part of the house gets a turn. Instead, disperse across the whole house:
+    #   - Seed with the route whose target is closest to the start (cheap warm-up).
+    #   - Then farthest-point traversal against the running centroid of picked targets.
+    #   - Break ties toward higher cost_m, so when two candidates are equidistant the
+    #     longer route wins (long routes still credit more coverage per success).
     # No-path entries go last in stable order.
     entries = manifest["entries"]
     planned = [e for e in entries if "cost_m" in e]
     unplanned = [e for e in entries if "cost_m" not in e]
-    BAND_M = 5.0
     if planned:
-        # Bucket by cost band. band_idx = floor(cost / BAND_M) — higher cost → higher idx.
-        # We want the highest-cost band first, so iterate sorted-desc.
-        bands = {}
-        for e in planned:
-            bands.setdefault(int(e["cost_m"] // BAND_M), []).append(e)
-
-        dispersed = []
-        for band_idx in sorted(bands.keys(), reverse=True):
-            band = bands[band_idx]
-            if len(band) <= 1:
-                dispersed.extend(band)
-                continue
-            # Farthest-point traversal seeded by the entry closest to the start
-            # (so the first route in each band is the "easiest" one nearby).
-            sx, sz = start_world
-            band.sort(key=lambda e: (e["world_xz"][0] - sx) ** 2 + (e["world_xz"][1] - sz) ** 2)
-            picked = [band.pop(0)]
-            # Track running centroid to avoid O(N^2 * K) costs for large bands.
-            cx = picked[0]["world_xz"][0]
-            cz = picked[0]["world_xz"][1]
-            while band:
-                # Pick the remaining entry farthest from centroid.
-                best_idx = 0
-                best_d2 = -1.0
-                for i, e in enumerate(band):
-                    dx = e["world_xz"][0] - cx
-                    dz = e["world_xz"][1] - cz
-                    d2 = dx * dx + dz * dz
-                    if d2 > best_d2:
-                        best_d2 = d2; best_idx = i
-                nxt = band.pop(best_idx)
-                picked.append(nxt)
-                # Update centroid incrementally.
-                n = len(picked)
-                cx = ((n - 1) * cx + nxt["world_xz"][0]) / n
-                cz = ((n - 1) * cz + nxt["world_xz"][1]) / n
-            dispersed.extend(picked)
-        manifest["entries"] = dispersed + unplanned
+        sx, sz = start_world
+        planned.sort(key=lambda e: (e["world_xz"][0] - sx) ** 2 + (e["world_xz"][1] - sz) ** 2)
+        picked = [planned.pop(0)]
+        cx = picked[0]["world_xz"][0]
+        cz = picked[0]["world_xz"][1]
+        while planned:
+            best_idx = 0
+            best_key = (-1.0, -1.0)
+            for i, e in enumerate(planned):
+                dx = e["world_xz"][0] - cx
+                dz = e["world_xz"][1] - cz
+                d2 = dx * dx + dz * dz
+                key = (d2, e["cost_m"])
+                if key > best_key:
+                    best_key = key; best_idx = i
+            nxt = planned.pop(best_idx)
+            picked.append(nxt)
+            n = len(picked)
+            cx = ((n - 1) * cx + nxt["world_xz"][0]) / n
+            cz = ((n - 1) * cz + nxt["world_xz"][1]) / n
+        manifest["entries"] = picked + unplanned
     else:
         manifest["entries"] = unplanned
 
