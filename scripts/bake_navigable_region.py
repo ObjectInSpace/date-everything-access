@@ -32,11 +32,16 @@ NAVDATA = REPO / "artifacts/navigation/thirdpersongreybox-navigation-data.json"
 OUT_JSON = REPO / "artifacts/navigation/navigable_region.bake.json"
 OUT_PNG_DIR = REPO / "artifacts/navigation"
 
-# Player local CapsuleCollider radius is 0.4, but the exported Player object
-# has 2x world scale and runtime proof showed collision at ~0.44m from the
-# fireplace. Use a conservative standing-clearance radius that catches those
-# near-grazes without immediately doubling every doorway clearance.
-CAPSULE_R = 0.50
+# Player CapsuleCollider radius is 0.4m (Player.prefab; the exported value of
+# 0.2 is multiplied by the 2x world scale). The earlier 0.50m setting was a
+# safety margin in response to a runtime graze against the fireplace at
+# ~0.44m, but it over-sealed narrow corridors — notably the hallway between
+# z=5.7 and z=6.9 (1.2m wide), where 0.5m dilation leaves <1 cell of clearance
+# and breaks the office→front-door route entirely. 0.4m leaves 0.4m / 2 cells
+# of clearance — passable by the actual player capsule. If fireplace-style
+# grazes return, address them with per-mesh inflation rather than a global
+# bump that closes legitimate doorways.
+CAPSULE_R = 0.40
 CAPSULE_H = 2.50
 STEP_UP_TOL = 0.25
 CELL = 0.20  # rasterization resolution
@@ -279,6 +284,48 @@ def _is_solid_blocker(record):
         return False
     if record.get("IsActive") is False:
         return False
+    # Bounds-blowup meshes: MovingDateable and wiggle_MODEL_UPDATE_ORIGIN
+    # parents animate their children between several poses. The exporter
+    # records the world-space union of all poses, producing phantom blocker
+    # geometry that can seal whole rooms:
+    #
+    # - ComputerMovingDateable / Monitor: combined 18m × 19m × 17m bounds
+    #   sealed the Bathroom 1 doorway (local extent only 3.3m).
+    # - towel1_2_sink_bathroom2_normal_wiggle_MODEL_UPDATE_ORIGIN /
+    #   SM_Sink_Bathroom_2: combined 2.8 × 7.1m bounds sealed the Bathroom 2
+    #   sink area from the main bathroom (local extent 2.4 × 1.2m).
+    #
+    # Most wiggle meshes are small props (mugs, plates) that don't bound-blow-
+    # up. Only skip when the world XZ is materially larger than the local
+    # mesh's XZ — measured against the largest two LocalAabbExtent axes (the
+    # mesh's local Y can map to any world axis after rotation).
+    #
+    # Always skip MovingDateable (only 2 records in this scene, both
+    # bound-blow-up). For wiggle paths, require the inflation ratio gate.
+    #
+    # See [[project-navigation-bounds-blowup-meshes]].
+    path = record.get("Path") or ""
+    if "MovingDateable" in path:
+        return False
+    if "wiggle" in path:
+        ls = record.get("LocalShape") or {}
+        le = ls.get("LocalAabbExtent") or {}
+        bb = record.get("Bounds2D") or {}
+        if le and bb:
+            world_x = bb["MaxX"] - bb["MinX"]
+            world_z = bb["MaxZ"] - bb["MinZ"]
+            # Local extents are half-extents; double them. Take the two
+            # largest axes since local rotation can re-orient them.
+            extents = sorted([
+                abs(le.get("x", 0)) * 2,
+                abs(le.get("y", 0)) * 2,
+                abs(le.get("z", 0)) * 2,
+            ], reverse=True)
+            local_xz_max = max(extents[0], 0.01)
+            # If either world dimension exceeds local_xz_max by 2x or more,
+            # this mesh is bounds-blown. Skip it as a blocker.
+            if world_x / local_xz_max > 2.0 or world_z / local_xz_max > 2.0:
+                return False
     return True
 
 
@@ -287,7 +334,7 @@ def _segments_in_floor_band(mesh_record, y_lo, y_hi):
     segs = fp.get("Segments") or []
     if not segs:
         return []
-    result = []
+    in_band = []
     for segment in segs:
         py = segment.get("PlaneY")
         if py is not None and (py < y_lo or py > y_hi):
@@ -296,8 +343,70 @@ def _segments_in_floor_band(mesh_record, y_lo, y_hi):
         bx = segment["BX"]; bz = segment["BZ"]
         if not (in_scene(ax, az) or in_scene(bx, bz)):
             continue
-        result.append(segment)
-    return result
+        in_band.append(segment)
+    if in_band:
+        return in_band
+
+    # Borrow-from-other-band fallback for wall-FAT meshes whose Y range
+    # overlaps the band but whose only slice planes lie outside it.
+    #
+    # The exporter slices at fixed Y planes; a wall with TopY=12.55 produces
+    # segments at PlaneY=0.5 (ground band) but none at PlaneY=13.5 (upper
+    # band), even though the wall geometrically extends into the upper-floor
+    # bake band [12.25, 15.0]. Walls are vertical extrusions, so their
+    # silhouette at any Y inside [BottomY, TopY] is identical to their
+    # silhouette at any slice plane inside that range. Reuse the closest
+    # slice plane's segments. See [[project-navigation-walls-living-upper-slice-gap]].
+    #
+    # Gate: only borrow when the wall extends at least MIN_BORROW_HEIGHT
+    # above the floor. A wall whose top is only 0.07m above the upper floor
+    # (e.g. SM_Walls_Hall1, TopY=12.57 vs upper floor_y=12.5) is a knee-high
+    # lip the player capsule walks over, not a real obstacle. Borrowing
+    # ground-floor segments for such walls draws phantom upper-floor walls
+    # that seal the upstairs hallway (CC split between bedroom and stairs).
+    MIN_BORROW_HEIGHT_M = 0.75  # ~ a player's hip; below this, walk over it
+    if not fp.get("IsWallLikeFatVictim"):
+        return []
+    by = mesh_record.get("BottomY"); ty = mesh_record.get("TopY")
+    if by is None or ty is None:
+        return []
+    # The wall must geometrically intersect the band.
+    if max(by, y_lo) > min(ty, y_hi):
+        return []
+    # Gate the borrow: TopY must clear y_lo by at least MIN_BORROW_HEIGHT,
+    # otherwise the wall is sub-knee and not a real obstacle on this floor.
+    # y_lo is floor_y - STEP_UP_TOL, so MIN_BORROW_HEIGHT here = capsule
+    # interception above the floor band's lower edge. Note this is intentionally
+    # asymmetric: we don't gate the BottomY side because walls extending DOWN
+    # into the band (e.g. ceiling beams hanging into the player's head) still
+    # block — they just don't get borrow-fallback either way, because they have
+    # in-band segments to start with.
+    if ty - y_lo < MIN_BORROW_HEIGHT_M:
+        return []
+    band_mid = (y_lo + y_hi) / 2.0
+    nearest_plane = None
+    nearest_d = float("inf")
+    plane_groups = {}
+    for s in segs:
+        py = s.get("PlaneY")
+        if py is None:
+            continue
+        if py < by or py > ty:
+            continue
+        plane_groups.setdefault(py, []).append(s)
+        d = abs(py - band_mid)
+        if d < nearest_d:
+            nearest_d = d; nearest_plane = py
+    if nearest_plane is None:
+        return []
+    borrowed = []
+    for s in plane_groups[nearest_plane]:
+        ax = s["AX"]; az = s["AZ"]
+        bx = s["BX"]; bz = s["BZ"]
+        if not (in_scene(ax, az) or in_scene(bx, bz)):
+            continue
+        borrowed.append(s)
+    return borrowed
 
 
 def _dilate_disc(bm, nx, nz, d):
@@ -370,9 +479,64 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
     def cell_center(ix, iz):
         return (minx + (ix + 0.5) * CELL, minz + (iz + 0.5) * CELL)
 
+    # Walkable rasterization with vaulted-ceiling gate.
+    #
+    # Some rooms in this scene are vaulted (Kitchen, LaundryRoom) — they have
+    # no real upper floor above them, just a thin `SM_Ceiling_*` slab at
+    # ~12.37m as a visual ceiling cap. Other rooms have a real upper-floor
+    # walkable surface in the same band (often named `SM_Ceiling_<RoomBelow>`
+    # too — e.g. SM_Ceiling_Hall is the upstairs hall floor, doubling as the
+    # downstairs hall ceiling). Discriminator: real walkable surfaces sit
+    # near the floor-band's target Y (within VAULTED_GATE_M of fy); pure
+    # visual ceilings sit noticeably lower (~0.1-0.2m below fy).
+    #
+    # This filter only triggers above STEP_UP_TOL below fy — anything closer
+    # than that to fy is admitted as before. Ground-floor band stays
+    # unaffected because no vaulted-ceiling pattern exists there.
+    # Vaulted-ceiling gate.
+    #
+    # Some rooms in this scene are vaulted (Kitchen, LaundryRoom). They have
+    # no real upper-floor walkable area, just a thin visual `SM_Ceiling_*`
+    # slab at TopY≈12.37m (0.5m below the actual upper-floor surfaces at
+    # ~12.84-12.95). Without filtering, that visual ceiling rasterizes as
+    # walkable upper-floor area and interactables snap into a phantom region.
+    #
+    # Discriminator: each band has a "true" floor Y close to its highest
+    # large walkable surface. Visual ceilings sit noticeably lower. We
+    # measure that distance per-band rather than against the band's mid-Y
+    # because fy is a round number that doesn't always equal the actual
+    # mesh height (ground SM_Floor_* sits at -0.57 vs fy=-0.5).
+    #
+    # Algorithm: the band's "true" floor Y is the highest TopY among LARGE
+    # walkable surfaces (area > LARGE_SLAB_M2). Props and small objects (a
+    # 0.5×0.5m book lying on a desk) don't qualify. Then gate surfaces whose
+    # TopY is more than VAULTED_DROP_M below that.
+    #
+    # Calibration: vaulted Kitchen ceiling (TopY=12.37, area >>4 m² → large)
+    # vs band-top 12.95 (SM_Ceiling_Hall = upstairs hall floor) → 0.58m drop
+    # → gates. SM_Floor_Bedroom 12.84 vs 12.95 → 0.11m drop → passes.
+    # Ground floor SM_Floor_Office −0.57 vs band-top −0.48 (rugs) → 0.09 drop
+    # → passes.
+    LARGE_SLAB_M2 = 50.0       # actual room floors are 100-800 m²
+    SLAB_MAX_VEXT_M = 0.10     # actual floor/ceiling meshes are thin (VExt 0-0.04m);
+                               # treadmills, rugs, beds have VExt 0.16-0.81m
+    VAULTED_DROP_M = 0.30
+    def _slab_area(w):
+        fp = w["Footprint"]
+        return (fp["MaxX"] - fp["MinX"]) * (fp["MaxZ"] - fp["MinZ"])
+    large_walks = [
+        w for w in floor_walks
+        if _slab_area(w) >= LARGE_SLAB_M2 and w["VerticalExtent"] <= SLAB_MAX_VEXT_M
+    ]
+    if large_walks:
+        band_top_y = max(w["TopY"] for w in large_walks)
+    else:
+        band_top_y = max(w["TopY"] for w in floor_walks)
+
     walkable_bm = [[False] * nz for _ in range(nx)]
-    # Rasterize walkable footprints (AABB-fill)
     for w in floor_walks:
+        if band_top_y - w["TopY"] > VAULTED_DROP_M:
+            continue
         fp = w["Footprint"]
         ix0 = max(0, int(math.floor((fp["MinX"] - minx) / CELL)))
         ix1 = min(nx, int(math.ceil((fp["MaxX"] - minx) / CELL)))
@@ -599,6 +763,11 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         # state. Cells within DOOR_COMPONENT_CARVE_RADIUS of the door's anchor
         # that are currently dilated-blocked AND walkable count as threshold
         # cells that opening this door unblocks.
+        # Threshold cells: cells within DOOR_COMPONENT_CARVE_RADIUS of the
+        # door anchor that are walkable + dilation-blocked. The doorway gap
+        # in the wall mesh is often modelled on only one face (asymmetric
+        # export), so dilation seals the gap even though the geometry has
+        # it. Threshold cells re-open that gap.
         door_pos = door_rec.get("WorldPosition") or {}
         anchor_x = door_pos.get("x")
         anchor_z = door_pos.get("z")
@@ -608,38 +777,121 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
                 and abs(anchor_y - fy) <= 2.0):
             cx = int((anchor_x - minx) / CELL)
             cz = int((anchor_z - minz) / CELL)
-            radius_m = DOOR_COMPONENT_CARVE_RADIUS
-            cr = int(math.ceil(radius_m / CELL))
-            for dx in range(-cr, cr + 1):
-                for dz in range(-cr, cr + 1):
-                    if dx * dx + dz * dz > cr * cr:
-                        continue
-                    jx = cx + dx
-                    jz = cz + dz
-                    if jx < 0 or jx >= nx or jz < 0 or jz >= nz:
-                        continue
-                    if not walkable_bm[jx][jz]:
-                        continue
-                    if not dilated[jx][jz]:
-                        continue  # already navigable, no help
-                    threshold_cells.append((jx, jz))
+            cr = int(math.ceil(DOOR_COMPONENT_CARVE_RADIUS / CELL))
+            # Connectivity gate against the original bug A: a threshold cell
+            # must be reachable from the door's own panel through cells that
+            # are EITHER navigable in the door-open world OR in the door's
+            # closed-pose dilation. This prevents the carve from leaking
+            # through an intervening wall into a neighbouring room's clearance
+            # band (Doors_Office leaking into SM_Walls_Hall1 dilation).
+            # Implemented as a BFS seeded from the panel_closed_dil cells,
+            # bounded to the carve disc.
+            from collections import deque
+            seeds = []
+            for ix in range(max(0, cx - cr), min(nx, cx + cr + 1)):
+                for iz in range(max(0, cz - cr), min(nz, cz + cr + 1)):
+                    if panel_closed_dil[ix][iz]:
+                        seeds.append((ix, iz))
+            if seeds:
+                reach = set(seeds)
+                queue = deque(seeds)
+                while queue:
+                    qx, qz = queue.popleft()
+                    for dx in (-1, 0, 1):
+                        for dz in (-1, 0, 1):
+                            if dx == 0 and dz == 0:
+                                continue
+                            tx = qx + dx; tz = qz + dz
+                            if tx < 0 or tx >= nx or tz < 0 or tz >= nz:
+                                continue
+                            # Stay inside the carve disc.
+                            if (tx - cx) ** 2 + (tz - cz) ** 2 > cr * cr:
+                                continue
+                            if (tx, tz) in reach:
+                                continue
+                            # Walkable cells inside the disc that are EITHER
+                            # navigable post-bake OR in the panel's closed
+                            # dilation are reachable. Walls (dilated cells
+                            # NOT in the panel) block the BFS.
+                            if not walkable_bm[tx][tz]:
+                                continue
+                            if dilated[tx][tz] and not panel_closed_dil[tx][tz]:
+                                continue
+                            reach.add((tx, tz))
+                            queue.append((tx, tz))
+                # Threshold cells = reachable cells that are dilation-blocked
+                # (so opening the door is what gives them passage). Cells
+                # already navigable don't need to be re-added.
+                for (jx, jz) in reach:
+                    if dilated[jx][jz]:
+                        threshold_cells.append((jx, jz))
+
+        # Door-open dilation mask. A freed cell must be navigable in the world
+        # where this door is open. The earlier "any non-door raw blocker
+        # within DILATE_CELLS" check was too aggressive — it dropped the
+        # entire doorway threshold (cells in the gap between the door's
+        # surrounding walls) because the walls themselves are within DILATE
+        # of the gap, even though the gap is wider than 2× capsule radius.
+        #
+        # The correct test: compute the would-be dilated bitmap if this door
+        # were open (= blocked_bm minus this door's closed panel cells, plus
+        # this door's open panel cells), then a cell is legitimately freed
+        # iff it is NOT dilation-blocked in that alternative world. This
+        # exactly captures "opening the door makes this cell reachable."
+        #
+        # Cost: one O(nx*nz*DILATE_CELLS^2) dilation per door. Doors are
+        # sparse and only one floor at a time matters, so total cost is fine.
+        door_open_raw = [
+            [(blocked_bm[ix][iz] and not panel_closed_raw[ix][iz]) or panel_open_raw[ix][iz]
+             for iz in range(nz)]
+            for ix in range(nx)
+        ]
+        door_open_dil = _dilate_disc(door_open_raw, nx, nz, DILATE_CELLS)
 
         freed_set = set()
         for ix in range(nx):
             for iz in range(nz):
+                # Candidate cells: those the closed-pose dilation covers but
+                # the open-pose dilation does not (the door panel's swept
+                # region) and the doorway threshold (added below).
                 if not panel_closed_dil[ix][iz]:
                     continue
                 if panel_open_dil[ix][iz]:
                     continue
                 if not walkable_bm[ix][iz]:
                     continue
+                # Final gate: in the door-open world, this cell must be
+                # outside any blocker's capsule clearance.
+                if door_open_dil[ix][iz]:
+                    continue
                 freed_set.add((ix, iz))
+        # Threshold cells are exempt from the door_open_dil gate by design:
+        # the doorway opening is exactly the place where the wall has a gap
+        # that dilation seals over (the wall mesh is exported on one face
+        # only). The adjacent-to-panel_closed_dil constraint above ensures
+        # threshold cells sit in the door's own wall opening rather than in
+        # a different wall's clearance band.
         for c in threshold_cells:
             freed_set.add(c)
 
         if not freed_set:
             continue
         freed = sorted([list(c) for c in freed_set])
+        # Emit the door's own closed-pose dilation footprint so the post-bake
+        # invariant can subtract it when checking freed_cells against the
+        # global dilated bitmap (otherwise every freed cell looks "blocked"
+        # because the door's own panel contributes to dilation).
+        own_dil_cells = sorted(
+            [ix, iz]
+            for ix in range(nx) for iz in range(nz)
+            if panel_closed_dil[ix][iz]
+        )
+        # Threshold cells emitted separately so the invariant can exempt them
+        # from the "freed cells must not be dilation-blocked by another wall"
+        # check. Threshold cells are by design in the surrounding wall's
+        # dilation band — that's the wall opening dilation seals over. The
+        # adjacency-to-panel_closed_dil constraint above keeps them legitimate.
+        threshold_cells_list = sorted([list(c) for c in threshold_cells])
         doors_per_floor.append({
             "name": door_rec.get("Name"),
             "kind": door_rec.get("Kind"),
@@ -648,8 +900,10 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             "closed_cells": sum(sum(row) for row in panel_closed_dil),
             "open_cells": sum(sum(row) for row in panel_open_dil),
             "threshold_cells": len(threshold_cells),
+            "threshold_cells_list": threshold_cells_list,
             "freed_cells": freed,
             "freed_count": len(freed),
+            "panel_dilated_cells": own_dil_cells,
         })
 
     # Per-state-wall freed-cells pass. State-gated walls (currently just the
@@ -671,6 +925,17 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         if not _rasterize_bounds(wall_raw, b2, minx, minz, nx, nz, CELL):
             continue
         wall_dil = _dilate_disc(wall_raw, nx, nz, DILATE_CELLS)
+        # Wall-released dilation mask, same shape as the door pass.
+        # The original guard `dilated AND NOT wall_dil` was a no-op (the
+        # outer loop already required wall_dil). The correct test: compute
+        # the dilated bitmap as it would be if THIS wall were removed, then
+        # the wall's freed cells are those navigable in that alternative
+        # world. See [[project-navigation-door-carve-dilation-bug]].
+        wall_released_raw = [
+            [blocked_bm[ix][iz] and not wall_raw[ix][iz] for iz in range(nz)]
+            for ix in range(nx)
+        ]
+        wall_released_dil = _dilate_disc(wall_released_raw, nx, nz, DILATE_CELLS)
         freed = []
         for ix in range(nx):
             for iz in range(nz):
@@ -678,13 +943,16 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
                     continue
                 if not walkable_bm[ix][iz]:
                     continue
-                # If dilated AND not in wall_dil, another blocker covers this
-                # cell too — freeing the wall doesn't help.
-                if dilated[ix][iz] and not wall_dil[ix][iz]:
+                if wall_released_dil[ix][iz]:
                     continue
                 freed.append([ix, iz])
         if not freed:
             continue
+        own_dil_cells_sw = sorted(
+            [ix, iz]
+            for ix in range(nx) for iz in range(nz)
+            if wall_dil[ix][iz]
+        )
         state_walls_per_floor.append({
             "name": wall.get("Name"),
             "component_id": wall.get("ComponentId"),
@@ -694,6 +962,7 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             "wall_cells": sum(sum(row) for row in wall_dil),
             "freed_cells": freed,
             "freed_count": len(freed),
+            "panel_dilated_cells": own_dil_cells_sw,
         })
 
     walk_count = sum(sum(row) for row in walkable_bm)
@@ -781,6 +1050,189 @@ def write_png(floor_result, path):
                 r, g, b = palette.get(c, (255, 0, 255))
                 line.append(r); line.append(g); line.append(b)
             f.write(bytes(line))
+
+
+def _verify_bake_invariants(report, mesh_colliders, slice_planes):
+    """Assert structural invariants on a freshly-baked report. Each failure is
+    a recurring bug shape we want to catch at bake time, not at runtime.
+
+    Returns (errors, warnings) — caller decides whether to raise.
+    """
+    errors = []
+    warnings = []
+
+    # 1. door.freed_cells ∩ (dilated_blocked ∖ panel_dilated_cells) must be empty.
+    # 2. state_wall.freed_cells ∩ (dilated_blocked ∖ panel_dilated_cells) must be empty.
+    # A freed cell may legitimately sit in the global dilated bitmap because
+    # the door's own closed-pose panel contributes to dilation — that's the
+    # whole point of freed_cells. The invariant catches freed cells that are
+    # closed by a *different* blocker (a neighbouring wall). Repro this would
+    # catch: see [[project-navigation-door-carve-dilation-bug]] (Doors_Office
+    # freeing cells inside SM_Walls_Hall1's clearance band).
+    for floor in report["floors"]:
+        if "error" in floor:
+            continue
+        label = floor["label"]
+        rows = floor["bitmap_rows"]
+        def _is_dilated_blocked(ix, iz):
+            # 'X' = walkable AND blocked, 'B' = blocker only. Both are dilated-blocked.
+            return rows[ix][iz] in ('X', 'B')
+        for door in floor.get("doors", []):
+            own = {(c[0], c[1]) for c in door.get("panel_dilated_cells", [])}
+            # Threshold cells are exempt: they sit in the door's surrounding
+            # wall's dilation by design (asymmetric wall-mesh export), and
+            # the carve adjacency constraint keeps them inside the door's
+            # actual opening rather than in an unrelated wall.
+            thresholds = {(c[0], c[1]) for c in door.get("threshold_cells_list", [])}
+            violating = [(c[0], c[1]) for c in door.get("freed_cells", [])
+                         if _is_dilated_blocked(c[0], c[1])
+                         and (c[0], c[1]) not in own
+                         and (c[0], c[1]) not in thresholds]
+            if violating:
+                errors.append(
+                    f"floor={label} door={door.get('name')!r}: "
+                    f"{len(violating)} freed_cells closed by a non-door blocker "
+                    f"(e.g. {violating[:5]})"
+                )
+        for wall in floor.get("state_walls", []):
+            own = {(c[0], c[1]) for c in wall.get("panel_dilated_cells", [])}
+            violating = [(c[0], c[1]) for c in wall.get("freed_cells", [])
+                         if _is_dilated_blocked(c[0], c[1])
+                         and (c[0], c[1]) not in own]
+            if violating:
+                errors.append(
+                    f"floor={label} state_wall={wall.get('name')!r}: "
+                    f"{len(violating)} freed_cells closed by a non-wall blocker "
+                    f"(e.g. {violating[:5]})"
+                )
+
+    # 3. For every floor's bake band, every IsWallLikeFatVictim mesh whose Y
+    # range overlaps the band must have *some* slice plane the bake can use —
+    # either inside the intersection (perfect), or anywhere in the wall's Y
+    # range (the borrow-from-other-band fallback in _segments_in_floor_band
+    # will reuse those segments). The only way the wall ends up invisible is
+    # if there is no slice plane anywhere in [BottomY, TopY].
+    # See [[project-navigation-walls-living-upper-slice-gap]] for the upper-
+    # floor slice-gap case the borrow fallback exists to handle.
+    if slice_planes:
+        for floor in report["floors"]:
+            if "error" in floor:
+                continue
+            label = floor["label"]
+            fy = floor["floor_y"]
+            band_lo = fy - STEP_UP_TOL
+            band_hi = fy + CAPSULE_H
+            for m in mesh_colliders:
+                fp = m.get("Footprint") or {}
+                if not fp.get("IsWallLikeFatVictim"):
+                    continue
+                by = m.get("BottomY"); ty = m.get("TopY")
+                if by is None or ty is None:
+                    continue
+                # Does the wall's Y range intersect this floor's band?
+                if max(by, band_lo) > min(ty, band_hi):
+                    continue  # no overlap, wall doesn't belong to this floor
+                # The borrow fallback needs at least one slice plane in the
+                # wall's Y range (not necessarily in the band intersection).
+                if any(by <= p <= ty for p in slice_planes):
+                    continue
+                name = m.get("GameObjectName") or (m.get("Path") or "?").split("/")[-1]
+                errors.append(
+                    f"floor={label}: wall-FAT mesh {name!r} Y=[{by:.2f},{ty:.2f}] "
+                    f"overlaps band [{band_lo:.2f},{band_hi:.2f}] but no slice plane "
+                    f"lies in [{by:.2f},{ty:.2f}] either — borrow fallback cannot "
+                    f"help (planes={slice_planes}). Wall invisible on this floor."
+                )
+
+    # 4. Interactable coverage smoke check intentionally omitted here. The
+    # raw interactables list contains many sub-mesh entries (book pages,
+    # monitor sub-parts, lighting variants) whose Position is buried inside
+    # the parent's collider footprint, so a naive nearest-navigable check
+    # produces hundreds of false positives every bake. scripts/reachability_matrix.py
+    # already does the per-interactable check correctly (snapping by Path
+    # and interaction radius); use that as the authoritative coverage tool.
+
+    # 5. Every inter_floor_edge endpoint must land on a navigable cell.
+    # If a stair/teleporter terminus falls into a sealed cell, the planner
+    # silently drops the edge and cross-floor routing breaks. Edges live in
+    # a dict keyed by category (stair_ramp, teleporter); each entry has
+    # per-floor endpoints with {cell: [ix, iz]} or a deferred note.
+    edges_doc = report.get("inter_floor_edges") or {}
+    if isinstance(edges_doc, dict):
+        floors_by_label = {f["label"]: f for f in report["floors"] if "error" not in f}
+        edge_lists = []
+        for category, lst in edges_doc.items():
+            if isinstance(lst, list):
+                edge_lists.append((category, lst))
+        for category, lst in edge_lists:
+            if category.endswith("rejected"):
+                continue  # rejected entries are diagnostic, not active edges
+            for edge in lst:
+                if not isinstance(edge, dict):
+                    continue
+                for label, f in floors_by_label.items():
+                    ep = edge.get(label)
+                    if not isinstance(ep, dict):
+                        continue
+                    cell = ep.get("cell")
+                    if not isinstance(cell, list) or len(cell) < 2:
+                        continue  # deferred / no-cell endpoint
+                    ix, iz = cell[0], cell[1]
+                    fr = f["frame"]
+                    if not (0 <= ix < fr["nx"] and 0 <= iz < fr["nz"]):
+                        errors.append(
+                            f"inter_floor_edge {category}/{edge.get('kind','?')} endpoint "
+                            f"on floor {label} cell ({ix},{iz}) out of bounds"
+                        )
+                        continue
+                    if f["bitmap_rows"][ix][iz] != 'N':
+                        errors.append(
+                            f"inter_floor_edge {category}/{edge.get('kind','?')} endpoint "
+                            f"on floor {label} cell ({ix},{iz}) is not navigable "
+                            f"(char={f['bitmap_rows'][ix][iz]!r})"
+                        )
+
+    # 6. Every door / state-wall with panel data must have a non-empty
+    # freed_cells set. The carve passes have several layers of masking
+    # (other-blocker dilation, door-open-dilation, threshold adjacency) and
+    # a regression in any of them can wipe a door's contribution silently —
+    # the runtime then unions an empty set when the door opens, the door
+    # becomes a no-op overlay, and the room behind it stays unreachable.
+    #
+    # Distinction: doors with `panel_count == 0` are name-only entries
+    # (interactables tagged Doors_* but no exported panel mesh, e.g. the
+    # Camera_DorianBathroom2Door* placeholder objects). Those legitimately
+    # have no freed cells. Warning, not error.
+    for floor in report["floors"]:
+        if "error" in floor:
+            continue
+        label = floor["label"]
+        for door in floor.get("doors", []):
+            if door.get("freed_count", 0) > 0:
+                continue
+            name = door.get("name") or "?"
+            panels = door.get("panel_count", 0)
+            if panels > 0:
+                errors.append(
+                    f"floor={label} door={name!r}: 0 freed_cells despite "
+                    f"panel_count={panels}. Carve masks may be over-aggressive — "
+                    f"opening this door has no effect on routing."
+                )
+            else:
+                warnings.append(
+                    f"floor={label} door={name!r}: 0 freed_cells (no panel data; "
+                    f"name-only door entry — expected)."
+                )
+        for wall in floor.get("state_walls", []):
+            if wall.get("freed_count", 0) > 0:
+                continue
+            name = wall.get("name") or "?"
+            errors.append(
+                f"floor={label} state_wall={name!r}: 0 freed_cells. Releasing "
+                f"this wall has no effect on routing."
+            )
+
+    return errors, warnings
 
 
 def append_inter_floor_edges():
@@ -900,6 +1352,26 @@ def main():
     OUT_JSON.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"\nWrote {OUT_JSON}")
     append_inter_floor_edges()
+
+    # Re-load after the inter-floor pass so invariant 5 sees the edges.
+    full_report = json.loads(OUT_JSON.read_text(encoding="utf-8"))
+    slice_planes = (blok.get("Filtering") or {}).get("MeshSlicePlanes") or []
+    errors, warnings = _verify_bake_invariants(
+        full_report, mesh_colliders, slice_planes
+    )
+    if warnings:
+        print("\nBake invariant warnings:")
+        for w in warnings:
+            print(f"  WARN: {w}")
+    if errors:
+        print("\nBake invariant errors:")
+        for e in errors:
+            print(f"  ERROR: {e}")
+        raise SystemExit(
+            f"Bake produced {len(errors)} invariant violation(s). "
+            f"See errors above; do not consume this artifact."
+        )
+    print("\nBake invariants: OK")
 
 
 if __name__ == "__main__":
