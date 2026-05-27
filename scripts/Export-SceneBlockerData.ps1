@@ -29,7 +29,17 @@ param(
     # opening is clear at capsule-middle height; see the bedroom-door analysis
     # in the slope-filter-retirement follow-up.
     [Parameter()]
-    [double[]]$MeshSlicePlanes = @(0.5, 13.5),
+    # Slice planes are positioned at player-eye height above each floor band.
+    # 0.5 = ground floor (floor_y -0.5 + 1.0m); 12.5 catches walls whose tops
+    # sit just above the upper floor (upper floor_y 12.5); 13.5 catches walls
+    # that extend higher into the upper-floor band.
+    # Adding 12.5: many ground-floor walls (SM_Walls_Living, SM_Walls_Hall1,
+    # Fireplace, etc.) have TopY in [12.39, 12.59], i.e. between the upper
+    # floor level and the next slice plane at 13.5. Without a slice at 12.5
+    # they emit zero segments inside the upper-floor bake band [12.25, 15.0],
+    # leaving the staircase region apparently wall-free in upper routing.
+    # See [[project-navigation-walls-living-upper-slice-gap]].
+    [double[]]$MeshSlicePlanes = @(0.5, 12.5, 13.5),
 
     [Parameter()]
     [double]$MaxMeshFootprintAreaSqM = 25.0,
