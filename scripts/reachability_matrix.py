@@ -189,20 +189,6 @@ def classify_target(planner, labels_by_floor, reachable, item):
     wz = float(pos["z"])
 
     verdict, _ = _classify_on_floor(planner, labels_by_floor, reachable, floor_label, wx, wz, radius)
-    if verdict == "reachable":
-        return verdict, floor_label
-
-    # Fallback to the alternate floor. Game targets often have Y attributed to
-    # the floor above them (ceiling-mounted lights, high shelves) when the
-    # player actually interacts from below. If the preferred floor's goal is
-    # isolated or has no navigable goal but the other floor is reachable at
-    # the same XZ, use the other floor.
-    for alt in planner.floors:
-        if alt == floor_label:
-            continue
-        alt_verdict, _ = _classify_on_floor(planner, labels_by_floor, reachable, alt, wx, wz, radius)
-        if alt_verdict == "reachable":
-            return "reachable", alt
     return verdict, floor_label
 
 

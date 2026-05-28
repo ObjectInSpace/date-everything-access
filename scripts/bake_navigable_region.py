@@ -154,6 +154,12 @@ def _is_structural_mesh(record):
         "doorframe",
         "fence",
         "exterior",
+        # The /House/Hallway/Stairs mesh: its ground-band (Y=0.5) slice segments
+        # are the bottom-landing side walls, which must rasterize as wall traces
+        # only. Routing it through the furniture path (convex-hull perimeter +
+        # closed-region fill) would over-block, since the hull spans the full
+        # 21m stair run. See [[project-navigation-stairs-runtime-collision]].
+        "/hallway/stairs",
     )
     return any(marker in text for marker in structural_markers)
 
