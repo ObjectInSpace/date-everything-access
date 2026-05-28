@@ -384,11 +384,35 @@ def _is_solid_blocker(record):
     return True
 
 
+MIN_BORROW_HEIGHT_M = 0.75  # ~ a player's hip; below this, walk over it
+
+
 def _segments_in_floor_band(mesh_record, y_lo, y_hi):
     fp = mesh_record.get("Footprint") or {}
     segs = fp.get("Segments") or []
     if not segs:
         return []
+
+    # Top-lip gate. Several ground-floor walls (SM_Walls_Hall1/Kitchen/Living/
+    # Office/Dining/Laundry/Closet_Office) have TopY ~12.54-12.59 — i.e. their
+    # tops poke only 0.04-0.09m above the upper floor (12.5). The exporter
+    # slices at PlaneY=12.5 (a plane added to catch walls whose tops sit just
+    # above the upper floor), so these walls DO produce in-band segments at
+    # 12.5 — but those segments are just the wall-top silhouette of a
+    # ground-floor wall, a sub-knee lip the player capsule walks straight over.
+    # Rasterizing them draws phantom upper-floor walls that seal real passages
+    # (notably SM_Walls_Hall1 sealing the stair-landing→bedroom archway, which
+    # isolated the whole stair landing). Same rationale and threshold as the
+    # borrow gate below — this is its in-band analog. A wall whose TopY clears
+    # the band's lower edge by < MIN_BORROW_HEIGHT_M is not a real obstacle on
+    # this floor; skip it. Real upper walls (SM_Walls_Bedroom/Hall2, TopY~25.8)
+    # clear by 13m and are unaffected. See
+    # [[project-navigation-upper-hall2-archway-seal]], [[project-navigation-borrow-height-gate]].
+    ty_lip = mesh_record.get("TopY")
+    if (fp.get("IsWallLikeFatVictim") and ty_lip is not None
+            and ty_lip - y_lo < MIN_BORROW_HEIGHT_M):
+        return []
+
     in_band = []
     for segment in segs:
         py = segment.get("PlaneY")
@@ -419,7 +443,7 @@ def _segments_in_floor_band(mesh_record, y_lo, y_hi):
     # lip the player capsule walks over, not a real obstacle. Borrowing
     # ground-floor segments for such walls draws phantom upper-floor walls
     # that seal the upstairs hallway (CC split between bedroom and stairs).
-    MIN_BORROW_HEIGHT_M = 0.75  # ~ a player's hip; below this, walk over it
+    # MIN_BORROW_HEIGHT_M is module-level (shared with the top-lip gate above).
     if not fp.get("IsWallLikeFatVictim"):
         return []
     by = mesh_record.get("BottomY"); ty = mesh_record.get("TopY")
@@ -817,11 +841,21 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
 
     # Open-archway carve: for doorframes with no associated door, undo dilation
     # across the doorway throat so the passage opens. Masked to the frame's own
-    # XZ bounding box (plus a small margin) so the carve cannot leak past the
-    # jambs into an adjacent room's clearance band. Like the door-carve, only
-    # dilated cells are cleared and the final `walkable AND NOT dilated` keeps
-    # non-floor cells blocked. See [[project-navigation-upper-hall2-archway-seal]].
-    ARCHWAY_CARVE_MARGIN_M = 0.5
+    # XZ bounding box (plus a margin) so the carve cannot leak far from the
+    # frame. Like the door-carve, only dilated cells are cleared and the final
+    # `walkable AND NOT dilated` keeps non-floor cells blocked.
+    #
+    # Margin is floor-aware. Ground frames use a tight 0.5m margin: ground
+    # rooms are densely packed and a wide carve over-widens many doorways at
+    # once (merging components that should stay doorway-gated). The upper floor
+    # uses 1.2m to bridge the stair-newel dilation pinch that seals the stair
+    # landing from the upstairs archway corridor — the newel post + jamb
+    # dilation close a ~1m doorway about one capsule-width past the
+    # SM_Doorframe_Small_13 frame, and a 0.5m box stops just short of it. The
+    # upper floor is safe to carve wider because the top-lip gate (above) has
+    # already removed the phantom ground-wall lips a wide carve would graze.
+    # See [[project-navigation-upper-hall2-archway-seal]].
+    ARCHWAY_CARVE_MARGIN_M = 1.2 if fy > 6.0 else 0.5
     mgn = ARCHWAY_CARVE_MARGIN_M
     for bb in archway_carves:
         bx0 = int((bb["MinX"] - mgn - minx) / CELL)
