@@ -316,8 +316,20 @@ class Planner:
             f = self.floors[floor]
             for dx, dz, cost in NEIGHBORS_8:
                 nx, nz = a + dx, b + dz
-                if f.navigable(nx, nz):
-                    out.append(((floor, nx, nz), cost * self.cell_size, {"kind": "walk"}))
+                if not f.navigable(nx, nz):
+                    continue
+                # Corner-cut prevention: a diagonal step is only valid if BOTH
+                # orthogonally-adjacent cells are navigable too. Without this, A*
+                # slips through a corner where two blockers touch — a sub-capsule
+                # pinhole the player can't physically thread (e.g. the 0.2m
+                # diagonal leak through SM_Walls_Bedroom that routed autowalk into
+                # a dead pocket instead of the real door). Forbidding the cut
+                # closes such pinholes at the pathfinding level without changing
+                # the bake's navigable cells. See [[project-navigation-executor-corner-stall]].
+                if dx != 0 and dz != 0:
+                    if not (f.navigable(a + dx, b) and f.navigable(a, b + dz)):
+                        continue
+                out.append(((floor, nx, nz), cost * self.cell_size, {"kind": "walk"}))
         for nbr, cost, meta in self.edges_from.get(node, ()):
             out.append((nbr, cost, meta))
         return out
@@ -391,9 +403,22 @@ def _segment_is_clear(planner, a, b):
         cell = floor.world_to_cell(wx, wz)
         if cell == last_cell:
             continue
-        last_cell = cell
         if not floor.navigable(cell[0], cell[1]):
             return False
+        # Reject corner-cuts: if the sampled cell moved diagonally from the
+        # previous one, both orthogonal in-between cells must be navigable too.
+        # Point-sampling alone can hop across a 1-cell corner pinhole the player
+        # can't fit through, re-introducing the impassable-gap routes that the
+        # A* corner-cut prevention closes. Mirrors Planner.neighbors. See
+        # [[project-navigation-executor-corner-stall]].
+        if last_cell is not None:
+            ddx = cell[0] - last_cell[0]
+            ddz = cell[1] - last_cell[1]
+            if ddx != 0 and ddz != 0:
+                if not (floor.navigable(last_cell[0] + ddx, last_cell[1]) and
+                        floor.navigable(last_cell[0], last_cell[1] + ddz)):
+                    return False
+        last_cell = cell
     return True
 
 

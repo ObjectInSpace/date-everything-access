@@ -49,6 +49,14 @@ def label_components(floor: routes.Floor):
                         continue
                     if labels[nx][nz] != -1 or not floor.navigable(nx, nz):
                         continue
+                    # Corner-cut prevention, mirroring Planner.neighbors: a
+                    # diagonal connection requires both orthogonal cells open, so
+                    # components reflect what the planner can actually traverse
+                    # (no sub-capsule pinhole leaks). See
+                    # [[project-navigation-executor-corner-stall]].
+                    if dx != 0 and dz != 0:
+                        if not (floor.navigable(cx + dx, cz) and floor.navigable(cx, cz + dz)):
+                            continue
                     labels[nx][nz] = comp_id
                     q.append((nx, nz))
             sizes.append(count)
