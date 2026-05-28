@@ -90,17 +90,15 @@ param(
     [Parameter()]
     # Layer 31 = 3DUI (UI elements, not physical). Layer 18 = Mirror; in this
     # scene only PF_PlanarReflection (reflection-probe helper, no MeshCollider)
-    # and /House/Hallway/Stairs use it. We experimented with admitting the
-    # Stairs MeshCollider (removing 18 from this list) so the player would
-    # route AROUND the staircase instead of through it. Result: the Stairs
-    # mesh slice-segments at Y=0.5 form a wall across X=11.18-13.51 Z=-5.83
-    # to +0.25, which after dilation seals the front hallway from the rest of
-    # the ground floor (reachable 2320→1809). The Stairs IS a player-collidable
-    # mesh, but slicing it at floor height captures the SLOPE the player walks
-    # on, not just the side faces — so we can't admit it whole. Future fix
-    # would need per-cell slope-aware blocking (the slope is passable when
-    # approached from the bottom, not the side). For now, exclude.
-    [int[]]$SkipMeshLayers = @(18, 31)
+    # and /House/Hallway/Stairs carry it, and only the Stairs has a MeshCollider.
+    # The Stairs is admitted: at the ground slice plane (Y=0.5) its segments are
+    # the bottom-landing SIDE WALLS (X=11.18-13.51, Z=-5.83..0.25), not the
+    # climbable tread (the treads start higher and only appear at the upper
+    # planes). Rasterizing those side walls makes A* route around the staircase
+    # instead of straight into the rail, fixing the runtime stall. The baker
+    # treats the Stairs as structural so only its slice traces rasterize.
+    # See [[project-navigation-stairs-runtime-collision]].
+    [int[]]$SkipMeshLayers = @(31)
 )
 
 Set-StrictMode -Version Latest
