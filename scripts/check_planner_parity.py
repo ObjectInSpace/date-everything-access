@@ -98,15 +98,20 @@ def replan_with_python(capture, bake):
     target_y = target_pos[1]
     start_floor = capture.get("start_floor") or "ground"
 
-    # Resolve start cell same way plan() does.
+    # Resolve start cell same way plan() does (NEAREST_NAVIGABLE_SEARCH_M).
     f_start = planner.floors[start_floor]
-    n = f_start.nearest_navigable(start[0], start[2], max_radius_m=4.0)
+    n = f_start.nearest_navigable(start[0], start[2],
+                                  max_radius_m=planner_mod.NEAREST_NAVIGABLE_SEARCH_M)
     if n is None:
         return None, "python: no nav cell near start"
     start_node = (start_floor, n[0], n[1])
 
-    # Resolve target cell(s) same way plan() does.
-    target_floor_label = planner._floor_for_y(target_y)
+    # Resolve target cell(s) the same way plan() does: _floor_for_target_y
+    # (the floor the player STANDS on to interact — the floor below the
+    # target), NOT _floor_for_y (closest baked floor). Using the wrong one
+    # rejected wall-mounted props like the magnifying glass at Y=4.09 as
+    # "not on a baked floor". Keep this in sync with plan().
+    target_floor_label = planner._floor_for_target_y(target_y)
     if target_floor_label is None:
         return None, f"python: target Y={target_y} not on a baked floor"
     radius = capture.get("target_interaction_radius") or 1.0
@@ -117,7 +122,7 @@ def replan_with_python(capture, bake):
     )
     if not goals:
         nf = planner.floors[target_floor_label].nearest_navigable(
-            target_pos[0], target_pos[2], max_radius_m=4.0
+            target_pos[0], target_pos[2], max_radius_m=planner_mod.NEAREST_NAVIGABLE_SEARCH_M
         )
         if nf is None:
             return None, "python: no nav cell near target"
