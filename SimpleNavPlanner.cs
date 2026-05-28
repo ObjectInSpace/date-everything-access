@@ -882,10 +882,23 @@ namespace DateEverythingAccess
                 {
                     for (int i = 0; i < 8; i++)
                     {
-                        int nx = node.Ix + NeighborDx[i];
-                        int nz = node.Iz + NeighborDz[i];
+                        int ddx = NeighborDx[i];
+                        int ddz = NeighborDz[i];
+                        int nx = node.Ix + ddx;
+                        int nz = node.Iz + ddz;
                         if (!f.Navigable(nx, nz)) continue;
-                        float step = (NeighborDx[i] != 0 && NeighborDz[i] != 0) ? Sqrt2 : 1f;
+                        // Corner-cut prevention: a diagonal step is only valid if
+                        // both orthogonally-adjacent cells are navigable. Without
+                        // this, A* slips through a corner where two blockers touch
+                        // — a sub-capsule pinhole the player can't physically fit
+                        // (e.g. the 0.2m diagonal leak through SM_Walls_Bedroom that
+                        // routed autowalk into a dead pocket instead of the real
+                        // door). Must match the Python planner. See
+                        // [[project-navigation-executor-corner-stall]].
+                        if (ddx != 0 && ddz != 0 &&
+                            !(f.Navigable(node.Ix + ddx, node.Iz) && f.Navigable(node.Ix, node.Iz + ddz)))
+                            continue;
+                        float step = (ddx != 0 && ddz != 0) ? Sqrt2 : 1f;
                         yield return (new NodeKey(f.Label, nx, nz), step * f.CellSize);
                     }
                 }
@@ -1023,6 +1036,21 @@ namespace DateEverythingAccess
 
                 if (!floor.Navigable(ix, iz))
                     return false;
+
+                // Reject corner-cuts: if the sampled cell moved diagonally from
+                // the previous one, both orthogonal in-between cells must be
+                // navigable. Point-sampling alone can hop a 1-cell corner pinhole
+                // the player can't fit through, re-introducing impassable-gap
+                // routes that the A* corner-cut prevention closes. Must match the
+                // Python planner. See [[project-navigation-executor-corner-stall]].
+                if (lastIx != int.MinValue)
+                {
+                    int ddx = ix - lastIx;
+                    int ddz = iz - lastIz;
+                    if (ddx != 0 && ddz != 0 &&
+                        !(floor.Navigable(lastIx + ddx, lastIz) && floor.Navigable(lastIx, lastIz + ddz)))
+                        return false;
+                }
 
                 lastIx = ix;
                 lastIz = iz;
