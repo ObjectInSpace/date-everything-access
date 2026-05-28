@@ -72,9 +72,11 @@ namespace DateEverythingAccess
         private static int _walkTargetIx;
         private static int _walkTargetIz;
         // Cell-snap radius around the current player position. After arriving at a leg target,
-        // every cell within this many cells of the player counts as walkable too. Same shape as
-        // the StampCoverage 4-neighbour ring; bumped to 8-neighbour for walk mode.
-        private const int WalkVerifyRadiusCells = 1;
+        // every cell within this many cells of the player counts as walkable too. Set to match
+        // the player capsule's physical footprint (~0.8m diameter at cell_size=0.2m → 4 cells)
+        // so the next-leg target picker doesn't return a cell already inside the arrival disc
+        // and produce zero-distance legs.
+        private const int WalkVerifyRadiusCells = 4;
 
         private static Phase _phase = Phase.Idle;
         private static SweepManifest _manifest;
@@ -221,6 +223,7 @@ namespace DateEverythingAccess
             _walkReachable.Clear();
             _impassRecords = new List<ImpassRecord>(64);
             _walkLegIndex = 0;
+            _walkPlannerFailureCount = 0;
             if (_manifest.reachable_bitmap_rows == null || _manifest.floor_frames == null) return;
             foreach (var kv in _manifest.floor_frames)
             {
@@ -852,7 +855,10 @@ namespace DateEverythingAccess
                 targetGameObjectId: 0);
             if (route == null)
             {
-                MarkImpassable(floor, ix, iz, playerPos, "no_path", targetPos, null);
+                // Planner couldn't reach this cell from the player's current position. That's
+                // a planner / connectivity bug, not a bake-rasterization bug — record it on a
+                // separate channel so the impass list stays focused on runtime stalls.
+                MarkPlannerFailure(floor, ix, iz, playerPos, "no_path");
                 return;
             }
 
@@ -867,7 +873,7 @@ namespace DateEverythingAccess
             _doorCloseObservedSince = 0f;
             if (!AccessibilityWatcher.TryStartCoverageSweepRoute(route, out string detail))
             {
-                MarkImpassable(floor, ix, iz, playerPos, "input_failed:" + detail, targetPos, null);
+                MarkPlannerFailure(floor, ix, iz, playerPos, "input_failed:" + detail);
                 return;
             }
             _phase = Phase.WalkRunningLeg;
@@ -959,8 +965,30 @@ namespace DateEverythingAccess
                 // Best-effort tag from the current waypoint.
                 segmentDoorName = SimpleNavBridge.ActiveWaypoint.DoorName;
             }
+            // Fire the diagnostic probe BEFORE tearing down the autowalk — StopCoverageSweepRoute
+            // calls StopNavigationRuntime which zeros _lastAutoWalkProgressTime, and emptying the
+            // input may also briefly leave the player in a state where physics queries return
+            // nothing. The probe stamps RuntimeBlockerProbe.Last; MarkImpassable then reads it
+            // without re-probing.
+            Vector3 probeTarget = (targetPos.sqrMagnitude > 0.001f) ? targetPos : playerPos + Vector3.forward;
+            try { AccessibilityWatcher.ProbeRuntimeBlockerNow(playerPos, probeTarget); }
+            catch (Exception ex) { if (Main.Log != null) Main.Log.LogWarning("ProbeRuntimeBlockerNow threw: " + ex.Message); }
             try { AccessibilityWatcher.StopCoverageSweepRoute(); } catch { }
             try { SimpleNavBridge.EndStep(); } catch { }
+            // Drop sub-half-second failures: those are planner/bridge errors that fired before
+            // the autowalk had a chance to make progress, not navigation stalls. Treating them
+            // as impass records would pollute the bake-triage signal with planner-side bugs.
+            float elapsed = Time.unscaledTime - _routeStartUnscaledTime;
+            if (elapsed < 0.5f)
+            {
+                if (Main.Log != null)
+                    Main.Log.LogInfo("SimpleNavCoverageSweep walk-leg " + _walkLegIndex +
+                        " dropped (early failure " + elapsed.ToString("0.00") + "s outcome=" + outcome + ")");
+                _currentRoute = null;
+                _phase = Phase.WalkPickLeg;
+                _nextActionTime = 0f;
+                return;
+            }
             MarkImpassable(_walkTargetFloor, _walkTargetIx, _walkTargetIz, playerPos, outcome, targetPos,
                 activeDoorName, segmentDoorName);
             _currentRoute = null;
@@ -1008,7 +1036,8 @@ namespace DateEverythingAccess
             {
                 state[ix * frame.nz + iz] = CellImpassable;
             }
-            // Pull probe data while it's fresh.
+            // Caller (FinishWalkLegFailure or WalkStepPickLeg no-path branch) is responsible
+            // for firing the probe before tearing down the autowalk. We just consume Last here.
             RuntimeBlockerProbe probe = RuntimeBlockerProbe.Last;
             RuntimeBlockerProbe.Hit chest = probe?.Chest;
             RuntimeBlockerProbe.Hit ankle = probe?.Ankle;
@@ -1042,6 +1071,19 @@ namespace DateEverythingAccess
                 active_door_name = activeDoorName,
                 segment_door_name = segmentDoorName,
                 elapsed_s = Time.unscaledTime - _routeStartUnscaledTime,
+                distance_to_waypoint_m = probe != null ? probe.DistanceToWaypointM : -1f,
+                recent_displacement_m = probe != null ? probe.RecentDisplacementM : -1f,
+                seconds_since_progress = probe != null ? probe.SecondsSinceProgress : -1f,
+                down_path = probe?.Down?.Path,
+                down_layer = probe?.Down != null ? probe.Down.Layer : -1,
+                down_distance = probe != null ? probe.DownDistanceM : -1f,
+                left_path = probe?.Left?.Path,
+                left_distance = probe?.Left != null ? probe.Left.Distance : -1f,
+                right_path = probe?.Right?.Path,
+                right_distance = probe?.Right != null ? probe.Right.Distance : -1f,
+                back_path = probe?.Back?.Path,
+                back_distance = probe?.Back != null ? probe.Back.Distance : -1f,
+                all_horizontal_clear = probe != null && probe.AllHorizontalClear(),
             };
             _impassRecords.Add(rec);
             if (Main.Log != null)
@@ -1051,6 +1093,27 @@ namespace DateEverythingAccess
                     " mode=" + (rec.blocker_mode ?? "?") +
                     " chest=" + (rec.chest_path ?? "<clear>") +
                     " ankle=" + (rec.ankle_path ?? "<clear>"));
+        }
+
+        // Planner failures (no_path, input_failed) — the player never moved, no spherecast
+        // diagnostics are meaningful. Mark the cell impassable so it isn't retried; emit a
+        // skeletal record on a separate channel from runtime stalls.
+        private static int _walkPlannerFailureCount;
+        private static void MarkPlannerFailure(string floor, int ix, int iz, Vector3 playerPos, string reason)
+        {
+            _walkLegIndex++;
+            _walkPlannerFailureCount++;
+            if (_manifest.floor_frames.TryGetValue(floor, out FloorFrame frame) &&
+                _walkState.TryGetValue(floor, out byte[] state) &&
+                ix >= 0 && ix < frame.nx && iz >= 0 && iz < frame.nz)
+            {
+                state[ix * frame.nz + iz] = CellImpassable;
+            }
+            if (Main.Log != null)
+                Main.Log.LogInfo("SimpleNavCoverageSweep walk-leg " + _walkLegIndex +
+                    " PLANNER_FAIL target=(" + floor + "," + ix + "," + iz + ") reason=" + reason);
+            _phase = Phase.WalkPickLeg;
+            _nextActionTime = 0f;
         }
 
         private static bool PickNearestUntested(Vector3 playerPos, out string floor, out int ix, out int iz)
@@ -1085,6 +1148,11 @@ namespace DateEverythingAccess
             if (!_walkState.TryGetValue(floor, out byte[] state)) return false;
             int pIx = (int)Mathf.Floor((playerPos.x - frame.origin_x) / frame.cell_size);
             int pIz = (int)Mathf.Floor((playerPos.z - frame.origin_z) / frame.cell_size);
+            // Skip cells inside the bridge's WorldTargetArrivalRadius (0.45m). The autowalk
+            // would immediately report "arrived" without the player having moved, producing
+            // zero-distance legs and locking the sweep into a tight oscillation.
+            // 0.45m / cell_size + slack → 3 cells at cell_size=0.2m.
+            int minDistSq = 3 * 3;
             // Brute-force linear scan — nx*nz is ~100k per floor and we run this once per leg.
             // A real spiral would be ~10x faster but ~50x more code; revisit if profiling demands.
             int bestD2 = int.MaxValue;
@@ -1099,6 +1167,7 @@ namespace DateEverythingAccess
                     if (state[k] != CellUntested) continue;
                     int dx = x - pIx, dz = z - pIz;
                     int d2 = dx * dx + dz * dz;
+                    if (d2 < minDistSq) continue;
                     if (d2 < bestD2) { bestD2 = d2; bestIx = x; bestIz = z; }
                 }
             }
@@ -1138,7 +1207,8 @@ namespace DateEverythingAccess
             }
             if (Main.Log != null)
                 Main.Log.LogInfo("SimpleNavCoverageSweep walk done legs=" + _walkLegIndex +
-                    " walkable=" + walked + " impassable=" + impass + " untested=" + untested);
+                    " walkable=" + walked + " impassable=" + impass + " untested=" + untested +
+                    " planner_failures=" + _walkPlannerFailureCount);
             ScreenReader.Say("Walk-sweep complete: " + walked + " walkable, " + impass + " blocked", remember: false);
             _phase = Phase.Idle;
             _manifest = null;
@@ -1186,7 +1256,20 @@ namespace DateEverythingAccess
                         sw.Write("},\"active_door\":\""); sw.Write(JsonEscape(r.active_door_name ?? ""));
                         sw.Write("\",\"segment_door\":\""); sw.Write(JsonEscape(r.segment_door_name ?? ""));
                         sw.Write("\",\"elapsed_s\":"); sw.Write(r.elapsed_s.ToString("0.000", ci));
-                        sw.Write("}");
+                        sw.Write(",\"distance_to_waypoint\":"); sw.Write(r.distance_to_waypoint_m.ToString("0.000", ci));
+                        sw.Write(",\"recent_displacement\":"); sw.Write(r.recent_displacement_m.ToString("0.000", ci));
+                        sw.Write(",\"seconds_since_progress\":"); sw.Write(r.seconds_since_progress.ToString("0.000", ci));
+                        sw.Write(",\"all_horizontal_clear\":"); sw.Write(r.all_horizontal_clear ? "true" : "false");
+                        sw.Write(",\"down\":{\"path\":\""); sw.Write(JsonEscape(r.down_path ?? ""));
+                        sw.Write("\",\"layer\":"); sw.Write(r.down_layer);
+                        sw.Write(",\"distance\":"); sw.Write(r.down_distance.ToString("0.000", ci));
+                        sw.Write("},\"left\":{\"path\":\""); sw.Write(JsonEscape(r.left_path ?? ""));
+                        sw.Write("\",\"distance\":"); sw.Write(r.left_distance.ToString("0.000", ci));
+                        sw.Write("},\"right\":{\"path\":\""); sw.Write(JsonEscape(r.right_path ?? ""));
+                        sw.Write("\",\"distance\":"); sw.Write(r.right_distance.ToString("0.000", ci));
+                        sw.Write("},\"back\":{\"path\":\""); sw.Write(JsonEscape(r.back_path ?? ""));
+                        sw.Write("\",\"distance\":"); sw.Write(r.back_distance.ToString("0.000", ci));
+                        sw.Write("}}");
                     }
                     sw.Write("],\"groups\":[");
                     WriteWalkGroups(sw, ci);
@@ -1199,10 +1282,12 @@ namespace DateEverythingAccess
             }
         }
 
-        // Bucket impass records by (floor, chest.path, ankle.path). One bucket = one bake-side
-        // bug to chase. Each bucket reports: cell count, the (ix,iz) bounding box, the blocker
-        // mode, layers, the smallest distances seen, and the leg index of the first occurrence
-        // so you can cross-ref the raw impassable[] list.
+        // Bucket impass records by (floor, nearest-collider). The nearest collider is the closest
+        // non-empty probe across all six directions (chest/ankle/left/right/back/down) — a player
+        // wedged sideways against a wall keys to that wall, not "unknown", so one bake-side bug
+        // shows up as one bucket regardless of which way the capsule was pinned. Each bucket
+        // reports cell count, (ix,iz) bbox, mode, the nearest collider's layer, min distance seen,
+        // and the first leg index for cross-referencing the raw impassable[] list.
         private static void WriteWalkGroups(StreamWriter sw, CultureInfo ci)
         {
             if (_impassRecords == null || _impassRecords.Count == 0) return;
@@ -1210,22 +1295,21 @@ namespace DateEverythingAccess
             for (int i = 0; i < _impassRecords.Count; i++)
             {
                 var r = _impassRecords[i];
-                string key = (r.target_floor ?? "") + "|" + (r.chest_path ?? "") + "|" + (r.ankle_path ?? "");
+                NearestProbe(r, out string nearPath, out int nearLayer, out float nearDist, out string nearDir);
+                string key = (r.target_floor ?? "") + "|" + (nearPath ?? "");
                 if (!buckets.TryGetValue(key, out WalkGroup g))
                 {
                     g = new WalkGroup
                     {
                         Floor = r.target_floor,
-                        ChestPath = r.chest_path,
-                        AnklePath = r.ankle_path,
-                        ChestLayer = r.chest_layer,
-                        AnkleLayer = r.ankle_layer,
+                        BlockerPath = nearPath,
+                        BlockerLayer = nearLayer,
+                        BlockerDir = nearDir,
                         Mode = r.blocker_mode,
                         FirstLeg = r.leg_index,
                         MinIx = r.target_ix, MaxIx = r.target_ix,
                         MinIz = r.target_iz, MaxIz = r.target_iz,
-                        MinChestDist = r.chest_distance,
-                        MinAnkleDist = r.ankle_distance,
+                        MinDist = nearDist,
                     };
                     buckets[key] = g;
                 }
@@ -1234,8 +1318,7 @@ namespace DateEverythingAccess
                 if (r.target_ix > g.MaxIx) g.MaxIx = r.target_ix;
                 if (r.target_iz < g.MinIz) g.MinIz = r.target_iz;
                 if (r.target_iz > g.MaxIz) g.MaxIz = r.target_iz;
-                if (r.chest_distance < g.MinChestDist) g.MinChestDist = r.chest_distance;
-                if (r.ankle_distance < g.MinAnkleDist) g.MinAnkleDist = r.ankle_distance;
+                if (nearDist >= 0f && (g.MinDist < 0f || nearDist < g.MinDist)) g.MinDist = nearDist;
             }
             // Sort by count desc so the worst offender is on top.
             var list = new List<WalkGroup>(buckets.Values);
@@ -1245,34 +1328,54 @@ namespace DateEverythingAccess
                 WalkGroup g = list[i];
                 if (i > 0) sw.Write(",");
                 sw.Write("{\"floor\":\""); sw.Write(JsonEscape(g.Floor ?? ""));
-                sw.Write("\",\"chest_path\":\""); sw.Write(JsonEscape(g.ChestPath ?? ""));
-                sw.Write("\",\"ankle_path\":\""); sw.Write(JsonEscape(g.AnklePath ?? ""));
-                sw.Write("\",\"chest_layer\":"); sw.Write(g.ChestLayer);
-                sw.Write(",\"ankle_layer\":"); sw.Write(g.AnkleLayer);
-                sw.Write(",\"mode\":\""); sw.Write(JsonEscape(g.Mode ?? "unknown"));
+                sw.Write("\",\"blocker_path\":\""); sw.Write(JsonEscape(g.BlockerPath ?? ""));
+                sw.Write("\",\"blocker_layer\":"); sw.Write(g.BlockerLayer);
+                sw.Write(",\"blocker_dir\":\""); sw.Write(JsonEscape(g.BlockerDir ?? ""));
+                sw.Write("\",\"mode\":\""); sw.Write(JsonEscape(g.Mode ?? "unknown"));
                 sw.Write("\",\"count\":"); sw.Write(g.Count);
                 sw.Write(",\"bbox\":["); sw.Write(g.MinIx); sw.Write(","); sw.Write(g.MinIz);
                 sw.Write(","); sw.Write(g.MaxIx); sw.Write(","); sw.Write(g.MaxIz); sw.Write("]");
-                sw.Write(",\"min_chest_distance\":"); sw.Write(g.MinChestDist.ToString("0.000", ci));
-                sw.Write(",\"min_ankle_distance\":"); sw.Write(g.MinAnkleDist.ToString("0.000", ci));
+                sw.Write(",\"min_distance\":"); sw.Write(g.MinDist.ToString("0.000", ci));
                 sw.Write(",\"first_leg\":"); sw.Write(g.FirstLeg);
                 sw.Write("}");
+            }
+        }
+
+        // Pick the closest non-empty probe across all six directions. Distances of -1 (no hit)
+        // are ignored. Returns empty path when every probe missed (a genuine "nothing around"
+        // stall — autowalk stopped feeding input, or the player arrived but the check disagreed).
+        private static void NearestProbe(in ImpassRecord r,
+            out string path, out int layer, out float dist, out string dir)
+        {
+            // Horizontal probes only — the down probe always finds the floor and would define
+            // a bogus "floor mesh" blocker group for every record. Down stays diagnostic-only
+            // (kept in the raw impassable[] record for fall/wrong-floor analysis).
+            path = ""; layer = -1; dist = -1f; dir = "";
+            string[] paths = { r.chest_path, r.ankle_path, r.left_path, r.right_path, r.back_path };
+            int[] layers = { r.chest_layer, r.ankle_layer, -1, -1, -1 };
+            float[] dists = { r.chest_distance, r.ankle_distance, r.left_distance, r.right_distance, r.back_distance };
+            string[] dirs = { "chest", "ankle", "left", "right", "back" };
+            for (int i = 0; i < paths.Length; i++)
+            {
+                if (string.IsNullOrEmpty(paths[i]) || dists[i] < 0f) continue;
+                if (dist < 0f || dists[i] < dist)
+                {
+                    path = paths[i]; layer = layers[i]; dist = dists[i]; dir = dirs[i];
+                }
             }
         }
 
         private sealed class WalkGroup
         {
             public string Floor;
-            public string ChestPath;
-            public string AnklePath;
-            public int ChestLayer;
-            public int AnkleLayer;
+            public string BlockerPath;
+            public int BlockerLayer;
+            public string BlockerDir;
             public string Mode;
             public int Count;
             public int FirstLeg;
             public int MinIx, MaxIx, MinIz, MaxIz;
-            public float MinChestDist;
-            public float MinAnkleDist;
+            public float MinDist;
         }
 
         private static void FlushResults()
@@ -1516,6 +1619,21 @@ namespace DateEverythingAccess
             // Active route's tagged door for the segment we were on.
             public string segment_door_name;
             public float elapsed_s;
+            // Diagnostic context — filled by the probe even when no forward collider is found,
+            // so "unknown" stalls (player stuck without an obstacle in front) become diagnosable.
+            public float distance_to_waypoint_m;
+            public float recent_displacement_m;
+            public float seconds_since_progress;
+            public string down_path;
+            public int down_layer;
+            public float down_distance;
+            public string left_path;
+            public float left_distance;
+            public string right_path;
+            public float right_distance;
+            public string back_path;
+            public float back_distance;
+            public bool all_horizontal_clear;
         }
 
         private static SweepManifest LoadManifest(string path)

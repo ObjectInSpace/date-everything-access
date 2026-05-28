@@ -1092,20 +1092,69 @@ namespace DateEverythingAccess
         // height the player capsule normally encounters. Returns "chest=<a> ankle=<b>" with
         // either side filled with "<clear>" when that probe is unblocked, or null if both clear.
         // Also stamps RuntimeBlockerProbe.Last so the coverage sweep can pick up structured data.
-        private static string ProbeRuntimeBlocker(Vector3 playerPos, Vector3 target)
+        // Public entry for the coverage sweep: fire a fresh probe on demand so impass records
+        // captured outside the autowalk's own progress-timeout path still have diagnostic data.
+        // Returns the diagnostic string for logging; the structured snapshot lives in
+        // RuntimeBlockerProbe.Last.
+        public static string ProbeRuntimeBlockerNow(Vector3 playerPos, Vector3 target)
+        {
+            if (_instance == null) { RuntimeBlockerProbe.Last = null; return null; }
+            return _instance.ProbeRuntimeBlocker(playerPos, target);
+        }
+
+        private string ProbeRuntimeBlocker(Vector3 playerPos, Vector3 target)
         {
             Vector3 toward = target - playerPos;
             toward.y = 0f;
             float dist = toward.magnitude;
-            if (dist < 0.1f) { RuntimeBlockerProbe.Last = null; return null; }
-            Vector3 dir = toward / dist;
-            float castDist = dist + 0.5f;
+            Vector3 dir = dist > 0.01f ? toward / dist : Vector3.forward;
+            // Forward cast distance includes a 0.5m overshoot so we don't miss a wall
+            // sitting exactly at the waypoint.
+            float castDist = Mathf.Max(0.6f, dist + 0.5f);
 
             RuntimeBlockerProbe.Hit chest = ProbeOne(playerPos + new Vector3(0f, 1.0f, 0f), dir, castDist);
             RuntimeBlockerProbe.Hit ankle = ProbeOne(playerPos + new Vector3(0f, 0.2f, 0f), dir, castDist);
-            if (chest == null && ankle == null) { RuntimeBlockerProbe.Last = null; return null; }
-            var probe = new RuntimeBlockerProbe { Chest = chest, Ankle = ankle, PlayerPos = playerPos, Waypoint = target };
+
+            // Side / rear casts — fixed 1m range, used for "forward is clear but I'm still
+            // stuck" diagnosis. Right-handed: right = (dir.z, 0, -dir.x), left = -right.
+            Vector3 right = new Vector3(dir.z, 0f, -dir.x);
+            Vector3 left = -right;
+            Vector3 back = -dir;
+            RuntimeBlockerProbe.Hit hRight = ProbeOne(playerPos + new Vector3(0f, 1.0f, 0f), right, 1.0f);
+            RuntimeBlockerProbe.Hit hLeft  = ProbeOne(playerPos + new Vector3(0f, 1.0f, 0f), left,  1.0f);
+            RuntimeBlockerProbe.Hit hBack  = ProbeOne(playerPos + new Vector3(0f, 1.0f, 0f), back,  1.0f);
+
+            // Downward cast — 2m below the player. Uses a raycast, not a spherecast, because
+            // SphereCast returns no hit when the sphere is already overlapping geometry at the
+            // start of the cast (which happens for any reasonable above-feet origin near the
+            // floor). The raycast doesn't have that limitation. Origin sits 1.2m up to clear
+            // the player capsule's lower half cleanly.
+            RuntimeBlockerProbe.Hit down = ProbeDown(playerPos + new Vector3(0f, 1.2f, 0f), 3.0f);
+
+            // Recent movement tracking — uses the autowalk's progress detector state, so we
+            // see exactly the displacement that timed out.
+            float recentDisp = Vector3.Distance(
+                new Vector3(playerPos.x, 0, playerPos.z),
+                new Vector3(_lastAutoWalkPosition.x, 0, _lastAutoWalkPosition.z));
+            float sinceProgress = Time.unscaledTime - _lastAutoWalkProgressTime;
+
+            var probe = new RuntimeBlockerProbe
+            {
+                Chest = chest,
+                Ankle = ankle,
+                Left = hLeft,
+                Right = hRight,
+                Back = hBack,
+                Down = down,
+                DownDistanceM = down != null ? down.Distance : -1f,
+                PlayerPos = playerPos,
+                Waypoint = target,
+                DistanceToWaypointM = dist,
+                RecentDisplacementM = recentDisp,
+                SecondsSinceProgress = sinceProgress,
+            };
             RuntimeBlockerProbe.Last = probe;
+            if (chest == null && ankle == null) return null;
             return "chest=" + (chest?.Format() ?? "<clear>") + " ankle=" + (ankle?.Format() ?? "<clear>");
         }
 
@@ -1114,6 +1163,22 @@ namespace DateEverythingAccess
             if (!Physics.SphereCast(origin, 0.35f, dir, out RaycastHit hit, maxDist,
                     Physics.AllLayers, QueryTriggerInteraction.Ignore))
                 return null;
+            return HitFrom(hit);
+        }
+
+        // Straight raycast (no sphere) — used for the downward ground probe, where a spherecast
+        // would start overlapping the floor and report no hit. Distance is measured from the
+        // origin, so subtract the 1.2m origin lift to recover the player's clearance to ground.
+        private static RuntimeBlockerProbe.Hit ProbeDown(Vector3 origin, float maxDist)
+        {
+            if (!Physics.Raycast(origin, Vector3.down, out RaycastHit hit, maxDist,
+                    Physics.AllLayers, QueryTriggerInteraction.Ignore))
+                return null;
+            return HitFrom(hit);
+        }
+
+        private static RuntimeBlockerProbe.Hit HitFrom(RaycastHit hit)
+        {
             GameObject go = hit.collider != null ? hit.collider.gameObject : null;
             return new RuntimeBlockerProbe.Hit
             {
