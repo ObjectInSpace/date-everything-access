@@ -47,6 +47,25 @@ namespace DateEverythingAccess
         /// </summary>
         public static Vector3 LastResolvedTarget => _activeTarget;
 
+        /// <summary>
+        /// Start of the active segment: the waypoint immediately before the active one
+        /// (<see cref="LastResolvedTarget"/>). Together they define the planned line the
+        /// player should be on. Falls back to the active waypoint itself when there is no
+        /// predecessor (single-waypoint route or index 0), so callers can treat the
+        /// "segment" as a degenerate point. Used by the executor's stall recovery to steer
+        /// back onto the planned path instead of straight at the waypoint vertex.
+        /// </summary>
+        public static Vector3 ActiveSegmentStart
+        {
+            get
+            {
+                if (_waypoints.Count == 0) return _activeTarget;
+                int prev = _waypointIndex - 1;
+                if (prev < 0 || prev >= _waypoints.Count) return _activeTarget;
+                return _waypoints[prev];
+            }
+        }
+
         // Called from AccessibilityWatcher.Update once per frame.
         public static void Tick()
         {
