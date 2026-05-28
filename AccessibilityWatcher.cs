@@ -133,6 +133,13 @@ namespace DateEverythingAccess
         // but large enough to avoid jitter. ~1 capsule-diameter + margin.
         // See [[project-navigation-executor-corner-stall]].
         private const float AutoWalkPursuitLookahead = 1.5f;
+        // Turn-before-walk move gating: full speed until the desired heading is
+        // AutoWalkTurnGateStartDeg off the player's facing, then ramp move speed
+        // linearly to 0 by AutoWalkTurnGateFullDeg (turn in place). Keeps normal
+        // walking and gentle curves at full speed; only sharp corners (where
+        // walking forward would hit the wall the player still faces) are slowed.
+        private const float AutoWalkTurnGateStartDeg = 45f;
+        private const float AutoWalkTurnGateFullDeg = 90f;
         private const float AutoWalkInteractionRetrySeconds = 0.75f;
         private const float AutoWalkMovementProbeMinimumCommand = 0.2f;
         private const float AutoWalkMovementProbeCancelledVelocity = 0.1f;
@@ -850,14 +857,19 @@ namespace DateEverythingAccess
             // the player's facing). When the desired direction is far from where
             // the player faces — e.g. exiting a corridor and turning ~90° through
             // a door — "move forward" sends the player into the wall they're
-            // still facing before the look command finishes turning them. Scale
-            // the move down by facing alignment so the player effectively turns
-            // in place when badly misaligned and only accelerates once roughly
-            // aimed. cos(turn): full speed when aligned, ~0 at 90°+, preventing
-            // the walk-into-wall-while-turning drift. See
-            // [[project-navigation-executor-corner-stall]].
-            float alignment = Mathf.Cos(turnDeg * Mathf.Deg2Rad);
-            float moveScale = Mathf.Clamp01(alignment);
+            // still facing before the look command finishes turning them.
+            //
+            // Gate the move speed by misalignment, but only for SHARP turns:
+            // full speed up to AutoWalkTurnGateStartDeg (45°) so normal walking
+            // and gentle curves aren't slowed, then ramp linearly to 0 by
+            // AutoWalkTurnGateFullDeg (90°), where the player effectively turns
+            // in place. (A plain cos(turn) falloff started slowing from the very
+            // first degree, making the player crawl through every mild bend.)
+            // See [[project-navigation-executor-corner-stall]].
+            float absTurn = Mathf.Abs(turnDeg);
+            float moveScale = 1f - Mathf.Clamp01(
+                (absTurn - AutoWalkTurnGateStartDeg) /
+                (AutoWalkTurnGateFullDeg - AutoWalkTurnGateStartDeg));
             move *= moveScale;
 
             // Hold position while the segment's door is mid-swing. Same reasoning as the step path:
