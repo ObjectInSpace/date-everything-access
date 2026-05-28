@@ -126,15 +126,13 @@ namespace DateEverythingAccess
         private const float AutoWalkLookScaleDegrees = 45f;
         private const float AutoWalkProgressDistance = 0.35f;
         private const float AutoWalkBlockedTimeoutSeconds = 2f;
-        // When the player makes no progress for this long (but before the full
-        // blocked timeout above), the executor assumes it has drifted off the
-        // planned segment and is pushing into a wall. It then re-steers toward
-        // the nearest point on the planned line instead of straight at the
-        // waypoint vertex, peeling the player off the wall and back onto the
-        // corridor. Must be < AutoWalkBlockedTimeoutSeconds so recovery gets a
-        // chance before we give up and replan. See
-        // [[project-navigation-executor-corner-stall]].
-        private const float AutoWalkPathRecoverySeconds = 0.6f;
+        // Pure-pursuit lookahead distance (metres). The route executor aims at a
+        // point this far ahead along the planned polyline (projected from the
+        // player), rather than at the next waypoint vertex. Small enough to track
+        // corners tightly (so the player stays in narrow corridors and doorways)
+        // but large enough to avoid jitter. ~1 capsule-diameter + margin.
+        // See [[project-navigation-executor-corner-stall]].
+        private const float AutoWalkPursuitLookahead = 1.5f;
         private const float AutoWalkInteractionRetrySeconds = 0.75f;
         private const float AutoWalkMovementProbeMinimumCommand = 0.2f;
         private const float AutoWalkMovementProbeCancelledVelocity = 0.1f;
@@ -805,32 +803,29 @@ namespace DateEverythingAccess
             if (segmentHasDoor)
                 SimpleNavBridge.TryOpenActiveDoorIfNeeded(playerPos);
 
-            // Steering target. Normally the active waypoint. But the controller
-            // steers in a straight line at the waypoint with no path-following,
-            // so if the player drifts off the planned segment (corner deflection,
-            // momentum) they can end up in a pocket where a wall sits between
-            // them and the waypoint — they then walk into the wall and stall
-            // until the blocked timeout. Recovery: once there's been no progress
-            // for AutoWalkPathRecoverySeconds, aim at the nearest point on the
-            // planned segment (start->waypoint) instead of the vertex, pulling
-            // the player back onto the corridor so it can resume normally. The
-            // nearest-point is nudged slightly toward the waypoint so the player
-            // doesn't oscillate exactly on the projection.
+            // Pure-pursuit steering. Instead of aiming straight at the next
+            // waypoint vertex (which lets the player drift off the corridor on
+            // corners / wall-hugging segments and get trapped against a wall),
+            // aim at a lookahead point that tracks the planned polyline: project
+            // the player onto the path and target a point AutoWalkPursuitLookahead
+            // metres ahead along it. This continuously pulls the player back onto
+            // the corridor, so it follows the path through corners rather than
+            // cutting toward vertices. Door resolution and arrival still key off
+            // the discrete waypoint index (advanced above); only the steering
+            // direction uses the lookahead. For door/world-target segments we
+            // keep aiming at the discrete target so the final approach is exact.
             // See [[project-navigation-executor-corner-stall]].
-            Vector3 steerTarget = target;
-            bool recovering = (Time.unscaledTime - _lastAutoWalkProgressTime) >= AutoWalkPathRecoverySeconds;
-            if (recovering)
-            {
-                Vector3 segStart = SimpleNavBridge.ActiveSegmentStart;
-                Vector3 onPath = NearestPointOnSegmentXZ(segStart, target, playerPos);
-                // Nudge the aim a little past the projection toward the waypoint
-                // so re-snapping also makes forward progress along the segment.
-                Vector3 along = target - onPath;
-                along.y = 0f;
-                if (along.sqrMagnitude > 0.0001f)
-                    onPath += along.normalized * 0.5f;
-                steerTarget = onPath;
-            }
+            Vector3 steerTarget;
+            SimpleNavWaypoint activeWp = SimpleNavBridge.ActiveWaypoint;
+            bool exactApproach = segmentHasDoor ||
+                (activeWp != null && (activeWp.Kind == SimpleNavWaypointKind.Target ||
+                                      activeWp.Kind == SimpleNavWaypointKind.DoorOpening ||
+                                      activeWp.Kind == SimpleNavWaypointKind.DoorExit ||
+                                      activeWp.Kind == SimpleNavWaypointKind.DoorApproach));
+            if (exactApproach)
+                steerTarget = target;
+            else
+                steerTarget = SimpleNavBridge.PursuitTarget(playerPos, AutoWalkPursuitLookahead);
 
             Vector3 toWaypoint = steerTarget - playerPos;
             toWaypoint.y = 0f;
@@ -1044,21 +1039,6 @@ namespace DateEverythingAccess
             if (Mathf.Abs(yaw) < 0.05f) yaw = 0f;
             if (Mathf.Abs(pitch) < 0.05f) pitch = 0f;
             return new Vector3(yaw, 0f, pitch);
-        }
-
-        // Closest point to p on the XZ segment [a, b], preserving p's Y. Used by
-        // the route executor's stall recovery to re-snap the player onto the
-        // planned segment line. Degenerate (a==b) returns a at p's height.
-        private static Vector3 NearestPointOnSegmentXZ(Vector3 a, Vector3 b, Vector3 p)
-        {
-            float abx = b.x - a.x;
-            float abz = b.z - a.z;
-            float lenSq = abx * abx + abz * abz;
-            if (lenSq <= 0.0001f)
-                return new Vector3(a.x, p.y, a.z);
-            float t = ((p.x - a.x) * abx + (p.z - a.z) * abz) / lenSq;
-            t = Mathf.Clamp01(t);
-            return new Vector3(a.x + abx * t, p.y, a.z + abz * t);
         }
 
         private void LogSimpleRouteFrameDiagnostic(
