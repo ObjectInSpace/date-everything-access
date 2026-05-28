@@ -36,6 +36,11 @@ CORNER_WAYPOINT_DEG = 30.0       # smoothing: keep vertices with turn > this
 DOOR_TAG_RADIUS_M = 0.8          # segment tagged with door if door XZ is within this distance of the segment
 MIN_INTERACTION_RADIUS_M = 0.5
 MAX_INTERACTION_RADIUS_M = 7.5
+# Radius to snap an explicit start/goal world position to the nearest navigable
+# cell. Kept in sync with SimpleNavPlanner.NearestNavigableSearchM (6.0m): real
+# runtime starts often land >4m off-mesh beside furniture (fireplace, closet),
+# so the old 4.0m caused no_path + repeated replans. See SimpleNavPlanner.cs.
+NEAREST_NAVIGABLE_SEARCH_M = 6.0
 
 
 # ---------- bake loading + cell/world conversions ----------
@@ -612,7 +617,7 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
     goals = goal_cells_around(planner.floors[tfloor], tx, tz, radius)
     if not goals:
         # Fall back to the nearest navigable cell.
-        n = planner.floors[tfloor].nearest_navigable(tx, tz, max_radius_m=4.0)
+        n = planner.floors[tfloor].nearest_navigable(tx, tz, max_radius_m=NEAREST_NAVIGABLE_SEARCH_M)
         if n is None:
             raise SystemExit(f"no navigable cell near target {target['Path']}")
         goals = [n]
@@ -628,7 +633,7 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
         start_node = (start_floor, n[0], n[1])
     else:
         start_floor = start_floor or "ground"
-        n = planner.floors[start_floor].nearest_navigable(start_xz[0], start_xz[1], max_radius_m=4.0)
+        n = planner.floors[start_floor].nearest_navigable(start_xz[0], start_xz[1], max_radius_m=NEAREST_NAVIGABLE_SEARCH_M)
         if n is None:
             raise SystemExit(f"no navigable cell near start {start_xz} on {start_floor}")
         start_node = (start_floor, n[0], n[1])
