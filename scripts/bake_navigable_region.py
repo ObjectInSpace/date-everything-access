@@ -708,7 +708,11 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         if _is_doorframe(m) and not _frame_has_door(m):
             bb = m.get("Bounds2D")
             if bb:
-                archway_carves.append(bb)
+                # Keep the frame's own in-band segments alongside its bbox: the
+                # carve must open the threshold gap but PRESERVE the capsule-
+                # clearance dilation around the frame's solid jamb posts, or the
+                # player walks into a post the bake marked navigable.
+                archway_carves.append((bb, segments))
         mesh_records_with_segments.add(m.get("ComponentId"))
         mesh_had_segment = False
         for s in segments:
@@ -855,16 +859,33 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
     # upper floor is safe to carve wider because the top-lip gate (above) has
     # already removed the phantom ground-wall lips a wide carve would graze.
     # See [[project-navigation-upper-hall2-archway-seal]].
+    # POST-CLEARANCE GUARD: a doorframe is not a clean hole — it has solid jamb
+    # POSTS. The carve must open the threshold GAP between the posts but must NOT
+    # remove the capsule-clearance dilation hugging the posts, or the planner
+    # routes the player flush against a post and the runtime collider stops them
+    # (e.g. SM_Doorframe_Small_7's east post: bake said navigable, player walked
+    # into it and stalled). For each frame, re-rasterize its own segments and
+    # dilate by the capsule radius; that post-halo is preserved (never cleared),
+    # while the threshold gap — which is >1 capsule-width from either post — is
+    # opened. See [[project-navigation-executor-corner-stall]].
     ARCHWAY_CARVE_MARGIN_M = 1.2 if fy > 6.0 else 0.5
     mgn = ARCHWAY_CARVE_MARGIN_M
-    for bb in archway_carves:
+    for bb, segments in archway_carves:
         bx0 = int((bb["MinX"] - mgn - minx) / CELL)
         bx1 = int((bb["MaxX"] + mgn - minx) / CELL)
         bz0 = int((bb["MinZ"] - mgn - minz) / CELL)
         bz1 = int((bb["MaxZ"] + mgn - minz) / CELL)
+
+        # Build the frame's own post-halo (raw post cells dilated by capsule R).
+        post_raw = [[False] * nz for _ in range(nx)]
+        for s in segments:
+            _rasterize_segment(post_raw, s["AX"], s["AZ"], s["BX"], s["BZ"],
+                               minx, minz, nx, nz, CELL)
+        post_halo = _dilate_disc(post_raw, nx, nz, DILATE_CELLS)
+
         for jx in range(max(0, bx0), min(nx, bx1 + 1)):
             for jz in range(max(0, bz0), min(nz, bz1 + 1)):
-                if dilated[jx][jz]:
+                if dilated[jx][jz] and not post_halo[jx][jz]:
                     dilated[jx][jz] = False
                     door_carves += 1
 
