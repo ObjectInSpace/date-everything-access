@@ -106,6 +106,11 @@
     <Copy SourceFiles="$(SceneNavigationDataSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\thirdpersongreybox-navigation-data.json" Condition="Exists('$(SceneNavigationDataSourcePath)')" />
     <Copy SourceFiles="$(NavigableRegionBakeSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigable_region.bake.json" Condition="Exists('$(NavigableRegionBakeSourcePath)')" />
     <Message Text="Copied $(TargetFileName) to BepInEx plugins folder" Importance="High" />
+    <!-- Wipe captured C# routes on every deploy: a new DLL or bake invalidates
+         them for parity diffing (they were planned against the old planner /
+         bake). Keeps c_sharp_routes/ self-limited and the parity check honest. -->
+    <RemoveDir Directories="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\c_sharp_routes" Condition="Exists('D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\c_sharp_routes')" />
+    <Message Text="Cleared stale c_sharp_routes captures" Importance="High" />
   </Target>
 
 </Project>
