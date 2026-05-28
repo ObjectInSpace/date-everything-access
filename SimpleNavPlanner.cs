@@ -34,7 +34,16 @@ namespace DateEverythingAccess
         // Floor sets a minimum so degenerate radii (0) still produce at least a few cells.
         private const float MaxInteractionRadiusM = 7.5f;
         private const float MinInteractionRadiusM = 0.5f;
-        private const float NearestNavigableSearchM = 4.0f;
+        // Radius to snap a start/goal world position to the nearest navigable
+        // cell. 4.0m was too tight for real runtime starts: the player, driven
+        // by the executor, often ends up standing beside furniture (fireplace
+        // hearth, closet) more than 4m from any navigable cell, so Plan()
+        // returned no_path and the user had to reposition and replan
+        // repeatedly. 6.0m gives margin for those off-mesh standing spots while
+        // staying under MaxInteractionRadiusM (7.5m) and small enough that it
+        // won't routinely snap across a wall into the wrong room. Kept in sync
+        // with the Python planner's start/goal snap radius for parity.
+        private const float NearestNavigableSearchM = 6.0f;
         private const float FloorMatchToleranceM = 2.0f;
         // Player-capsule + safety margin from the target's collider face. Goal cells whose
         // player-capsule center is closer than this become invalid (overlap), and cells further
