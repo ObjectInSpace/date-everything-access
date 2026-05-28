@@ -133,13 +133,19 @@ namespace DateEverythingAccess
         // but large enough to avoid jitter. ~1 capsule-diameter + margin.
         // See [[project-navigation-executor-corner-stall]].
         private const float AutoWalkPursuitLookahead = 1.5f;
-        // Turn-before-walk move gating: full speed until the desired heading is
-        // AutoWalkTurnGateStartDeg off the player's facing, then ramp move speed
-        // linearly to 0 by AutoWalkTurnGateFullDeg (turn in place). Keeps normal
-        // walking and gentle curves at full speed; only sharp corners (where
-        // walking forward would hit the wall the player still faces) are slowed.
-        private const float AutoWalkTurnGateStartDeg = 45f;
-        private const float AutoWalkTurnGateFullDeg = 90f;
+        // Stop-and-turn: if the route player makes no forward progress for this
+        // long, zero the move command so they turn in place toward the waypoint
+        // (look is still applied) until movement resumes. Targets the real
+        // condition — being physically blocked — rather than turn angle. Short
+        // enough to react before the player grinds into a wall, well under
+        // AutoWalkBlockedTimeoutSeconds (2s) so it engages long before giving up.
+        private const float AutoWalkStallSeconds = 0.3f;
+        // Once stalled, the player holds (move=0) and turns in place until the
+        // waypoint is within this many degrees of their facing, then resumes
+        // moving in the new heading. Releasing at a small angle ensures they
+        // actually face the (hopefully clear) direction before walking again,
+        // which also breaks the would-be deadlock of zeroing move while stalled.
+        private const float AutoWalkStallTurnReleaseDeg = 15f;
         private const float AutoWalkInteractionRetrySeconds = 0.75f;
         private const float AutoWalkMovementProbeMinimumCommand = 0.2f;
         private const float AutoWalkMovementProbeCancelledVelocity = 0.1f;
@@ -853,24 +859,28 @@ namespace DateEverythingAccess
                 Mathf.Clamp(localDirection.z, -1f, 1f));
             Vector3 look = new Vector3(Mathf.Clamp(turnDeg / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
 
-            // Turn-before-walk gate. The move command is player-LOCAL (forward =
-            // the player's facing). When the desired direction is far from where
-            // the player faces — e.g. exiting a corridor and turning ~90° through
-            // a door — "move forward" sends the player into the wall they're
-            // still facing before the look command finishes turning them.
+            // Stop-and-turn when stalled. The move command is player-LOCAL
+            // (forward = the player's facing), and movement can outpace the look
+            // command's turn: exiting a corridor toward a door the player still
+            // faces ~90° away, "move forward" drives them into the wall before
+            // they finish turning. Rather than gate on turn ANGLE (a poor proxy —
+            // a 90° turn in open space is fine; a small turn into a tight jamb
+            // can still stall), gate on actual STALL: if the player has made no
+            // forward progress for AutoWalkStallSeconds, stop and turn in place
+            // toward the waypoint until they FACE it, then resume moving in the
+            // new (hopefully clear) direction. The turn angle only matters as the
+            // release condition once stalled — not as the trigger.
             //
-            // Gate the move speed by misalignment, but only for SHARP turns:
-            // full speed up to AutoWalkTurnGateStartDeg (45°) so normal walking
-            // and gentle curves aren't slowed, then ramp linearly to 0 by
-            // AutoWalkTurnGateFullDeg (90°), where the player effectively turns
-            // in place. (A plain cos(turn) falloff started slowing from the very
-            // first degree, making the player crawl through every mild bend.)
+            // Why "until facing it" and not "until stalled clears": zeroing move
+            // while stalled would deadlock — a stopped player never makes
+            // progress, so the stall never clears. Instead we hold move at zero
+            // only while still misaligned; once turned to face the waypoint we
+            // let movement resume so the player tests the new heading (and either
+            // makes progress, clearing the stall, or stalls again and re-turns).
             // See [[project-navigation-executor-corner-stall]].
-            float absTurn = Mathf.Abs(turnDeg);
-            float moveScale = 1f - Mathf.Clamp01(
-                (absTurn - AutoWalkTurnGateStartDeg) /
-                (AutoWalkTurnGateFullDeg - AutoWalkTurnGateStartDeg));
-            move *= moveScale;
+            bool stalled = (Time.unscaledTime - _lastAutoWalkProgressTime) >= AutoWalkStallSeconds;
+            if (stalled && Mathf.Abs(turnDeg) > AutoWalkStallTurnReleaseDeg)
+                move = Vector3.zero;
 
             // Hold position while the segment's door is mid-swing. Same reasoning as the step path:
             // walking into a moving door trips Door.OnCollisionEnter and pins the swing.
