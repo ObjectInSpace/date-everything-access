@@ -241,6 +241,25 @@ def _rasterize_closed_segment_regions(blocked_bm, segments, minx, minz, nx, nz, 
 FOOTPRINT_PERIMETER_MAX_DIM_M = 4.0
 
 
+# Open-archway carve. Doorframe meshes (SM_Doorframe_*, Door_frame_*) are thin
+# walls with an opening; the exporter flags them IsWallLikeFatVictim and routes
+# them to segment-trace rasterization. But the frame's footprint is a CLOSED
+# loop — its threshold/sill and lintel cross-pieces span the opening width and
+# seal the doorway line at floor level, so a narrow archway (e.g.
+# SM_Doorframe_Small_13, 1.23m throat) gets walled off, isolating whole rooms.
+#
+# Real doors are repaired by the door-position carve (Doors_* interactables) or
+# the per-door freed-cells state machine (panel-based door_records). But ~18
+# frames in this scene are open archways with NO associated door, so nothing
+# opens them. For those, carve the frame's footprint bbox clear of dilation
+# (bounded to the bbox + a small margin so it can't leak past the jambs) in the
+# door-carve pass below. See [[project-navigation-upper-hall2-archway-seal]],
+# [[project-navigation-bake-doorframe-gap-outcome]].
+def _is_doorframe(record):
+    text = f"{record.get('Name', '')} {record.get('GameObjectName', '')} {record.get('Path', '')}".lower()
+    return "doorframe" in text or "door_frame" in text
+
+
 def _rasterize_footprint_perimeter(blocked_bm, record, minx, minz, nx, nz, cell):
     fp = record.get("Footprint") or {}
     vertices = fp.get("Vertices") or []
@@ -331,6 +350,36 @@ def _is_solid_blocker(record):
             # If either world dimension exceeds local_xz_max by 2x or more,
             # this mesh is bounds-blown. Skip it as a blocker.
             if world_x / local_xz_max > 2.0 or world_z / local_xz_max > 2.0:
+                return False
+
+    # Ceiling void-plug colliders (e.g. CeilingStairsFix1/2 under
+    # House/MultiRoom/Ceilings/). These are tall, floor-to-ceiling boxes the
+    # game authored to plug the open stairwell void in the ceiling so the
+    # player can't fall through from the attic side. Their body is centered
+    # near the ceiling (~Y18), but their bottom face dips to ~12.38 — a hair
+    # below the upper floor (12.5) — so they get admitted to the upper bake
+    # band and rasterize as an 11.6m wall sealing the stair landing from the
+    # upstairs hall (the entire upper floor isolates from the stairs).
+    #
+    # Discriminator (all three required, to avoid freeing real geometry):
+    #   1. parented under a /Ceilings/ node — authored ceiling fixup, not a
+    #      wall or furniture collider;
+    #   2. a sliver footprint — one XZ axis <= 0.1m (CeilingStairsFix1 is
+    #      0.04m deep, Fix2 is 0.02m wide). Real walls and furniture have
+    #      substantial footprints on both axes. NOTE the */Fix suffix alone
+    #      is NOT safe: TreadmillColliderFix is a real 8.5x2.2m equipment
+    #      collider that must keep blocking.
+    #   3. a tall body (>= 3m) — it spans floor to ceiling, confirming it's a
+    #      vertical void-plug rather than a low lip.
+    # See [[project-navigation-upper-hall2-archway-seal]].
+    if "/ceilings/" in path.lower():
+        bb = record.get("Bounds2D") or {}
+        by = record.get("BottomY")
+        ty = record.get("TopY")
+        if bb and by is not None and ty is not None:
+            width = bb.get("Width", bb.get("MaxX", 0) - bb.get("MinX", 0))
+            depth = bb.get("Depth", bb.get("MaxZ", 0) - bb.get("MinZ", 0))
+            if min(width, depth) <= 0.1 and (ty - by) >= 3.0:
                 return False
     return True
 
@@ -578,6 +627,52 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
     # triangle-slice segments contributes its actual surface traces, regardless
     # of whether it is a wall, fireplace, table, counter, bookshelf, etc.
     # Dilation below expands those traces by the player capsule radius.
+    # Anchors for the "is this archway carved by a door?" test. A doorframe
+    # within DOOR_COMPONENT_CARVE_RADIUS of any door anchor is a REAL door's
+    # frame — its passability is governed by the door-position carve (for
+    # Doors_* interactables) or the per-door freed-cells state machine (for
+    # panel-based door_records like AtticDoor_11, BackDoorPivot, the front
+    # door). Those frames must NOT be archway-carved: doing so would force the
+    # doorway permanently open and bypass locked/closed-door state. Frames with
+    # no nearby door anchor are genuine open archways and get carved.
+    #
+    # Both anchor sources matter: `doors` covers Doors_*-named carve anchors;
+    # door_records covers panel-based doors whose names don't start with Doors_
+    # (e.g. AtticDoor_11 frames SM_Doorframe_Small_12 — a LOCKED attic door
+    # that must stay shut). Missing door_records here wrongly opened it.
+    door_anchor_xz = [
+        (d["x"], d["z"]) for d in doors
+        if abs(d.get("y", fy) - fy) <= 2.0
+    ]
+    for dr in door_records:
+        wp = dr.get("WorldPosition") or {}
+        ax = wp.get("x")
+        az = wp.get("z")
+        ay = wp.get("y")
+        if ax is None or az is None:
+            continue
+        if ay is not None and abs(ay - fy) > 2.0:
+            continue
+        door_anchor_xz.append((ax, az))
+
+    def _frame_has_door(record):
+        c = record.get("Footprint", {}).get("Center") or {}
+        cx = c.get("x")
+        cz = c.get("z")
+        if cx is None or cz is None:
+            return False
+        return any(
+            math.hypot(cx - ax, cz - az) <= DOOR_COMPONENT_CARVE_RADIUS
+            for ax, az in door_anchor_xz
+        )
+
+    # Open-archway carve anchors. Doorframes with no associated door
+    # (open archways) get a clearance disc carved at the frame center, exactly
+    # like a real door — the door-carve below is proven to punch through a
+    # doorway's asymmetric segment stubs + dilation. Collected here, applied in
+    # the door-carve pass. See [[project-navigation-upper-hall2-archway-seal]].
+    archway_carves = []
+
     for m in mesh_colliders:
         if not _is_solid_blocker(m):
             continue
@@ -586,6 +681,10 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         segments = _segments_in_floor_band(m, y_lo, y_hi)
         if not segments:
             continue
+        if _is_doorframe(m) and not _frame_has_door(m):
+            bb = m.get("Bounds2D")
+            if bb:
+                archway_carves.append(bb)
         mesh_records_with_segments.add(m.get("ComponentId"))
         mesh_had_segment = False
         for s in segments:
@@ -715,6 +814,25 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             if dilated[jx][jz]:
                 dilated[jx][jz] = False
                 door_carves += 1
+
+    # Open-archway carve: for doorframes with no associated door, undo dilation
+    # across the doorway throat so the passage opens. Masked to the frame's own
+    # XZ bounding box (plus a small margin) so the carve cannot leak past the
+    # jambs into an adjacent room's clearance band. Like the door-carve, only
+    # dilated cells are cleared and the final `walkable AND NOT dilated` keeps
+    # non-floor cells blocked. See [[project-navigation-upper-hall2-archway-seal]].
+    ARCHWAY_CARVE_MARGIN_M = 0.5
+    mgn = ARCHWAY_CARVE_MARGIN_M
+    for bb in archway_carves:
+        bx0 = int((bb["MinX"] - mgn - minx) / CELL)
+        bx1 = int((bb["MaxX"] + mgn - minx) / CELL)
+        bz0 = int((bb["MinZ"] - mgn - minz) / CELL)
+        bz1 = int((bb["MaxZ"] + mgn - minz) / CELL)
+        for jx in range(max(0, bx0), min(nx, bx1 + 1)):
+            for jz in range(max(0, bz0), min(nz, bz1 + 1)):
+                if dilated[jx][jz]:
+                    dilated[jx][jz] = False
+                    door_carves += 1
 
     # Navigable = walkable AND NOT dilated
     navigable_bm = [[walkable_bm[ix][iz] and not dilated[ix][iz]
