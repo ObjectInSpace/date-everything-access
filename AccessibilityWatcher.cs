@@ -846,6 +846,20 @@ namespace DateEverythingAccess
                 Mathf.Clamp(localDirection.z, -1f, 1f));
             Vector3 look = new Vector3(Mathf.Clamp(turnDeg / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
 
+            // Turn-before-walk gate. The move command is player-LOCAL (forward =
+            // the player's facing). When the desired direction is far from where
+            // the player faces — e.g. exiting a corridor and turning ~90° through
+            // a door — "move forward" sends the player into the wall they're
+            // still facing before the look command finishes turning them. Scale
+            // the move down by facing alignment so the player effectively turns
+            // in place when badly misaligned and only accelerates once roughly
+            // aimed. cos(turn): full speed when aligned, ~0 at 90°+, preventing
+            // the walk-into-wall-while-turning drift. See
+            // [[project-navigation-executor-corner-stall]].
+            float alignment = Mathf.Cos(turnDeg * Mathf.Deg2Rad);
+            float moveScale = Mathf.Clamp01(alignment);
+            move *= moveScale;
+
             // Hold position while the segment's door is mid-swing. Same reasoning as the step path:
             // walking into a moving door trips Door.OnCollisionEnter and pins the swing.
             bool waitingForDoorSwing = segmentHasDoor && SimpleNavBridge.IsActiveDoorMoving();
