@@ -48,22 +48,72 @@ namespace DateEverythingAccess
         public static Vector3 LastResolvedTarget => _activeTarget;
 
         /// <summary>
-        /// Start of the active segment: the waypoint immediately before the active one
-        /// (<see cref="LastResolvedTarget"/>). Together they define the planned line the
-        /// player should be on. Falls back to the active waypoint itself when there is no
-        /// predecessor (single-waypoint route or index 0), so callers can treat the
-        /// "segment" as a degenerate point. Used by the executor's stall recovery to steer
-        /// back onto the planned path instead of straight at the waypoint vertex.
+        /// Pure-pursuit lookahead point. Projects the player onto the planned polyline
+        /// (the segment ending at the active waypoint, plus all following segments) and
+        /// returns a point <paramref name="lookaheadM"/> metres FORWARD along the polyline
+        /// from that projection. Steering toward this point — rather than the next waypoint
+        /// vertex — keeps the player ON the planned corridor through corners and prevents the
+        /// drift-into-walls the steer-at-vertex controller suffered. Y is taken from the
+        /// polyline; XZ is what matters for steering. Falls back to the active waypoint if
+        /// there is no usable polyline. See [[project-navigation-executor-corner-stall]].
         /// </summary>
-        public static Vector3 ActiveSegmentStart
+        public static Vector3 PursuitTarget(Vector3 playerPos, float lookaheadM)
         {
-            get
+            if (_waypoints.Count == 0) return _activeTarget;
+            int startSeg = _waypointIndex - 1;
+            if (startSeg < 0) startSeg = 0;
+            if (startSeg >= _waypoints.Count - 1)
+                return _waypoints[_waypoints.Count - 1];
+
+            // 1. Find the closest point on the remaining polyline to the player, and the
+            //    segment index it lies on.
+            int bestSeg = startSeg;
+            float bestT = 0f;
+            float bestDistSq = float.PositiveInfinity;
+            for (int i = startSeg; i < _waypoints.Count - 1; i++)
             {
-                if (_waypoints.Count == 0) return _activeTarget;
-                int prev = _waypointIndex - 1;
-                if (prev < 0 || prev >= _waypoints.Count) return _activeTarget;
-                return _waypoints[prev];
+                Vector3 a = _waypoints[i];
+                Vector3 b = _waypoints[i + 1];
+                float t = ProjectParamXZ(a, b, playerPos);
+                Vector3 proj = Vector3.Lerp(a, b, t);
+                float dx = proj.x - playerPos.x;
+                float dz = proj.z - playerPos.z;
+                float d2 = dx * dx + dz * dz;
+                if (d2 < bestDistSq) { bestDistSq = d2; bestSeg = i; bestT = t; }
             }
+
+            // 2. Walk forward lookaheadM metres along the polyline from that projection.
+            float remaining = lookaheadM;
+            int seg = bestSeg;
+            Vector3 cur = Vector3.Lerp(_waypoints[seg], _waypoints[seg + 1], bestT);
+            while (seg < _waypoints.Count - 1)
+            {
+                Vector3 segEnd = _waypoints[seg + 1];
+                Vector3 toEnd = segEnd - cur;
+                toEnd.y = 0f;
+                float segLen = toEnd.magnitude;
+                if (segLen >= remaining)
+                {
+                    if (segLen <= 1e-4f) return segEnd;
+                    return cur + toEnd.normalized * remaining;
+                }
+                remaining -= segLen;
+                seg++;
+                cur = _waypoints[seg];
+            }
+            return _waypoints[_waypoints.Count - 1];
+        }
+
+        // Clamped projection parameter of p onto segment [a,b], XZ only.
+        private static float ProjectParamXZ(Vector3 a, Vector3 b, Vector3 p)
+        {
+            float abx = b.x - a.x;
+            float abz = b.z - a.z;
+            float lenSq = abx * abx + abz * abz;
+            if (lenSq <= 1e-6f) return 0f;
+            float t = ((p.x - a.x) * abx + (p.z - a.z) * abz) / lenSq;
+            if (t < 0f) t = 0f; else if (t > 1f) t = 1f;
+            return t;
         }
 
         // Called from AccessibilityWatcher.Update once per frame.
