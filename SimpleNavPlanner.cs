@@ -131,7 +131,7 @@ namespace DateEverythingAccess
             // opens them en route).
             ApplyLiveDoorState();
 
-            Floor startFloor = FloorForY(startPos.y);
+            Floor startFloor = FloorForY(startPos.y, StartFloorMatchToleranceM);
             Floor goalFloor = FloorForTargetY(targetPos.y);
             if (startFloor == null)
             {
@@ -499,7 +499,7 @@ namespace DateEverythingAccess
                 {
                     TeleporterEdge t = ife.teleporter[i];
                     if (t == null || t.up == null || t.up.world_xyz == null || t.up.world_xyz.Length < 3) continue;
-                    Floor upFloor = FloorForY(t.up.world_xyz[1]);
+                    Floor upFloor = FloorForY(t.up.world_xyz[1], FloorMatchToleranceM);
                     if (upFloor == null) continue;
                     int ix, iz;
                     if (!upFloor.NearestNavigable(t.up.world_xyz[0], t.up.world_xyz[2], 3.0f, out ix, out iz)) continue;
@@ -701,7 +701,20 @@ namespace DateEverythingAccess
             return null;
         }
 
-        private static Floor FloorForY(float y)
+        // Half the inter-floor gap (~13m) plus margin. Used as the START floor
+        // tolerance so a player caught MID-STAIRCASE (Y between the two floor
+        // planes, e.g. Y=2 while descending) still resolves to the nearest
+        // floor instead of failing with StartOffBake. The bake models only the
+        // two discrete floor planes, so any standable mid-stair Y is up to ~6.5m
+        // from a floor; the tight default tolerance (2m) wrongly rejected it and
+        // the planner refused to plan from a spot the player was actually
+        // standing on. Snapping to the nearest floor is sufficient: the stairs
+        // connect both floors via the inter-floor edge, so A* finds a valid path
+        // regardless of which floor the mid-stair player snaps to.
+        // See [[project-navigation-executor-corner-stall]].
+        private const float StartFloorMatchToleranceM = 7.0f;
+
+        private static Floor FloorForY(float y, float toleranceM)
         {
             Floor best = null;
             float bestD = float.PositiveInfinity;
@@ -710,7 +723,7 @@ namespace DateEverythingAccess
                 float d = Mathf.Abs(_floors[i].FloorY - y);
                 if (d < bestD) { bestD = d; best = _floors[i]; }
             }
-            return bestD <= FloorMatchToleranceM ? best : null;
+            return bestD <= toleranceM ? best : null;
         }
 
         // Pick the floor a player stands on to interact with a target at world Y.
