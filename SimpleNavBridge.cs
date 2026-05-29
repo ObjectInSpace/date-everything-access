@@ -116,6 +116,58 @@ namespace DateEverythingAccess
             return t;
         }
 
+        /// <summary>
+        /// Look ahead along the planned polyline for the next SHARP corner (turn angle
+        /// between the incoming and outgoing segment exceeding <paramref name="minTurnDeg"/>)
+        /// that lies within <paramref name="withinM"/> metres of the player along the path.
+        /// On a hit, outputs the corner's world position and the OUTGOING segment's XZ
+        /// direction (the heading the player should be facing as they round it), and returns
+        /// true. Lets the executor PRE-ORIENT toward the post-corner heading before reaching
+        /// the corner, instead of walking into the corner wall and stalling. Turn angle is
+        /// read straight off the route geometry — no camera zones needed.
+        /// See [[project-navigation-executor-corner-stall]].
+        /// </summary>
+        public static bool TryGetUpcomingSharpCorner(Vector3 playerPos, float withinM, float minTurnDeg,
+                                                     out Vector3 cornerPos, out Vector3 outgoingDir)
+        {
+            cornerPos = Vector3.zero;
+            outgoingDir = Vector3.zero;
+            if (_waypoints.Count < 3) return false;
+
+            // Distance budget measured from the player's current position to each interior
+            // waypoint, walking forward along the polyline from the active segment.
+            int startSeg = _waypointIndex - 1;
+            if (startSeg < 0) startSeg = 0;
+
+            // Accumulate path distance from the player to each interior vertex i
+            // (1..count-2), and test the turn there.
+            float acc = 0f;
+            Vector3 from = playerPos;
+            for (int i = startSeg; i < _waypoints.Count - 1; i++)
+            {
+                Vector3 segStart = (i == startSeg) ? playerPos : _waypoints[i];
+                Vector3 segEnd = _waypoints[i + 1];
+                Vector3 d = segEnd - segStart; d.y = 0f;
+                acc += d.magnitude;
+                if (acc > withinM) return false; // no sharp corner within range
+
+                int vtx = i + 1;
+                if (vtx >= _waypoints.Count - 1) return false; // last vertex is the target, no outgoing turn
+
+                Vector3 incoming = _waypoints[vtx] - _waypoints[vtx - 1]; incoming.y = 0f;
+                Vector3 outgoing = _waypoints[vtx + 1] - _waypoints[vtx]; outgoing.y = 0f;
+                if (incoming.sqrMagnitude < 1e-6f || outgoing.sqrMagnitude < 1e-6f) continue;
+                float turn = Vector3.Angle(incoming, outgoing);
+                if (turn >= minTurnDeg)
+                {
+                    cornerPos = _waypoints[vtx];
+                    outgoingDir = outgoing.normalized;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         // Called from AccessibilityWatcher.Update once per frame.
         public static void Tick()
         {

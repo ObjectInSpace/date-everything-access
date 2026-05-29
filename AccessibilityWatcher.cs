@@ -146,6 +146,14 @@ namespace DateEverythingAccess
         // actually face the (hopefully clear) direction before walking again,
         // which also breaks the would-be deadlock of zeroing move while stalled.
         private const float AutoWalkStallTurnReleaseDeg = 15f;
+        // Proactive corner pre-orientation. When a waypoint whose turn exceeds
+        // AutoWalkCornerSharpDeg lies within AutoWalkCornerPreorientRangeM ahead
+        // along the path, the executor faces the post-corner heading early and
+        // throttles approach speed by alignment (down to AutoWalkCornerMinApproachScale
+        // at worst) so the player rounds the corner already facing the new way.
+        private const float AutoWalkCornerSharpDeg = 50f;
+        private const float AutoWalkCornerPreorientRangeM = 1.5f;
+        private const float AutoWalkCornerMinApproachScale = 0.25f;
         private const float AutoWalkInteractionRetrySeconds = 0.75f;
         private const float AutoWalkMovementProbeMinimumCommand = 0.2f;
         private const float AutoWalkMovementProbeCancelledVelocity = 0.1f;
@@ -858,6 +866,28 @@ namespace DateEverythingAccess
                 0f,
                 Mathf.Clamp(localDirection.z, -1f, 1f));
             Vector3 look = new Vector3(Mathf.Clamp(turnDeg / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
+
+            // Proactive corner pre-orientation. The turn angle at each upcoming
+            // waypoint is known from the route polyline (no camera zones needed).
+            // When a SHARP corner is close ahead along the path, start facing the
+            // OUTGOING heading before reaching it and throttle forward speed by
+            // how aligned we already are — so the player rounds the corner facing
+            // the new direction instead of walking into the corner wall and
+            // stalling. This anticipates the stop-and-turn (below) rather than
+            // waiting to get blocked. See [[project-navigation-executor-corner-stall]].
+            if (!exactApproach &&
+                SimpleNavBridge.TryGetUpcomingSharpCorner(playerPos, AutoWalkCornerPreorientRangeM,
+                    AutoWalkCornerSharpDeg, out _, out Vector3 outgoingDir))
+            {
+                float cornerTurnDeg = Vector3.SignedAngle(playerTransform.forward, outgoingDir, Vector3.up);
+                // Steer look toward the post-corner heading early.
+                look = new Vector3(Mathf.Clamp(cornerTurnDeg / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
+                // Throttle approach speed by alignment to the outgoing heading:
+                // full speed once aligned, easing toward a floor as misalignment
+                // grows so we creep into the corner rather than charging the wall.
+                float align = Mathf.Clamp01(Vector3.Dot(playerTransform.forward, outgoingDir));
+                move *= Mathf.Lerp(AutoWalkCornerMinApproachScale, 1f, align);
+            }
 
             // Stop-and-turn when stalled. The move command is player-LOCAL
             // (forward = the player's facing), and movement can outpace the look
