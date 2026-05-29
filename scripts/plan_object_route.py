@@ -139,6 +139,18 @@ class Planner:
         # doesn't wipe another's effect.
         self._open_doors = set()
         self._open_state_walls = set()
+        # Names of doors whose authoritative scene-load state is open. Lets a
+        # consumer request doors_open="default" — the real configuration the
+        # player faces at load — instead of guessing "all". Populated from the
+        # bake's per-door `default_open` (carried from the exporter's Door.Open).
+        self._default_open_doors = set()
+        # Names of doors the player can open during normal play: every door that
+        # is NOT locked. Lets a consumer request doors_open="unlocked" — the
+        # coverage model that matches the in-game executor (it opens any door on
+        # the path it reaches) while still hard-blocking the genuinely locked
+        # door. From the bake's per-door `locked` (exporter's Door.Locked).
+        self._unlocked_doors = set()
+        self._locked_doors = set()
         # Index per-door freed-cells from the bake into each floor.
         for f_raw in bake["floors"]:
             floor = self.floors[f_raw["label"]]
@@ -146,6 +158,12 @@ class Planner:
                 name = door.get("name")
                 if not name:
                     continue
+                if door.get("default_open"):
+                    self._default_open_doors.add(name)
+                if door.get("locked"):
+                    self._locked_doors.add(name)
+                else:
+                    self._unlocked_doors.add(name)
                 cells = {tuple(c) for c in door.get("freed_cells", [])}
                 if not cells:
                     continue
@@ -166,6 +184,9 @@ class Planner:
                     floor.state_walls_freed_by_name[name] |= cells
                 else:
                     floor.state_walls_freed_by_name[name] = cells
+        # Locked is authoritative regardless of record ordering: if any record
+        # for a name is locked, that door is not player-openable.
+        self._unlocked_doors -= self._locked_doors
         if doors_open:
             self.apply_doors_open(doors_open)
         if state_walls_open:
@@ -195,14 +216,24 @@ class Planner:
             self.edges_from.setdefault(down_node, []).append((up_node, t["cost_m"], meta))
     def apply_doors_open(self, doors_open):
         """Set the doors-open set. `doors_open` is an iterable of door names; or
-        the literal string "all" to open every known door. Pass `None` to clear.
-        Replaces any prior doors-open state but preserves state_walls_open.
-        Unknown names are silently ignored so callers can pass a static list
-        across scenes."""
+        the literal string "all" to open every known door; "unlocked" to open
+        every door the player can open during normal play (all but the locked
+        ones) — the coverage model matching the in-game executor, which opens any
+        door on the path it reaches; or "default" to open exactly the doors whose
+        authoritative scene-load state is open (from the exporter's Door.Open,
+        carried in the bake). Pass `None` to clear (all closed). All of
+        "unlocked"/"default"/`locked` derive from the exporter's per-door state
+        carried through the bake — no guessing. Replaces any prior doors-open
+        state but preserves state_walls_open. Unknown names are silently ignored
+        so callers can pass a static list across scenes."""
         if doors_open is None:
             self._open_doors = set()
         elif isinstance(doors_open, str) and doors_open == "all":
             self._open_doors = None  # sentinel: "all known"
+        elif isinstance(doors_open, str) and doors_open == "unlocked":
+            self._open_doors = set(self._unlocked_doors)
+        elif isinstance(doors_open, str) and doors_open == "default":
+            self._open_doors = set(self._default_open_doors)
         else:
             self._open_doors = set(doors_open)
         self._rebuild_extra_navigable()

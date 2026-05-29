@@ -1083,6 +1083,16 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             "freed_cells": freed,
             "freed_count": len(freed),
             "panel_dilated_cells": own_dil_cells,
+            # Authoritative scene-load state from the exporter's Door component,
+            # carried through so consumers stop GUESSING the doors-open set. At
+            # scene load every Door/SlidingDoor in this house exports Open=False
+            # (one is Locked). A consumer wanting "what the player actually faces
+            # on load" opens exactly the doors with default_open=True (none here)
+            # rather than the all-open coverage probe. See
+            # [[project-navigation-doors-open-defaults]],
+            # [[project-navigation-sweep-follower-doorstate-fix]].
+            "default_open": bool(door_rec.get("Open", False)),
+            "locked": bool(door_rec.get("Locked", False)),
         })
 
     # Per-state-wall freed-cells pass. State-gated walls (currently just the

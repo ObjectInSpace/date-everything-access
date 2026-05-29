@@ -894,7 +894,9 @@
               149,
               397
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "SM_Kitchen_Cupboard_Door_9_MODEL_UPDATE",
@@ -1794,7 +1796,9 @@
               117,
               479
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "ShowerDoor",
@@ -2501,7 +2505,9 @@
               186,
               421
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Laundry_Closet",
@@ -3633,7 +3639,9 @@
               111,
               529
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "BackDoorPivot",
@@ -4568,7 +4576,9 @@
               6,
               235
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": true
         },
         {
           "name": "SM_Kithcen_Cupboard_Door_12_MODEL_UPDATE",
@@ -5432,7 +5442,9 @@
               116,
               468
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "SM_Kithcen_Cupboard_Door_12_MODEL_UPDATE",
@@ -6328,7 +6340,9 @@
               116,
               426
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "SM_Kitchen_Cupboard_Door_9_MODEL_UPDATE",
@@ -7176,7 +7190,9 @@
               116,
               436
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Office_Closet",
@@ -8192,7 +8208,9 @@
               190,
               470
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Laundry",
@@ -9356,7 +9374,9 @@
               90,
               484
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Bathroom1",
@@ -10560,7 +10580,9 @@
               179,
               373
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Office",
@@ -11408,7 +11430,9 @@
               217,
               372
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         }
       ],
       "state_walls": [],
@@ -13798,7 +13822,9 @@
               147,
               294
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Bedroom_ClosetRight_Outer",
@@ -14770,7 +14796,9 @@
               147,
               71
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "AtticDoor_11_MODEL_UPDATE",
@@ -16070,7 +16098,9 @@
               188,
               200
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Gym_ClosetInner",
@@ -17065,7 +17095,9 @@
               148,
               276
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Bedroom_ClosetRight_Inner",
@@ -17840,7 +17872,9 @@
               148,
               54
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Bedroom_ClosetLeft_Inner",
@@ -18783,7 +18817,9 @@
               148,
               114
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Bedroom_Bathroom",
@@ -19987,7 +20023,9 @@
               50,
               143
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_UpperHall_Electric",
@@ -21135,7 +21173,9 @@
               175,
               215
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Gym_Hall",
@@ -22251,7 +22291,9 @@
               137,
               215
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Bedroom",
@@ -23415,7 +23457,9 @@
               114,
               144
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Gym_Bathroom",
@@ -24575,7 +24619,9 @@
               52,
               215
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         },
         {
           "name": "Doors_Bedroom_ClosetLeft_Outer",
@@ -25787,7 +25833,9 @@
               147,
               131
             ]
-          ]
+          ],
+          "default_open": false,
+          "locked": false
         }
       ],
       "state_walls": [
