@@ -29276,6 +29276,7 @@
   "inter_floor_edges": {
     "stair_ramp": [
       {
+        "landing_source": "slice_plane",
         "kind": "stairs",
         "source_path": "===SCENE===/House/Hallway/Stairs",
         "source_slope_kind": "stairs",
@@ -29290,27 +29291,27 @@
         ],
         "ground": {
           "cell": [
-            180,
-            327
+            229,
+            336
           ],
           "world_xz": [
-            2.787,
-            -2.739
+            12.587,
+            -0.939
           ],
           "floor_y": -0.5
         },
         "upper": {
           "cell": [
-            180,
-            161
+            135,
+            172
           ],
           "world_xz": [
-            2.783,
-            -2.702
+            -6.217,
+            -0.502
           ],
           "floor_y": 12.5
         },
-        "cost_m": 13.0
+        "cost_m": 22.865
       }
     ],
     "stair_ramp_rejected": [],

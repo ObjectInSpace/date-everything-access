@@ -32,6 +32,18 @@ INTERACTABLES = REPO / "artifacts/navigation/thirdpersongreybox-interactables.js
 NAVDATA = REPO / "artifacts/navigation/thirdpersongreybox-navigation-data.json"
 
 NAVIGABLE_CHAR = "N"
+# Clearance-cost A*: bias routes away from walls so the follower isn't sent through
+# sub-passable pinches when a wider alternative exists. The dominant in-game autowalk
+# stalls cluster at a SMALL set of shared chokepoints (Hall1 ground ~(14,-6.3), Hall2
+# upper) where the planned path threads a 0.0-0.2m pinch even though a 1.2-1.6m-wide
+# route sits within ~2m — A* takes the tight path only because it's shorter. A bounded
+# per-step clearance penalty makes A* prefer the wide route there, WITHOUT detouring
+# real unavoidable ~1.0m doorways (those have no wider alternative, so the penalty
+# applies equally to all their cells and doesn't change the choice). See
+# [[project-navigation-clearance-cost-rejected-2026-05-29]] (re-opened/reconciled) and
+# [[project-navigation-corner-dilation-severance-2026-05-29]].
+CLEARANCE_TARGET_CELLS = 4       # >= this many cells to nearest wall (0.8m) ⇒ no penalty
+CLEARANCE_PENALTY_PER_CELL_M = 0.15  # added per missing clearance-cell below target, in metres
 CORNER_WAYPOINT_DEG = 30.0       # smoothing: keep vertices with turn > this
 DOOR_TAG_RADIUS_M = 0.8          # segment tagged with door if door XZ is within this distance of the segment
 MIN_INTERACTION_RADIUS_M = 0.5
@@ -76,6 +88,11 @@ class Floor:
         self.doors_freed_by_name = {}
         # Same shape, for state-gated walls (DresserWall and similar).
         self.state_walls_freed_by_name = {}
+        # Lazily-built clearance map: per cell, distance (in cells, capped at
+        # CLEARANCE_TARGET_CELLS) to the nearest non-navigable cell. Drives the
+        # clearance-cost penalty in Planner.neighbors. Invalidated whenever overlays
+        # change navigability (doors/state-walls opening), rebuilt on next access.
+        self._clearance = None
 
     def in_bounds(self, ix, iz):
         return 0 <= ix < self.nx and 0 <= iz < self.nz
@@ -88,6 +105,45 @@ class Floor:
         if (ix, iz) in self.extra_navigable:
             return True
         return self.rows[ix][iz] == NAVIGABLE_CHAR
+
+    def _build_clearance(self):
+        """Multi-source BFS from every non-navigable cell: each navigable cell gets
+        its 4-connected distance (in cells, capped at CLEARANCE_TARGET_CELLS) to the
+        nearest wall. O(nx*nz), built once per overlay state. Capping at the target
+        means roomy cells all share the max and incur no penalty — only the gradient
+        inside the tight band matters. L1 distance slightly under-counts diagonal
+        clearance, which is the safe (conservative) direction for wall avoidance."""
+        from collections import deque
+        cap = CLEARANCE_TARGET_CELLS
+        nx, nz = self.nx, self.nz
+        dist = [[cap] * nz for _ in range(nx)]
+        dq = deque()
+        for ix in range(nx):
+            row = dist[ix]
+            for iz in range(nz):
+                if not self.navigable(ix, iz):
+                    row[iz] = 0
+                    dq.append((ix, iz))
+        while dq:
+            x, z = dq.popleft()
+            d = dist[x][z]
+            if d >= cap:
+                continue
+            for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                a, b = x + dx, z + dz
+                if 0 <= a < nx and 0 <= b < nz and dist[a][b] > d + 1:
+                    dist[a][b] = d + 1
+                    dq.append((a, b))
+        self._clearance = dist
+
+    def clearance(self, ix, iz):
+        """Cells-to-nearest-wall (capped at CLEARANCE_TARGET_CELLS) for a cell.
+        Lazily builds the map; out-of-bounds returns 0."""
+        if not self.in_bounds(ix, iz):
+            return 0
+        if self._clearance is None:
+            self._build_clearance()
+        return self._clearance[ix][iz]
 
     def cell_to_world(self, ix, iz):
         # Cell centre.
@@ -265,6 +321,7 @@ class Planner:
                 if self._open_state_walls is None or name in self._open_state_walls:
                     extra |= cells
             floor.extra_navigable = extra
+            floor._clearance = None  # navigability changed → clearance map stale
 
     def door_names(self):
         """Every door that has freed-cells on at least one floor. Useful for
@@ -360,7 +417,15 @@ class Planner:
                 if dx != 0 and dz != 0:
                     if not (f.navigable(a + dx, b) and f.navigable(a, b + dz)):
                         continue
-                out.append(((floor, nx, nz), cost * self.cell_size, {"kind": "walk"}))
+                # Bounded clearance penalty on the destination cell: cells nearer than
+                # CLEARANCE_TARGET_CELLS to a wall cost extra metres, so A* prefers a
+                # wider route when one is only modestly longer (reroutes avoidable
+                # pinches) but still threads a genuinely unavoidable doorway (all its
+                # cells are penalized equally, so the choice is unchanged). The penalty
+                # only raises g-costs, so the Euclidean heuristic stays admissible.
+                deficit = CLEARANCE_TARGET_CELLS - f.clearance(nx, nz)
+                penalty = deficit * CLEARANCE_PENALTY_PER_CELL_M if deficit > 0 else 0.0
+                out.append(((floor, nx, nz), cost * self.cell_size + penalty, {"kind": "walk"}))
         for nbr, cost, meta in self.edges_from.get(node, ()):
             out.append((nbr, cost, meta))
         return out
@@ -513,6 +578,17 @@ def smooth_path(path, planner):
     out = [los[0]]
     for j in range(1, len(los) - 1):
         a, b, c = out[-1], los[j], los[j + 1]
+        # Never drop a floor-transition endpoint. b is a stair/teleporter landing
+        # when its floor differs from a neighbour; the player MUST pass through both
+        # landings to change floors. Pass-2 angles are XZ-only, so the two landings
+        # of a staircase (same XZ, different Y) look collinear and the GROUND-side
+        # landing was being pruned — leaving the follower to steer from the stair-top
+        # XZ straight at the next ground corridor point, cutting across the stairs
+        # into the side wall mid-descent (the SM_Walls_Hall1 stair-exit stall).
+        # See [[project-navigation-hall1-runtime-truth-2026-05-29]].
+        if b[0] != a[0] or b[0] != c[0] or b[0].startswith("@") or \
+           a[0].startswith("@") or c[0].startswith("@"):
+            out.append(b); continue
         wa = planner.world_of(a); wb = planner.world_of(b); wc = planner.world_of(c)
         if wa is None or wb is None or wc is None:
             out.append(b); continue
