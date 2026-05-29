@@ -243,6 +243,12 @@ namespace DateEverythingAccess
         private static float _suppressDateADexOpenEntrySelectionUntil;
         private static DateADexEntry _pendingDateADexDetailEntry;
         private static float _suppressInitialSpecsAnnouncementsUntil;
+        // One-shot guard for the live capsule-dimension diagnostic. The bake assumes
+        // CAPSULE_R=0.40 (Player.prefab local radius 0.4), but the prefab root carries
+        // localScale=2; we need the REAL world radius (radius * lossyScale) to confirm
+        // whether tight corridors like SM_Walls_Hall1 (~1.0m gap) are passable as baked.
+        // See [[project-navigation-capsule-radius-groundtruth-2026-05-29]]. Logged once.
+        private static bool _loggedCapsuleDimensions;
         private static bool _awaitingSpecsTutorialDialogs;
         private static bool _choiceUpWasDown;
         private static bool _choiceDownWasDown;
@@ -431,6 +437,7 @@ namespace DateEverythingAccess
             SimpleNavBridge.EndStep();
             SimpleNavBridge.BeginRoute(route);
             _instance._isAutoWalking = true;
+            LogCapsuleDimensionsOnce();
             _instance._lastAutoWalkPosition = BetterPlayerControl.Instance != null
                 ? BetterPlayerControl.Instance.transform.position
                 : Vector3.zero;
@@ -706,6 +713,43 @@ namespace DateEverythingAccess
                     waypoint = SimpleNavBridge.LastResolvedTarget;
                 ObjectTracker.StartTracking(waypoint, requiresInteraction: false);
             }
+        }
+
+        // One-time diagnostic: log the player's REAL world-space capsule dimensions.
+        // The bake reserves CAPSULE_R=0.40m of clearance per wall (Player.prefab local
+        // radius 0.4), but the prefab root has localScale=2, so the literal world radius
+        // could be 0.8m (height 5.0m — absurd, hence likely counter-scaled to net ~1x).
+        // This reads the live CapsuleCollider * lossyScale to settle 0.4 vs 0.8 for real,
+        // which decides whether ~1.0m gaps (SM_Walls_Hall1) are passable as baked.
+        // See [[project-navigation-capsule-radius-groundtruth-2026-05-29]].
+        private static void LogCapsuleDimensionsOnce()
+        {
+            if (_loggedCapsuleDimensions) return;
+            if (Main.Log == null || BetterPlayerControl.Instance == null) return;
+            Transform t = BetterPlayerControl.Instance.transform;
+            CapsuleCollider cc = BetterPlayerControl.Instance.GetComponent<CapsuleCollider>();
+            if (cc == null) cc = BetterPlayerControl.Instance.GetComponentInChildren<CapsuleCollider>();
+            if (cc == null)
+            {
+                Main.Log.LogInfo("[capsule-probe] no CapsuleCollider on BetterPlayerControl");
+                _loggedCapsuleDimensions = true;
+                return;
+            }
+            // Unity scales a CapsuleCollider's radius by the larger of the two non-height
+            // lossyScale axes, and its height by the height axis. Use the collider's own
+            // transform lossyScale (it may differ from the controller root if nested).
+            Vector3 ls = cc.transform.lossyScale;
+            float radialScale = Mathf.Max(Mathf.Abs(ls.x), Mathf.Abs(ls.z));
+            float worldR = cc.radius * radialScale;
+            float worldH = cc.height * Mathf.Abs(ls.y);
+            Main.Log.LogInfo(
+                "[capsule-probe] localRadius=" + cc.radius.ToString("F3") +
+                " localHeight=" + cc.height.ToString("F3") +
+                " colliderLossyScale=(" + ls.x.ToString("F3") + "," + ls.y.ToString("F3") + "," + ls.z.ToString("F3") + ")" +
+                " rootLossyScale=(" + t.lossyScale.x.ToString("F3") + "," + t.lossyScale.y.ToString("F3") + "," + t.lossyScale.z.ToString("F3") + ")" +
+                " => worldRadius=" + worldR.ToString("F3") + "m worldHeight=" + worldH.ToString("F3") + "m" +
+                " (bake CAPSULE_R=0.40)");
+            _loggedCapsuleDimensions = true;
         }
 
         // Auto-walk driver. Drives toward the active SimpleNavRoute installed by
@@ -1205,7 +1249,14 @@ namespace DateEverythingAccess
             };
             RuntimeBlockerProbe.Last = probe;
             if (chest == null && ankle == null) return null;
-            return "chest=" + (chest?.Format() ?? "<clear>") + " ankle=" + (ankle?.Format() ?? "<clear>");
+            // Include the directional casts (1m range) so a stall log shows which way is
+            // actually open — essential for diagnosing tight-channel chokepoints like
+            // SM_Walls_Hall1 where "forward is blocked but a side is clear" is the whole
+            // question. left/right are perpendicular to the travel dir; back is behind.
+            // See [[project-navigation-corner-dilation-severance-2026-05-29]].
+            return "chest=" + (chest?.Format() ?? "<clear>") + " ankle=" + (ankle?.Format() ?? "<clear>") +
+                   " left=" + (hLeft?.Format() ?? "<clear>") + " right=" + (hRight?.Format() ?? "<clear>") +
+                   " back=" + (hBack?.Format() ?? "<clear>") + " downDist=" + (down != null ? down.Distance.ToString("F2") : "-1");
         }
 
         private static RuntimeBlockerProbe.Hit ProbeOne(Vector3 origin, Vector3 dir, float maxDist)
@@ -3130,6 +3181,7 @@ namespace DateEverythingAccess
             }
 
             _isAutoWalking = true;
+            LogCapsuleDimensionsOnce();
             _lastAutoWalkPosition = BetterPlayerControl.Instance != null ? BetterPlayerControl.Instance.transform.position : Vector3.zero;
             _lastAutoWalkProgressTime = Time.unscaledTime;
             ScreenReader.Say(Loc.Get("navigation_autowalk_started"));

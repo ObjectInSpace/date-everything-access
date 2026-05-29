@@ -53,9 +53,18 @@ def project_param_xz(ax, az, bx, bz, px, pz):
     return max(0.0, min(1.0, t))
 
 
+# Cross-track threshold (m): mirrors SimpleNavBridge.PursuitMaxCrossTrackM. Above
+# this off-line distance, steer to the projection point (back onto the corridor)
+# instead of a forward lookahead, so the player converges rather than tracking
+# parallel into a wall. See [[project-navigation-hall1-runtime-truth-2026-05-29]].
+PURSUIT_MAX_CROSSTRACK_M = 0.6
+
+
 def pursuit_target(wps, wp_index, px, pz, lookahead):
     """Mirror SimpleNavBridge.PursuitTarget: project player onto the remaining
-    polyline, return the point `lookahead` m forward along it."""
+    polyline; return the projection point if the player is farther than
+    PURSUIT_MAX_CROSSTRACK_M off the line (steer back onto the corridor),
+    otherwise the point `lookahead` m forward along it (normal pure pursuit)."""
     n = len(wps)
     start_seg = max(0, wp_index - 1)
     if start_seg >= n - 1:
@@ -69,10 +78,13 @@ def pursuit_target(wps, wp_index, px, pz, lookahead):
         d2 = (cx - px) ** 2 + (cz - pz) ** 2
         if d2 < best_d2:
             best_d2, best_seg, best_t = d2, i, t
+    proj_x = wps[best_seg][0] + (wps[best_seg + 1][0] - wps[best_seg][0]) * best_t
+    proj_z = wps[best_seg][1] + (wps[best_seg + 1][1] - wps[best_seg][1]) * best_t
+    if best_d2 > PURSUIT_MAX_CROSSTRACK_M * PURSUIT_MAX_CROSSTRACK_M:
+        return (proj_x, proj_z)
     rem = lookahead
     seg = best_seg
-    cx = wps[seg][0] + (wps[seg + 1][0] - wps[seg][0]) * best_t
-    cz = wps[seg][1] + (wps[seg + 1][1] - wps[seg][1]) * best_t
+    cx, cz = proj_x, proj_z
     while seg < n - 1:
         ex, ez = wps[seg + 1]
         dx, dz = ex - cx, ez - cz
@@ -95,28 +107,79 @@ def pursuit_target(wps, wp_index, px, pz, lookahead):
 DOOR_OPEN_SPAN_M = 1.5
 
 
+# Stall is now defined by LACK OF PROGRESS, not by touching a blocked cell. The
+# real player is a non-kinematic Rigidbody whose velocity the physics solver
+# deflects ALONG walls (it slides), so brief wall contact is normal and not a
+# stall — it is exactly how the 1.6m-geometric capsule passes the ~1.0m doors.
+# See [[project-navigation-capsule-radius-groundtruth-2026-05-29]]. We model that
+# with axis-separated sliding collision (try the full move; if blocked, try the
+# X-only and Z-only sub-moves — the one(s) that stay navigable let the player
+# slide along the wall). A genuine stall is when route progress (distance to the
+# final waypoint) fails to improve for a sustained window despite trying to move.
+PROGRESS_EPS_M = 0.03           # min net progress per window to count as "moving"
+STALL_WINDOW_TICKS = 90         # ~3s at 30Hz with no progress ⇒ pinned (real stall)
+
+
+def _try_step(floor, px, pz, dx, dz):
+    """Axis-separated sliding move. Returns the new (px, pz) after attempting to
+    move by (dx, dz): full move if clear, else slide along whichever axis stays
+    navigable (mirrors the physics solver deflecting velocity along the wall).
+    Returns the unchanged position only if BOTH the full and both axis sub-moves
+    are blocked (a true corner pin)."""
+    def nav(x, z):
+        ix, iz = floor.world_to_cell(x, z)
+        return floor.in_bounds(ix, iz) and floor.navigable(ix, iz)
+    # 1. Full diagonal move.
+    if nav(px + dx, pz + dz):
+        return px + dx, pz + dz, False
+    # 2. Slide on X only (wall is roughly Z-aligned).
+    slid_x = nav(px + dx, pz)
+    # 3. Slide on Z only (wall is roughly X-aligned).
+    slid_z = nav(px, pz + dz)
+    if slid_x and not slid_z:
+        return px + dx, pz, True
+    if slid_z and not slid_x:
+        return px, pz + dz, True
+    if slid_x and slid_z:
+        # Both axes individually clear but the diagonal isn't: a 1-cell corner
+        # pinhole the capsule can't thread. Pick the axis with the larger
+        # component so the player still slides the dominant direction.
+        if abs(dx) >= abs(dz):
+            return px + dx, pz, True
+        return px, pz + dz, True
+    # Fully pinned this tick.
+    return px, pz, True
+
+
 def simulate(floor, wps, door_xz=None):
     """Run the follower from wps[0] to wps[-1]. Returns (status, stall_pos, trace).
 
+    Models the real movement chain: the follower commands a `move` direction
+    (pure-pursuit), the controller turns it into velocity, and the physics solver
+    SLIDES the capsule along walls on contact (axis-separated here). A stall is
+    declared only when route progress stops for STALL_WINDOW_TICKS despite the
+    player still trying to move — i.e. genuinely pinned, not merely grazing.
+
     `door_xz` is the list of (x, z) positions of doors this route is tagged to
-    pass through. Near one of those, an off-navigable position is treated as the
-    executor opening the door (not a wall stall), so the stall counter resets —
-    this is how a route through a door the player must open gets verified rather
-    than false-flagged at the doorway."""
+    pass through; near one, wall contact is attributed to the executor opening the
+    door rather than a stall."""
     if len(wps) < 2:
         return "trivial", None, []
     door_xz = door_xz or []
     px, pz = wps[0]
     facing = math.atan2(wps[1][1] - pz, wps[1][0] - px)  # start facing 1st segment
     wp_index = 1
-    offcells = []
+    contacts = []                       # positions where the player touched a wall (slid)
+    best_remaining = math.inf           # closest approach to the final waypoint so far
+    ticks_since_progress = 0
     for _ in range(MAX_TICKS):
         # Advance discrete waypoint when within arrival radius (mirrors TryAdvanceWaypoint).
         while wp_index < len(wps) - 1 and math.hypot(wps[wp_index][0] - px, wps[wp_index][1] - pz) <= WAYPOINT_ARRIVE_M:
             wp_index += 1
         # Arrival.
-        if math.hypot(wps[-1][0] - px, wps[-1][1] - pz) <= TARGET_ARRIVE_M:
-            return "arrived", None, offcells
+        remaining = math.hypot(wps[-1][0] - px, wps[-1][1] - pz)
+        if remaining <= TARGET_ARRIVE_M:
+            return "arrived", None, contacts
         # Steer toward pursuit lookahead point.
         tx, tz = pursuit_target(wps, wp_index, px, pz, PURSUIT_LOOKAHEAD_M)
         desired = math.atan2(tz - pz, tx - px)
@@ -124,26 +187,30 @@ def simulate(floor, wps, door_xz=None):
         dyaw = (desired - facing + math.pi) % (2 * math.pi) - math.pi
         max_step = math.radians(MAX_TURN_DEG_PER_S) * STEP_DT
         facing += max(-max_step, min(max_step, dyaw))
-        # Alignment speed gate: move = clamp01(cos(turn)).
+        # Alignment speed gate: move = clamp01(cos(turn)). NOTE: this mirrors the
+        # CURRENT follower. The velocity-preserving fix changes this term; update
+        # it here in lockstep so the sim tests the same controller the game runs.
         align = max(0.0, math.cos(dyaw))
         speed = MOVE_SPEED_MPS * align
-        px += math.cos(facing) * speed * STEP_DT
-        pz += math.sin(facing) * speed * STEP_DT
-        # Check the player position against the navigable bitmap.
-        ix, iz = floor.world_to_cell(px, pz)
-        if not (floor.in_bounds(ix, iz) and floor.navigable(ix, iz)):
-            # If we're at a door the route passes through, the executor is
-            # opening it — not a wall stall. Reset the counter and proceed.
-            near_door = any(math.hypot(px - dx, pz - dz) <= DOOR_OPEN_SPAN_M
-                            for dx, dz in door_xz)
-            if near_door:
-                offcells = []
-                continue
-            offcells.append((round(px, 2), round(pz, 2)))
-            # If we pile up off-navigable for a stretch, call it a stall.
-            if len(offcells) >= 15:
-                return "stall", (round(px, 2), round(pz, 2)), offcells
-    return "timeout", (round(px, 2), round(pz, 2)), offcells
+        dx = math.cos(facing) * speed * STEP_DT
+        dz = math.sin(facing) * speed * STEP_DT
+        # Move with sliding collision response.
+        npx, npz, touched = _try_step(floor, px, pz, dx, dz)
+        if touched:
+            near_door = any(math.hypot(npx - ddx, npz - ddz) <= DOOR_OPEN_SPAN_M
+                            for ddx, ddz in door_xz)
+            if not near_door:
+                contacts.append((round(npx, 2), round(npz, 2)))
+        px, pz = npx, npz
+        # Progress check: did we get materially closer to the goal?
+        if remaining < best_remaining - PROGRESS_EPS_M:
+            best_remaining = remaining
+            ticks_since_progress = 0
+        else:
+            ticks_since_progress += 1
+            if ticks_since_progress >= STALL_WINDOW_TICKS:
+                return "stall", (round(px, 2), round(pz, 2)), contacts
+    return "timeout", (round(px, 2), round(pz, 2)), contacts
 
 
 def upper_or_floor_wps(route, planner):

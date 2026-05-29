@@ -20,6 +20,19 @@ REPO = Path(__file__).resolve().parents[1]
 BAKE = REPO / "artifacts/navigation/navigable_region.bake.json"
 WALK = REPO / "artifacts/navigation/thirdpersongreybox-walkable.json"
 NAV  = REPO / "artifacts/navigation/thirdpersongreybox-navigation-data.json"
+BLOCK = REPO / "artifacts/navigation/thirdpersongreybox-blockers.json"
+
+# A stair mesh's two landings are at OPPOSITE ENDS of the run, not the footprint
+# centre. The old code picked the navigable cell nearest the footprint centre for
+# BOTH floors, collapsing a long diagonal staircase to a single mid-stair point —
+# so descending/ascending routes had no correct stair direction and the follower
+# wedged against the side wall (the SM_Walls_Hall1 stair-exit stall). Instead we
+# locate each landing from the stair COLLIDER's player-height slice segments: the
+# segments sliced at ~ground-Y cluster at the bottom landing, those at ~upper-Y at
+# the top landing. Centroid of the floor-plane slice → that floor's landing XZ.
+# Endpoints are symmetric, so they serve ascent and descent identically.
+# See [[project-navigation-hall1-runtime-truth-2026-05-29]].
+STAIR_SLICE_PLANE_TOL = 1.5   # |segment.PlaneY - floor_Y| ≤ this counts as that floor's slice
 
 # Stair surface filters
 MAX_STAIR_AREA = 200.0        # exclude wall-meshes mis-tagged as stairs
@@ -77,10 +90,59 @@ def navigable_cell_in_footprint(floor, surface_fp):
     return best
 
 
+def stair_collider_segments(blockers, source_path):
+    """Player-height slice segments of the stair mesh collider matching source_path.
+    Returns list of (ax, az, bx, bz, plane_y), or [] if not found."""
+    for m in blockers.get("MeshColliders", []):
+        if m.get("Path") != source_path:
+            continue
+        segs = (m.get("Footprint") or {}).get("Segments") or []
+        out = []
+        for s in segs:
+            py = s.get("PlaneY")
+            if py is None:
+                continue
+            out.append((s["AX"], s["AZ"], s["BX"], s["BZ"], py))
+        return out
+    return []
+
+
+def landing_from_slice(floor, segments, floor_y):
+    """The stair landing on `floor`: centroid of the stair collider's slice segments
+    nearest that floor's Y, snapped to the nearest navigable cell. Falls back to None
+    if no slice near that plane or no navigable cell nearby. This finds the true END
+    of the stair run on each floor (bottom vs top), not the footprint centre."""
+    pts = []
+    for ax, az, bx, bz, py in segments:
+        if abs(py - floor_y) <= STAIR_SLICE_PLANE_TOL:
+            pts.append((ax, az)); pts.append((bx, bz))
+    if not pts:
+        return None
+    cx = sum(p[0] for p in pts) / len(pts)
+    cz = sum(p[1] for p in pts) / len(pts)
+    frame = floor["frame"]
+    ox, oz, cs = frame["origin_x"], frame["origin_z"], frame["cell_size"]
+    nx, nz = frame["nx"], frame["nz"]
+    rows = floor["bitmap_rows"]
+    # Spiral out from the centroid cell to the nearest navigable cell.
+    ccx = int((cx - ox) / cs); ccz = int((cz - oz) / cs)
+    max_r = int(math.ceil(3.0 / cs))
+    for r in range(0, max_r + 1):
+        for dx in range(-r, r + 1):
+            for dz in range(-r, r + 1):
+                if max(abs(dx), abs(dz)) != r:
+                    continue
+                ix, iz = ccx + dx, ccz + dz
+                if 0 <= ix < nx and 0 <= iz < nz and rows[ix][iz] == 'N':
+                    return (ix, iz, ox + (ix + 0.5) * cs, oz + (iz + 0.5) * cs)
+    return None
+
+
 def main():
     bake = json.load(open(BAKE, encoding="utf-8"))
     walk = json.load(open(WALK, encoding="utf-8"))
     nav = json.load(open(NAV, encoding="utf-8"))
+    blockers = json.load(open(BLOCK, encoding="utf-8"))
 
     ground = find_floor(bake, "ground")
     upper = find_floor(bake, "upper")
@@ -114,9 +176,18 @@ def main():
     rejected = []
     for s in candidates:
         fp = s["Footprint"]
-        g_cell = navigable_cell_in_footprint(ground, fp)
-        u_cell = navigable_cell_in_footprint(upper, fp)
+        # Prefer slice-plane landings (true ends of the stair run); fall back to the
+        # footprint-centre method only if the collider has no usable slice segments.
+        segments = stair_collider_segments(blockers, s.get("Path", ""))
+        g_cell = landing_from_slice(ground, segments, gy) if segments else None
+        u_cell = landing_from_slice(upper, segments, uy) if segments else None
+        landing_source = "slice_plane"
+        if g_cell is None:
+            g_cell = navigable_cell_in_footprint(ground, fp); landing_source = "footprint_center"
+        if u_cell is None:
+            u_cell = navigable_cell_in_footprint(upper, fp); landing_source = "footprint_center"
         edge_record = {
+            "landing_source": landing_source,
             "kind": "stairs" if s["SlopeKind"] == "stairs" else "ramp",
             "source_path": s["Path"],
             "source_slope_kind": s["SlopeKind"],

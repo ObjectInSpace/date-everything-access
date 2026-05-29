@@ -47,15 +47,30 @@ namespace DateEverythingAccess
         /// </summary>
         public static Vector3 LastResolvedTarget => _activeTarget;
 
+        // Cross-track error (m) above which the player is "off the corridor" and pure
+        // pursuit must steer it BACK onto the line rather than further along it. Pure
+        // pursuit only converges when the lookahead exceeds the cross-track error; when
+        // the player drifts ~lookahead off the line (e.g. emerging from the stairs ~1.5m
+        // off a corridor), a fixed forward lookahead point sits ahead-and-beside and the
+        // player tracks PARALLEL into the wall instead of cutting back — the confirmed
+        // SM_Walls_Hall1 overshoot stall (player 1.55m N of the z=-6.34 corridor drove
+        // east into the wall). Above this threshold we steer toward the projection point
+        // (straight back onto the line); below it we use the normal forward lookahead.
+        // See [[project-navigation-hall1-runtime-truth-2026-05-29]].
+        private const float PursuitMaxCrossTrackM = 0.6f;
+
         /// <summary>
-        /// Pure-pursuit lookahead point. Projects the player onto the planned polyline
-        /// (the segment ending at the active waypoint, plus all following segments) and
-        /// returns a point <paramref name="lookaheadM"/> metres FORWARD along the polyline
-        /// from that projection. Steering toward this point — rather than the next waypoint
-        /// vertex — keeps the player ON the planned corridor through corners and prevents the
-        /// drift-into-walls the steer-at-vertex controller suffered. Y is taken from the
-        /// polyline; XZ is what matters for steering. Falls back to the active waypoint if
-        /// there is no usable polyline. See [[project-navigation-executor-corner-stall]].
+        /// Pure-pursuit steer point. Projects the player onto the planned polyline (the
+        /// segment ending at the active waypoint, plus all following segments). When the
+        /// player is within <see cref="PursuitMaxCrossTrackM"/> of the line, returns a
+        /// point <paramref name="lookaheadM"/> metres FORWARD along the polyline (normal
+        /// pure pursuit — follows the corridor smoothly through corners). When the player
+        /// is FARTHER off the line than that, returns the projection point itself so the
+        /// player steers straight back ONTO the corridor instead of tracking parallel and
+        /// driving into a wall (the overshoot failure mode). Y is from the polyline; XZ is
+        /// what matters for steering. Falls back to the active waypoint if there is no
+        /// usable polyline. See [[project-navigation-hall1-runtime-truth-2026-05-29]],
+        /// [[project-navigation-executor-corner-stall]].
         /// </summary>
         public static Vector3 PursuitTarget(Vector3 playerPos, float lookaheadM)
         {
@@ -82,10 +97,19 @@ namespace DateEverythingAccess
                 if (d2 < bestDistSq) { bestDistSq = d2; bestSeg = i; bestT = t; }
             }
 
-            // 2. Walk forward lookaheadM metres along the polyline from that projection.
+            Vector3 projPoint = Vector3.Lerp(_waypoints[bestSeg], _waypoints[bestSeg + 1], bestT);
+
+            // 2. If the player has drifted off the corridor by more than the cross-track
+            //    threshold, steer straight back onto the line (the projection point).
+            //    This guarantees convergence — the case a fixed forward lookahead can't
+            //    handle when the lateral error approaches the lookahead distance.
+            if (bestDistSq > PursuitMaxCrossTrackM * PursuitMaxCrossTrackM)
+                return projPoint;
+
+            // 3. On the corridor: walk forward lookaheadM metres along the polyline.
             float remaining = lookaheadM;
             int seg = bestSeg;
-            Vector3 cur = Vector3.Lerp(_waypoints[seg], _waypoints[seg + 1], bestT);
+            Vector3 cur = projPoint;
             while (seg < _waypoints.Count - 1)
             {
                 Vector3 segEnd = _waypoints[seg + 1];
@@ -636,6 +660,16 @@ namespace DateEverythingAccess
         /// If the player is within <see cref="WaypointArrivalRadius"/> of the active waypoint
         /// (XZ), advance to the next one. Returns true when a waypoint was advanced.
         /// </summary>
+        // A waypoint is "arrived" in XZ but on a different floor level than the player is
+        // not really reached — the two stair landings share an XZ but are ~13m apart in Y.
+        // Without a Y gate the XZ-only check counts the GROUND landing as reached the instant
+        // the player passes the (vertically-stacked) UPPER landing, skipping straight to the
+        // ground corridor waypoint while the player is still mid-descent — so the follower
+        // steers across the stairs into the side wall. Gating advance on Y keeps the descent
+        // landing active until the player has actually come down to it.
+        // See [[project-navigation-hall1-runtime-truth-2026-05-29]].
+        private const float WaypointArrivalMaxYDeltaM = 1.5f;
+
         public static bool TryAdvanceWaypoint(Vector3 playerPos)
         {
             if (!_activeTargetValid || _waypoints.Count == 0) return false;
@@ -645,6 +679,15 @@ namespace DateEverythingAccess
             float dz = cur.z - playerPos.z;
             float arrivalRadius = GetActiveWaypointArrivalRadius();
             if (dx * dx + dz * dz > arrivalRadius * arrivalRadius &&
+                !HasPassedActiveDoorWaypoint(playerPos, dx * dx + dz * dz))
+            {
+                return false;
+            }
+            // Y gate: don't count a waypoint as reached while the player is on a different
+            // level (mid-stairs). Keeps the stair-bottom landing active during the descent
+            // so the follower tracks DOWN the stairs rather than cutting toward the next
+            // ground waypoint. Skip the gate for door waypoints (handled in XZ as before).
+            if (Mathf.Abs(cur.y - playerPos.y) > WaypointArrivalMaxYDeltaM &&
                 !HasPassedActiveDoorWaypoint(playerPos, dx * dx + dz * dz))
             {
                 return false;

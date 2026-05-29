@@ -1028,6 +1028,18 @@ namespace DateEverythingAccess
             for (int j = 1; j < los.Count - 1; j++)
             {
                 NodeKey a = outList[outList.Count - 1], b = los[j], c = los[j + 1];
+                // Never drop a floor-transition endpoint (stair/teleporter landing): the
+                // player must pass through BOTH landings to change floors. Pass-2 angles
+                // are XZ-only, so a staircase's two landings (same XZ, different floor Y)
+                // look collinear and the ground-side landing was pruned — making the
+                // follower steer from the stair-top XZ straight at the next ground waypoint,
+                // cutting across the stairs into the side wall mid-descent.
+                // Mirrors plan_object_route.smooth_path. See
+                // [[project-navigation-hall1-runtime-truth-2026-05-29]].
+                if (b.Floor != a.Floor || b.Floor != c.Floor || IsVirtual(a) || IsVirtual(b) || IsVirtual(c))
+                {
+                    outList.Add(b); continue;
+                }
                 Vector2? wa = WorldOf(a), wb = WorldOf(b), wc = WorldOf(c);
                 if (!wa.HasValue || !wb.HasValue || !wc.HasValue) { outList.Add(b); continue; }
                 Vector2 v1 = wb.Value - wa.Value;
