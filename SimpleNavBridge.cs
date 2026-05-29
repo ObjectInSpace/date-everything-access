@@ -222,11 +222,28 @@ namespace DateEverythingAccess
         /// True when the player is within the target's interaction radius (XZ) of the route's
         /// target world position. The planner already routes to a goal cell inside this disc.
         /// </summary>
+        // Max |player.y - finalWaypoint.y| for arrival. The arrival checks are XZ-only,
+        // so a target whose interaction disc overlaps the STAIRCASE (e.g. an object near
+        // the stair foot) was reported "arrived" while the player was still mid-descent
+        // (player y~3.7 vs ground waypoint y=-0.5) — autowalk stopped ON the stairs and
+        // the player had to finish manually. This was the dominant stair stall (25/28
+        // mid-stair stalls were arrival-stops, not grazes). Gate arrival on the player
+        // being on the final waypoint's floor level. 1.5m tolerance absorbs step height /
+        // the player-origin lift without admitting a mid-stair pose.
+        // See [[project-navigation-stair-arrival-stop-2026-05-29]].
+        private const float ArrivalMaxYDeltaM = 1.5f;
+
         public static bool HasArrivedAtRouteTarget(Vector3 playerPos)
         {
             if (_activeRoute == null) return false;
             if (!_activeTargetValid || _waypoints.Count == 0) return false;
             if (_waypointIndex < _waypoints.Count - 1) return false;
+
+            // Not arrived while the player is on a different level than the final
+            // waypoint (mid-stairs) — XZ proximity alone is not arrival.
+            Vector3 finalWp = _waypoints[_waypoints.Count - 1];
+            if (Mathf.Abs(playerPos.y - finalWp.y) > ArrivalMaxYDeltaM)
+                return false;
 
             if (_activeRoute.TargetGameObjectId == 0)
             {
