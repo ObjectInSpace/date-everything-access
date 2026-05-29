@@ -472,11 +472,21 @@ class Planner:
 _SEGMENT_SAMPLE_STEP_FACTOR = 0.35
 
 
-def _segment_is_clear(planner, a, b):
+def _segment_is_clear(planner, a, b, min_clearance=0):
     """True iff every cell along the straight world-space segment from a to b is
     navigable on a's floor. Same-floor only; cross-floor and virtual-node segments
     are conservatively treated as non-clear so they always carry an explicit
     waypoint.
+
+    When `min_clearance` > 0, every sampled cell must additionally have clearance
+    (cells-to-nearest-wall) >= min_clearance. The smoother passes the minimum
+    clearance of the raw A* sub-path it is collapsing, so a line-of-sight shortcut
+    cannot straighten a margin-keeping path back to HUG an obstacle: A* (with the
+    clearance-cost) curves around furniture/doorframe jambs with ~0.4m margin, but a
+    plain navigability-only shortcut flattens it flush against the obstacle (0.2m),
+    so the follower grazes. A shortcut through a genuinely tight spot the raw path
+    already threaded (min_clearance already low there) is still allowed.
+    See [[project-navigation-stair-arrival-stop-2026-05-29]] (doorframe/furniture class).
 
     Uses supercover-style sampling at ~0.35 cells per step. Earlier versions used
     Bresenham, which steps in (sx, sz) independently and could slip diagonally
@@ -500,6 +510,8 @@ def _segment_is_clear(planner, a, b):
         if cell == last_cell:
             continue
         if not floor.navigable(cell[0], cell[1]):
+            return False
+        if min_clearance > 0 and floor.clearance(cell[0], cell[1]) < min_clearance:
             return False
         # Reject corner-cuts: if the sampled cell moved diagonally from the
         # previous one, both orthogonal in-between cells must be navigable too.
@@ -540,8 +552,25 @@ def smooth_path(path, planner):
         return list(path)
 
     # Pass 1: greedy line-of-sight.
+    # Min clearance (cells, capped) of the raw A* cells over path[lo..hi]. A
+    # line-of-sight shortcut spanning those cells must hold at least this much
+    # clearance, so it can't straighten a margin-keeping curve back against an
+    # obstacle — but a shortcut through a spot the raw path already threaded tight
+    # stays allowed. Virtual nodes are skipped (they have no grid clearance).
+    def _subpath_min_clearance(lo, hi):
+        mn = CLEARANCE_TARGET_CELLS
+        for k in range(lo, hi + 1):
+            n = path[k]
+            if n[0].startswith("@"):
+                continue
+            c = planner.floors[n[0]].clearance(n[1], n[2])
+            if c < mn:
+                mn = c
+        return mn
+
     los = [path[0]]
     last_anchor_idx = 0
+    anchor_path_idx = 0
     i = 1
     while i < len(path):
         node = path[i]
@@ -552,10 +581,14 @@ def smooth_path(path, planner):
             if los[-1] != node:
                 los.append(node)
             last_anchor_idx = i
+            anchor_path_idx = i
             i += 1
             continue
-        # If the straight segment from anchor to node is still clear, keep skipping.
-        if _segment_is_clear(planner, los[-1], node):
+        # Keep skipping while the straight segment stays clear AND holds the
+        # clearance of the raw sub-path it replaces (so it rounds obstacles with
+        # the margin A* found instead of hugging them).
+        if _segment_is_clear(planner, los[-1], node,
+                             min_clearance=_subpath_min_clearance(anchor_path_idx, i)):
             i += 1
             continue
         # Otherwise the previous cell was the last clear endpoint; anchor it.
@@ -565,10 +598,12 @@ def smooth_path(path, planner):
         if i - 1 <= last_anchor_idx:
             los.append(node)
             last_anchor_idx = i
+            anchor_path_idx = i
             i += 1
         else:
             los.append(prev)
             last_anchor_idx = i - 1
+            anchor_path_idx = i - 1
     # Always end at the final node.
     if los[-1] != path[-1]:
         los.append(path[-1])
@@ -600,7 +635,11 @@ def smooth_path(path, planner):
         dot = (v1[0] * v2[0] + v1[1] * v2[1]) / (n1 * n2)
         dot = max(-1.0, min(1.0, dot))
         angle_deg = math.degrees(math.acos(dot))
-        if angle_deg <= CORNER_WAYPOINT_DEG and _segment_is_clear(planner, a, c):
+        # Only drop b if the a→c shortcut also holds b's clearance — else pruning a
+        # corner of a margin-keeping curve would route a→c flush against the obstacle
+        # b was rounding.
+        b_clear = planner.floors[b[0]].clearance(b[1], b[2]) if not b[0].startswith("@") else 0
+        if angle_deg <= CORNER_WAYPOINT_DEG and _segment_is_clear(planner, a, c, min_clearance=b_clear):
             continue  # drop b
         out.append(b)
     out.append(los[-1])
