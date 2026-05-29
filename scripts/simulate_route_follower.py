@@ -85,10 +85,27 @@ def pursuit_target(wps, wp_index, px, pz, lookahead):
     return wps[-1]
 
 
-def simulate(floor, wps):
-    """Run the follower from wps[0] to wps[-1]. Returns (status, stall_pos, trace)."""
+# Radius around a door-tagged position within which an off-navigable position is
+# attributed to the door opening rather than a wall stall. The in-game executor
+# opens any door on the route as it reaches it (see
+# [[project-navigation-door-handling-rules]]), so the capsule legitimately
+# overlaps the closed-pose doorway cells for a moment while the door swings. A
+# little wider than the planner's DOOR_TAG_RADIUS_M (0.8m) to cover the threshold
+# span the player crosses during the swing.
+DOOR_OPEN_SPAN_M = 1.5
+
+
+def simulate(floor, wps, door_xz=None):
+    """Run the follower from wps[0] to wps[-1]. Returns (status, stall_pos, trace).
+
+    `door_xz` is the list of (x, z) positions of doors this route is tagged to
+    pass through. Near one of those, an off-navigable position is treated as the
+    executor opening the door (not a wall stall), so the stall counter resets —
+    this is how a route through a door the player must open gets verified rather
+    than false-flagged at the doorway."""
     if len(wps) < 2:
         return "trivial", None, []
+    door_xz = door_xz or []
     px, pz = wps[0]
     facing = math.atan2(wps[1][1] - pz, wps[1][0] - px)  # start facing 1st segment
     wp_index = 1
@@ -115,6 +132,13 @@ def simulate(floor, wps):
         # Check the player position against the navigable bitmap.
         ix, iz = floor.world_to_cell(px, pz)
         if not (floor.in_bounds(ix, iz) and floor.navigable(ix, iz)):
+            # If we're at a door the route passes through, the executor is
+            # opening it — not a wall stall. Reset the counter and proceed.
+            near_door = any(math.hypot(px - dx, pz - dz) <= DOOR_OPEN_SPAN_M
+                            for dx, dz in door_xz)
+            if near_door:
+                offcells = []
+                continue
             offcells.append((round(px, 2), round(pz, 2)))
             # If we pile up off-navigable for a stretch, call it a stall.
             if len(offcells) >= 15:
@@ -140,14 +164,47 @@ def upper_or_floor_wps(route, planner):
     return runs
 
 
+def _door_positions_by_floor(route, planner):
+    """Collect the world XZ of every door this route is tagged to pass through,
+    grouped by floor label. Door tags live on route segments (tag_doors); their
+    XZ comes from the planner's door_positions() table keyed by id/name."""
+    by_floor = {}
+    pos_by_id = {d["id"]: d["xz"] for d in planner_mod.door_positions()}
+    pos_by_name = {d["name"]: d["xz"] for d in planner_mod.door_positions()}
+    for seg in route.get("segments", []):
+        fl = seg.get("from", {}).get("floor")
+        if fl is None:
+            continue
+        for d in seg.get("doors", []):
+            xz = pos_by_id.get(d.get("id")) or pos_by_name.get(d.get("name"))
+            if xz is not None:
+                by_floor.setdefault(fl, []).append((xz[0], xz[1]))
+    return by_floor
+
+
 def run_one(planner, route):
     runs = upper_or_floor_wps(route, planner)
+    doors_by_floor = _door_positions_by_floor(route, planner)
     results = []
     for fl_label, wps in runs:
         floor = planner.floors[fl_label]
-        status, stall, off = simulate(floor, wps)
+        status, stall, off = simulate(floor, wps, door_xz=doors_by_floor.get(fl_label, []))
         results.append((fl_label, status, stall, len(off)))
     return results
+
+
+def _sweep_planner_config(sweep_dir):
+    """Read the door / state-wall posture from a sweep manifest so the follower's
+    Planner matches the one the routes were planned under. Manifests written before
+    this field existed default to the dispersed-sweep posture (every door open,
+    every state-wall released), which is how those route files were planned."""
+    manifest_path = sweep_dir / "sweep_manifest.json"
+    if not manifest_path.exists():
+        return "all", "all"
+    params = json.loads(manifest_path.read_text()).get("params", {})
+    doors_open = params.get("doors_open", "all")
+    state_walls_open = params.get("state_walls_open", "all")
+    return doors_open, state_walls_open
 
 
 def main():
@@ -159,10 +216,16 @@ def main():
     args = ap.parse_args()
 
     bake = planner_mod.load_bake()
-    planner = planner_mod.Planner(bake)
 
     if args.sweep:
         sweep_dir = Path(args.sweep)
+        # Mirror the door / state-wall posture the routes were planned under, read
+        # from the sweep manifest. A bare Planner(bake) closes every door, so a
+        # doors-open sweep would false-stall at every doorway it routes through.
+        doors_open, state_walls_open = _sweep_planner_config(sweep_dir)
+        planner = planner_mod.Planner(
+            bake, doors_open=doors_open, state_walls_open=state_walls_open
+        )
         files = sorted(sweep_dir.glob("route.*.json"))
         stalls = 0
         for f in files:
@@ -176,6 +239,7 @@ def main():
         print(f"\n{len(files)} routes simulated, {stalls} predicted stalls.")
         return
 
+    planner = planner_mod.Planner(bake)
     if not args.target:
         ap.error("provide --target or --sweep")
     route = planner_mod.plan(args.target, start_xz=args.start_xz, start_floor=args.start_floor)
