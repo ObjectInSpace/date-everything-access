@@ -86,6 +86,11 @@ namespace DateEverythingAccess
         // have changed by the time we serialize).
         private static List<string> _lastOpenDoorNames = new List<string>();
         private static List<string> _lastOpenStateWallNames = new List<string>();
+        // Door names that are locked at scene load (exporter Door.Locked, carried
+        // through the bake). A locked door is a hard block; every other door is
+        // treated as openable when planning so A* can route through it and the
+        // executor opens it en route. Populated by IndexDoorFreedCells.
+        private static readonly HashSet<string> _lockedDoorNames = new HashSet<string>();
         // Monotonic counter for capture filenames. Restarted at process start.
         private static int _captureSeq;
 
@@ -349,7 +354,11 @@ namespace DateEverythingAccess
                     .Append(startPos.y.ToString("F4")).Append(", ")
                     .Append(startPos.z.ToString("F4")).Append("],\n");
                 sb.Append("  \"start_floor\": ").Append(JsonString(startFloorLabel)).Append(",\n");
-                sb.Append("  \"doors_open\": ").Append(JsonStringArray(_lastOpenDoorNames)).Append(",\n");
+                // The planner routes through every unlocked door (the executor
+                // opens path-doors en route), so the offline parity re-plan must
+                // do the same — emit the "unlocked" mode string, not just the
+                // live-open names. The Python Planner accepts doors_open="unlocked".
+                sb.Append("  \"doors_open\": \"unlocked\",\n");
                 sb.Append("  \"state_walls_open\": ").Append(JsonStringArray(_lastOpenStateWallNames)).Append(",\n");
                 sb.Append("  \"cost_m\": ").Append(totalCost.ToString("F4")).Append(",\n");
                 sb.Append("  \"waypoints\": [\n");
@@ -520,6 +529,7 @@ namespace DateEverythingAccess
         private static void IndexDoorFreedCells()
         {
             if (_bake?.floors == null) return;
+            _lockedDoorNames.Clear();
             for (int fi = 0; fi < _bake.floors.Length; fi++)
             {
                 BakeFloor raw = _bake.floors[fi];
@@ -532,6 +542,8 @@ namespace DateEverythingAccess
                     {
                         DoorRecord d = raw.doors[di];
                         if (d == null || string.IsNullOrEmpty(d.name) || d.freed_cells == null) continue;
+                        // Locked is authoritative regardless of record ordering.
+                        if (d.locked) _lockedDoorNames.Add(d.name);
                         HashSet<long> cells;
                         if (!floor.DoorFreedByName.TryGetValue(d.name, out cells))
                         {
@@ -637,10 +649,37 @@ namespace DateEverythingAccess
                 else totalWallsUnmatched++;
             }
 
+            // Openable-door pass: plan through every door the player CAN open
+            // (everything except the locked ones), regardless of its current live
+            // open state. The autowalk executor opens any door on the route as it
+            // reaches it (see [[project-navigation-door-handling-rules]]), so a
+            // route that needs a closed-but-unlocked door is valid — the planner
+            // must not return no_path just because the door happens to be shut
+            // right now. Without this, a target behind a closed door is
+            // unreachable and ToggleAutoWalk reports NoPath before the executor
+            // ever gets a chance to open it (observed in-game: MagnifyingGlass
+            // no_path with open=0). Locked doors stay hard-blocked. Mirrors the
+            // Python planner's doors_open="unlocked". See
+            // [[project-navigation-sweep-follower-doorstate-fix]].
+            int openableFreed = 0;
+            for (int fi = 0; fi < _floors.Count; fi++)
+            {
+                Floor f = _floors[fi];
+                foreach (var kvp in f.DoorFreedByName)
+                {
+                    if (_lockedDoorNames.Contains(kvp.Key)) continue;
+                    int before = f.ExtraNavigable.Count;
+                    f.ExtraNavigable.UnionWith(kvp.Value);
+                    openableFreed += f.ExtraNavigable.Count - before;
+                }
+            }
+            totalFreed += openableFreed;
+
             if (Main.Log != null)
                 Main.Log.LogInfo("SimpleNavPlanner.ApplyLiveDoorState: doors=" + totalDoorsFound +
                     " (hinges=" + hinges.Length + " sliders=" + sliders.Length + ")" +
                     " open=" + totalDoorsOpen + " matched=" + totalDoorsMatched + " unmatched=" + totalDoorsUnmatched +
+                    " | openableFreed=" + openableFreed + " lockedDoors=" + _lockedDoorNames.Count +
                     " | stateWalls=" + totalWallsFound + " released=" + totalWallsReleased +
                     " matched=" + totalWallsMatched + " unmatched=" + totalWallsUnmatched +
                     " | freedCells=" + totalFreed);
@@ -1567,6 +1606,8 @@ namespace DateEverythingAccess
         {
             [DataMember] public string name;
             [DataMember] public int[][] freed_cells;
+            [DataMember] public bool locked;
+            [DataMember] public bool default_open;
         }
 
         [DataContract]
