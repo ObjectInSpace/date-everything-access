@@ -135,9 +135,13 @@ def main():
     ap.add_argument("--run-id", default="default",
                     help="Subdirectory name under artifacts/navigation/sweep/.")
     ap.add_argument("--doors-open", nargs="*", metavar="NAME",
-                    help="Override the doors-open set; default opens every door.")
+                    help="Override the doors-open set with specific names.")
     ap.add_argument("--doors-closed", action="store_true",
-                    help="Sweep with every door closed (matches scene-load state).")
+                    help="Sweep with every door closed (raw scene-load cells; "
+                         "routes needing any door open will report no_path).")
+    ap.add_argument("--doors-all", action="store_true",
+                    help="Open every door including locked ones (absolute max-"
+                         "coverage probe; ignores the locked gate).")
     ap.add_argument("--state-walls-open", nargs="*", metavar="NAME",
                     help="Override the state-walls-open set; default releases every wall.")
     ap.add_argument("--state-walls-active", action="store_true",
@@ -148,17 +152,25 @@ def main():
     args = ap.parse_args()
 
     bake = _mod.load_bake()
-    # Sweep precondition: every door is open AND every state-wall released.
-    # The sweep verifies max-coverage routing — "could the planner reach this
-    # target if every door it needs were unlocked and every story-gate cleared."
-    # Per-route door state is tagged in the artifact via tag_doors(), so
-    # consumers can still see which doors a route requires.
+    # Door model: default to "unlocked" — open every door the player CAN open
+    # during normal play, but hard-block the locked door(s). This matches the
+    # in-game autowalk executor, which opens any door on the route it reaches
+    # (see [[project-navigation-door-handling-rules]]) yet cannot pass a locked
+    # door. It is the honest coverage question: "could the player reach this,
+    # opening doors they're allowed to?" Per-route door requirements are still
+    # captured via tag_doors() so consumers see which doors a route depends on.
+    # Overrides: --doors-all (include locked, absolute max coverage),
+    # --doors-closed (raw scene-load, no door opening), --doors-open NAME...
+    # (explicit set). The locked/unlocked split comes from the exporter's
+    # per-door Door.Locked carried through the bake — not guessed.
     if args.doors_closed:
         doors_open = None
+    elif args.doors_all:
+        doors_open = "all"
     elif args.doors_open is not None:
         doors_open = args.doors_open
     else:
-        doors_open = "all"
+        doors_open = "unlocked"
     if args.state_walls_active:
         state_walls_open = None
     elif args.state_walls_open is not None:
@@ -215,6 +227,12 @@ def main():
         "params": {
             "grid_m": args.grid_m,
             "floors": floors_to_sweep,
+            # Persist the door / state-wall posture the routes were planned under so
+            # downstream consumers (simulate_route_follower.py) build a matching
+            # Planner. "all" = every door open / every state-wall released; None =
+            # all closed / all active; a list = those specific names freed.
+            "doors_open": doors_open,
+            "state_walls_open": state_walls_open,
         },
         "entries": [],
     }
