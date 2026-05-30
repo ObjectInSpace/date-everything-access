@@ -84,8 +84,7 @@ New-Item -ItemType Directory -Path (Join-Path $packageRoot "BepInEx\plugins") -F
 
 Copy-Item -LiteralPath $outputDllPath -Destination (Join-Path $packageRoot "BepInEx\plugins\DateEverythingAccess.dll") -Force
 foreach ($supportFile in @(
-    "navigable_region.bake.json",
-    "thirdpersongreybox-navigation-data.json"
+    "navigable_region.bake.json"
 )) {
     $supportPath = Join-Path (Split-Path -Parent $outputDllPath) $supportFile
     if (Test-Path -LiteralPath $supportPath) {
