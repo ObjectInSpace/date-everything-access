@@ -16,7 +16,6 @@ namespace DateEverythingAccess
     internal static class SimpleNavPlanner
     {
         private const string BakeFileName = "navigable_region.bake.json";
-        private const string SceneNavigationDataFileName = "thirdpersongreybox-navigation-data.json";
         private const char NavigableChar = 'N';
         private const float CornerWaypointDeg = 30f;
         // Door is tagged on a segment if its XZ is within this radius of the segment.
@@ -72,12 +71,6 @@ namespace DateEverythingAccess
         // cells the planner fails fast (DoorMissingOperableCells) rather than guessing
         // with the band, so a missing/broken operability data source surfaces instead of
         // being silently papered over. See [[project-navigation-door-operability-cells]].
-        // Door portal waypoints are semantic, not just geometric corners. The executor should
-        // approach the opening, cross it, then clear the far side instead of aiming a long
-        // segment through the live open door panel.
-        private const float DoorOpeningApproachDistanceM = 1.15f;
-        private const float DoorOpeningMinimumSpacingSqM = 0.36f;
-
         private static BakeDoc _bake;
         private static List<Floor> _floors;
         private static float _cellSize;
@@ -86,8 +79,6 @@ namespace DateEverythingAccess
         private static float _minInterFloorCost;
         private static bool _loadAttempted;
         private static bool _loadOk;
-        private static bool _doorOpeningsLoadAttempted;
-        private static Dictionary<string, Vector3> _doorOpeningByName;
 
         // Names of doors and state-walls treated as open during the last
         // ApplyLiveDoorState call. Captured here so the route-capture path can
@@ -1409,107 +1400,6 @@ namespace DateEverythingAccess
             route.AddWaypoint(waypoint, kind, doorName);
         }
 
-        private static bool TryGetDoorOpeningWaypoints(
-            List<string> doorNames,
-            Vector3 segmentStart,
-            Vector3 segmentEnd,
-            out string doorName,
-            out Vector3 approach,
-            out Vector3 opening,
-            out Vector3 exit)
-        {
-            doorName = null;
-            approach = Vector3.zero;
-            opening = Vector3.zero;
-            exit = Vector3.zero;
-            if (doorNames == null || doorNames.Count == 0)
-                return false;
-
-            for (int i = 0; i < doorNames.Count; i++)
-            {
-                if (!TryGetExportedDoorOpening(doorNames[i], out Vector3 center))
-                    continue;
-
-                center.y = (segmentStart.y + segmentEnd.y) * 0.5f;
-                Vector3 segment = segmentEnd - segmentStart;
-                segment.y = 0f;
-                if (segment.sqrMagnitude <= 0.0001f)
-                    continue;
-
-                Vector3 direction = segment.normalized;
-                Vector3 toCenter = center - segmentStart;
-                toCenter.y = 0f;
-                float projection = Vector3.Dot(toCenter, segment) / segment.sqrMagnitude;
-                if (projection < 0.05f || projection > 0.95f)
-                    continue;
-
-                Vector3 candidateApproach = center - direction * DoorOpeningApproachDistanceM;
-                Vector3 candidateExit = center + direction * DoorOpeningApproachDistanceM;
-                candidateApproach.y = center.y;
-                candidateExit.y = center.y;
-
-                if (FlatDistanceSq(segmentStart, candidateApproach) <= DoorOpeningMinimumSpacingSqM ||
-                    FlatDistanceSq(candidateApproach, center) <= DoorOpeningMinimumSpacingSqM ||
-                    FlatDistanceSq(center, candidateExit) <= DoorOpeningMinimumSpacingSqM ||
-                    FlatDistanceSq(candidateExit, segmentEnd) <= DoorOpeningMinimumSpacingSqM)
-                    continue;
-
-                doorName = doorNames[i];
-                approach = candidateApproach;
-                opening = center;
-                exit = candidateExit;
-                return true;
-            }
-
-            return false;
-        }
-
-        private static bool TryGetExportedDoorOpening(string doorName, out Vector3 center)
-        {
-            center = Vector3.zero;
-            EnsureDoorOpeningsLoaded();
-            return _doorOpeningByName != null &&
-                !string.IsNullOrEmpty(doorName) &&
-                _doorOpeningByName.TryGetValue(doorName, out center);
-        }
-
-        private static void EnsureDoorOpeningsLoaded()
-        {
-            if (_doorOpeningsLoadAttempted)
-                return;
-
-            _doorOpeningsLoadAttempted = true;
-            _doorOpeningByName = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
-            string path = Path.Combine(Paths.PluginPath, SceneNavigationDataFileName);
-            if (!File.Exists(path))
-                return;
-
-            try
-            {
-                using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(File.ReadAllText(path))))
-                {
-                    var serializer = new DataContractJsonSerializer(typeof(SceneNavigationDataDoc));
-                    SceneNavigationDataDoc doc = serializer.ReadObject(stream) as SceneNavigationDataDoc;
-                    if (doc == null || doc.OcclusionPortals == null)
-                        return;
-
-                    for (int i = 0; i < doc.OcclusionPortals.Length; i++)
-                    {
-                        ScenePortalRecord portal = doc.OcclusionPortals[i];
-                        if (portal == null || string.IsNullOrEmpty(portal.ParentDoorName) || portal.Center == null)
-                            continue;
-
-                        _doorOpeningByName[portal.ParentDoorName] = new Vector3(portal.Center.x, portal.Center.y, portal.Center.z);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                if (Main.Log != null)
-                    Main.Log.LogWarning("SimpleNavPlanner: failed to load door opening portals from " + path + " ex=" + ex.Message);
-            }
-        }
-
         private static float FlatDistanceSq(Vector3 a, Vector3 b)
         {
             float dx = a.x - b.x;
@@ -1869,26 +1759,6 @@ namespace DateEverythingAccess
             [DataMember] public float[] world_xyz;
         }
 
-        [DataContract]
-        private class SceneNavigationDataDoc
-        {
-            [DataMember] public ScenePortalRecord[] OcclusionPortals;
-        }
-
-        [DataContract]
-        private class ScenePortalRecord
-        {
-            [DataMember] public string ParentDoorName;
-            [DataMember] public SceneVector3 Center;
-        }
-
-        [DataContract]
-        private class SceneVector3
-        {
-            [DataMember] public float x;
-            [DataMember] public float y;
-            [DataMember] public float z;
-        }
 #pragma warning restore CS0649
     }
 }
