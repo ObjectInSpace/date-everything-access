@@ -45,6 +45,16 @@ namespace DateEverythingAccess
         // with the Python planner's start/goal snap radius for parity.
         private const float NearestNavigableSearchM = 6.0f;
         private const float FloorMatchToleranceM = 2.0f;
+        // Bounded clearance-cost A* + smoother guard. A cell nearer than
+        // ClearanceTargetCells (=4 cells = 0.8m) to a wall costs extra metres per missing
+        // clearance-cell, so A* prefers the wide lane through a doorway/between furniture
+        // WITHOUT detouring where there's no wider option. The smoother then refuses to
+        // straighten those margin-keeping curves back against the obstacle. Mirrors
+        // plan_object_route.py CLEARANCE_TARGET_CELLS / CLEARANCE_PENALTY_PER_CELL_M. See
+        // [[project-navigation-csharp-clearance-port-TODO]],
+        // [[project-navigation-clearance-cost-rejected-2026-05-29]] (reconciled: bounded, not flat).
+        private const int ClearanceTargetCells = 4;
+        private const float ClearancePenaltyPerCellM = 0.15f;
         // Player-capsule + safety margin from the target's collider face. Goal cells whose
         // player-capsule center is closer than this become invalid (overlap), and cells further
         // than ColliderBandOuterM become invalid (too far to interact reliably). The result is
@@ -194,7 +204,48 @@ namespace DateEverythingAccess
             // See [[project-navigation-collider-band-filter]].
             Door targetDoor = ResolveTargetDoor(targetGameObjectId);
             Collider targetCollider = targetDoor == null ? ResolveTargetCollider(targetGameObjectId) : null;
-            if (targetDoor != null || targetCollider != null)
+
+            // Door target: use the bake's operable_from_cells — the authoritative set of
+            // navigable cells the player can stand in to operate this door (already
+            // excludes the swing arc and the panel itself, computed from the real Door.cs
+            // rule). This replaces the old hinge-distance band approximation. Fall back to
+            // the band filter only if the bake has no operable cells for this door.
+            // See [[project-navigation-door-operability-cells]].
+            bool doorGoalsFromOperable = false;
+            if (targetDoor != null && targetDoor.gameObject != null)
+            {
+                HashSet<long> operable;
+                if (goalFloor.OperableFromByName.TryGetValue(targetDoor.gameObject.name, out operable)
+                    && operable.Count > 0)
+                {
+                    List<NodeKey> opGoals = new List<NodeKey>(operable.Count);
+                    foreach (long packed in operable)
+                    {
+                        int ix = (int)(packed >> 32);
+                        int iz = (int)(uint)packed;
+                        if (goalFloor.Navigable(ix, iz))
+                            opGoals.Add(new NodeKey(goalFloor.Label, ix, iz));
+                    }
+                    if (opGoals.Count > 0)
+                    {
+                        goals = opGoals;
+                        doorGoalsFromOperable = true;
+                    }
+                }
+                if (!doorGoalsFromOperable && Main.Log != null)
+                    Main.Log.LogInfo("SimpleNavPlanner.Plan: no operable_from_cells for door target=" +
+                        (targetName ?? "<null>") + "; falling back to hinge band");
+            }
+
+            // Collider target (or door fallback): narrow goal cells to a band around the
+            // target so A* terminates *near* the interactable instead of anywhere in the
+            // 7.5m InteractionRadius disc.
+            //   - Door fallback: distance from targetPos (the hinge); the door's Collider
+            //     AABB sweeps with the panel, so ClosestPointOnBounds is unreliable.
+            //   - Non-door targets: distance from the target's Collider via
+            //     ClosestPointOnBounds, which hugs prop geometry.
+            // See [[project-navigation-collider-band-filter]].
+            if (!doorGoalsFromOperable && (targetDoor != null || targetCollider != null))
             {
                 List<NodeKey> filtered = new List<NodeKey>(goals.Count);
                 float innerM = targetDoor != null ? DoorHingeBandInnerM : TargetColliderClearanceM;
@@ -541,20 +592,38 @@ namespace DateEverythingAccess
                     for (int di = 0; di < raw.doors.Length; di++)
                     {
                         DoorRecord d = raw.doors[di];
-                        if (d == null || string.IsNullOrEmpty(d.name) || d.freed_cells == null) continue;
+                        if (d == null || string.IsNullOrEmpty(d.name)) continue;
                         // Locked is authoritative regardless of record ordering.
                         if (d.locked) _lockedDoorNames.Add(d.name);
-                        HashSet<long> cells;
-                        if (!floor.DoorFreedByName.TryGetValue(d.name, out cells))
+                        if (d.freed_cells != null)
                         {
-                            cells = new HashSet<long>();
-                            floor.DoorFreedByName[d.name] = cells;
+                            HashSet<long> cells;
+                            if (!floor.DoorFreedByName.TryGetValue(d.name, out cells))
+                            {
+                                cells = new HashSet<long>();
+                                floor.DoorFreedByName[d.name] = cells;
+                            }
+                            for (int ci = 0; ci < d.freed_cells.Length; ci++)
+                            {
+                                int[] pair = d.freed_cells[ci];
+                                if (pair == null || pair.Length < 2) continue;
+                                cells.Add(Floor.PackCell(pair[0], pair[1]));
+                            }
                         }
-                        for (int ci = 0; ci < d.freed_cells.Length; ci++)
+                        if (d.operable_from_cells != null)
                         {
-                            int[] pair = d.freed_cells[ci];
-                            if (pair == null || pair.Length < 2) continue;
-                            cells.Add(Floor.PackCell(pair[0], pair[1]));
+                            HashSet<long> op;
+                            if (!floor.OperableFromByName.TryGetValue(d.name, out op))
+                            {
+                                op = new HashSet<long>();
+                                floor.OperableFromByName[d.name] = op;
+                            }
+                            for (int ci = 0; ci < d.operable_from_cells.Length; ci++)
+                            {
+                                int[] pair = d.operable_from_cells[ci];
+                                if (pair == null || pair.Length < 2) continue;
+                                op.Add(Floor.PackCell(pair[0], pair[1]));
+                            }
                         }
                     }
                 }
@@ -674,6 +743,11 @@ namespace DateEverythingAccess
                 }
             }
             totalFreed += openableFreed;
+
+            // Navigability just changed (overlay rebuilt) — the clearance map is stale.
+            // Mirror plan_object_route.py _rebuild_extra_navigable nulling floor._clearance.
+            for (int i = 0; i < _floors.Count; i++)
+                _floors[i].InvalidateClearance();
 
             if (Main.Log != null)
                 Main.Log.LogInfo("SimpleNavPlanner.ApplyLiveDoorState: doors=" + totalDoorsFound +
@@ -841,6 +915,8 @@ namespace DateEverythingAccess
                     f.ExtraNavigable.UnionWith(kvp.Value);
                 foreach (var kvp in f.StateWallFreedByName)
                     f.ExtraNavigable.UnionWith(kvp.Value);
+                // Navigability changed for the relaxed A* — clearance map is stale.
+                f.InvalidateClearance();
             }
 
             try
@@ -862,6 +938,8 @@ namespace DateEverythingAccess
                     Floor f = _floors[i];
                     f.ExtraNavigable.Clear();
                     f.ExtraNavigable.UnionWith(saved[i]);
+                    // Restored the live overlay — clearance map must reflect it again.
+                    f.InvalidateClearance();
                 }
             }
         }
@@ -951,7 +1029,13 @@ namespace DateEverythingAccess
                             !(f.Navigable(node.Ix + ddx, node.Iz) && f.Navigable(node.Ix, node.Iz + ddz)))
                             continue;
                         float step = (ddx != 0 && ddz != 0) ? Sqrt2 : 1f;
-                        yield return (new NodeKey(f.Label, nx, nz), step * f.CellSize);
+                        // Bounded clearance penalty on the destination cell: cells nearer
+                        // than ClearanceTargetCells to a wall cost extra metres, so A*
+                        // prefers the wide lane. Penalty only raises g (heuristic stays
+                        // admissible). Mirrors plan_object_route.py Planner.neighbors.
+                        int deficit = ClearanceTargetCells - f.Clearance(nx, nz);
+                        float penalty = deficit > 0 ? deficit * ClearancePenaltyPerCellM : 0f;
+                        yield return (new NodeKey(f.Label, nx, nz), step * f.CellSize + penalty);
                     }
                 }
             }
@@ -976,6 +1060,27 @@ namespace DateEverythingAccess
 
         // ---- smoothing ----
 
+        // Min clearance (cells, capped) of the raw A* cells over path[lo..hi]. A
+        // line-of-sight shortcut spanning those cells must hold at least this much
+        // clearance, so it can't straighten a margin-keeping curve back against an
+        // obstacle — but a shortcut through a spot the raw path already threaded tight
+        // stays allowed. Virtual nodes are skipped (no grid clearance). Mirrors
+        // plan_object_route.py _subpath_min_clearance.
+        private static int SubpathMinClearance(List<NodeKey> path, int lo, int hi)
+        {
+            int mn = ClearanceTargetCells;
+            for (int k = lo; k <= hi; k++)
+            {
+                NodeKey n = path[k];
+                if (IsVirtual(n)) continue;
+                Floor f = FloorByLabel(n.Floor);
+                if (f == null) continue;
+                int c = f.Clearance(n.Ix, n.Iz);
+                if (c < mn) mn = c;
+            }
+            return mn;
+        }
+
         private static List<NodeKey> SmoothPath(List<NodeKey> path)
         {
             if (path == null || path.Count <= 2) return new List<NodeKey>(path ?? new List<NodeKey>());
@@ -984,6 +1089,7 @@ namespace DateEverythingAccess
             List<NodeKey> los = new List<NodeKey> { path[0] };
             int i = 1;
             int lastAnchorIdx = 0;
+            int anchorPathIdx = 0;
             while (i < path.Count)
             {
                 NodeKey node = path[i];
@@ -994,10 +1100,16 @@ namespace DateEverythingAccess
                     if (!prev.Equals(los[los.Count - 1])) los.Add(prev);
                     if (!node.Equals(los[los.Count - 1])) los.Add(node);
                     lastAnchorIdx = i;
+                    anchorPathIdx = i;
                     i++;
                     continue;
                 }
-                if (SegmentIsClear(los[los.Count - 1], node))
+                // Keep skipping while the straight segment stays clear AND holds the
+                // clearance of the raw A* sub-path it replaces (so it rounds obstacles
+                // with the margin A* found instead of hugging them). Mirrors
+                // plan_object_route.py smooth_path pass 1.
+                if (SegmentIsClear(los[los.Count - 1], node,
+                        SubpathMinClearance(path, anchorPathIdx, i)))
                 {
                     i++;
                     continue;
@@ -1013,12 +1125,14 @@ namespace DateEverythingAccess
                     // Can't make progress by re-anchoring; force advance.
                     los.Add(node);
                     lastAnchorIdx = i;
+                    anchorPathIdx = i;
                     i++;
                 }
                 else
                 {
                     los.Add(prev);
                     lastAnchorIdx = i - 1;
+                    anchorPathIdx = i - 1;
                 }
             }
             if (!los[los.Count - 1].Equals(path[path.Count - 1])) los.Add(path[path.Count - 1]);
@@ -1048,7 +1162,12 @@ namespace DateEverythingAccess
                 if (n1 == 0f || n2 == 0f) { outList.Add(b); continue; }
                 float dot = Mathf.Clamp(Vector2.Dot(v1, v2) / (n1 * n2), -1f, 1f);
                 float angleDeg = Mathf.Acos(dot) * Mathf.Rad2Deg;
-                if (angleDeg <= CornerWaypointDeg && SegmentIsClear(a, c))
+                // Only drop b if the a→c shortcut also holds b's own clearance — else
+                // pruning a corner of a margin-keeping curve routes a→c flush against the
+                // obstacle b was rounding. Mirrors plan_object_route.py smooth_path pass 2.
+                Floor bf = IsVirtual(b) ? null : FloorByLabel(b.Floor);
+                int bClear = bf != null ? bf.Clearance(b.Ix, b.Iz) : 0;
+                if (angleDeg <= CornerWaypointDeg && SegmentIsClear(a, c, bClear))
                     continue; // drop b
                 outList.Add(b);
             }
@@ -1075,7 +1194,7 @@ namespace DateEverythingAccess
         // smoothing to create routes that skimmed wall-like blockers such as the living-room
         // fireplace. Sampling at half-cell spacing is deliberately conservative and only affects
         // waypoint smoothing, not A* graph connectivity.
-        private static bool SegmentIsClear(NodeKey a, NodeKey b)
+        private static bool SegmentIsClear(NodeKey a, NodeKey b, int minClearance = 0)
         {
             if (a.Floor != b.Floor || IsVirtual(a)) return false;
             Floor floor = FloorByLabel(a.Floor);
@@ -1099,6 +1218,13 @@ namespace DateEverythingAccess
                     continue;
 
                 if (!floor.Navigable(ix, iz))
+                    return false;
+
+                // Min-clearance guard: when collapsing a curve that the clearance-cost A*
+                // pushed off a wall, every shortcut cell must keep at least the curve's own
+                // clearance, so the smoother can't flatten the margin back against the
+                // obstacle. Mirrors plan_object_route.py _segment_is_clear(min_clearance).
+                if (minClearance > 0 && floor.Clearance(ix, iz) < minClearance)
                     return false;
 
                 // Reject corner-cuts: if the sampled cell moved diagonally from
@@ -1506,13 +1632,79 @@ namespace DateEverythingAccess
             // names) — the indexer unions their cells.
             public readonly Dictionary<string, HashSet<long>> DoorFreedByName =
                 new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
+            // Per-door operability cells (where the player can stand to open the door),
+            // indexed from the bake's doors[*].operable_from_cells. Used as the door-target
+            // goal set. Multiple door records may share a name → union.
+            public readonly Dictionary<string, HashSet<long>> OperableFromByName =
+                new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
             // Per-state-wall freed-cells, parallel to DoorFreedByName. State-gated walls
             // (DresserWall and similar) contribute freed cells when their collider is
             // disabled at runtime.
             public readonly Dictionary<string, HashSet<long>> StateWallFreedByName =
                 new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
 
+            // Lazily-built clearance map: per cell, the 4-connected distance (in cells,
+            // capped at ClearanceTargetCells) to the nearest non-navigable cell. Drives
+            // the bounded clearance-cost penalty in Neighbors and the min-clearance guard
+            // in SmoothPath, so routes curve around doorframe jambs / furniture with margin
+            // instead of grazing. Invalidated (set null) whenever ExtraNavigable changes —
+            // mirrors plan_object_route.py Floor._build_clearance / _rebuild_extra_navigable.
+            // See [[project-navigation-csharp-clearance-port-TODO]].
+            private int[][] _clearance;
+
             public static long PackCell(int ix, int iz) => ((long)ix << 32) | (uint)iz;
+
+            // Invalidate the cached clearance map. Call after any mutation of
+            // ExtraNavigable (door/state-wall freed-cell overlay).
+            public void InvalidateClearance() { _clearance = null; }
+
+            private void BuildClearance()
+            {
+                int cap = ClearanceTargetCells;
+                int[][] dist = new int[Nx][];
+                // Multi-source BFS queue (packed cells). Seed every non-navigable cell at 0.
+                var dq = new Queue<long>();
+                for (int ix = 0; ix < Nx; ix++)
+                {
+                    int[] col = new int[Nz];
+                    dist[ix] = col;
+                    for (int iz = 0; iz < Nz; iz++)
+                    {
+                        if (!Navigable(ix, iz))
+                        {
+                            col[iz] = 0;
+                            dq.Enqueue(PackCell(ix, iz));
+                        }
+                        else
+                        {
+                            col[iz] = cap;
+                        }
+                    }
+                }
+                while (dq.Count > 0)
+                {
+                    long packed = dq.Dequeue();
+                    int x = (int)(packed >> 32);
+                    int z = (int)(uint)packed;
+                    int d = dist[x][z];
+                    if (d >= cap) continue;
+                    // 4-connected (L1) — under-counts diagonal clearance, the safe direction.
+                    if (x + 1 < Nx && dist[x + 1][z] > d + 1) { dist[x + 1][z] = d + 1; dq.Enqueue(PackCell(x + 1, z)); }
+                    if (x - 1 >= 0 && dist[x - 1][z] > d + 1) { dist[x - 1][z] = d + 1; dq.Enqueue(PackCell(x - 1, z)); }
+                    if (z + 1 < Nz && dist[x][z + 1] > d + 1) { dist[x][z + 1] = d + 1; dq.Enqueue(PackCell(x, z + 1)); }
+                    if (z - 1 >= 0 && dist[x][z - 1] > d + 1) { dist[x][z - 1] = d + 1; dq.Enqueue(PackCell(x, z - 1)); }
+                }
+                _clearance = dist;
+            }
+
+            // Cells-to-nearest-wall (capped at ClearanceTargetCells) for a cell. Lazily
+            // builds the map; out-of-bounds returns 0 (treated as a wall).
+            public int Clearance(int ix, int iz)
+            {
+                if (!InBounds(ix, iz)) return 0;
+                if (_clearance == null) BuildClearance();
+                return _clearance[ix][iz];
+            }
 
             public static Floor From(BakeFloor raw)
             {
@@ -1618,6 +1810,12 @@ namespace DateEverythingAccess
         {
             [DataMember] public string name;
             [DataMember] public int[][] freed_cells;
+            // Cells where the player can stand to open/close this door, computed
+            // offline by the bake from the real Door.cs rule (navigable + within reach
+            // + not touching the closed panel + not in the swing arc). Used as the
+            // door-target goal set, replacing the planner's hinge-distance band
+            // approximation. See [[project-navigation-door-operability-cells]].
+            [DataMember] public int[][] operable_from_cells;
             [DataMember] public bool locked;
             [DataMember] public bool default_open;
         }

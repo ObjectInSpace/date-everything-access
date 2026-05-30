@@ -64,6 +64,16 @@ DOOR_CARVE_RADIUS = 0.40
 # widening every name-only door-like object.
 DOOR_COMPONENT_CARVE_RADIUS = 1.50
 
+# Reach radius for the door-operability standpoint (meters). Door.cs opens via
+# InteractableObj.Interact, gated by InteractionRadius (7.5m default). The
+# planner already caps door-target approach to ~3.0m so the player stops near
+# the door rather than across the room; we use the same cap as the radius of the
+# operable-from disc. The runtime still confirms the live gates
+# (blockInteraction, collidedWithPlayer, moving) before acting — this is the
+# static candidate set of cells the player could stand in to operate the door.
+# See [[project-navigation-door-tag-radius]], [[project-navigation-door-pose-exporter]].
+DOOR_OPERABLE_RADIUS_M = 3.0
+
 # Floor bands: (label, target_Y, Y_tolerance_for_walkable_inclusion)
 # Tolerance is ± around target_Y for which walkable TopY values count as "on this floor".
 FLOORS = [
@@ -242,9 +252,9 @@ FOOTPRINT_PERIMETER_MAX_DIM_M = 4.0
 
 
 # Open-archway carve. Doorframe meshes (SM_Doorframe_*, Door_frame_*) are thin
-# walls with an opening; the exporter flags them IsWallLikeFatVictim and routes
-# them to segment-trace rasterization. But the frame's footprint is a CLOSED
-# loop — its threshold/sill and lintel cross-pieces span the opening width and
+# walls with an opening, rasterized from their collision-slice segments like any
+# other mesh. But the frame's footprint is a CLOSED loop — its threshold/sill
+# and lintel cross-pieces span the opening width and
 # seal the doorway line at floor level, so a narrow archway (e.g.
 # SM_Doorframe_Small_13, 1.23m throat) gets walled off, isolating whole rooms.
 #
@@ -309,48 +319,19 @@ def _is_solid_blocker(record):
         return False
     if record.get("IsActive") is False:
         return False
-    # Bounds-blowup meshes: MovingDateable and wiggle_MODEL_UPDATE_ORIGIN
-    # parents animate their children between several poses. The exporter
-    # records the world-space union of all poses, producing phantom blocker
-    # geometry that can seal whole rooms:
-    #
-    # - ComputerMovingDateable / Monitor: combined 18m × 19m × 17m bounds
-    #   sealed the Bathroom 1 doorway (local extent only 3.3m).
-    # - towel1_2_sink_bathroom2_normal_wiggle_MODEL_UPDATE_ORIGIN /
-    #   SM_Sink_Bathroom_2: combined 2.8 × 7.1m bounds sealed the Bathroom 2
-    #   sink area from the main bathroom (local extent 2.4 × 1.2m).
-    #
-    # Most wiggle meshes are small props (mugs, plates) that don't bound-blow-
-    # up. Only skip when the world XZ is materially larger than the local
-    # mesh's XZ — measured against the largest two LocalAabbExtent axes (the
-    # mesh's local Y can map to any world axis after rotation).
-    #
-    # Always skip MovingDateable (only 2 records in this scene, both
-    # bound-blow-up). For wiggle paths, require the inflation ratio gate.
-    #
-    # See [[project-navigation-bounds-blowup-meshes]].
+    # NOTE: the former MovingDateable path-skip and the wiggle 2x bounds-
+    # inflation gate are RETIRED. Those compensated for animated dialog-rig
+    # colliders whose world AABB sprawled across all animation poses. That whole
+    # failure mode is now handled at the SOURCE: (1) the exporter drops any
+    # MeshCollider sharing a GameObject with a SkinnedMeshRenderer
+    # (SkinnedMeshRigCollider) — the animated rig body, e.g. Monitor and the
+    # cars — so it never reaches the blocker set; and (2) the bake no longer
+    # rasterizes any mesh-collider AABB, only its real collision-surface slice
+    # segments, so a pose-union bounding box can't seal a room. The wiggle props
+    # that had no collider never produced a blocker in the first place. See
+    # [[project-navigation-model-update-meshes-2026-05-29]],
+    # [[project-navigation-capsule-radius-groundtruth-2026-05-29]].
     path = record.get("Path") or ""
-    if "MovingDateable" in path:
-        return False
-    if "wiggle" in path:
-        ls = record.get("LocalShape") or {}
-        le = ls.get("LocalAabbExtent") or {}
-        bb = record.get("Bounds2D") or {}
-        if le and bb:
-            world_x = bb["MaxX"] - bb["MinX"]
-            world_z = bb["MaxZ"] - bb["MinZ"]
-            # Local extents are half-extents; double them. Take the two
-            # largest axes since local rotation can re-orient them.
-            extents = sorted([
-                abs(le.get("x", 0)) * 2,
-                abs(le.get("y", 0)) * 2,
-                abs(le.get("z", 0)) * 2,
-            ], reverse=True)
-            local_xz_max = max(extents[0], 0.01)
-            # If either world dimension exceeds local_xz_max by 2x or more,
-            # this mesh is bounds-blown. Skip it as a blocker.
-            if world_x / local_xz_max > 2.0 or world_z / local_xz_max > 2.0:
-                return False
 
     # Ceiling void-plug colliders (e.g. CeilingStairsFix1/2 under
     # House/MultiRoom/Ceilings/). These are tall, floor-to-ceiling boxes the
@@ -386,6 +367,26 @@ def _is_solid_blocker(record):
 
 MIN_BORROW_HEIGHT_M = 0.75  # ~ a player's hip; below this, walk over it
 
+# Vertical-extrusion threshold for the top-lip gate. A wall is a tall vertical
+# extrusion (floor-to-ceiling, vertical extent ~13m); a ceiling/floor is a flat
+# horizontal slab (vertical extent < 1m). Only the former's sub-knee top-lip
+# should be suppressed on the floor above; a flat ceiling-edge slab that
+# genuinely sits in the band must keep blocking. Measured: the 7 SM_Walls_*
+# top-lip cases have vext ~13.2m; the SM_Ceiling_Hall slab has vext 0.58m, so
+# 1.0m cleanly separates wall from slab. This is a SHAPE test (physical, survives
+# an asset re-rip / new scene), replacing the old IsWallLikeFatVictim flag.
+WALL_VERTICAL_EXTENT_MIN_M = 1.0
+
+
+def _is_vertical_wall(mesh_record):
+    """True when the collider is a tall vertical extrusion (a wall), not a flat
+    horizontal slab (ceiling/floor) or a low prop. The top-lip gate uses this to
+    scope sub-knee-lip suppression to walls only."""
+    by = mesh_record.get("BottomY"); ty = mesh_record.get("TopY")
+    if by is None or ty is None:
+        return False
+    return (ty - by) >= WALL_VERTICAL_EXTENT_MIN_M
+
 
 def _segments_in_floor_band(mesh_record, y_lo, y_hi):
     fp = mesh_record.get("Footprint") or {}
@@ -402,14 +403,16 @@ def _segments_in_floor_band(mesh_record, y_lo, y_hi):
     # ground-floor wall, a sub-knee lip the player capsule walks straight over.
     # Rasterizing them draws phantom upper-floor walls that seal real passages
     # (notably SM_Walls_Hall1 sealing the stair-landing→bedroom archway, which
-    # isolated the whole stair landing). Same rationale and threshold as the
-    # borrow gate below — this is its in-band analog. A wall whose TopY clears
-    # the band's lower edge by < MIN_BORROW_HEIGHT_M is not a real obstacle on
-    # this floor; skip it. Real upper walls (SM_Walls_Bedroom/Hall2, TopY~25.8)
-    # clear by 13m and are unaffected. See
-    # [[project-navigation-upper-hall2-archway-seal]], [[project-navigation-borrow-height-gate]].
+    # isolated the whole stair landing). A wall whose TopY clears the band's
+    # lower edge by < MIN_BORROW_HEIGHT_M is not a real obstacle on this floor;
+    # skip it. Real upper walls (SM_Walls_Bedroom/Hall2, TopY~25.8) clear by 13m
+    # and are unaffected. Scoped by _is_vertical_wall so a genuine flat ceiling-
+    # edge slab in the band (SM_Ceiling_Hall, vext 0.58m) is NOT suppressed.
+    # See [[project-navigation-upper-hall2-archway-seal]],
+    # [[project-navigation-borrow-height-gate]],
+    # [[project-navigation-iswalllikefatvictim-followup]].
     ty_lip = mesh_record.get("TopY")
-    if (fp.get("IsWallLikeFatVictim") and ty_lip is not None
+    if (_is_vertical_wall(mesh_record) and ty_lip is not None
             and ty_lip - y_lo < MIN_BORROW_HEIGHT_M):
         return []
 
@@ -423,69 +426,7 @@ def _segments_in_floor_band(mesh_record, y_lo, y_hi):
         if not (in_scene(ax, az) or in_scene(bx, bz)):
             continue
         in_band.append(segment)
-    if in_band:
-        return in_band
-
-    # Borrow-from-other-band fallback for wall-FAT meshes whose Y range
-    # overlaps the band but whose only slice planes lie outside it.
-    #
-    # The exporter slices at fixed Y planes; a wall with TopY=12.55 produces
-    # segments at PlaneY=0.5 (ground band) but none at PlaneY=13.5 (upper
-    # band), even though the wall geometrically extends into the upper-floor
-    # bake band [12.25, 15.0]. Walls are vertical extrusions, so their
-    # silhouette at any Y inside [BottomY, TopY] is identical to their
-    # silhouette at any slice plane inside that range. Reuse the closest
-    # slice plane's segments. See [[project-navigation-walls-living-upper-slice-gap]].
-    #
-    # Gate: only borrow when the wall extends at least MIN_BORROW_HEIGHT
-    # above the floor. A wall whose top is only 0.07m above the upper floor
-    # (e.g. SM_Walls_Hall1, TopY=12.57 vs upper floor_y=12.5) is a knee-high
-    # lip the player capsule walks over, not a real obstacle. Borrowing
-    # ground-floor segments for such walls draws phantom upper-floor walls
-    # that seal the upstairs hallway (CC split between bedroom and stairs).
-    # MIN_BORROW_HEIGHT_M is module-level (shared with the top-lip gate above).
-    if not fp.get("IsWallLikeFatVictim"):
-        return []
-    by = mesh_record.get("BottomY"); ty = mesh_record.get("TopY")
-    if by is None or ty is None:
-        return []
-    # The wall must geometrically intersect the band.
-    if max(by, y_lo) > min(ty, y_hi):
-        return []
-    # Gate the borrow: TopY must clear y_lo by at least MIN_BORROW_HEIGHT,
-    # otherwise the wall is sub-knee and not a real obstacle on this floor.
-    # y_lo is floor_y - STEP_UP_TOL, so MIN_BORROW_HEIGHT here = capsule
-    # interception above the floor band's lower edge. Note this is intentionally
-    # asymmetric: we don't gate the BottomY side because walls extending DOWN
-    # into the band (e.g. ceiling beams hanging into the player's head) still
-    # block — they just don't get borrow-fallback either way, because they have
-    # in-band segments to start with.
-    if ty - y_lo < MIN_BORROW_HEIGHT_M:
-        return []
-    band_mid = (y_lo + y_hi) / 2.0
-    nearest_plane = None
-    nearest_d = float("inf")
-    plane_groups = {}
-    for s in segs:
-        py = s.get("PlaneY")
-        if py is None:
-            continue
-        if py < by or py > ty:
-            continue
-        plane_groups.setdefault(py, []).append(s)
-        d = abs(py - band_mid)
-        if d < nearest_d:
-            nearest_d = d; nearest_plane = py
-    if nearest_plane is None:
-        return []
-    borrowed = []
-    for s in plane_groups[nearest_plane]:
-        ax = s["AX"]; az = s["AZ"]
-        bx = s["BX"]; bz = s["BZ"]
-        if not (in_scene(ax, az) or in_scene(bx, bz)):
-            continue
-        borrowed.append(s)
-    return borrowed
+    return in_band
 
 
 def _dilate_disc(bm, nx, nz, d):
@@ -529,6 +470,44 @@ def _door_panels_with_floor_segments(door_records, floor_y_lo, floor_y_hi):
             if not closed and not any(s["Segments"] for s in open_sets):
                 continue
             yield d, p, closed, open_sets
+
+
+def _door_operable_cells(navigable_bm, panel_closed_dil, panel_open_dil,
+                         anchor_x, anchor_z, minx, minz, nx, nz):
+    """Cells where the player can stand to open/close a door, derived offline
+    from the Door.cs rule. A cell qualifies when it is:
+      (1) NAVIGABLE — the player can actually stand on it;
+      (2) within DOOR_OPERABLE_RADIUS_M of the door anchor (the
+          InteractionRadius reach, capped to the planner's door-approach cap);
+      (3) NOT within a capsule radius of the CLOSED panel — Door.OpenDoor is
+          gated on !collidedWithPlayer, so a cell touching the panel can't
+          trigger it (panel_closed_dil is the panel rasterized + dilated by R);
+      (4) NOT within a capsule radius of the OPEN panel sweep — standing where
+          the leaf swings would abort the open (stopOnCollision) or trap the
+          player. For sliding doors the "open" set is the slid-to position,
+          which the player likewise must not occupy.
+    Returns a sorted list of [ix, iz]. The runtime still re-checks the live
+    gates (blockInteraction, collidedWithPlayer, moving) before acting; this is
+    the static candidate set. See [[project-navigation-door-handling-rules]]."""
+    if anchor_x is None or anchor_z is None:
+        return []
+    cx = int((anchor_x - minx) / CELL)
+    cz = int((anchor_z - minz) / CELL)
+    cr = int(math.ceil(DOOR_OPERABLE_RADIUS_M / CELL))
+    cr2 = cr * cr
+    out = []
+    for ix in range(max(0, cx - cr), min(nx, cx + cr + 1)):
+        for iz in range(max(0, cz - cr), min(nz, cz + cr + 1)):
+            if (ix - cx) ** 2 + (iz - cz) ** 2 > cr2:
+                continue
+            if not navigable_bm[ix][iz]:
+                continue
+            if panel_closed_dil[ix][iz]:
+                continue
+            if panel_open_dil[ix][iz]:
+                continue
+            out.append([ix, iz])
+    return out
 
 
 def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, state_walls):
@@ -632,20 +611,12 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
     blocked_bm = [[False] * nz for _ in range(nx)]
     blocker_hits = 0
     primitive_blocker_hits = 0
-    mesh_bounds_fallback_hits = 0
     mesh_segment_blocker_hits = 0
     mesh_segments_rasterized = 0
     mesh_closed_region_blocker_hits = 0
     mesh_closed_region_cells = 0
     mesh_footprint_edge_blocker_hits = 0
     mesh_footprint_edge_cells = 0
-    mesh_records_by_id = {
-        m.get("ComponentId"): m
-        for m in mesh_colliders
-        if m.get("ComponentId") is not None
-    }
-    mesh_records_with_segments = set()
-
     # Mesh collider pass: this is the 2.5D capsule-clearance approximation.
     # Any active, enabled, non-trigger mesh collider that has player-height
     # triangle-slice segments contributes its actual surface traces, regardless
@@ -713,7 +684,6 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
                 # clearance dilation around the frame's solid jamb posts, or the
                 # player walks into a post the bake marked navigable.
                 archway_carves.append((bb, segments))
-        mesh_records_with_segments.add(m.get("ComponentId"))
         mesh_had_segment = False
         for s in segments:
             _rasterize_segment(
@@ -769,16 +739,17 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         if not bb: continue
         if not in_scene((bb["MinX"]+bb["MaxX"])/2, (bb["MinZ"]+bb["MaxZ"])/2): continue
 
-        # Mesh colliders with slice segments already used actual collider
-        # surface traces above. Falling back to their AABB would reintroduce
-        # the over-blocking that the capsule-clearance pass is replacing.
+        # Mesh colliders contribute ONLY via their actual collision-surface
+        # slice traces (the segment pass above). We never rasterize a mesh
+        # collider's AABB: the bounding box of a non-convex collision mesh
+        # over-blocks (a wall's AABB fills the room interior; an animated/
+        # skinned mesh's AABB sprawls across all poses). A mesh collider with no
+        # in-band segments simply doesn't intersect the player band here, so it
+        # contributes nothing. Skinned dialog-rig colliders are already dropped
+        # at export (SkinnedMeshRigCollider). Only PRIMITIVE colliders rasterize
+        # from bounds below — for a Box/Sphere/Capsule the "bounds" ARE the
+        # exact collision dimensions, not an inflated mesh AABB.
         if b.get("ColliderType") == "MeshCollider":
-            mesh_record = mesh_records_by_id.get(b.get("ComponentId"))
-            if mesh_record is not None and b.get("ComponentId") in mesh_records_with_segments:
-                continue
-            if _rasterize_bounds(blocked_bm, bb, minx, minz, nx, nz, CELL):
-                blocker_hits += 1
-                mesh_bounds_fallback_hits += 1
             continue
 
         if _rasterize_bounds(blocked_bm, bb, minx, minz, nx, nz, CELL):
@@ -1071,6 +1042,16 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         # dilation band — that's the wall opening dilation seals over. The
         # adjacency-to-panel_closed_dil constraint above keeps them legitimate.
         threshold_cells_list = sorted([list(c) for c in threshold_cells])
+        # Operability standpoint: navigable cells where the player can stand to
+        # open/close this door, derived offline from the Door.cs rule (within
+        # reach, not touching the closed panel, not in the open-pose sweep). The
+        # cleaner blocker signal (no dating-rig / AABB sprawl) means panel_*_dil
+        # is now a faithful silhouette of just the door leaf, so this set is
+        # tight. Computed against the door-CLOSED navigable bitmap (you operate a
+        # door from the world where it is currently closed).
+        operable_from_cells = _door_operable_cells(
+            navigable_bm, panel_closed_dil, panel_open_dil,
+            anchor_x, anchor_z, minx, minz, nx, nz)
         doors_per_floor.append({
             "name": door_rec.get("Name"),
             "kind": door_rec.get("Kind"),
@@ -1083,6 +1064,8 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             "freed_cells": freed,
             "freed_count": len(freed),
             "panel_dilated_cells": own_dil_cells,
+            "operable_from_cells": operable_from_cells,
+            "operable_from_count": len(operable_from_cells),
             # Authoritative scene-load state from the exporter's Door component,
             # carried through so consumers stop GUESSING the doors-open set. At
             # scene load every Door/SlidingDoor in this house exports Open=False
@@ -1172,7 +1155,6 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         "walkable_surface_count": len(floor_walks),
         "blocker_hits": blocker_hits,
         "primitive_blocker_hits": primitive_blocker_hits,
-        "mesh_bounds_fallback_hits": mesh_bounds_fallback_hits,
         "mesh_segment_blocker_hits": mesh_segment_blocker_hits,
         "mesh_segments_rasterized": mesh_segments_rasterized,
         "mesh_closed_region_blocker_hits": mesh_closed_region_blocker_hits,
@@ -1295,43 +1277,14 @@ def _verify_bake_invariants(report, mesh_colliders, slice_planes):
                     f"(e.g. {violating[:5]})"
                 )
 
-    # 3. For every floor's bake band, every IsWallLikeFatVictim mesh whose Y
-    # range overlaps the band must have *some* slice plane the bake can use —
-    # either inside the intersection (perfect), or anywhere in the wall's Y
-    # range (the borrow-from-other-band fallback in _segments_in_floor_band
-    # will reuse those segments). The only way the wall ends up invisible is
-    # if there is no slice plane anywhere in [BottomY, TopY].
-    # See [[project-navigation-walls-living-upper-slice-gap]] for the upper-
-    # floor slice-gap case the borrow fallback exists to handle.
-    if slice_planes:
-        for floor in report["floors"]:
-            if "error" in floor:
-                continue
-            label = floor["label"]
-            fy = floor["floor_y"]
-            band_lo = fy - STEP_UP_TOL
-            band_hi = fy + CAPSULE_H
-            for m in mesh_colliders:
-                fp = m.get("Footprint") or {}
-                if not fp.get("IsWallLikeFatVictim"):
-                    continue
-                by = m.get("BottomY"); ty = m.get("TopY")
-                if by is None or ty is None:
-                    continue
-                # Does the wall's Y range intersect this floor's band?
-                if max(by, band_lo) > min(ty, band_hi):
-                    continue  # no overlap, wall doesn't belong to this floor
-                # The borrow fallback needs at least one slice plane in the
-                # wall's Y range (not necessarily in the band intersection).
-                if any(by <= p <= ty for p in slice_planes):
-                    continue
-                name = m.get("GameObjectName") or (m.get("Path") or "?").split("/")[-1]
-                errors.append(
-                    f"floor={label}: wall-FAT mesh {name!r} Y=[{by:.2f},{ty:.2f}] "
-                    f"overlaps band [{band_lo:.2f},{band_hi:.2f}] but no slice plane "
-                    f"lies in [{by:.2f},{ty:.2f}] either — borrow fallback cannot "
-                    f"help (planes={slice_planes}). Wall invisible on this floor."
-                )
+    # 3. (Retired.) This slot held a slice-plane-coverage assertion that backed
+    # the borrow-from-other-band fallback in _segments_in_floor_band. Both the
+    # fallback and the IsWallLikeFatVictim flag it keyed on are gone: the bake
+    # rasterizes only real collision-slice segments and the 12.5 slice plane
+    # already covers the ground-wall top-lip case. A wall-slice-gap regression
+    # now surfaces as item isolation in scripts/reachability_matrix.py, which is
+    # the authoritative coverage check. See
+    # [[project-navigation-iswalllikefatvictim-followup]].
 
     # 4. Interactable coverage smoke check intentionally omitted here. The
     # raw interactables list contains many sub-mesh entries (book pages,
@@ -1531,7 +1484,6 @@ def main():
               f"mesh_segments={result['mesh_segments_rasterized']}  "
               f"mesh_footprint_edges={result['mesh_footprint_edge_blocker_hits']}  "
               f"mesh_closed_regions={result['mesh_closed_region_blocker_hits']}  "
-              f"mesh_bounds_fallback={result['mesh_bounds_fallback_hits']}  "
               f"door_carves={result['door_carves']}")
         png_path = OUT_PNG_DIR / f"navigable_region.{floor['label']}.ppm"
         write_png(result, png_path)
