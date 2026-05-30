@@ -609,6 +609,22 @@ namespace DateEverythingAccess
                                 op.Add(Floor.PackCell(pair[0], pair[1]));
                             }
                         }
+                        if (d.threshold_cells_list != null && d.threshold_cells_list.Length > 0
+                            && !floor.OpeningCenterByName.ContainsKey(d.name))
+                        {
+                            // World-space centroid of the doorway-opening cells.
+                            double sx = 0, sz = 0; int n = 0;
+                            for (int ci = 0; ci < d.threshold_cells_list.Length; ci++)
+                            {
+                                int[] pair = d.threshold_cells_list[ci];
+                                if (pair == null || pair.Length < 2) continue;
+                                Vector2 w = floor.CellToWorld(pair[0], pair[1]);
+                                sx += w.x; sz += w.y; n++;
+                            }
+                            if (n > 0)
+                                floor.OpeningCenterByName[d.name] =
+                                    new Vector3((float)(sx / n), floor.FloorY, (float)(sz / n));
+                        }
                     }
                 }
                 if (raw.state_walls != null)
@@ -1377,12 +1393,73 @@ namespace DateEverythingAccess
             route.AddWaypoint(rawWaypoints[0], SimpleNavWaypointKind.Navigation);
             for (int i = 0; i < rawWaypoints.Count - 1; i++)
             {
+                Vector3 a = rawWaypoints[i];
                 Vector3 b = rawWaypoints[i + 1];
                 List<string> doors = i < rawSegmentDoors.Count && rawSegmentDoors[i] != null
                     ? rawSegmentDoors[i]
                     : new List<string>(0);
-                AddSemanticDoorWaypoint(route, doors, b, i == rawWaypoints.Count - 2 ? SimpleNavWaypointKind.Target : SimpleNavWaypointKind.Navigation, null);
+                bool isFinalSegment = i == rawWaypoints.Count - 2;
+
+                // On-path door crossing: if this segment is tagged with a door the route
+                // passes THROUGH (not the final target), aim the follower through the
+                // doorway opening center first, so it threads the gap instead of pure-
+                // pursuing the cell past the jamb (the office-doorway wedge). Only insert
+                // when the opening lies ahead between a and b, so we never steer backward.
+                // The destination door (final segment, door==target) is excluded — its
+                // approach is governed by operable_from_cells goal selection.
+                if (!isFinalSegment && doors.Count > 0)
+                {
+                    Vector3 opening;
+                    if (TryGetDoorOpeningCenter(doors, a, b, out opening))
+                        AddSemanticDoorWaypoint(route, doors, opening, SimpleNavWaypointKind.DoorOpening, null);
+                }
+
+                AddSemanticDoorWaypoint(route, doors, b, isFinalSegment ? SimpleNavWaypointKind.Target : SimpleNavWaypointKind.Navigation, null);
             }
+        }
+
+        // Look up a tagged on-path door's doorway-opening center (world centroid of its
+        // threshold cells) and accept it only when it sits ahead of the player along the
+        // a->b segment (projection in (0,1)) and near the segment line, so inserting it
+        // threads the opening without steering backward or sideways off-route.
+        private static bool TryGetDoorOpeningCenter(List<string> doors, Vector3 a, Vector3 b, out Vector3 opening)
+        {
+            opening = default;
+            Floor floor = NearestFloorByY(a.y);
+            if (floor == null) return false;
+            float bestT = -1f;
+            bool found = false;
+            for (int i = 0; i < doors.Count; i++)
+            {
+                if (!floor.OpeningCenterByName.TryGetValue(doors[i], out Vector3 c)) continue;
+                float t = ProjectParamXZ(a, b, c);
+                if (t <= 0.05f || t >= 0.95f) continue;          // must be genuinely between a and b
+                Vector3 proj = Vector3.Lerp(a, b, t);
+                float dx = proj.x - c.x, dz = proj.z - c.z;
+                if (dx * dx + dz * dz > 1.0f) continue;          // opening must be near the route line (<=1m)
+                if (t > bestT) { bestT = t; opening = new Vector3(c.x, a.y, c.z); found = true; }
+            }
+            return found;
+        }
+
+        private static float ProjectParamXZ(Vector3 a, Vector3 b, Vector3 p)
+        {
+            float abx = b.x - a.x, abz = b.z - a.z;
+            float len2 = abx * abx + abz * abz;
+            if (len2 <= 1e-6f) return 0f;
+            float t = ((p.x - a.x) * abx + (p.z - a.z) * abz) / len2;
+            return t < 0f ? 0f : (t > 1f ? 1f : t);
+        }
+
+        private static Floor NearestFloorByY(float y)
+        {
+            Floor best = null; float bestD = float.PositiveInfinity;
+            for (int i = 0; i < _floors.Count; i++)
+            {
+                float d = Mathf.Abs(_floors[i].FloorY - y);
+                if (d < bestD) { bestD = d; best = _floors[i]; }
+            }
+            return best;
         }
 
         private static void AddSemanticDoorWaypoint(
@@ -1520,6 +1597,11 @@ namespace DateEverythingAccess
             // goal set. Multiple door records may share a name → union.
             public readonly Dictionary<string, HashSet<long>> OperableFromByName =
                 new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
+            // Per-door doorway-opening center in WORLD space (centroid of threshold_cells),
+            // used to insert a "thread through the opening" waypoint on routes that cross
+            // an on-path door. Indexed from the bake at load time.
+            public readonly Dictionary<string, Vector3> OpeningCenterByName =
+                new Dictionary<string, Vector3>(StringComparer.Ordinal);
             // Per-state-wall freed-cells, parallel to DoorFreedByName. State-gated walls
             // (DresserWall and similar) contribute freed cells when their collider is
             // disabled at runtime.
@@ -1699,6 +1781,11 @@ namespace DateEverythingAccess
             // door-target goal set, replacing the planner's hinge-distance band
             // approximation. See [[project-navigation-door-operability-cells]].
             [DataMember] public int[][] operable_from_cells;
+            // The doorway-opening gap cells (the threshold the player crosses through).
+            // Their centroid is the point an on-path route aims THROUGH, so the follower
+            // threads the opening instead of pure-pursuing a cell past the door jamb.
+            // See [[project-navigation-office-doorway-wedge-2026-05-30]].
+            [DataMember] public int[][] threshold_cells_list;
             [DataMember] public bool locked;
             [DataMember] public bool default_open;
         }
