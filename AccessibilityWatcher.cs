@@ -137,6 +137,12 @@ namespace DateEverythingAccess
         //     pre-align step.
         // See [[project-navigation-door-operability-cells]].
         private const float TutorialGiftApproachRadius = 1.25f;
+        // Door-target approach cap (metres). MUST stay in sync with the bake's
+        // DOOR_OPERABLE_RADIUS_M (scripts/bake_navigable_region.py): the bake computes a
+        // door's operable_from_cells within that radius, and door goals now come from
+        // those cells, so a mismatch here would only mis-bound the pre-snap. Kept as a
+        // named constant (no cross-runtime shared source: PowerShell bake vs C# runtime).
+        // If you change one, change the other. See [[project-navigation-door-operability-cells]].
         private const float SimpleNavDoorTargetRadius = 3f;
         private const int VkUp = 0x26;
         private const int VkDown = 0x28;
