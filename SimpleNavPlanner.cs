@@ -852,16 +852,27 @@ namespace DateEverythingAccess
         private static Floor FloorForTargetY(float y)
         {
             const float UpwardSlackM = 0.1f;
+            // Highest floor whose floor_y - slack <= y (the floor the player stands on to
+            // interact with a target above it). If the target is BELOW every floor plane,
+            // fall back to the lowest floor — door pivots sit ~0.12m under the ground plane
+            // (Y=-0.62 vs floor_y=-0.5), and without this fallback they return null →
+            // TargetOffBake, making all five ground doors (Laundry, Office, their closets,
+            // Bathroom1) un-targetable. Mirrors plan_object_route._floor_for_target_y, which
+            // has this fallback (it's why the offline plan succeeded where the C# failed).
             Floor best = null;
-            float bestDist = float.PositiveInfinity;
+            float bestFloorY = float.NegativeInfinity;
+            Floor lowest = null;
+            float lowestFloorY = float.PositiveInfinity;
             for (int i = 0; i < _floors.Count; i++)
             {
                 float floorY = _floors[i].FloorY;
-                if (y + UpwardSlackM < floorY) continue; // floor is above target — skip
-                float dist = y - floorY; // >= -UpwardSlackM
-                if (dist < bestDist) { bestDist = dist; best = _floors[i]; }
+                if (floorY < lowestFloorY) { lowestFloorY = floorY; lowest = _floors[i]; }
+                if (y >= floorY - UpwardSlackM && floorY > bestFloorY)
+                {
+                    bestFloorY = floorY; best = _floors[i];
+                }
             }
-            return best;
+            return best ?? lowest;
         }
 
         private static List<NodeKey> GoalCellsAround(Floor floor, float wx, float wz, float radiusM)
