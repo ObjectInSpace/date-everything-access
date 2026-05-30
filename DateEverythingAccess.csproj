@@ -18,17 +18,14 @@
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- thirdpersongreybox-navigation-data.json is NOT shipped: it's a build-time /
+       offline input (bake, inter-floor edges, route validation read it from
+       artifacts\navigation\), and the runtime DLL no longer reads it (the door-opening
+       / occlusion-portal loader that did was removed). Only the bake JSON ships. -->
   <PropertyGroup>
-    <SceneNavigationDataSourcePath>$(ProjectDir)artifacts\navigation\thirdpersongreybox-navigation-data.json</SceneNavigationDataSourcePath>
-    <SceneNavigationDataOutputPath>$(ProjectDir)bin\$(Configuration)\net472\thirdpersongreybox-navigation-data.json</SceneNavigationDataOutputPath>
     <NavigableRegionBakeSourcePath>$(ProjectDir)artifacts\navigation\navigable_region.bake.json</NavigableRegionBakeSourcePath>
     <NavigableRegionBakeOutputPath>$(ProjectDir)bin\$(Configuration)\net472\navigable_region.bake.json</NavigableRegionBakeOutputPath>
   </PropertyGroup>
-
-  <Target Name="CopySceneNavigationDataToOutput" AfterTargets="Build" Condition="Exists('$(SceneNavigationDataSourcePath)')">
-    <Copy SourceFiles="$(SceneNavigationDataSourcePath)" DestinationFiles="$(SceneNavigationDataOutputPath)" />
-    <Message Text="Copied scene navigation data JSON to $(SceneNavigationDataOutputPath)" Importance="High" />
-  </Target>
 
   <Target Name="CopyNavigableRegionBakeToOutput" AfterTargets="Build" Condition="Exists('$(NavigableRegionBakeSourcePath)')">
     <Copy SourceFiles="$(NavigableRegionBakeSourcePath)" DestinationFiles="$(NavigableRegionBakeOutputPath)" />
@@ -103,7 +100,6 @@
 
   <Target Name="CopyToPlugins" AfterTargets="Build" Condition="'$(SkipCopyToPlugins)' != 'true'">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\" />
-    <Copy SourceFiles="$(SceneNavigationDataSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\thirdpersongreybox-navigation-data.json" Condition="Exists('$(SceneNavigationDataSourcePath)')" />
     <Copy SourceFiles="$(NavigableRegionBakeSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigable_region.bake.json" Condition="Exists('$(NavigableRegionBakeSourcePath)')" />
     <Message Text="Copied $(TargetFileName) to BepInEx plugins folder" Importance="High" />
     <!-- Wipe captured C# routes on every deploy: a new DLL or bake invalidates
