@@ -194,21 +194,17 @@ namespace DateEverythingAccess
             }
             List<NodeKey> unfilteredGoals = new List<NodeKey>(goals);
 
-            // Narrow goal cells to a band around the target so A* terminates *near* the
-            // interactable instead of anywhere in the 7.5m InteractionRadius disc.
-            //
-            // Two anchor strategies:
-            //   - Door targets: distance measured from targetPos (the hinge). A door's
-            //     Collider AABB sweeps along the panel rotation, so ClosestPointOnBounds
-            //     reports cells 5m down a hallway as "near the collider" when the door is
-            //     85deg open. Hinge-distance is invariant to rotation.
-            //   - Non-door targets: distance measured from the target's Collider via
-            //     ClosestPointOnBounds, which hugs prop geometry better than the hinge would.
-            //
-            // Cells in the [TargetColliderClearanceM, TargetColliderBandOuterM] band are
-            // kept; A* picks the cheapest-from-start. Falls back to the unfiltered disc
-            // if the band has no nav-eligible cells.
-            // See [[project-navigation-collider-band-filter]].
+            // Narrow goal cells so A* terminates *near* the target rather than anywhere in
+            // the interaction disc. The strategy splits by target kind:
+            //   - Door targets: goals come from the bake's operable_from_cells (handled
+            //     just below) — authoritative swing-arc-aware standpoints; the disc above
+            //     is discarded for doors.
+            //   - Non-door targets: keep cells in the
+            //     [TargetColliderClearanceM, TargetColliderBandOuterM] band measured from
+            //     the target's Collider via ClosestPointOnBounds (hugs prop geometry).
+            //     A* picks the cheapest-from-start; falls back to the unfiltered disc if
+            //     the band has no nav-eligible cells.
+            // See [[project-navigation-collider-band-filter]], [[project-navigation-door-operability-cells]].
             Door targetDoor = ResolveTargetDoor(targetGameObjectId);
             Collider targetCollider = targetDoor == null ? ResolveTargetCollider(targetGameObjectId) : null;
 

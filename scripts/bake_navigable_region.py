@@ -71,8 +71,9 @@ DOOR_COMPONENT_CARVE_RADIUS = 1.50
 # operable-from disc. The runtime still confirms the live gates
 # (blockInteraction, collidedWithPlayer, moving) before acting — this is the
 # static candidate set of cells the player could stand in to operate the door.
-# MUST stay in sync with SimpleNavDoorTargetRadius in AccessibilityWatcher.cs (the
-# C# runtime's door-approach cap) — same value in two runtimes, no shared source.
+# Single home for the door-approach distance: the C# runtime no longer has its own
+# door radius (it routes to these operable_from_cells directly), so there is no
+# cross-runtime value to keep in sync.
 # See [[project-navigation-door-tag-radius]], [[project-navigation-door-pose-exporter]].
 DOOR_OPERABLE_RADIUS_M = 3.0
 
