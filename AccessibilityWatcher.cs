@@ -107,8 +107,6 @@ namespace DateEverythingAccess
         private const float EstimatedSpeechWordsPerMinute = 185f;
         private const float EstimatedSpeechLeadInSeconds = 0.75f;
         private const float AutoWalkArrivalDistance = 2f;
-        private const float AutoWalkTransitionInteractableArrivalDistance = 0.75f;
-        private const float AutoWalkOpenPassageDestinationApproachDistance = 2.5f;
         private const float AutoWalkLookScaleDegrees = 45f;
         private const float AutoWalkProgressDistance = 0.35f;
         private const float AutoWalkBlockedTimeoutSeconds = 2f;
@@ -119,41 +117,27 @@ namespace DateEverythingAccess
         // but large enough to avoid jitter. ~1 capsule-diameter + margin.
         // See [[project-navigation-executor-corner-stall]].
         private const float AutoWalkPursuitLookahead = 1.5f;
-        private const float AutoWalkInteractionRetrySeconds = 0.75f;
-        private const float AutoWalkMovementProbeMinimumCommand = 0.2f;
-        private const float AutoWalkMovementProbeCancelledVelocity = 0.1f;
-        private const float AutoWalkMovementProbeCancelledDisplacement = 0.08f;
-        private const float AutoWalkOpenPassageHandoffDistance = 2.5f;
-        private const float OpenPassageGuidedWaypointAdvanceDistance = 1.25f;
-        private const float OpenPassageGuidedWaypointDedupDistance = 0.25f;
-        private const float LocalNavigationPathAdvanceDistance = 0.75f;
-        private const float LocalNavigationLookaheadDistance = 3f;
-        private const float LocalNavigationGoalReachedDistance = 2f;
-        private const float LocalNavigationStallBypassSeconds = 2.5f;
-        private const float LocalNavigationStallMovementThreshold = 0.45f;
-        private const float LocalNavigationStallTargetTolerance = 0.2f;
-        private const float LocalNavigationStallBypassDurationSeconds = 1f;
-        private const float OpenPassageOverrideLocalNavigationGoalReachedDistance = 0.75f;
-        private const float LocalNavigationGoalRetargetDistance = 0.5f;
         private const float TrackedInteractableApproachClearanceDistance = 0.9f;
         private const float TrackedInteractableApproachRetargetDistance = 0.75f;
         private const float TrackedInteractableApproachMinimumExtent = 0.35f;
-        private const float AutoWalkConnectorSearchDistance = 4f;
         private const float InteractableZoneFallbackDistance = 8f;
-        // NOTE: the DoorTraversal* / DoorPushThrough* / DoorThresholdAdvance* /
-        // DoorPostInteractionFallback* constants were retired — they were leftovers
-        // from a removed door-traversal push-through recovery state machine (all
-        // declaration-only, never read). The planner now lands the player at an
-        // authoritative operable_from_cells standpoint outside the swing arc, so the
-        // door is opened cleanly without the old proxy-completion / push-through
-        // recovery. See [[project-navigation-door-operability-cells]].
-        private const float TransitionFacingAlignmentCooldownSeconds = 0.2f;
-        private const float TransitionFacingAlignmentMinimumAngleDegrees = 8f;
-        private const float UnityNavMeshFallbackSampleDistance = 3.5f;
-        private const float UnityNavMeshFallbackAdvanceDistance = 0.5f;
+        // NOTE: a large block of door/follower RECOVERY constants was retired here,
+        // all declaration-only (never read) leftovers from removed systems:
+        //   - DoorTraversal* / DoorPushThrough* / DoorThresholdAdvance* /
+        //     DoorPostInteractionFallback* / DoorCommittedSourceRecovery* — the door
+        //     push-through recovery state machine. The planner now lands the player at
+        //     an authoritative operable_from_cells standpoint outside the swing arc, so
+        //     doors open via the normal TryOpenActiveDoorIfNeeded path (confirmed
+        //     in-game: "SimpleNav fired Interact ... openAfter=True" across multi-door
+        //     routes, with no recovery path firing).
+        //   - LocalNavigation* (A*-around-obstacles fallback) and UnityNavMeshFallback*
+        //     (Unity NavMesh last resort) and AutoWalkMaxRecoveryAttempts — their
+        //     consumer methods are already gone.
+        //   - TransitionFacingAlignment* — a removed stair/floor-transition facing
+        //     pre-align step.
+        // See [[project-navigation-door-operability-cells]].
         private const float TutorialGiftApproachRadius = 1.25f;
         private const float SimpleNavDoorTargetRadius = 3f;
-        private const int AutoWalkMaxRecoveryAttempts = 2;
         private const int VkUp = 0x26;
         private const int VkDown = 0x28;
         private const int VkLeft = 0x25;
