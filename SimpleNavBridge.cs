@@ -59,6 +59,21 @@ namespace DateEverythingAccess
         // See [[project-navigation-hall1-runtime-truth-2026-05-29]].
         private const float PursuitMaxCrossTrackM = 0.6f;
 
+        // Tighter cross-track threshold on STAIR segments. On a steep segment the
+        // corridor is a narrow stair throat (the SM_Walls_Hall1 chokepoint at the stair
+        // foot is ~1 capsule wide) and the waypoint sits up to ~2.5m below the player in
+        // Y, so an XZ overshoot of even ~0.5m wedges the player against the side wall —
+        // but 0.5m is under the normal 0.6m threshold, so the follower keeps driving
+        // forward into the wall instead of cutting back (the confirmed second-floor
+        // stair-descent stall: player (9.47,1.98,-4.79) jammed on SM_Walls_Hall1 with the
+        // waypoint at (8.99,-0.50,-5.74), needed a manual nudge). On stairs we steer back
+        // onto the line at a much smaller drift so the descent stays centered.
+        private const float PursuitStairMaxCrossTrackM = 0.25f;
+        // A segment is a "stair" for steering purposes when its endpoints differ in Y by
+        // more than this (real stair segments drop ~3m floor-to-floor; flat corridor
+        // segments are ~0). Keeps the tighter threshold off gentle ramps / flat runs.
+        private const float StairSegmentMinYDeltaM = 0.75f;
+
         /// <summary>
         /// Pure-pursuit steer point. Projects the player onto the planned polyline (the
         /// segment ending at the active waypoint, plus all following segments). When the
@@ -102,8 +117,14 @@ namespace DateEverythingAccess
             // 2. If the player has drifted off the corridor by more than the cross-track
             //    threshold, steer straight back onto the line (the projection point).
             //    This guarantees convergence — the case a fixed forward lookahead can't
-            //    handle when the lateral error approaches the lookahead distance.
-            if (bestDistSq > PursuitMaxCrossTrackM * PursuitMaxCrossTrackM)
+            //    handle when the lateral error approaches the lookahead distance. On a
+            //    stair segment (steep Y-delta), use a tighter threshold so an overshoot
+            //    against the narrow stair-throat side wall corrects before the player
+            //    wedges (the second-floor stair-descent stall).
+            float segYDelta = Mathf.Abs(_waypoints[bestSeg + 1].y - _waypoints[bestSeg].y);
+            float maxCrossTrack = segYDelta > StairSegmentMinYDeltaM
+                ? PursuitStairMaxCrossTrackM : PursuitMaxCrossTrackM;
+            if (bestDistSq > maxCrossTrack * maxCrossTrack)
                 return projPoint;
 
             // 3. On the corridor: walk forward lookaheadM metres along the polyline.

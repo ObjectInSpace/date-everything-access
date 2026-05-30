@@ -21,7 +21,17 @@
 param(
     [string]$ScenePath = "D:\root\AssetRipper\1.3.12-premium\extracted\Ripped\ExportedProject\Assets\ThirdPersonGreybox.unity",
     [string]$OutputPath = ".\artifacts\navigation\thirdpersongreybox-interactables.json",
-    [string]$InteractableObjScriptGuid = "be0aae912dc4cf5f4134485b9d59d925"
+    [string]$InteractableObjScriptGuid = "be0aae912dc4cf5f4134485b9d59d925",
+
+    # Blocker export (produced first by Export-SceneBlockerData.ps1). When
+    # present, each interactable gets world-space Bounds3D/Bounds2D derived from
+    # the union of its PHYSICAL collider bounds — every blocker record whose
+    # GameObject is the interactable's own or a descendant. The blocker export
+    # already filters out triggers, non-player-collidable layers, and the
+    # animated dialog-rig (SkinnedMeshRigCollider), so these bounds reflect the
+    # static physical object the player routes to/around, not the dating-scene
+    # animation. Absent => Bounds fields are null (Position/Radius still emitted).
+    [string]$BlockersPath = ".\artifacts\navigation\thirdpersongreybox-blockers.json"
 )
 
 Set-StrictMode -Version Latest
@@ -228,9 +238,67 @@ function ToEulerDegrees([System.Numerics.Quaternion]$q) {
     }
 }
 
+# Load the blocker export and index physical-collider Bounds3D by GameObject
+# path. Each interactable's world dimensions are the union of all blocker bounds
+# at-or-under its path (its own collider plus descendant *_MODEL_UPDATE nodes).
+$blockerRecordsByPath = $null
+if (-not [string]::IsNullOrWhiteSpace($BlockersPath) -and (Test-Path -LiteralPath $BlockersPath)) {
+    $blockerJson = Get-Content -LiteralPath $BlockersPath -Raw | ConvertFrom-Json
+    $blockerRecordsByPath = New-Object System.Collections.Generic.List[object]
+    foreach ($b in @($blockerJson.NavigationBlockers)) {
+        if ($null -eq $b.Path -or $null -eq $b.Bounds3D) { continue }
+        $blockerRecordsByPath.Add($b)
+    }
+    # Sort once by path so the per-datable prefix scan is a contiguous range.
+    $blockerRecordsByPath = @($blockerRecordsByPath | Sort-Object -Property Path)
+    Write-Host ("Loaded {0} physical blocker records for datable dimensions from {1}" -f $blockerRecordsByPath.Count, $BlockersPath)
+} else {
+    Write-Host ("Blocker export not found at {0}; datable Bounds fields will be null" -f $BlockersPath)
+}
+
+function Get-DatableBounds {
+    <#
+    Unions the world AABBs (Bounds3D) of every physical blocker record whose
+    GameObject is $Path itself or a descendant of it. Returns @{ Bounds3D;
+    Bounds2D } or $null when the datable has no physical collider (e.g. a
+    look-only interactable with no blocking geometry).
+    #>
+    param([Parameter(Mandatory = $true)] [string]$Path)
+    if ($null -eq $script:blockerRecordsByPath) { return $null }
+
+    $descPrefix = $Path + "/"
+    $minX = [double]::PositiveInfinity; $minY = [double]::PositiveInfinity; $minZ = [double]::PositiveInfinity
+    $maxX = [double]::NegativeInfinity; $maxY = [double]::NegativeInfinity; $maxZ = [double]::NegativeInfinity
+    $found = $false
+    foreach ($b in $script:blockerRecordsByPath) {
+        $bp = [string]$b.Path
+        if ($bp -ne $Path -and -not $bp.StartsWith($descPrefix, [System.StringComparison]::Ordinal)) { continue }
+        $bn = $b.Bounds3D
+        $minX = [Math]::Min($minX, [double]$bn.Min.x); $minY = [Math]::Min($minY, [double]$bn.Min.y); $minZ = [Math]::Min($minZ, [double]$bn.Min.z)
+        $maxX = [Math]::Max($maxX, [double]$bn.Max.x); $maxY = [Math]::Max($maxY, [double]$bn.Max.y); $maxZ = [Math]::Max($maxZ, [double]$bn.Max.z)
+        $found = $true
+    }
+    if (-not $found) { return $null }
+
+    return [ordered]@{
+        Bounds3D = [ordered]@{
+            Min    = [ordered]@{ x = [Math]::Round($minX, 6); y = [Math]::Round($minY, 6); z = [Math]::Round($minZ, 6) }
+            Max    = [ordered]@{ x = [Math]::Round($maxX, 6); y = [Math]::Round($maxY, 6); z = [Math]::Round($maxZ, 6) }
+            Size   = [ordered]@{ x = [Math]::Round($maxX - $minX, 6); y = [Math]::Round($maxY - $minY, 6); z = [Math]::Round($maxZ - $minZ, 6) }
+            Center = [ordered]@{ x = [Math]::Round(($minX + $maxX) / 2.0, 6); y = [Math]::Round(($minY + $maxY) / 2.0, 6); z = [Math]::Round(($minZ + $maxZ) / 2.0, 6) }
+        }
+        Bounds2D = [ordered]@{
+            MinX = [Math]::Round($minX, 6); MaxX = [Math]::Round($maxX, 6)
+            MinZ = [Math]::Round($minZ, 6); MaxZ = [Math]::Round($maxZ, 6)
+            Width = [Math]::Round($maxX - $minX, 6); Depth = [Math]::Round($maxZ - $minZ, 6)
+        }
+    }
+}
+
 $records = New-Object System.Collections.Generic.List[object]
 $missingTransform = 0
 $missingGameObject = 0
+$withBounds = 0
 
 foreach ($c in $interactableComponents) {
     if (-not $gameObjects.ContainsKey($c.GameObjectId)) { $missingGameObject++; continue }
@@ -241,10 +309,13 @@ foreach ($c in $interactableComponents) {
     if ($null -eq $w) { $missingTransform++; continue }
 
     $isDatable = -not [string]::IsNullOrWhiteSpace($c.InkFileName)
+    $path = Get-GameObjectPath $go.Id
+    $bounds = Get-DatableBounds -Path $path
+    if ($null -ne $bounds) { $withBounds++ }
     $records.Add([ordered]@{
         GameObjectId = $go.Id
         GameObjectName = $go.Name
-        Path = Get-GameObjectPath $go.Id
+        Path = $path
         Layer = $go.Layer
         IsActive = $go.IsActive
         ComponentId = $c.ComponentId
@@ -256,6 +327,10 @@ foreach ($c in $interactableComponents) {
         }
         RotationEuler = ToEulerDegrees $w.Rotation
         InteractionRadius = [Math]::Round([double]$c.InteractionRadius, 4)
+        # World-space extent of the physical object (union of its blocking
+        # colliders). Null when the interactable has no player-blocking geometry.
+        Bounds3D = $(if ($null -ne $bounds) { $bounds.Bounds3D } else { $null })
+        Bounds2D = $(if ($null -ne $bounds) { $bounds.Bounds2D } else { $null })
         IsDatable = $isDatable
         InkFileName = $c.InkFileName
         InternalCharacterName = $c.InternalCharacterName
@@ -284,6 +359,7 @@ $result = [ordered]@{
         NonDatable = $records.Count - $datableCount
         ActiveGameObjects = $activeCount
         InactiveGameObjects = $records.Count - $activeCount
+        WithPhysicalBounds = $withBounds
         SkippedMissingGameObject = $missingGameObject
         SkippedMissingTransform = $missingTransform
     }
@@ -291,4 +367,4 @@ $result = [ordered]@{
 }
 
 $result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $OutputPath -Encoding UTF8
-Write-Host ("Wrote {0} interactables to {1} (datable: {2}, active: {3})" -f $records.Count, $OutputPath, $datableCount, $activeCount)
+Write-Host ("Wrote {0} interactables to {1} (datable: {2}, active: {3}, with physical bounds: {4})" -f $records.Count, $OutputPath, $datableCount, $activeCount, $withBounds)

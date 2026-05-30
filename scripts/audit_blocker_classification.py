@@ -150,7 +150,6 @@ def main() -> int:
                 f"  {floor['label']}: "
                 f"mesh_segment_blockers={floor.get('mesh_segment_blocker_hits')} "
                 f"mesh_segments={floor.get('mesh_segments_rasterized')} "
-                f"mesh_bounds_fallback={floor.get('mesh_bounds_fallback_hits')} "
                 f"primitive_blockers={floor.get('primitive_blocker_hits')} "
                 f"navigable={floor.get('cells', {}).get('navigable')}"
             )

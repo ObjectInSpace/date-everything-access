@@ -41,56 +41,35 @@ param(
     # See [[project-navigation-walls-living-upper-slice-gap]].
     [double[]]$MeshSlicePlanes = @(0.5, 12.5, 13.5),
 
-    [Parameter()]
-    [double]$MaxMeshFootprintAreaSqM = 25.0,
+    # NOTE: the former MaxMeshFootprintAreaSqM / Wall* (wall-FAT bypass) and
+    # ThinFrame* (doorframe AABB-suppression) parameters are retired. They tuned
+    # whether a mesh collider's AABB was rasterized or suppressed in favour of
+    # its slice segments. The bake now rasterizes ONLY slice segments for every
+    # mesh collider (no AABB path at all), so those signatures no longer gate
+    # anything. Wall-vs-slab handling moved to the bake's _is_vertical_wall shape
+    # test. See [[project-navigation-iswalllikefatvictim-followup]].
 
-    # Bypass MaxMeshFootprintAreaSqM when a mesh has a wall-like signature:
-    # tall (vertical extent >= WallMinVerticalExtent), grounded
-    # (BottomY <= WallMaxBottomY), capped (TopY <= WallMaxTopY to exclude
-    # trees), AND thin in at least one horizontal direction
-    # (min(Width, Depth) <= WallMaxThinDimension). The thinness check is the
-    # critical one: combined-room wall meshes like SM_Walls_Hall1 satisfy the
-    # tall/grounded criteria but their AABBs span an entire room interior, so
-    # admitting them blocks all routes inside the room. Real wall meshes
-    # (fences, single-wall segments) are thin in one direction.
+    # Player physics layer (Unity layer index). The player capsule lives on
+    # FPEPlayer (layer 10). A collider only blocks the player if Unity's layer
+    # collision matrix lets layer 10 collide with the collider's layer. The
+    # admissible-layer set is derived from DynamicsManager.asset below, replacing
+    # a hand-maintained skip list. See [[project-navigation-capsule-radius-groundtruth-2026-05-29]].
     [Parameter()]
-    [double]$WallMinVerticalExtent = 3.0,
+    [int]$PlayerLayer = 10,
 
+    # ProjectSettings/DynamicsManager.asset — source of m_LayerCollisionMatrix.
+    # The exporter parses it once and drops any collider whose layer the player
+    # layer does NOT collide with (authoritative physics, not a name/layer
+    # heuristic). Falls back to the SkipMeshLayers list if the asset is absent.
     [Parameter()]
-    [double]$WallMaxBottomY = 0.6,
-
-    [Parameter()]
-    [double]$WallMaxTopY = 25.0,
-
-    [Parameter()]
-    [double]$WallMaxThinDimension = 1.5,
-
-    # Thin-frame admission: catches doorframe/closet-door/perimeter-fence-shaped
-    # meshes whose AABBs span a doorway opening and would seal it. These pass
-    # under MaxMeshFootprintAreaSqM (so the wall-FAT path never sees them) but
-    # their AABBs still bridge across the opening. Signature: tall (vertical
-    # extent >= ThinFrameMinVerticalExtent), thin in one direction
-    # (min <= ThinFrameMaxThinDimension), spans the opening in the other
-    # (max >= ThinFrameMinSpanDimension), grounded enough to sit on a floor band
-    # (BottomY <= ThinFrameMaxBottomY), and has segments. When matched, the
-    # AABB is suppressed and the segments are rasterized by the bake. See
-    # [[project-navigation-bake-doorframe-gap]].
-    [Parameter()]
-    [double]$ThinFrameMinVerticalExtent = 5.0,
+    [string]$DynamicsManagerPath = "D:\root\AssetRipper\1.3.12-premium\extracted\Ripped\ExportedProject\ProjectSettings\DynamicsManager.asset",
 
     [Parameter()]
-    [double]$ThinFrameMaxThinDimension = 2.0,
-
-    [Parameter()]
-    [double]$ThinFrameMinSpanDimension = 2.5,
-
-    [Parameter()]
-    [double]$ThinFrameMaxBottomY = 14.0,
-
-    [Parameter()]
-    # Layer 31 = 3DUI (UI elements, not physical). Layer 18 = Mirror; in this
-    # scene only PF_PlanarReflection (reflection-probe helper, no MeshCollider)
-    # and /House/Hallway/Stairs carry it, and only the Stairs has a MeshCollider.
+    # Fallback only (used when DynamicsManagerPath is unavailable): layers to
+    # skip when the collision matrix cannot be read. Layer 31 = 3DUI (UI
+    # elements, not physical). Layer 18 = Mirror; in this scene only
+    # PF_PlanarReflection (reflection-probe helper, no MeshCollider) and
+    # /House/Hallway/Stairs carry it, and only the Stairs has a MeshCollider.
     # The Stairs is admitted: at the ground slice plane (Y=0.5) its segments are
     # the bottom-landing SIDE WALLS (X=11.18-13.51, Z=-5.83..0.25), not the
     # climbable tread (the treads start higher and only appear at the upper
@@ -231,6 +210,51 @@ function Get-SectionTypeInfo {
         Type = [int]$match.Groups[1].Value
         Id = [long]$match.Groups[2].Value
     }
+}
+
+function Get-PlayerCollidableLayers {
+    <#
+    .SYNOPSIS
+    Returns the HashSet[int] of Unity layers the player layer collides with,
+    derived from DynamicsManager.asset's m_LayerCollisionMatrix. Returns $null
+    if the asset can't be read (caller falls back to the skip list).
+
+    The matrix is serialized as 32 '/'-separated hex groups; group index = layer
+    index, and each group is a hex mask where bit j set means "this layer
+    collides with layer j". Trailing high layers (28-31) are trimmed from the
+    hex (shorter group => those bits are 0). Verified against the FPEPlayer row
+    (layer 10 = 'fffddff' => collides with 0-8,10-12,14-27; excludes 9,13,28-31).
+    #>
+    param(
+        [Parameter(Mandatory = $true)] [string]$DynamicsManagerPath,
+        [Parameter(Mandatory = $true)] [int]$PlayerLayer
+    )
+
+    if ([string]::IsNullOrWhiteSpace($DynamicsManagerPath) -or -not (Test-Path -LiteralPath $DynamicsManagerPath)) {
+        return $null
+    }
+
+    $matrixLine = $null
+    foreach ($line in [System.IO.File]::ReadLines($DynamicsManagerPath)) {
+        $m = [regex]::Match($line, "^\s*m_LayerCollisionMatrix:\s*(\S+)\s*$")
+        if ($m.Success) { $matrixLine = $m.Groups[1].Value; break }
+    }
+    if ($null -eq $matrixLine) { return $null }
+
+    $groups = $matrixLine.Split('/')
+    if ($PlayerLayer -lt 0 -or $PlayerLayer -ge $groups.Count) { return $null }
+
+    $maskHex = $groups[$PlayerLayer]
+    if ([string]::IsNullOrWhiteSpace($maskHex)) { return $null }
+
+    # Parse as a 32-bit mask. The hex is most-significant-nibble-first; bit j
+    # (counting from the low end) = collides-with-layer-j.
+    $mask = [System.Convert]::ToUInt64($maskHex, 16)
+    $result = [System.Collections.Generic.HashSet[int]]::new()
+    for ($j = 0; $j -lt 32; $j++) {
+        if ((($mask -shr $j) -band 1UL) -eq 1UL) { [void]$result.Add($j) }
+    }
+    return $result
 }
 
 function Get-WorldTransform {
@@ -1134,6 +1158,14 @@ $teleporterGameObjectIds = New-Object System.Collections.Generic.HashSet[long]
 $rigidbodyByGameObjectId = [System.Collections.Generic.Dictionary[long, object]]::new()
 $primitiveColliderComponents = New-Object System.Collections.Generic.List[object]
 $meshColliderComponents = New-Object System.Collections.Generic.List[object]
+# GameObject ids that carry a SkinnedMeshRenderer (section type 137). A
+# MeshCollider sharing a GameObject with a SkinnedMeshRenderer is the animated
+# dating-character/dialog rig body: the collider mesh is the skinned mesh, which
+# the exporter slices in its bind/animated-pose union, producing phantom sprawl
+# (Monitor 18x17m, cars 12x27m). These never move in the walked world and their
+# physical object is blocked by a separate static-MeshRenderer collider (desk,
+# chair, tower). Drop them as blockers. See [[project-navigation-model-update-meshes-2026-05-29]].
+$skinnedMeshGameObjectIds = New-Object System.Collections.Generic.HashSet[long]
 # MeshFilter records (section type 33). Used as a fallback panel source for
 # doors whose visual panel has no collider (e.g. closet SlidingDoors).
 $meshFilterComponents = New-Object System.Collections.Generic.List[object]
@@ -1302,6 +1334,13 @@ function Process-SceneSection {
                 })
             }
         }
+        137 {
+            # SkinnedMeshRenderer — marks the animated dialog/character rig body.
+            $gameObjectIdText = Get-LineValue -Lines $linesArray -Pattern "^  m_GameObject: \{fileID: (\d+)\}$"
+            if ($null -ne $gameObjectIdText) {
+                [void]$skinnedMeshGameObjectIds.Add([long]$gameObjectIdText)
+            }
+        }
         154 { $script:terrainColliderCount++ }
     }
 }
@@ -1334,6 +1373,29 @@ foreach ($transformId in $transformsById.Keys) {
 $primitiveColliders = New-Object System.Collections.Generic.List[object]
 $navigationBlockers = New-Object System.Collections.Generic.List[object]
 $ignoredReasons = New-ReasonCounter
+
+# Authoritative blocker layer filter. A collider blocks the player only if the
+# Unity collision matrix lets the player layer (FPEPlayer) collide with the
+# collider's layer. Derive that set from DynamicsManager.asset; fall back to the
+# legacy skip list if the asset is unavailable. The predicate
+# Test-LayerCollidesWithPlayer returns $true when the layer should be ADMITTED.
+$playerCollidableLayers = Get-PlayerCollidableLayers -DynamicsManagerPath $DynamicsManagerPath -PlayerLayer $PlayerLayer
+$skipLayerSet = [System.Collections.Generic.HashSet[int]]::new()
+foreach ($lyr in $SkipMeshLayers) { [void]$skipLayerSet.Add([int]$lyr) }
+if ($null -ne $playerCollidableLayers) {
+    Write-Host ("Player layer {0} collides with {1} layers (from collision matrix): {2}" -f `
+        $PlayerLayer, $playerCollidableLayers.Count, (($playerCollidableLayers | Sort-Object) -join ","))
+} else {
+    Write-Host ("DynamicsManager.asset unavailable; falling back to SkipMeshLayers: {0}" -f ($SkipMeshLayers -join ","))
+}
+
+function Test-LayerCollidesWithPlayer {
+    param([Parameter(Mandatory = $true)] [int]$Layer)
+    if ($null -ne $script:playerCollidableLayers) {
+        return $script:playerCollidableLayers.Contains($Layer)
+    }
+    return -not $script:skipLayerSet.Contains($Layer)
+}
 
 foreach ($component in $primitiveColliderComponents) {
     if (-not $gameObjects.ContainsKey($component.GameObjectId) -or -not $transformByGameObjectId.ContainsKey($component.GameObjectId)) {
@@ -1381,6 +1443,7 @@ foreach ($component in $primitiveColliderComponents) {
     elseif ($record.IsDoorConnector) { $reason = "DoorConnector" }
     elseif ($record.IsTeleporterConnector) { $reason = "TeleporterConnector" }
     elseif ($record.HasRigidbody) { $reason = "RigidbodyObject" }
+    elseif (-not (Test-LayerCollidesWithPlayer -Layer $gameObject.Layer)) { $reason = ("LayerNotPlayerCollidable:{0}" -f $gameObject.Layer) }
     elseif ($record.TopY -lt $MinimumBlockingTopY) { $reason = "BelowBlockingHeight" }
     elseif ($record.BottomY -gt $MaximumBlockingBottomY) { $reason = "AbovePlayerBand" }
     elseif ($null -eq $record.Bounds2D) { $reason = "MissingFootprintBounds" }
@@ -1413,9 +1476,6 @@ if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($
     $guidIndex = Build-MeshGuidIndex -MeshRoot $MeshAssetRoot -CachePath $MeshGuidIndexCachePath
     $meshGuidIndexCount = $guidIndex.Count
     Write-Host ("Mesh GUID index entries: {0}" -f $meshGuidIndexCount)
-
-    $skipLayerSet = [System.Collections.Generic.HashSet[int]]::new()
-    foreach ($lyr in $SkipMeshLayers) { [void]$skipLayerSet.Add([int]$lyr) }
 
     foreach ($component in $meshColliderComponents) {
         if (-not $gameObjects.ContainsKey($component.GameObjectId) -or -not $transformByGameObjectId.ContainsKey($component.GameObjectId)) {
@@ -1459,7 +1519,14 @@ if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($
         if ($component.IsDoorConnector) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "DoorConnector"; continue }
         if ($component.IsTeleporterConnector) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "TeleporterConnector"; continue }
         if ($component.HasRigidbody) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "RigidbodyObject"; continue }
-        if ($skipLayerSet.Contains($gameObject.Layer)) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason ("SkippedLayer:{0}" -f $gameObject.Layer); continue }
+        if (-not (Test-LayerCollidesWithPlayer -Layer $gameObject.Layer)) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason ("LayerNotPlayerCollidable:{0}" -f $gameObject.Layer); continue }
+        # Drop the animated dialog/character rig body: a MeshCollider sharing a
+        # GameObject with a SkinnedMeshRenderer is the skinned mesh sliced across
+        # its bind/animated-pose union, which sprawls (Monitor 18x17m, cars
+        # 12x27m). The physical object is blocked by a separate static-
+        # MeshRenderer collider (desk, chair, tower). 17/17 sprawl cases this
+        # scene. See [[project-navigation-model-update-meshes-2026-05-29]].
+        if ($skinnedMeshGameObjectIds.Contains($gameObject.Id)) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "SkinnedMeshRigCollider"; continue }
 
         $assetPath = $guidIndex[$component.MeshGuid]
         $meshData = $null
@@ -1493,85 +1560,24 @@ if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($
 
         $meshColliderRecords.Add($record)
 
+        # Mesh colliders are rasterized by the bake from their collision-SLICE
+        # SEGMENTS only (never their AABB), so the old thin-frame / wall-FAT /
+        # footprint-area gates — which existed solely to decide AABB suppression
+        # vs rasterization and to tag IsWallLikeFatVictim — are retired. Every
+        # mesh record that resolved a footprint flows through; the bake's
+        # _segments_in_floor_band + _is_vertical_wall handle wall geometry, and
+        # the dilation pass handles clearance. We keep two cheap sanity gates so
+        # out-of-band / degenerate records don't pollute NavigationBlockers (the
+        # primitive bounds pass and the datable-dimension join read it).
+        # See [[project-navigation-iswalllikefatvictim-followup]],
+        # [[project-navigation-collision-only-blockers-2026-05-29]].
         $reason = $null
-        $isWallLikeFatVictim = $false
-
-        # Thin-frame check (evaluated before the area cap): doorframes / closet
-        # doors / perimeter fences fall under the area cap but their AABBs
-        # still seal doorway openings. When the signature matches, suppress
-        # the AABB and flag the record for segment-trace rasterization. See
-        # [[project-navigation-bake-doorframe-gap]].
-        if ($null -ne $record.Bounds2D -and [int]$record.Footprint.SegmentCount -gt 0) {
-            $verticalExtent = [double]$record.TopY - [double]$record.BottomY
-            $thinDim = [Math]::Min([double]$record.Bounds2D.Width, [double]$record.Bounds2D.Depth)
-            $spanDim = [Math]::Max([double]$record.Bounds2D.Width, [double]$record.Bounds2D.Depth)
-            $isThinFrame = ($verticalExtent -ge $ThinFrameMinVerticalExtent) -and `
-                ($thinDim -le $ThinFrameMaxThinDimension) -and `
-                ($spanDim -ge $ThinFrameMinSpanDimension) -and `
-                ([double]$record.BottomY -le $ThinFrameMaxBottomY)
-            if ($isThinFrame) {
-                $reason = "ThinFrameAABBSuppressed"
-                $isWallLikeFatVictim = $true
-            }
-        }
-
-        if ($null -ne $reason) {
-            # Fall through to the shared victim emission path below.
-        }
-        elseif ($record.TopY -lt $MinimumBlockingTopY) { $reason = "BelowBlockingHeight" }
+        if ($record.TopY -lt $MinimumBlockingTopY) { $reason = "BelowBlockingHeight" }
         elseif ($record.BottomY -gt $MaximumBlockingBottomY) { $reason = "AbovePlayerBand" }
         elseif ($null -eq $record.Bounds2D) { $reason = "MissingFootprintBounds" }
-        elseif ([double]$record.Footprint.AreaSqM -gt $MaxMeshFootprintAreaSqM) {
-            # Wall-like bypass: tall, grounded, capped (rejects trees/skyboxes),
-            # AND thin in one horizontal direction. Thinness is the critical
-            # check: combined-room wall meshes have huge XZ AABBs that span the
-            # whole room interior; admitting them blocks routes inside the room.
-            $verticalExtent = [double]$record.TopY - [double]$record.BottomY
-            $thinDim = [Math]::Min([double]$record.Bounds2D.Width, [double]$record.Bounds2D.Depth)
-            $isGroundedTallCapped = ($verticalExtent -ge $WallMinVerticalExtent) -and `
-                ([double]$record.BottomY -le $WallMaxBottomY) -and `
-                ([double]$record.TopY -le $WallMaxTopY)
-            $isWallLike = $isGroundedTallCapped -and ($thinDim -le $WallMaxThinDimension)
-            if (-not $isWallLike) {
-                $reason = "FootprintAreaExceedsMax"
-                # Wall-like-FAT victim: combined-room wall meshes whose slice
-                # traces should rasterize into the bake bitmap. Three gates:
-                # (1) TopY clusters at a known ceiling/roof band — ~12.5m
-                #     (ground walls) or 25-33m (upper / full-height / roof).
-                #     Filters out furniture/dateable colliders (Monitor 18.0,
-                #     Body 6.0, Sofa 3.1, Bed 17.1, HVAC 20.1).
-                # (2) Vertical extent <= 22m — filters trees (whose foliage
-                #     extends well above the ceiling, vertical extent 26m+).
-                #     Largest legitimate wall is SM_Walls_Attic at 19.4m.
-                # (3) Must have produced at least one slice-plane segment.
-                # The clusters are data-driven for this scene; if the mod is
-                # re-targeted at another Unity scene the bands need to be
-                # re-derived from that scene's ceiling Y values. See
-                # [[project-navigation-bake-blocker-scope-2026-05-21]].
-                $topY = [double]$record.TopY
-                $inGroundCeilingBand = ($topY -ge 12.0 -and $topY -le 13.5)
-                $inUpperCeilingBand  = ($topY -ge 25.0 -and $topY -le 33.0)
-                $verticalReasonable  = ($verticalExtent -le 22.0)
-                $verticalOk          = ($verticalExtent -ge $WallMinVerticalExtent)
-                if ($verticalOk -and $verticalReasonable -and `
-                    ($inGroundCeilingBand -or $inUpperCeilingBand) -and `
-                    [int]$record.Footprint.SegmentCount -gt 0) {
-                    $isWallLikeFatVictim = $true
-                }
-            }
-            else {
-                $flatRadius = [Math]::Max([double]$record.Bounds2D.Width, [double]$record.Bounds2D.Depth) / 2.0
-                if ($flatRadius -lt $MinimumFootprintRadius) { $reason = "TinyFootprint" }
-            }
-        }
-        else {
-            $flatRadius = [Math]::Max([double]$record.Bounds2D.Width, [double]$record.Bounds2D.Depth) / 2.0
-            if ($flatRadius -lt $MinimumFootprintRadius) { $reason = "TinyFootprint" }
-        }
 
         if ($null -ne $reason) {
             $record.Footprint.RejectionReason = $reason
-            $record.Footprint.IsWallLikeFatVictim = $isWallLikeFatVictim
             Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason $reason
             continue
         }
@@ -2019,15 +2025,8 @@ $result = [ordered]@{
         RigidbodyObjectsExcluded = $true
         MeshCollidersUnsupported = (-not $meshSupported)
         MeshSlicePlanes = @($MeshSlicePlanes | ForEach-Object { [Math]::Round([double]$_, 4) })
-        MaxMeshFootprintAreaSqM = [Math]::Round($MaxMeshFootprintAreaSqM, 4)
-        WallMinVerticalExtent = [Math]::Round($WallMinVerticalExtent, 4)
-        WallMaxBottomY = [Math]::Round($WallMaxBottomY, 4)
-        WallMaxTopY = [Math]::Round($WallMaxTopY, 4)
-        WallMaxThinDimension = [Math]::Round($WallMaxThinDimension, 4)
-        ThinFrameMinVerticalExtent = [Math]::Round($ThinFrameMinVerticalExtent, 4)
-        ThinFrameMaxThinDimension = [Math]::Round($ThinFrameMaxThinDimension, 4)
-        ThinFrameMinSpanDimension = [Math]::Round($ThinFrameMinSpanDimension, 4)
-        ThinFrameMaxBottomY = [Math]::Round($ThinFrameMaxBottomY, 4)
+        PlayerLayer = $PlayerLayer
+        PlayerCollidableLayers = $(if ($null -ne $playerCollidableLayers) { @($playerCollidableLayers | Sort-Object) } else { $null })
         SkipMeshLayers = @($SkipMeshLayers | ForEach-Object { [int]$_ })
         TerrainCollidersUnsupported = $true
     }

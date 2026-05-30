@@ -58,20 +58,6 @@ namespace DateEverythingAccess
             DestinationZoneReached
         }
 
-        private enum DoorCommittedSourceRecoveryStage
-        {
-            None,
-            SourceThreshold,
-            PushThrough
-        }
-
-        private enum DoorCommittedSourceRecoveryTrigger
-        {
-            ActivateFromLoop,
-            EscalateFromRepeatedLoop,
-            SourceThresholdSatisfied
-        }
-
         private enum TrackedNavigationMode
         {
             None,
@@ -148,29 +134,19 @@ namespace DateEverythingAccess
         private const float LocalNavigationStallTargetTolerance = 0.2f;
         private const float LocalNavigationStallBypassDurationSeconds = 1f;
         private const float OpenPassageOverrideLocalNavigationGoalReachedDistance = 0.75f;
-        private const float DoorThresholdHandoffLocalNavigationGoalReachedDistance = 0.35f;
-        private const float DoorThresholdAdvanceRawGoalReachedDistance = 0.5f;
-        private const float DoorPushThroughLocalNavigationGoalReachedDistance = 0.35f;
-        private const float DoorEntryAdvanceLocalNavigationGoalReachedDistance = 0.35f;
         private const float LocalNavigationGoalRetargetDistance = 0.5f;
         private const float TrackedInteractableApproachClearanceDistance = 0.9f;
         private const float TrackedInteractableApproachRetargetDistance = 0.75f;
         private const float TrackedInteractableApproachMinimumExtent = 0.35f;
         private const float AutoWalkConnectorSearchDistance = 4f;
         private const float InteractableZoneFallbackDistance = 8f;
-        private const float DoorTraversalClearanceDistance = 1.4f;
-        private const float DoorTraversalLateralOffsetDistance = 0.6f;
-        private const float DoorThresholdAdvanceProxyCompletionDistance = DoorTraversalClearanceDistance + DoorTraversalLateralOffsetDistance;
-        private const float DoorTraversalPushThroughDistance = 1.35f;
-        private const float DoorTraversalMaximumPushThroughDistance = 3.25f;
-        private const float DoorPushThroughSourceAdvanceDistance = 1f;
-        private const float DoorPushThroughArrivalDistance = 2.15f;
-        private const float DoorPushThroughNoHandoffCommitTolerance = 0.1f;
-        private const float DoorPushThroughRecoveryNoHandoffCommitExtraTolerance = 0.2f;
-        private const float DoorPushThroughBlockedTimeoutSeconds = 3f;
-        private const float DoorThresholdAdvanceBypassDistance = 1f;
-        private const float DoorPostInteractionFallbackExhaustionSeconds = 0.2f;
-        private const float DoorPostInteractionFallbackExhaustionMovementThreshold = 0.35f;
+        // NOTE: the DoorTraversal* / DoorPushThrough* / DoorThresholdAdvance* /
+        // DoorPostInteractionFallback* constants were retired — they were leftovers
+        // from a removed door-traversal push-through recovery state machine (all
+        // declaration-only, never read). The planner now lands the player at an
+        // authoritative operable_from_cells standpoint outside the swing arc, so the
+        // door is opened cleanly without the old proxy-completion / push-through
+        // recovery. See [[project-navigation-door-operability-cells]].
         private const float TransitionFacingAlignmentCooldownSeconds = 0.2f;
         private const float TransitionFacingAlignmentMinimumAngleDegrees = 8f;
         private const float UnityNavMeshFallbackSampleDistance = 3.5f;
@@ -178,10 +154,6 @@ namespace DateEverythingAccess
         private const float TutorialGiftApproachRadius = 1.25f;
         private const float SimpleNavDoorTargetRadius = 3f;
         private const int AutoWalkMaxRecoveryAttempts = 2;
-        private const int DoorCommittedSourceWatchdogLoopTripsBeforeRetry = 2;
-        private const int DoorCommittedSourceWatchdogMaxInteractionRetries = 1;
-        private const int DoorPostInteractionFallbackExhaustionAttempts = 8;
-        private const int DoorPostInteractionLoopExhaustionDetections = 4;
         private const int VkUp = 0x26;
         private const int VkDown = 0x28;
         private const int VkLeft = 0x25;
