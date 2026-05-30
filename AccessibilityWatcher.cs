@@ -137,13 +137,12 @@ namespace DateEverythingAccess
         //     pre-align step.
         // See [[project-navigation-door-operability-cells]].
         private const float TutorialGiftApproachRadius = 1.25f;
-        // Door-target approach cap (metres). MUST stay in sync with the bake's
-        // DOOR_OPERABLE_RADIUS_M (scripts/bake_navigable_region.py): the bake computes a
-        // door's operable_from_cells within that radius, and door goals now come from
-        // those cells, so a mismatch here would only mis-bound the pre-snap. Kept as a
-        // named constant (no cross-runtime shared source: PowerShell bake vs C# runtime).
-        // If you change one, change the other. See [[project-navigation-door-operability-cells]].
-        private const float SimpleNavDoorTargetRadius = 3f;
+        // NOTE: the C#-side door-approach cap (SimpleNavDoorTargetRadius=3m) was retired.
+        // Door goals now come exclusively from the bake's operable_from_cells, which
+        // override the planner's goal disc entirely, so a C# door radius bounded only a
+        // discarded pre-snap. The door-approach distance now lives in ONE place — the
+        // bake's DOOR_OPERABLE_RADIUS_M — removing the cross-runtime sync hazard.
+        // See [[project-navigation-door-operability-cells]].
         private const int VkUp = 0x26;
         private const int VkDown = 0x28;
         private const int VkLeft = 0x25;
@@ -2507,7 +2506,7 @@ namespace DateEverythingAccess
 
             Vector3 start = BetterPlayerControl.Instance.transform.position;
             Vector3 target = GetInteractablePlanningPosition(interactable);
-            float radius = GetInteractableRouteRadius(interactable);
+            float radius = GetInteractableApproachRadius(interactable);
             SimpleNavRoute route = SimpleNavPlanner.Plan(
                 start,
                 target,
@@ -3210,7 +3209,7 @@ namespace DateEverythingAccess
                 : target.transform.position;
             int goId = target.gameObject.GetInstanceID();
             string goName = target.gameObject.name;
-            float radius = GetInteractableRouteRadius(target);
+            float radius = GetInteractableApproachRadius(target);
             string label = _navigationTargetLabel ?? goName;
 
             bool isDatable = !string.IsNullOrWhiteSpace(target.inkFileName);
@@ -3235,7 +3234,19 @@ namespace DateEverythingAccess
                 string.Equals(interactable.InternalName(), "skylar", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static float GetInteractableRouteRadius(InteractableObj interactable)
+        // APPROACH radius (metres) = the goal-disc the planner uses to choose where the
+        // player STOPS near a target. This is NOT the game's interaction gate: the game
+        // decides interaction success at runtime via the object's own InteractionRadius
+        // (Distance(camera, ClosestPointOnBounds) < InteractionRadius + a forward raycast).
+        // We default to the object's InteractionRadius so a target ~2m unreachable still
+        // gets a goal cell, then the collider-band filter narrows within it. Doors are NOT
+        // capped here: a door's goal cells come exclusively from the bake's
+        // operable_from_cells (which override this disc entirely), so the radius for a door
+        // only bounds a pre-snap that gets discarded — no cap needed. The Skylar gift IS
+        // capped (1.25m) because at the package's advertised 7.5m the route announces
+        // arrival ~7m short of a useful package stand point.
+        // See [[project-navigation-door-operability-cells]].
+        private static float GetInteractableApproachRadius(InteractableObj interactable)
         {
             if (interactable == null)
                 return 7.5f;
@@ -3243,14 +3254,9 @@ namespace DateEverythingAccess
             if (IsTutorialSkylarGiftTarget(interactable))
                 return TutorialGiftApproachRadius;
 
-            float radius = interactable.InteractionRadius > 0f
+            return interactable.InteractionRadius > 0f
                 ? interactable.InteractionRadius
                 : 7.5f;
-
-            if (IsDoorInteractable(interactable) && radius > SimpleNavDoorTargetRadius)
-                return SimpleNavDoorTargetRadius;
-
-            return radius;
         }
 
 
