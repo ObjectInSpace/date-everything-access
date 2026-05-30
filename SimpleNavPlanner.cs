@@ -66,13 +66,12 @@ namespace DateEverythingAccess
         // nav-eligible cells inside this band (e.g. tiny prop in a tight space), the planner
         // falls back to the standard disc.
         private const float TargetColliderBandOuterM = 1.5f;
-        // Door-specific hinge-distance band. The inner edge must clear the door's swing arc
-        // (panel ~0.9m wide, plus player capsule radius ~0.4m, plus margin): if the player
-        // stands inside the arc the game's Door.OnCollisionEnter latches collidedWithPlayer
-        // and refuses to open/close the door. Outer edge sits just inside the game's interact
-        // forward-raycast reach so the player can still interact after arrival.
-        private const float DoorHingeBandInnerM = 1.5f;
-        private const float DoorHingeBandOuterM = 3.0f;
+        // NOTE: the DoorHingeBandInner/OuterM geometric door-approach band was retired. A
+        // door target's goal cells now come exclusively from the bake's
+        // operable_from_cells (authoritative, swing-arc-aware). If a door lacks those
+        // cells the planner fails fast (DoorMissingOperableCells) rather than guessing
+        // with the band, so a missing/broken operability data source surfaces instead of
+        // being silently papered over. See [[project-navigation-door-operability-cells]].
         // Door portal waypoints are semantic, not just geometric corners. The executor should
         // approach the opening, cross it, then clear the far side instead of aiming a long
         // segment through the live open door panel.
@@ -116,6 +115,14 @@ namespace DateEverythingAccess
             StartUnreachable,
             TargetUnreachable,
             NoPath,
+            // A door target has no operable_from_cells in the bake. We FAIL FAST here
+            // rather than fall back to a geometric hinge-band guess: a door with no
+            // operability data is a broken/missing data source (bake didn't compute it,
+            // e.g. a new scene's door geometry the operability pass didn't handle), and
+            // silently routing with a worse approximation would mask that. The log names
+            // the door so the producer can be fixed. See
+            // [[project-navigation-door-operability-cells]], [[feedback-fix-the-data-source-first]].
+            DoorMissingOperableCells,
         }
         public static PlanFailure LastFailure { get; private set; } = PlanFailure.None;
 
@@ -205,20 +212,22 @@ namespace DateEverythingAccess
             Door targetDoor = ResolveTargetDoor(targetGameObjectId);
             Collider targetCollider = targetDoor == null ? ResolveTargetCollider(targetGameObjectId) : null;
 
-            // Door target: use the bake's operable_from_cells — the authoritative set of
-            // navigable cells the player can stand in to operate this door (already
-            // excludes the swing arc and the panel itself, computed from the real Door.cs
-            // rule). This replaces the old hinge-distance band approximation. Fall back to
-            // the band filter only if the bake has no operable cells for this door.
-            // See [[project-navigation-door-operability-cells]].
-            bool doorGoalsFromOperable = false;
+            // Door target: the goal set is the bake's operable_from_cells — the
+            // authoritative navigable cells the player can stand in to operate this door
+            // (excludes the swing arc and the panel, computed from the real Door.cs rule).
+            // This is REQUIRED, not best-effort: if a door has no operable cells we FAIL
+            // FAST (loud log + DoorMissingOperableCells) instead of guessing with a
+            // geometric hinge band. A door without operability data is a broken/missing
+            // data source to fix at the producer, not to paper over at runtime. See
+            // [[project-navigation-door-operability-cells]], [[feedback-fix-the-data-source-first]].
             if (targetDoor != null && targetDoor.gameObject != null)
             {
                 HashSet<long> operable;
+                List<NodeKey> opGoals = null;
                 if (goalFloor.OperableFromByName.TryGetValue(targetDoor.gameObject.name, out operable)
                     && operable.Count > 0)
                 {
-                    List<NodeKey> opGoals = new List<NodeKey>(operable.Count);
+                    opGoals = new List<NodeKey>(operable.Count);
                     foreach (long packed in operable)
                     {
                         int ix = (int)(packed >> 32);
@@ -226,49 +235,38 @@ namespace DateEverythingAccess
                         if (goalFloor.Navigable(ix, iz))
                             opGoals.Add(new NodeKey(goalFloor.Label, ix, iz));
                     }
-                    if (opGoals.Count > 0)
-                    {
-                        goals = opGoals;
-                        doorGoalsFromOperable = true;
-                    }
                 }
-                if (!doorGoalsFromOperable && Main.Log != null)
-                    Main.Log.LogInfo("SimpleNavPlanner.Plan: no operable_from_cells for door target=" +
-                        (targetName ?? "<null>") + "; falling back to hinge band");
+                if (opGoals == null || opGoals.Count == 0)
+                {
+                    if (Main.Log != null)
+                        Main.Log.LogWarning("SimpleNavPlanner.Plan: door target=" +
+                            (targetName ?? "<null>") + " (" + targetDoor.gameObject.name +
+                            ") on " + goalFloor.Label + " has no operable_from_cells in the bake" +
+                            (operable != null && operable.Count > 0 ? " (all off the navigable set)" : "") +
+                            " — failing fast; fix the bake's door operability data for this door.");
+                    LastFailure = PlanFailure.DoorMissingOperableCells;
+                    return null;
+                }
+                goals = opGoals;
             }
-
-            // Collider target (or door fallback): narrow goal cells to a band around the
-            // target so A* terminates *near* the interactable instead of anywhere in the
-            // 7.5m InteractionRadius disc.
-            //   - Door fallback: distance from targetPos (the hinge); the door's Collider
-            //     AABB sweeps with the panel, so ClosestPointOnBounds is unreliable.
-            //   - Non-door targets: distance from the target's Collider via
-            //     ClosestPointOnBounds, which hugs prop geometry.
+            // Non-door collider target: narrow goal cells to a band around the target's
+            // Collider (ClosestPointOnBounds, which hugs prop geometry) so A* terminates
+            // *near* the interactable instead of anywhere in the 7.5m InteractionRadius
+            // disc. Falls back to the unfiltered disc if the band is empty.
             // See [[project-navigation-collider-band-filter]].
-            if (!doorGoalsFromOperable && (targetDoor != null || targetCollider != null))
+            else if (targetCollider != null)
             {
                 List<NodeKey> filtered = new List<NodeKey>(goals.Count);
-                float innerM = targetDoor != null ? DoorHingeBandInnerM : TargetColliderClearanceM;
-                float outerM = targetDoor != null ? DoorHingeBandOuterM : TargetColliderBandOuterM;
-                float innerSq = innerM * innerM;
-                float outerSq = outerM * outerM;
+                float innerSq = TargetColliderClearanceM * TargetColliderClearanceM;
+                float outerSq = TargetColliderBandOuterM * TargetColliderBandOuterM;
                 for (int i = 0; i < goals.Count; i++)
                 {
                     NodeKey g = goals[i];
                     Vector2 xz = goalFloor.CellToWorld(g.Ix, g.Iz);
                     Vector3 cellWorld = new Vector3(xz.x, goalFloor.FloorY + 1.0f, xz.y);
-                    float dx, dz;
-                    if (targetDoor != null)
-                    {
-                        dx = targetPos.x - cellWorld.x;
-                        dz = targetPos.z - cellWorld.z;
-                    }
-                    else
-                    {
-                        Vector3 nearest = targetCollider.ClosestPointOnBounds(cellWorld);
-                        dx = nearest.x - cellWorld.x;
-                        dz = nearest.z - cellWorld.z;
-                    }
+                    Vector3 nearest = targetCollider.ClosestPointOnBounds(cellWorld);
+                    float dx = nearest.x - cellWorld.x;
+                    float dz = nearest.z - cellWorld.z;
                     float d2 = dx * dx + dz * dz;
                     if (d2 >= innerSq && d2 <= outerSq)
                         filtered.Add(g);
@@ -276,8 +274,7 @@ namespace DateEverythingAccess
                 if (filtered.Count > 0) goals = filtered;
                 else if (Main.Log != null)
                     Main.Log.LogInfo("SimpleNavPlanner.Plan: goal band empty for target=" +
-                        (targetName ?? "<null>") + " anchor=" + (targetDoor != null ? "door-hinge" : "collider") +
-                        "; keeping unfiltered goals=" + goals.Count);
+                        (targetName ?? "<null>") + " anchor=collider; keeping unfiltered goals=" + goals.Count);
             }
 
             List<NodeKey> path;
