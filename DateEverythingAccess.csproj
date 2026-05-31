@@ -32,6 +32,18 @@
     <Message Text="Copied navigable region bake JSON to $(NavigableRegionBakeOutputPath)" Importance="High" />
   </Target>
 
+  <!-- Per-language pose-card description files ship alongside the DLL. They're edited/translated
+       in the project root without recompiling; CardPoseDescriptions reads them from the plugin
+       folder at runtime. -->
+  <ItemGroup>
+    <CardPoseDescriptionFiles Include="$(ProjectDir)card_pose_descriptions.*.json" />
+  </ItemGroup>
+
+  <Target Name="CopyCardPoseDescriptionsToOutput" AfterTargets="Build">
+    <Copy SourceFiles="@(CardPoseDescriptionFiles)" DestinationFolder="$(ProjectDir)bin\$(Configuration)\net472\" SkipUnchangedFiles="true" />
+    <Message Text="Copied card pose description files to output" Importance="High" />
+  </Target>
+
   <ItemGroup>
     <Reference Include="BepInEx">
       <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\core\BepInEx.dll</HintPath>
@@ -101,6 +113,7 @@
   <Target Name="CopyToPlugins" AfterTargets="Build" Condition="'$(SkipCopyToPlugins)' != 'true'">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\" />
     <Copy SourceFiles="$(NavigableRegionBakeSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigable_region.bake.json" Condition="Exists('$(NavigableRegionBakeSourcePath)')" />
+    <Copy SourceFiles="@(CardPoseDescriptionFiles)" DestinationFolder="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\" SkipUnchangedFiles="true" />
     <Message Text="Copied $(TargetFileName) to BepInEx plugins folder" Importance="High" />
     <!-- Wipe captured C# routes on every deploy: a new DLL or bake invalidates
          them for parity diffing (they were planned against the old planner /
