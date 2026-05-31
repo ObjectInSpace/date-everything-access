@@ -83,13 +83,19 @@ New-Item -ItemType Directory -Path (Join-Path $packageRoot "BepInEx\core") -Forc
 New-Item -ItemType Directory -Path (Join-Path $packageRoot "BepInEx\plugins") -Force | Out-Null
 
 Copy-Item -LiteralPath $outputDllPath -Destination (Join-Path $packageRoot "BepInEx\plugins\DateEverythingAccess.dll") -Force
+$outputDir = Split-Path -Parent $outputDllPath
 foreach ($supportFile in @(
     "navigable_region.bake.json"
 )) {
-    $supportPath = Join-Path (Split-Path -Parent $outputDllPath) $supportFile
+    $supportPath = Join-Path $outputDir $supportFile
     if (Test-Path -LiteralPath $supportPath) {
         Copy-Item -LiteralPath $supportPath -Destination (Join-Path $packageRoot "BepInEx\plugins\$supportFile") -Force
     }
+}
+# Per-language pose-card description files ship alongside the DLL (CardPoseDescriptions reads them
+# from the plugin folder at runtime). Glob so future <lang> files are picked up automatically.
+foreach ($descFile in (Get-ChildItem -LiteralPath $outputDir -Filter "card_pose_descriptions.*.json" -ErrorAction SilentlyContinue)) {
+    Copy-Item -LiteralPath $descFile.FullName -Destination (Join-Path $packageRoot "BepInEx\plugins\$($descFile.Name)") -Force
 }
 Copy-Item -LiteralPath $coreSourcePath -Destination (Join-Path $packageRoot "BepInEx") -Recurse -Force
 

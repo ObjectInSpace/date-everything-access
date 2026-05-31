@@ -1,0 +1,25 @@
+Date Everything Access Portable Package
+Third-Party Notices
+
+This portable package redistributes third-party runtime components that are
+required to run the accessibility mod in Date Everything!.
+
+Included third-party components:
+
+1. BepInEx
+   - Purpose: Unity mod loader runtime
+   - Upstream: https://github.com/BepInEx/BepInEx
+   - Documentation: https://docs.bepinex.dev/
+   - License: LGPL-2.1
+
+2. Tolk
+   - Purpose: Screen reader bridge library
+   - Upstream: https://github.com/dkager/tolk
+   - License: LGPL-2.1 or later
+
+3. NVDA Controller Client DLL
+   - Purpose: NVDA integration used through Tolk
+   - Distributed with the local Tolk installation used by this mod
+
+This package includes only the runtime files needed to launch the mod with the
+tested local setup. It does not include game code or game assets.
