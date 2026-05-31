@@ -240,9 +240,35 @@ namespace DateEverythingAccess
             Add("navigation_room_object_option", "Objekt {0} von {1}. {2}", "Object {0} of {1}. {2}");
             Add("navigation_room_object_picker_closed", "Objektliste geschlossen.", "Object list closed.");
             Add("navigation_object_picker_title", "Bekannte Objekte", "Known objects");
-            Add("navigation_object_picker_option", "Objekt {0} von {1}. {2}", "Object {0} of {1}. {2}");
+            // Trailing position counter spoken AFTER the entry details: {0}=index, {1}=total.
+            Add("navigation_object_picker_position", "{0} von {1}", "{0} of {1}");
             Add("navigation_object_picker_empty", "Keine bekannten Objekte verfuegbar.", "No known objects available.");
+            Add("navigation_object_picker_empty_filtered", "Keine Objekte entsprechen den Filtern.", "No objects match the filters.");
             Add("navigation_object_picker_closed", "Objektliste geschlossen.", "Object list closed.");
+            // Section headers: {0}=count in section.
+            Add("navigation_object_picker_section_met", "Kennengelernt, {0}", "Met, {0}");
+            Add("navigation_object_picker_section_encountered", "Gesehen, {0}", "Encountered, {0}");
+            // Met entry name: {0}=character, {1}=object.
+            Add("navigation_object_picker_met_name", "{0}, {1}", "{0}, {1}");
+            // Floor tags.
+            Add("navigation_object_picker_floor_this", "diese Etage", "this floor");
+            Add("navigation_object_picker_floor_named", "Etage {0}", "{0} floor");
+            Add("navigation_object_picker_floor_other", "andere Etage", "other floor");
+            // Distance: {0}=metres.
+            Add("navigation_object_picker_distance_m", "{0} Meter", "{0} metres");
+            // Sort-mode announcements.
+            Add("navigation_object_picker_sort_distance", "naechstes zuerst", "nearest first");
+            Add("navigation_object_picker_sort_alpha", "alphabetisch", "alphabetical");
+            // Floor-filter announcements.
+            Add("navigation_object_picker_filter_floor_all", "alle Etagen", "all floors");
+            Add("navigation_object_picker_filter_floor_current", "nur diese Etage", "this floor only");
+            // Section-filter announcements.
+            Add("navigation_object_picker_filter_section_all", "alle", "all");
+            Add("navigation_object_picker_filter_section_met", "nur kennengelernt", "met only");
+            Add("navigation_object_picker_filter_section_encountered", "nur gesehen", "encountered only");
+            // Doors-only announcements.
+            Add("navigation_object_picker_filter_doors_on", "nur Tueren", "doors only");
+            Add("navigation_object_picker_filter_doors_off", "alle Objekte", "all objects");
             Add("room_scan_title", "Raum: {0}", "Room: {0}");
             Add("room_scan_empty", "Raum: {0}. Keine verfolgbaren Objekte in diesem Raum.", "Room: {0}. No trackable objects in this room.");
             Add("room_scan_unavailable", "Raumbericht ist gerade nicht verfuegbar.", "Room report is not available right now.");
