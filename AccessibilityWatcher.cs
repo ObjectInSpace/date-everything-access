@@ -224,11 +224,15 @@ namespace DateEverythingAccess
         private static string _pendingCardPoseDesc;
         private static float _pendingCardPoseNotBefore;
         private static float _pendingCardPoseExpiresAt;
-        // Delay before a pose-card description is spoken, letting the awaken/ending stinger play.
-        // The ending card stays open at least ResultSplashScreen._minTimeMustOpenFor (2s), so a
-        // ~1.2s hold leaves room to speak. Tune if the stinger still clips the speech.
-        private const float CardPoseSpeechDelaySeconds = 1.2f;
-        private const float CardPoseSpeechWindowSeconds = 8f;
+        // Delay before a pose-card description is spoken, letting the card stinger's loud attack
+        // pass so the speech lands over the quieter tail. The stinger clips run 6.1s (awaken) to
+        // 11.6s (love ending) — waiting for the whole clip would leave the player in silence and
+        // could outlast the card — so we wait past the attack, not the full clip. 3s was confirmed
+        // comfortable in-game.
+        private const float CardPoseSpeechDelaySeconds = 3f;
+        // Speak-by window after the delay. Must comfortably exceed the longest stinger so a late
+        // poll never drops the description (the love-ending stinger alone is ~11.6s).
+        private const float CardPoseSpeechWindowSeconds = 20f;
         private static float _suppressInitialSpecsAnnouncementsUntil;
         // One-shot guard for the live capsule-dimension diagnostic. The bake assumes
         // CAPSULE_R=0.40 (Player.prefab local radius 0.4), but the prefab root carries
