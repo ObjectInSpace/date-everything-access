@@ -37,6 +37,21 @@ namespace DateEverythingAccess
         }
 
         /// <summary>
+        /// The currently selected language code (e.g. "en", "de"). Other mod systems that ship
+        /// their own per-language data (see <c>CardPoseDescriptions</c>) select files with this
+        /// so their language tracks the game's text-language setting exactly like <see cref="Get"/>.
+        /// </summary>
+        public static string CurrentLanguage
+        {
+            get
+            {
+                if (!_initialized)
+                    Initialize();
+                return _currentLang;
+            }
+        }
+
+        /// <summary>
         /// Gets a localized string for the provided key.
         /// </summary>
         public static string Get(string key)
@@ -96,11 +111,11 @@ namespace DateEverythingAccess
         private static void InitializeStrings()
         {
             Add("mod_loaded",
-                "Date Everything Access geladen. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen werden automatisch vorgelesen. F1 fuer Hilfe. F6 meldet den aktuellen Raum und Objekte relativ zu deiner Blickrichtung. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen. Strg+Umschalt+F9 exportiert die Navmesh-Daten. Strg+Alt+Umschalt+F9 startet oder stoppt den Uebergangstestlauf. Strg+Alt+Umschalt+F6 startet oder stoppt den Tuer-Uebergangstestlauf. Strg+Alt+Umschalt+F1 startet oder stoppt die Live-Routenpruefung. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Raumliste. Strg+Alt+F6 schaltet den Auto-Lauf zum ausgewaehlten Ziel um.",
-                "Date Everything Access loaded. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes are spoken automatically. F1 for help. F6 reports the current room and objects relative to the direction you are facing. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings. Ctrl+Shift+F9 exports navmesh data. Ctrl+Alt+Shift+F9 starts or stops the transition sweep. Ctrl+Alt+Shift+F6 starts or stops the door transition sweep. Ctrl+Alt+Shift+F1 starts or stops the live route audit. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the room list. Ctrl+Alt+F6 toggles auto-walk to the selected target.");
+                "Date Everything Access geladen. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen werden automatisch vorgelesen. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F6 meldet den aktuellen Raum und Objekte relativ zu deiner Blickrichtung. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Liste bekannter Objekte. In der Liste bewegen Hoch und Runter die Auswahl, Eingabe waehlt aus, Escape schliesst, Links und Rechts wechseln die Sortierung, F schaltet nur diese Etage um, M wechselt den Abschnittsfilter und D schaltet nur Tueren um. Strg+Alt+F6 schaltet den Auto-Lauf zum ausgewaehlten Ziel um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen.",
+                "Date Everything Access loaded. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes are spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F6 reports the current room and objects relative to the direction you are facing. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the known objects list. In the list, Up and Down move the selection, Enter selects, Escape closes, Left and Right change the sort, F toggles this floor only, M cycles the section filter, and D toggles doors only. Ctrl+Alt+F6 toggles auto-walk to the selected target. Ctrl+F9 opens accessibility settings.");
             Add("help_text",
-                "Date Everything Access. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen koennen automatisch vorgelesen werden. F1 fuer Hilfe. F6 meldet den aktuellen Raum und Objekte relativ zu deiner Blickrichtung. Strg+F1 wiederholt die letzte Sprachausgabe. F9 schaltet den Debug-Modus um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen. Strg+Umschalt+F9 exportiert die Navmesh-Daten. Strg+Alt+Umschalt+F9 startet oder stoppt den Uebergangstestlauf. Strg+Alt+Umschalt+F6 startet oder stoppt den Tuer-Uebergangstestlauf. Strg+Alt+Umschalt+F1 startet oder stoppt die Live-Routenpruefung. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Raumliste. Strg+Alt+F6 schaltet den Auto-Lauf zum ausgewaehlten Ziel um.",
-                "Date Everything Access. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes can be spoken automatically. F1 for help. F6 reports the current room and objects relative to the direction you are facing. Ctrl+F1 repeats the last spoken line. F9 toggles debug mode. Ctrl+F9 opens accessibility settings. Ctrl+Shift+F9 exports navmesh data. Ctrl+Alt+Shift+F9 starts or stops the transition sweep. Ctrl+Alt+Shift+F6 starts or stops the door transition sweep. Ctrl+Alt+Shift+F1 starts or stops the live route audit. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the room list. Ctrl+Alt+F6 toggles auto-walk to the selected target.");
+                "Date Everything Access. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen koennen automatisch vorgelesen werden. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F6 meldet den aktuellen Raum und Objekte relativ zu deiner Blickrichtung. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Liste bekannter Objekte. In der Liste bewegen Hoch und Runter die Auswahl, Eingabe waehlt aus, Escape schliesst, Links und Rechts wechseln die Sortierung, F schaltet nur diese Etage um, M wechselt den Abschnittsfilter und D schaltet nur Tueren um. Strg+Alt+F6 schaltet den Auto-Lauf zum ausgewaehlten Ziel um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen.",
+                "Date Everything Access. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes can be spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F6 reports the current room and objects relative to the direction you are facing. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the known objects list. In the list, Up and Down move the selection, Enter selects, Escape closes, Left and Right change the sort, F toggles this floor only, M cycles the section filter, and D toggles doors only. Ctrl+Alt+F6 toggles auto-walk to the selected target. Ctrl+F9 opens accessibility settings.");
             Add("debug_mode_enabled", "Debug-Modus aktiviert.", "Debug mode enabled.");
             Add("debug_mode_enabled_with_mapping_dump",
                 "Debug-Modus aktiviert. Aktuelle Eingabebelegungen fuer {0} Geraete wurden ins Protokoll geschrieben.",
@@ -124,8 +139,7 @@ namespace DateEverythingAccess
             Add("config_nearby_objects", "Nahe Objekte", "Nearby objects");
             Add("config_status_changes", "Statusaenderungen", "Status changes");
             Add("room_announcement", "Raum: {0}", "Room: {0}");
-            Add("nearby_announcement_without_prompt", "In der Naehe: {0}.", "Nearby: {0}.");
-            Add("nearby_announcement_with_prompt", "In der Naehe: {0}. {1}.", "Nearby: {0}. {1}.");
+            Add("nearby_announcement_without_prompt", "{0}", "{0}");
             Add("dateviators_equipped", "ausgeruestet", "equipped");
             Add("dateviators_unequipped", "abgesetzt", "unequipped");
             Add("dateviators_state", "Dateviators {0}. {1} Ladungen.", "Dateviators {0}. {1} charges.");
@@ -137,6 +151,8 @@ namespace DateEverythingAccess
             Add("hate_ending_recorded", "Hassende gespeichert. {0} insgesamt.", "Hate ending recorded. {0} total.");
             Add("realized_ending_recorded", "Realized-Ende gespeichert. {0} insgesamt.", "Realized ending recorded. {0} total.");
             Add("choice_announcement", "Option {0} von {1}. {2}", "Choice {0} of {1}. {2}");
+            Add("choice_locked_suffix", "{0}. Gesperrt.", "{0}. Locked.");
+            Add("choice_locked_activate", "Diese Option ist gesperrt.", "This option is locked.");
             Add("apply_display_settings", "Anzeigeeinstellungen anwenden", "Apply display settings");
             Add("new_game_field_name", "Name", "Name");
             Add("new_game_field_town", "Wohnort", "Town");
@@ -154,7 +170,6 @@ namespace DateEverythingAccess
             Add("roomers_character", "Charakter: {0}", "Character: {0}");
             Add("roomers_location", "Ort: {0}", "Location: {0}");
             Add("canopy_no_messages", "Canopy. Keine aktiven Nachrichten.", "Canopy. No active messages.");
-            Add("canopy_summary_name", "Canopy. {0}", "Canopy. {0}");
             Add("music_no_track_selected", "Kein Titel ausgewaehlt", "No track selected");
             Add("music_playing", "Wird abgespielt", "Playing");
             Add("music_stopped", "Gestoppt", "Stopped");
@@ -162,11 +177,7 @@ namespace DateEverythingAccess
             Add("objective_announcement", "Ziel. {0}", "Objective. {0}");
             Add("loading_announcement", "Laden. {0}", "Loading. {0}");
             Add("outcome_announcement", "Ergebnis. {0}", "Outcome. {0}");
-            Add("phone_menu_summary", "Telefonmenu. {0} Ladungen. Dateviators {1}.", "Phone menu. {0} charges. Dateviators {1}.");
-            Add("roomers_summary_empty", "Roomers.", "Roomers.");
-            Add("roomers_summary_screen", "Roomers. {0}.", "Roomers. {0}.");
-            Add("dateadex_summary_empty", "Date A Dex.", "Date A Dex.");
-            Add("dateadex_summary_item", "Date A Dex. {0}.", "Date A Dex. {0}.");
+            Add("phone_menu_summary", "Telefonmenu.", "Phone menu.");
             Add("dateadex_voice_actor", "Sprechrolle: {0}", "Voice actor: {0}");
             Add("dateadex_likes", "Mag: {0}", "Likes: {0}");
             Add("dateadex_dislikes", "Mag nicht: {0}", "Dislikes: {0}");
@@ -184,14 +195,6 @@ namespace DateEverythingAccess
             Add("button_save", "Speichern", "Save");
             Add("button_load", "Laden", "Load");
             Add("button_delete", "Loeschen", "Delete");
-            Add("thiscord_summary_empty", "Thiscord.", "Thiscord.");
-            Add("thiscord_summary_friend", "Thiscord. {0}.", "Thiscord. {0}.");
-            Add("workspace_summary_empty", "Workspace.", "Workspace.");
-            Add("workspace_summary_name", "Workspace. {0}.", "Workspace. {0}.");
-            Add("music_summary_empty", "Musik.", "Music.");
-            Add("music_summary_title", "Musik. {0}.", "Music. {0}.");
-            Add("art_summary_empty", "Kunst.", "Art.");
-            Add("art_summary_title", "Kunst. {0}.", "Art. {0}.");
             Add("art_detail", "Kunst. {0}. {1}.", "Art. {0}. {1}.");
             Add("specs_summary_stats", "SPECS. Statuswerte.", "SPECS. Stats.");
             Add("specs_summary_glossary", "SPECS. Glossar.", "SPECS. Glossary.");

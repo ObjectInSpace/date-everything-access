@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using TMPro;
@@ -152,6 +153,18 @@ namespace DateEverythingAccess
         private const int VkEscape = 0x1B;
 
         private static readonly Regex RichTextRegex = new Regex("<[^>]+>", RegexOptions.Compiled);
+        private static readonly Regex SpriteTagRegex = new Regex(
+            "<sprite(?:=\"(?<asset>[^\"]*)\"|\\s+name=\"(?<name>[^\"]*)\")?\\s*(?:index=(?<idx>\\d+))?[^>]*>",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static FieldInfo _iconMarkupCurrentMapField;
+        private static FieldInfo _iconMarkupKeyboardMapField;
+        private static FieldInfo _iconMarkupControllerMapField;
+        private static FieldInfo _spriteBindingPairsField;
+        private static FieldInfo _spriteBindingPairNameField;
+        private static FieldInfo _spriteBindingPairIdField;
+        private static bool _glyphReflectionResolved;
+        private static readonly Dictionary<object, Dictionary<int, string>> _spriteReverseMaps =
+            new Dictionary<object, Dictionary<int, string>>();
         private static FieldInfo _talkingUiDialogBoxField;
         private static FieldInfo _dialogBoxNameTextField;
         private static FieldInfo _dialogBoxDialogTextField;
@@ -203,6 +216,19 @@ namespace DateEverythingAccess
         private static float _pendingDateADexEntryAnnouncementExpiresAt;
         private static float _suppressDateADexOpenEntrySelectionUntil;
         private static DateADexEntry _pendingDateADexDetailEntry;
+        // Deferred pose-card description (first-meet AwakenSplashScreen / ending ResultSplashScreen).
+        // Both card Initialize() methods START a stinger SFX in the same call, so speaking
+        // immediately would be lost under it. We hold the description until _pendingCardPoseNotBefore
+        // to clear the stinger, mirroring the _pendingDateADexEntry* deferral below.
+        private static int _pendingCardPoseRequested;
+        private static string _pendingCardPoseDesc;
+        private static float _pendingCardPoseNotBefore;
+        private static float _pendingCardPoseExpiresAt;
+        // Delay before a pose-card description is spoken, letting the awaken/ending stinger play.
+        // The ending card stays open at least ResultSplashScreen._minTimeMustOpenFor (2s), so a
+        // ~1.2s hold leaves room to speak. Tune if the stinger still clips the speech.
+        private const float CardPoseSpeechDelaySeconds = 1.2f;
+        private const float CardPoseSpeechWindowSeconds = 8f;
         private static float _suppressInitialSpecsAnnouncementsUntil;
         // One-shot guard for the live capsule-dimension diagnostic. The bake assumes
         // CAPSULE_R=0.40 (Player.prefab local radius 0.4), but the prefab root carries
@@ -328,6 +354,14 @@ namespace DateEverythingAccess
 
         // Section filter, cycled with M.
         private enum PickerSectionFilter { All, MetOnly, EncounteredOnly }
+
+        // Y below this (world units) means "in the crawlspace". The crawlspace floor sits at
+        // y ~= -9.7 and its contents (ladder y=-5.24, rat trap / time capsule / key / smoke
+        // alarms y ~= -9.6..-9.9) all fall below this line, while the lowest normal-house
+        // interactables sit at ground level (y ~= 0). The only other below-band objects are far
+        // exterior secret-room cubes (z < -50) and bushes, none of which survive the picker's
+        // encountered/datable filter. So a flat Y gate cleanly separates crawlspace from house.
+        private const float CrawlspaceCeilingY = -3.5f;
 
         private static readonly HashSet<string> _examinedObjectKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // Full, unfiltered candidate set built on open. The displayed list (_knownObjectView) is
@@ -475,6 +509,27 @@ namespace DateEverythingAccess
             _suppressDateADexOpenEntrySelectionUntil = Time.unscaledTime + DateADexOpenEntryInitialSuppressionSeconds;
         }
 
+        /// <summary>
+        /// Requests a deferred spoken description of a datable pose card (first-meet or ending),
+        /// keyed by the card's <c>(internalName, pose, expression)</c> identity. Looked up in
+        /// <see cref="CardPoseDescriptions"/>; if found, the speech is held until the awaken/ending
+        /// stinger has had time to play (see <see cref="CardPoseSpeechDelaySeconds"/>).
+        /// </summary>
+        internal static void RequestCardPoseAnnouncement(string internalName, E_General_Poses pose, E_Facial_Expressions expression)
+        {
+            bool found = CardPoseDescriptions.TryGet(internalName, pose, expression, out string description);
+            if (Main.Log != null)
+                Main.Log.LogInfo("[card-pose] key=" + CardPoseDescriptions.BuildKey(internalName, pose, expression) + " found=" + found);
+
+            if (!found || string.IsNullOrWhiteSpace(description))
+                return;
+
+            _pendingCardPoseDesc = description;
+            _pendingCardPoseNotBefore = Time.unscaledTime + CardPoseSpeechDelaySeconds;
+            _pendingCardPoseExpiresAt = _pendingCardPoseNotBefore + CardPoseSpeechWindowSeconds;
+            Interlocked.Exchange(ref _pendingCardPoseRequested, 1);
+        }
+
         internal static void RememberExaminedObject(ObjectExamine examine)
         {
             if (examine == null)
@@ -550,6 +605,7 @@ namespace DateEverythingAccess
             AnnounceSpecsDetailIfNeeded();
             AnnounceCreditsIfNeeded();
             HandlePendingDateADexEntryAnnouncement();
+            HandleCardPoseAnnouncement();
             if (!isSettingsMenuOpen)
             {
                 AnnounceSelectionIfNeeded();
@@ -607,6 +663,30 @@ namespace DateEverythingAccess
             ScreenReader.Say(announcement);
         }
 
+        private void HandleCardPoseAnnouncement()
+        {
+            if (Interlocked.CompareExchange(ref _pendingCardPoseRequested, 0, 0) == 0)
+                return;
+
+            if (Time.unscaledTime < _pendingCardPoseNotBefore)
+                return;
+
+            // Held too long (card already dismissed) — drop it rather than speak stale text.
+            if (Time.unscaledTime > _pendingCardPoseExpiresAt)
+            {
+                Interlocked.Exchange(ref _pendingCardPoseRequested, 0);
+                _pendingCardPoseDesc = null;
+                return;
+            }
+
+            string description = _pendingCardPoseDesc;
+            Interlocked.Exchange(ref _pendingCardPoseRequested, 0);
+            _pendingCardPoseDesc = null;
+
+            if (!string.IsNullOrWhiteSpace(description))
+                ScreenReader.Say(description);
+        }
+
         private static bool ShouldSuppressDateADexOpenEntrySelection(GameObject selectedObject)
         {
             if (selectedObject == null || Time.unscaledTime >= _suppressDateADexOpenEntrySelectionUntil)
@@ -654,7 +734,7 @@ namespace DateEverythingAccess
         {
             if (Interlocked.Exchange(ref _describeCurrentRoomRequested, 0) != 0)
             {
-                ScreenReader.Say(Loc.Get("room_scan_unavailable"));
+                DescribeCurrentRoom();
             }
 
             if (Interlocked.Exchange(ref _selectNavigationTargetRequested, 0) != 0)
@@ -674,6 +754,169 @@ namespace DateEverythingAccess
         }
 
 
+
+        // Radius (metres, flat XZ) within which a known object counts as "in this room" for the
+        // F6 scan. Generous enough to cover a whole room without spilling the entire house into
+        // one announcement. Cross-floor targets are excluded regardless of distance.
+        private const float RoomScanRadiusM = 10f;
+
+        // F6: announce the current room and the known objects near the player, grouped by their
+        // facing-relative direction (Ahead, Ahead right, Right, ...). Reuses the known-object
+        // enumeration that backs the Ctrl+Shift+F6 picker, so it respects the same
+        // encountered/met semantics and per-object dedup.
+        private void DescribeCurrentRoom()
+        {
+            if (Singleton<GameController>.Instance == null ||
+                Singleton<GameController>.Instance.viewState != VIEW_STATE.HOUSE)
+            {
+                ScreenReader.Say(Loc.Get("room_scan_unavailable"));
+                return;
+            }
+
+            Transform playerTransform = BetterPlayerControl.Instance != null
+                ? BetterPlayerControl.Instance.transform
+                : null;
+            if (playerTransform == null)
+            {
+                ScreenReader.Say(Loc.Get("room_scan_unavailable"));
+                return;
+            }
+
+            string roomName = GetCurrentRoomName();
+            if (string.IsNullOrEmpty(roomName))
+                roomName = Loc.Get("room_scan_unknown_room");
+
+            if (!TryBuildKnownObjectTargets(out List<KnownObjectTarget> targets) || targets.Count == 0)
+            {
+                ScreenReader.Say(Loc.Get("room_scan_empty", roomName));
+                return;
+            }
+
+            Vector3 playerPosition = playerTransform.position;
+            Vector3 forward = playerTransform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.0001f)
+                forward = Vector3.forward;
+            forward.Normalize();
+
+            // Bucket nearby same-floor targets by facing-relative direction.
+            var grouped = new Dictionary<FacingRelativeDirection, List<KnownObjectTarget>>();
+            foreach (KnownObjectTarget target in targets)
+            {
+                if (target.Interactable == null || !target.IsOnPlayerFloor)
+                    continue;
+                if (target.Distance > RoomScanRadiusM)
+                    continue;
+
+                FacingRelativeDirection direction = GetFacingRelativeDirection(
+                    forward, playerPosition, target.Interactable.transform.position);
+
+                if (!grouped.TryGetValue(direction, out List<KnownObjectTarget> bucket))
+                {
+                    bucket = new List<KnownObjectTarget>();
+                    grouped[direction] = bucket;
+                }
+                bucket.Add(target);
+            }
+
+            if (grouped.Count == 0)
+            {
+                ScreenReader.Say(Loc.Get("room_scan_empty", roomName));
+                return;
+            }
+
+            var report = new StringBuilder();
+            report.Append(Loc.Get("room_scan_title", roomName));
+
+            // Fixed clockwise order from straight ahead, so the report reads consistently.
+            FacingRelativeDirection[] order =
+            {
+                FacingRelativeDirection.Here,
+                FacingRelativeDirection.Ahead,
+                FacingRelativeDirection.AheadRight,
+                FacingRelativeDirection.Right,
+                FacingRelativeDirection.BehindRight,
+                FacingRelativeDirection.Behind,
+                FacingRelativeDirection.BehindLeft,
+                FacingRelativeDirection.Left,
+                FacingRelativeDirection.AheadLeft,
+            };
+
+            foreach (FacingRelativeDirection direction in order)
+            {
+                if (!grouped.TryGetValue(direction, out List<KnownObjectTarget> bucket))
+                    continue;
+
+                bucket.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+
+                var names = new List<string>(bucket.Count);
+                foreach (KnownObjectTarget target in bucket)
+                {
+                    string name = !string.IsNullOrEmpty(target.CharacterName) ? target.CharacterName : target.Label;
+                    if (!string.IsNullOrWhiteSpace(name))
+                        names.Add(name);
+                }
+
+                if (names.Count == 0)
+                    continue;
+
+                report.Append(" ");
+                report.Append(Loc.Get("room_scan_group",
+                    Loc.Get(DirectionLocKey(direction)),
+                    string.Join(", ", names.ToArray())));
+                report.Append(".");
+            }
+
+            ScreenReader.Say(report.ToString());
+        }
+
+        // Bucket a target into one of the 8 facing-relative compass directions (plus Here for
+        // anything essentially on top of the player). forward is the player's flattened, normalized
+        // facing; angle is measured clockwise from forward so positive = to the player's right.
+        private static FacingRelativeDirection GetFacingRelativeDirection(
+            Vector3 forward, Vector3 playerPosition, Vector3 targetPosition)
+        {
+            Vector3 toTarget = targetPosition - playerPosition;
+            toTarget.y = 0f;
+            if (toTarget.sqrMagnitude < 0.25f) // within ~0.5m flat → "here"
+                return FacingRelativeDirection.Here;
+            toTarget.Normalize();
+
+            // Clockwise angle from forward: SignedAngle is CCW-positive about +Y, so negate to make
+            // right-hand turns positive, matching how a player reads "ahead right" / "right".
+            float angle = -Vector3.SignedAngle(forward, toTarget, Vector3.up);
+
+            // Snap to the nearest of 8 sectors centred on each named direction (45-degree slices).
+            int sector = Mathf.RoundToInt(angle / 45f);
+            sector = ((sector % 8) + 8) % 8;
+            switch (sector)
+            {
+                case 0: return FacingRelativeDirection.Ahead;
+                case 1: return FacingRelativeDirection.AheadRight;
+                case 2: return FacingRelativeDirection.Right;
+                case 3: return FacingRelativeDirection.BehindRight;
+                case 4: return FacingRelativeDirection.Behind;
+                case 5: return FacingRelativeDirection.BehindLeft;
+                case 6: return FacingRelativeDirection.Left;
+                default: return FacingRelativeDirection.AheadLeft;
+            }
+        }
+
+        private static string DirectionLocKey(FacingRelativeDirection direction)
+        {
+            switch (direction)
+            {
+                case FacingRelativeDirection.Here: return "room_scan_direction_here";
+                case FacingRelativeDirection.Ahead: return "room_scan_direction_ahead";
+                case FacingRelativeDirection.AheadRight: return "room_scan_direction_ahead_right";
+                case FacingRelativeDirection.Right: return "room_scan_direction_right";
+                case FacingRelativeDirection.BehindRight: return "room_scan_direction_behind_right";
+                case FacingRelativeDirection.Behind: return "room_scan_direction_behind";
+                case FacingRelativeDirection.BehindLeft: return "room_scan_direction_behind_left";
+                case FacingRelativeDirection.Left: return "room_scan_direction_left";
+                default: return "room_scan_direction_ahead_left";
+            }
+        }
 
         private void HandleCoverageSweepRequest()
         {
@@ -1449,15 +1692,22 @@ namespace DateEverythingAccess
             TryGetCurrentTutorialObjectiveText(out objectiveText);
             string hallwayFallbackLabel = null;
 
-            if (!TryResolveTutorialObjectiveKind(out TutorialObjectiveKind objectiveKind) ||
-                objectiveKind == TutorialObjectiveKind.None)
+            bool haveKind = TryResolveTutorialObjectiveKind(out TutorialObjectiveKind objectiveKind);
+
+            // The game has no field naming the object a generic "awaken any object" objective
+            // points at, so for those (and when no objective resolves at all) we steer to the
+            // last Rumor the player looked at — a concrete, player-chosen intent — before falling
+            // back to a nearest-object guess. Specific objectives (computer, gift box, Maggie,
+            // Skylar, ...) still resolve to their own exact target below.
+            if (!haveKind || objectiveKind == TutorialObjectiveKind.None || IsGenericDatableObjective(objectiveKind))
             {
                 if (TryResolveCurrentRoomersEntryInteractable(out interactable, out targetZone, out targetLabel))
                 {
                     DebugLogger.Log(
                         LogCategory.State,
                         "AccessibilityWatcher",
-                        "Objective resolve success: source=Roomers fallback" +
+                        "Objective resolve success: source=Roomers" +
+                        " objectiveKind=" + objectiveKind +
                         " signpostText=" + (objectiveText ?? "<null>") +
                         " label=" + (targetLabel ?? "<null>") +
                         " zone=" + (targetZone ?? "<null>") +
@@ -1465,8 +1715,13 @@ namespace DateEverythingAccess
                     return !string.IsNullOrEmpty(targetLabel);
                 }
 
-                DebugLogger.Log(LogCategory.State, "AccessibilityWatcher", "Objective resolve failed: no tutorial objective kind. signpostText=" + (objectiveText ?? "<null>"));
-                return false;
+                // No rumor viewed yet (and no specific objective): fall through to the generic
+                // nearest-datable search if we at least have a generic kind; otherwise give up.
+                if (!haveKind || objectiveKind == TutorialObjectiveKind.None)
+                {
+                    DebugLogger.Log(LogCategory.State, "AccessibilityWatcher", "Objective resolve failed: no tutorial objective kind and no viewed rumor. signpostText=" + (objectiveText ?? "<null>"));
+                    return false;
+                }
             }
 
             if (objectiveKind == TutorialObjectiveKind.FrontDoor)
@@ -1806,6 +2061,15 @@ namespace DateEverythingAccess
             }
 
             return false;
+        }
+
+        // "Generic" objectives name a class of object (any unmet / any unrealized datable) rather
+        // than one specific target, so the game gives us nothing concrete to steer to. These defer
+        // to the last-viewed Rumor before any nearest-object fallback.
+        private static bool IsGenericDatableObjective(TutorialObjectiveKind objectiveKind)
+        {
+            return objectiveKind == TutorialObjectiveKind.AnyUnmetDatable ||
+                objectiveKind == TutorialObjectiveKind.AnyUnrealizedDatable;
         }
 
         private static bool TryFindTutorialObjectiveInteractable(TutorialObjectiveKind objectiveKind, out InteractableObj interactable)
@@ -2152,8 +2416,14 @@ namespace DateEverythingAccess
                 return false;
 
             Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
+            SimpleNavPlanner.TryGetPlayerFloorLabel(playerPosition.y, out string playerFloorLabel);
+
             InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
-            float bestScore = float.MinValue;
+            // Track the best candidate floor-aware: prefer one on the player's floor, then nearest
+            // by flat XZ distance. Raw 3D distance let an object directly above/below or through a
+            // wall win as "nearest" even though it isn't the easiest to actually reach.
+            bool bestOnPlayerFloor = false;
+            float bestDistance = float.MaxValue;
             for (int i = 0; i < interactables.Length; i++)
             {
                 InteractableObj candidate = interactables[i];
@@ -2181,13 +2451,19 @@ namespace DateEverythingAccess
                     continue;
                 }
 
-                float score = 0f;
-                score -= Vector3.Distance(playerPosition, candidate.transform.position);
-                if (score <= bestScore)
-                    continue;
+                Vector3 candidatePos = candidate.transform.position;
+                float distance = GetFlatDistance(playerPosition, candidatePos);
+                SimpleNavPlanner.TryGetTargetFloorLabel(candidatePos.y, out string candidateFloor);
+                bool onPlayerFloor = playerFloorLabel == null || candidateFloor == null ||
+                    string.Equals(candidateFloor, playerFloorLabel, StringComparison.OrdinalIgnoreCase);
 
-                bestScore = score;
-                interactable = candidate;
+                if (interactable == null ||
+                    CompareFloorAwareDistance(onPlayerFloor, distance, bestOnPlayerFloor, bestDistance) < 0)
+                {
+                    interactable = candidate;
+                    bestOnPlayerFloor = onPlayerFloor;
+                    bestDistance = distance;
+                }
             }
 
             return interactable != null;
@@ -2819,10 +3095,21 @@ namespace DateEverythingAccess
             if (playerTransform != null)
                 SimpleNavPlanner.TryGetPlayerFloorLabel(playerPosition.y, out playerFloorLabel);
 
+            // When the player has dropped into the crawlspace (reached by operating the ladder
+            // teleporter), the only things they can actually walk to and interact with are the
+            // crawlspace's own contents. Restrict the picker to crawlspace-band candidates so the
+            // whole house doesn't leak in; normal behavior resumes automatically once the player
+            // climbs back out and their Y is above the ceiling line again.
+            bool playerInCrawlspace = playerTransform != null && playerPosition.y < CrawlspaceCeilingY;
+
             for (int i = 0; i < interactables.Length; i++)
             {
                 InteractableObj candidate = interactables[i];
                 if (candidate == null || candidate.gameObject == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                // In the crawlspace, keep only objects that are themselves in the crawlspace band.
+                if (playerInCrawlspace && candidate.transform.position.y >= CrawlspaceCeilingY)
                     continue;
 
                 string label = GetObjectFacingDisplayName(candidate);
@@ -4344,6 +4631,17 @@ namespace DateEverythingAccess
             if (Singleton<InteractableManager>.Instance == null)
                 return;
 
+            // Only announce objects the player can actually interact with. activeObject is set
+            // from the targeting raycast even for out-of-range hits, but the game only shows the
+            // interaction prompt (UIon) once the player is in range — IsPlayerInRange is that gate.
+            // Announcing only in-range objects means hearing an object's name tells the player they
+            // can interact with it. Reset the last-id when out of range so re-entering re-announces.
+            if (!Singleton<InteractableManager>.Instance.IsPlayerInRange)
+            {
+                _lastInteractableId = null;
+                return;
+            }
+
             InteractableObj interactable = Singleton<InteractableManager>.Instance.activeObject;
             if (interactable == null)
             {
@@ -4357,11 +4655,7 @@ namespace DateEverythingAccess
 
             _lastInteractableId = identifier;
             string name = GetInteractableDisplayName(interactable);
-            string prompt = NormalizeText(interactable.InteractionPrompt);
-            string announcement = string.IsNullOrEmpty(prompt)
-                ? Loc.Get("nearby_announcement_without_prompt", name)
-                : Loc.Get("nearby_announcement_with_prompt", name, prompt);
-            ScreenReader.Say(announcement, interrupt: false);
+            ScreenReader.Say(Loc.Get("nearby_announcement_without_prompt", name), interrupt: false);
         }
 
         private void AnnounceDateviatorsStateIfNeeded()
@@ -5192,7 +5486,10 @@ namespace DateEverythingAccess
                     return null;
 
                 if (!string.IsNullOrEmpty(choiceText))
+                {
+                    choiceText = DecorateChoiceTextWithLockState(selectedObject, GetActiveChatChoices(), choiceText);
                     return Loc.Get("choice_announcement", choiceIndex, choiceCount, choiceText);
+                }
             }
 
             if (TryBuildChatSelectionAnnouncement(selectedObject, out specialAnnouncement))
@@ -5212,7 +5509,10 @@ namespace DateEverythingAccess
 
                 string dialogueChoiceText = ExtractTextFromObject(selectedObject);
                 if (!string.IsNullOrEmpty(dialogueChoiceText))
+                {
+                    dialogueChoiceText = DecorateChoiceTextWithLockState(selectedObject, GetActiveDialogueChoices(), dialogueChoiceText);
                     return Loc.Get("choice_announcement", choiceIndex, choiceCount, dialogueChoiceText);
+                }
             }
 
             if (TalkingUI.Instance != null && TalkingUI.Instance.open)
@@ -5772,15 +6072,17 @@ namespace DateEverythingAccess
                 if (string.IsNullOrEmpty(selectedName) && selectedChat != null && selectedChat.appMessage != null)
                     selectedName = NormalizeText(selectedChat.appMessage.Name);
 
-                announcement = BuildChatAnnouncement(appName, selectedName, null);
+                // Per-focus selection: announce only the focused contact/item. The app name
+                // ("Workspace"/"Thiscord") is already read once when the app opens, so repeating it
+                // on every navigation step (e.g. "Workspace. David Most") is noise.
+                announcement = selectedName;
                 return !string.IsNullOrEmpty(announcement);
             }
 
             if (!IsWithinChatPanel(selectedObject, activeChatType, activePanelNameObject, secondaryPanelObject))
                 return false;
 
-            string name = NormalizeText(ExtractTextFromObject(activePanelNameObject));
-            announcement = BuildChatAnnouncement(appName, name, null);
+            announcement = NormalizeText(ExtractTextFromObject(activePanelNameObject));
             return !string.IsNullOrEmpty(announcement);
         }
 
@@ -6818,6 +7120,8 @@ namespace DateEverythingAccess
 
             Button choiceButton = choices[_virtualChatChoiceIndex];
             choiceText = choiceButton != null ? NormalizeText(ExtractTextFromObject(choiceButton.gameObject)) : null;
+            if (choiceButton != null && !choiceButton.interactable && !string.IsNullOrEmpty(choiceText))
+                choiceText = Loc.Get("choice_locked_suffix", choiceText);
             choiceIndex = _virtualChatChoiceIndex + 1;
             choiceCount = choices.Count;
             return !string.IsNullOrEmpty(choiceText);
@@ -6853,6 +7157,31 @@ namespace DateEverythingAccess
             return false;
         }
 
+        // Wrap a choice's spoken text with a "Locked" marker when its button is non-interactable.
+        // The stat requirement itself is already baked into the button text by the game
+        // (e.g. "[Charm 3/5] ..." for a failed check), so only the locked state is added here.
+        private static string DecorateChoiceTextWithLockState(GameObject selectedObject, IList<Button> choices, string choiceText)
+        {
+            if (string.IsNullOrEmpty(choiceText) || selectedObject == null || choices == null)
+                return choiceText;
+
+            for (int i = 0; i < choices.Count; i++)
+            {
+                Button button = choices[i];
+                if (button == null)
+                    continue;
+
+                if (selectedObject == button.gameObject || selectedObject.transform.IsChildOf(button.transform))
+                {
+                    if (!button.interactable)
+                        return Loc.Get("choice_locked_suffix", choiceText);
+                    break;
+                }
+            }
+
+            return choiceText;
+        }
+
         private static IList<Button> GetActiveDialogueChoices()
         {
             if (TalkingUI.Instance == null || !TalkingUI.Instance.open)
@@ -6870,7 +7199,10 @@ namespace DateEverythingAccess
             for (int i = 0; i < allChoices.Count; i++)
             {
                 Button button = allChoices[i];
-                if (button != null && button.gameObject.activeInHierarchy && button.interactable)
+                // Keep locked (non-interactable) options in the list: the game leaves them
+                // active and visible (only failed negative StatChecks are SetActive(false)),
+                // so they must still be read and navigable. Activation is gated separately.
+                if (button != null && button.gameObject.activeInHierarchy)
                     activeChoices.Add(button);
             }
 
@@ -6900,7 +7232,9 @@ namespace DateEverythingAccess
             for (int i = 0; i < activeChat.Options.Length; i++)
             {
                 Button option = activeChat.Options[i];
-                if (option != null && option.gameObject.activeInHierarchy && option.interactable)
+                // Keep locked (non-interactable) options so they are read and navigable;
+                // activation is gated separately in ActivateChoice.
+                if (option != null && option.gameObject.activeInHierarchy)
                     activeChoices.Add(option);
             }
 
@@ -6999,8 +7333,16 @@ namespace DateEverythingAccess
 
         private static void ActivateChoice(Button choice)
         {
-            if (choice == null || !choice.interactable)
+            if (choice == null)
                 return;
+
+            // Locked options (e.g. a failed stat check) stay focusable so they can be read,
+            // but the game disables them. Announce why instead of silently doing nothing.
+            if (!choice.interactable)
+            {
+                ScreenReader.Say(Loc.Get("choice_locked_activate"));
+                return;
+            }
 
             choice.onClick.Invoke();
         }
@@ -7057,9 +7399,9 @@ namespace DateEverythingAccess
 
         private static string BuildPhoneHomeSummary()
         {
-            int charges = Singleton<Dateviators>.Instance != null ? Singleton<Dateviators>.Instance.GetCurrentCharges() : 0;
-            bool equipped = Singleton<Dateviators>.Instance != null && Singleton<Dateviators>.Instance.IsEquippingOrEquipped;
-            return Loc.Get("phone_menu_summary", charges, Loc.Get(equipped ? "dateviators_equipped" : "dateviators_unequipped"));
+            // The Dateviators state/charges are announced only on equip/unequip
+            // (AnnounceDateviatorsStateIfNeeded); the phone summary doesn't repeat them.
+            return Loc.Get("phone_menu_summary");
         }
 
         private static string BuildSpecsSummary()
@@ -7382,6 +7724,7 @@ namespace DateEverythingAccess
                 return;
 
             BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+            EnsureGlyphReflectionCache(flags);
             _talkingUiDialogBoxField = typeof(TalkingUI).GetField("dialogBox", flags);
             _talkingUiChoicesButtonsField = typeof(TalkingUI).GetField("choicesButtons", flags);
             _dialogBoxNameTextField = typeof(DialogBoxBehavior).GetField("nameText", flags);
@@ -7960,6 +8303,8 @@ namespace DateEverythingAccess
             if (string.IsNullOrWhiteSpace(value))
                 return null;
 
+            value = ResolveControlGlyphs(value);
+
             string cleaned = RichTextRegex.Replace(value, " ");
             cleaned = cleaned.Replace("\r", " ").Replace("\n", " ").Replace("\t", " ").Trim();
 
@@ -7972,6 +8317,117 @@ namespace DateEverythingAccess
                 return null;
 
             return cleaned;
+        }
+
+        // Replaces TMP control-prompt sprite tags (e.g. <sprite="Keyboard" index=12>) with the
+        // readable Rewired element name (e.g. "Space"), so the screen reader speaks the actual
+        // button instead of dropping the glyph. Device-aware: keyboard map vs. controller map.
+        // Runs before RichTextRegex strips all tags, so it must keep the regex cheap.
+        private static string ResolveControlGlyphs(string value)
+        {
+            if (value.IndexOf("<sprite", StringComparison.OrdinalIgnoreCase) < 0)
+                return value;
+
+            object markupMap;
+            Dictionary<int, string> reverseMap;
+            try
+            {
+                EnsureReflectionCache();
+                markupMap = GetActiveSpriteMarkupMap();
+                reverseMap = GetReverseSpriteMap(markupMap);
+            }
+            catch (Exception)
+            {
+                reverseMap = null;
+            }
+
+            return SpriteTagRegex.Replace(value, match =>
+            {
+                string name = null;
+                if (reverseMap != null && match.Groups["idx"].Success
+                    && int.TryParse(match.Groups["idx"].Value, out int spriteId)
+                    && reverseMap.TryGetValue(spriteId, out string resolved))
+                {
+                    name = resolved;
+                }
+
+                // Keep the sentence coherent ("Press button to start") when unresolved.
+                return string.IsNullOrEmpty(name) ? " button " : " " + name + " ";
+            });
+        }
+
+        private static void EnsureGlyphReflectionCache(BindingFlags flags)
+        {
+            if (_glyphReflectionResolved)
+                return;
+
+            _glyphReflectionResolved = true;
+
+            Type serviceType = typeof(Team17.Services.IconTextMarkupService);
+            _iconMarkupCurrentMapField = serviceType.GetField("_CurrentSpriteMarkupMap", flags);
+            _iconMarkupKeyboardMapField = serviceType.GetField("_KeyboardSpriteControllerMarkupMap", flags);
+            _iconMarkupControllerMapField = serviceType.GetField("_ControllerSpriteMarkupMap", flags);
+
+            Type markupType = typeof(InputSpriteBindingMarkupObject);
+            _spriteBindingPairsField = markupType.GetField("m_DeviceBindingSprites", flags);
+
+            Type pairType = markupType.GetNestedType("RewiredIdSpritePair", BindingFlags.NonPublic | BindingFlags.Public);
+            if (pairType != null)
+            {
+                _spriteBindingPairNameField = pairType.GetField("RewiredElementName", flags);
+                _spriteBindingPairIdField = pairType.GetField("spriteId", flags);
+            }
+        }
+
+        // Returns the InputSpriteBindingMarkupObject for the device that produced the current
+        // input, mirroring IconTextMarkupService.GetTMPSpriteTag's keyboard/controller branch.
+        private static object GetActiveSpriteMarkupMap()
+        {
+            object service = T17.Services.Services.IconTextMarkupService;
+            if (service == null || _spriteBindingPairsField == null)
+                return null;
+
+            bool useController = T17.Services.Services.InputService != null
+                && T17.Services.Services.InputService.IsLastActiveInputController();
+
+            FieldInfo mapField = useController ? _iconMarkupControllerMapField : _iconMarkupKeyboardMapField;
+            object map = mapField != null ? mapField.GetValue(service) : null;
+
+            // Fall back to whatever the service last resolved if the device-specific map is null.
+            if (map == null && _iconMarkupCurrentMapField != null)
+                map = _iconMarkupCurrentMapField.GetValue(service);
+
+            return map;
+        }
+
+        // Builds (and caches per markup object) a spriteId -> RewiredElementName reverse map from
+        // the markup object's private m_DeviceBindingSprites array.
+        private static Dictionary<int, string> GetReverseSpriteMap(object markupMap)
+        {
+            if (markupMap == null || _spriteBindingPairsField == null
+                || _spriteBindingPairNameField == null || _spriteBindingPairIdField == null)
+                return null;
+
+            if (_spriteReverseMaps.TryGetValue(markupMap, out Dictionary<int, string> cached))
+                return cached;
+
+            var reverse = new Dictionary<int, string>();
+            if (_spriteBindingPairsField.GetValue(markupMap) is Array pairs)
+            {
+                foreach (object pair in pairs)
+                {
+                    if (pair == null)
+                        continue;
+
+                    int id = (int)_spriteBindingPairIdField.GetValue(pair);
+                    string name = _spriteBindingPairNameField.GetValue(pair) as string;
+                    if (!string.IsNullOrEmpty(name) && !reverse.ContainsKey(id))
+                        reverse[id] = name;
+                }
+            }
+
+            _spriteReverseMaps[markupMap] = reverse;
+            return reverse;
         }
 
         private static string NormalizeIdentifierName(string value)

@@ -11,13 +11,21 @@ namespace DateEverythingAccess
         private const string TrackerTrackName = "dea_navigation_tracker";
         private const string LogSource = "ObjectTracker";
         private const int SampleRate = 44100;
-        private const float BaseFrequency = 880f;
+        // Dropped a full octave from the original 880 Hz (A5) to 440 Hz (A4) so the guidance tone
+        // sits in a more comfortable range for hard-of-hearing players.
+        private const float BaseFrequency = 440f;
         private const float CenterPitch = 1f;
         private const float MinPitch = 0.72f;
         private const float MaxPitch = 1.38f;
-        private const float MinVolume = 0.18f;
-        private const float MaxVolume = 0.32f;
+        // Volume range for the distance swell. Wide enough that approaching the waypoint is clearly
+        // audible (the old 0.18–0.32 spread was imperceptible at room scale).
+        private const float MinVolume = 0.08f;
+        private const float MaxVolume = 0.5f;
+        // How far (metres) the player can be before the tone still registers as a target at all.
         private const float MaxTrackingDistance = 100f;
+        // Distance over which the volume swell happens. Scoped to room/house scale rather than the
+        // 100 m detection range so the loudness changes meaningfully as the player crosses a room.
+        private const float VolumeFalloffDistance = 16f;
         private const float CenterViewportDeadZone = 0.08f;
         private const float ClipDurationSeconds = 1f;
         private const float TargetRefreshDistance = 0.2f;
@@ -162,7 +170,15 @@ namespace DateEverythingAccess
             audioSource.transform.position = _targetPosition;
             audioSource.spatialBlend = 1f;
             audioSource.spatialize = true;
-            audioSource.rolloffMode = AudioRolloffMode.Linear;
+            // Keep spatialization for left/right panning but neutralize Unity's distance attenuation:
+            // a custom rolloff curve held flat at 1.0 means the spatial system never lowers the gain,
+            // so loudness is driven solely by the manual proximity volume below. (The old Linear
+            // rolloff double-counted distance on top of the manual volume, and both were near-flat at
+            // room scale, which is why the tone didn't seem to swell as the player moved.)
+            audioSource.rolloffMode = AudioRolloffMode.Custom;
+            audioSource.SetCustomCurve(
+                AudioSourceCurveType.CustomRolloff,
+                AnimationCurve.Constant(0f, 1f, 1f));
             audioSource.minDistance = 0.5f;
             audioSource.maxDistance = MaxTrackingDistance;
             audioSource.spread = 0f;
@@ -170,7 +186,10 @@ namespace DateEverythingAccess
 
             Vector3 toTarget = _targetPosition - referenceTransform.position;
             float distance = toTarget.magnitude;
-            float proximityAmount = Mathf.Clamp01(1f - (distance / MaxTrackingDistance));
+            // Swell over a room-scale distance, not the full 100 m detection range, and square the
+            // amount so the loudness ramps up perceptibly as the player closes the last few metres.
+            float proximityAmount = Mathf.Clamp01(1f - (distance / VolumeFalloffDistance));
+            proximityAmount *= proximityAmount;
             float verticalPitchAmount = GetVerticalPitchAmount(referenceTransform);
 
             audioSource.pitch = GetPitchForVerticalAmount(verticalPitchAmount);
@@ -270,7 +289,12 @@ namespace DateEverythingAccess
             audioSource.bypassListenerEffects = true;
             audioSource.bypassReverbZones = true;
             audioSource.dopplerLevel = 0f;
-            audioSource.rolloffMode = AudioRolloffMode.Linear;
+            // Flat custom rolloff: loudness comes from the manual proximity volume in UpdateTracking,
+            // not from spatial distance attenuation. Matches the setup applied each frame there.
+            audioSource.rolloffMode = AudioRolloffMode.Custom;
+            audioSource.SetCustomCurve(
+                AudioSourceCurveType.CustomRolloff,
+                AnimationCurve.Constant(0f, 1f, 1f));
             audioSource.minDistance = 0.5f;
             audioSource.maxDistance = MaxTrackingDistance;
             audioSource.spread = 0f;
