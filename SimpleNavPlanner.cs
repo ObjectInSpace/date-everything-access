@@ -454,6 +454,37 @@ namespace DateEverythingAccess
         /// <summary>Returns true if the bake is loaded and the planner is ready.</summary>
         public static bool IsReady => EnsureLoaded();
 
+        // Resolve the floor a player STANDING at world Y belongs to (start-floor rule), as a
+        // stable string label (e.g. "ground"/"upper"). Used by the object picker to bucket
+        // candidates by floor before sorting by XZ distance, so cross-floor items don't read
+        // as "near" the way a flat XZ distance makes them. Returns false when the bake isn't
+        // loaded or Y matches no floor within tolerance.
+        public static bool TryGetPlayerFloorLabel(float worldY, out string floorLabel)
+        {
+            floorLabel = null;
+            if (!EnsureLoaded() || _floors == null)
+                return false;
+
+            Floor floor = FloorForY(worldY, StartFloorMatchToleranceM);
+            floorLabel = floor?.Label;
+            return floorLabel != null;
+        }
+
+        // Resolve the floor a player would STAND ON to interact with a TARGET at world Y, using
+        // the same FloorForTargetY rule the planner uses to choose where autowalk arrives (so a
+        // wall-mounted/tabletop/ceiling item resolves to the floor below it, matching where the
+        // route actually ends). Returns false only when the bake isn't loaded.
+        public static bool TryGetTargetFloorLabel(float worldY, out string floorLabel)
+        {
+            floorLabel = null;
+            if (!EnsureLoaded() || _floors == null)
+                return false;
+
+            Floor floor = FloorForTargetY(worldY);
+            floorLabel = floor?.Label;
+            return floorLabel != null;
+        }
+
         // ---- bake load ----
 
         private static bool EnsureLoaded()

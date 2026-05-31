@@ -221,6 +221,12 @@ namespace DateEverythingAccess
         private static bool _pickerDownWasDown;
         private static bool _pickerReturnWasDown;
         private static bool _pickerEscapeWasDown;
+        // Filter/sort toggle keys (Left/Right = sort, F = floor, M = section, D = doors).
+        private static bool _pickerLeftWasDown;
+        private static bool _pickerRightWasDown;
+        private static bool _pickerFloorKeyWasDown;
+        private static bool _pickerSectionKeyWasDown;
+        private static bool _pickerDoorsKeyWasDown;
         private static int _virtualChatChoiceIndex = -1;
         private static string _virtualChatChoiceContextKey;
         private static AccessibilityWatcher _instance;
@@ -292,12 +298,52 @@ namespace DateEverythingAccess
             public InteractableObj Interactable;
             public string Label;
             public float Distance;
+            // Stable floor label (e.g. "ground"/"upper") the player stands on to reach this
+            // target, resolved via SimpleNavPlanner.TryGetTargetFloorLabel. Null when the bake
+            // can't resolve it. Used to bucket the picker by floor before sorting on Distance.
+            public string FloorLabel;
+            // True when FloorLabel matches the player's current floor. Same-floor targets sort
+            // ahead of cross-floor ones regardless of XZ distance (a flat XZ sort wrongly makes
+            // an upstairs item at the same XZ read as "near").
+            public bool IsOnPlayerFloor;
+            // DateADex-style section this target belongs to.
+            public PickerSection Section;
+            // Resolved zone/room name for the entry label + alphabetical sort. May be null.
+            public string Zone;
+            // Character name for Met entries (resolved via the save). Null for Encountered
+            // entries — their datable is still Unmet and must not be revealed.
+            public string CharacterName;
+            // True when this object is a door/passage (for the doors-only filter).
+            public bool IsDoor;
         }
 
+        // Which DateADex-style section a target belongs to. Met = the player has dated its
+        // datable (shown by character name, like the DateADex met-list); Encountered = examined
+        // or normally interacted but the datable is still Unmet (shown by object name only, never
+        // revealing the character — consistent with the game hiding unmet identities).
+        private enum PickerSection { Met, Encountered }
+
+        // Picker sort axis, cycled with Left/Right.
+        private enum PickerSortMode { Distance, Alphabetical }
+
+        // Section filter, cycled with M.
+        private enum PickerSectionFilter { All, MetOnly, EncounteredOnly }
+
         private static readonly HashSet<string> _examinedObjectKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Full, unfiltered candidate set built on open. The displayed list (_knownObjectView) is
+        // derived from this each time a filter/sort toggle changes, so toggling never re-scans
+        // the scene.
         private List<KnownObjectTarget> _knownObjectTargets;
+        private List<KnownObjectTarget> _knownObjectView;
         private int _knownObjectSelectionIndex = -1;
         private bool _isKnownObjectPickerOpen;
+
+        // Filter/sort state. Persists across opens within a session so the player's last view
+        // is remembered.
+        private PickerSortMode _pickerSortMode = PickerSortMode.Distance;
+        private PickerSectionFilter _pickerSectionFilter = PickerSectionFilter.All;
+        private bool _pickerFloorCurrentOnly;
+        private bool _pickerDoorsOnly;
 
         internal static void EnsureCreated()
         {
@@ -434,10 +480,11 @@ namespace DateEverythingAccess
             if (examine == null)
                 return;
 
-            AddExaminedObjectKey(examine.InkNode);
-            if (examine.gameObject != null)
-                AddExaminedObjectKey(examine.gameObject.name);
-
+            // Remember ONLY the owning interactable's identity keys. The examine's own
+            // InkNode / gameObject name are shared-scope (an InkNode can be reused across
+            // objects, a child name can collide) and are no longer read by any consumer —
+            // remembering them would re-introduce the cross-object examine leak that
+            // IsExaminedInteractable was hardened against.
             InteractableObj interactable = examine.GetComponentInParent<InteractableObj>();
             if (interactable == null)
                 interactable = examine.GetComponentInChildren<InteractableObj>();
@@ -2440,9 +2487,11 @@ namespace DateEverythingAccess
 
         // Ctrl+Shift+F6 known-objects picker. The office door is seeded at game start;
         // every other entry comes from save/runtime evidence that the player has met,
-        // interacted with, or examined the object.
+        // interacted with, or examined the object. Entries are grouped DateADex-style into a
+        // Met section (by character name) and an Encountered section (object name only).
         // Up/Down move selection; Enter selects (drives the same nav-tone flow as Ctrl+F6);
-        // Escape closes.
+        // Escape closes. Left/Right cycle the sort, F toggles current-floor-only, M cycles the
+        // section filter, D toggles doors-only.
         private void OpenKnownObjectPicker()
         {
             Loc.RefreshLanguage();
@@ -2454,10 +2503,21 @@ namespace DateEverythingAccess
             }
 
             _knownObjectTargets = targets;
+            _knownObjectView = BuildFilteredKnownObjectView();
+            // If the remembered filters hide everything, open on the full set instead of an
+            // empty picker — better to show the player their objects than a dead end.
+            if (_knownObjectView.Count == 0)
+            {
+                _pickerDoorsOnly = false;
+                _pickerFloorCurrentOnly = false;
+                _pickerSectionFilter = PickerSectionFilter.All;
+                _knownObjectView = BuildFilteredKnownObjectView();
+            }
+
             _knownObjectSelectionIndex = 0;
             _isKnownObjectPickerOpen = true;
             SyncKnownObjectPickerKeyStates();
-            AnnounceCurrentKnownObjectPickerItem();
+            AnnounceKnownObjectPickerTitleAndItem();
         }
 
         private void CloseKnownObjectPicker(bool announceClosed)
@@ -2467,6 +2527,7 @@ namespace DateEverythingAccess
 
             _isKnownObjectPickerOpen = false;
             _knownObjectTargets = null;
+            _knownObjectView = null;
             _knownObjectSelectionIndex = -1;
             SyncKnownObjectPickerKeyStates();
             if (announceClosed)
@@ -2475,7 +2536,7 @@ namespace DateEverythingAccess
 
         private void UpdateKnownObjectPicker()
         {
-            if (_knownObjectTargets == null || _knownObjectTargets.Count == 0)
+            if (_knownObjectView == null || _knownObjectView.Count == 0)
             {
                 CloseKnownObjectPicker(announceClosed: false);
                 return;
@@ -2483,14 +2544,14 @@ namespace DateEverythingAccess
 
             if (WasChoiceKeyPressed(KeyCode.UpArrow, VkUp, ref _pickerUpWasDown))
             {
-                _knownObjectSelectionIndex = (_knownObjectSelectionIndex + _knownObjectTargets.Count - 1) % _knownObjectTargets.Count;
+                _knownObjectSelectionIndex = (_knownObjectSelectionIndex + _knownObjectView.Count - 1) % _knownObjectView.Count;
                 AnnounceCurrentKnownObjectPickerItem();
                 return;
             }
 
             if (WasChoiceKeyPressed(KeyCode.DownArrow, VkDown, ref _pickerDownWasDown))
             {
-                _knownObjectSelectionIndex = (_knownObjectSelectionIndex + 1) % _knownObjectTargets.Count;
+                _knownObjectSelectionIndex = (_knownObjectSelectionIndex + 1) % _knownObjectView.Count;
                 AnnounceCurrentKnownObjectPickerItem();
                 return;
             }
@@ -2502,37 +2563,212 @@ namespace DateEverythingAccess
                 return;
             }
 
+            // Left/Right cycle the sort mode (distance <-> alphabetical).
+            if (WasChoiceKeyPressed(KeyCode.LeftArrow, VkLeft, ref _pickerLeftWasDown) ||
+                WasChoiceKeyPressed(KeyCode.RightArrow, VkRight, ref _pickerRightWasDown))
+            {
+                _pickerSortMode = _pickerSortMode == PickerSortMode.Distance
+                    ? PickerSortMode.Alphabetical
+                    : PickerSortMode.Distance;
+                ReapplyKnownObjectFiltersAndAnnounce(Loc.Get(_pickerSortMode == PickerSortMode.Distance
+                    ? "navigation_object_picker_sort_distance"
+                    : "navigation_object_picker_sort_alpha"));
+                return;
+            }
+
+            // F toggles current-floor-only.
+            if (WasChoiceKeyPressed(KeyCode.F, 0x46, ref _pickerFloorKeyWasDown))
+            {
+                _pickerFloorCurrentOnly = !_pickerFloorCurrentOnly;
+                ReapplyKnownObjectFiltersAndAnnounce(Loc.Get(_pickerFloorCurrentOnly
+                    ? "navigation_object_picker_filter_floor_current"
+                    : "navigation_object_picker_filter_floor_all"));
+                return;
+            }
+
+            // M cycles the section filter (all -> met -> encountered -> all).
+            if (WasChoiceKeyPressed(KeyCode.M, 0x4D, ref _pickerSectionKeyWasDown))
+            {
+                _pickerSectionFilter = NextSectionFilter(_pickerSectionFilter);
+                ReapplyKnownObjectFiltersAndAnnounce(Loc.Get(SectionFilterLocKey(_pickerSectionFilter)));
+                return;
+            }
+
+            // D toggles doors-only.
+            if (WasChoiceKeyPressed(KeyCode.D, 0x44, ref _pickerDoorsKeyWasDown))
+            {
+                _pickerDoorsOnly = !_pickerDoorsOnly;
+                ReapplyKnownObjectFiltersAndAnnounce(Loc.Get(_pickerDoorsOnly
+                    ? "navigation_object_picker_filter_doors_on"
+                    : "navigation_object_picker_filter_doors_off"));
+                return;
+            }
+
             if (WasChoiceKeyPressed(KeyCode.Escape, VkEscape, ref _pickerEscapeWasDown))
             {
                 CloseKnownObjectPicker(announceClosed: true);
             }
         }
 
-        private void AnnounceCurrentKnownObjectPickerItem()
+        private static PickerSectionFilter NextSectionFilter(PickerSectionFilter current)
         {
-            if (_knownObjectTargets == null || _knownObjectTargets.Count == 0)
+            switch (current)
+            {
+                case PickerSectionFilter.All: return PickerSectionFilter.MetOnly;
+                case PickerSectionFilter.MetOnly: return PickerSectionFilter.EncounteredOnly;
+                default: return PickerSectionFilter.All;
+            }
+        }
+
+        private static string SectionFilterLocKey(PickerSectionFilter filter)
+        {
+            switch (filter)
+            {
+                case PickerSectionFilter.MetOnly: return "navigation_object_picker_filter_section_met";
+                case PickerSectionFilter.EncounteredOnly: return "navigation_object_picker_filter_section_encountered";
+                default: return "navigation_object_picker_filter_section_all";
+            }
+        }
+
+        // Re-derive the filtered view after a toggle, keep the selection sensible, and announce
+        // the new filter state + the now-current item (or an empty-result message). The toggle is
+        // left applied even when it empties the list, so the player can cycle back out of it.
+        private void ReapplyKnownObjectFiltersAndAnnounce(string filterAnnouncement)
+        {
+            _knownObjectView = BuildFilteredKnownObjectView();
+            if (_knownObjectView.Count == 0)
+            {
+                _knownObjectSelectionIndex = 0;
+                ScreenReader.Say(filterAnnouncement + ". " + Loc.Get("navigation_object_picker_empty_filtered"));
+                return;
+            }
+
+            _knownObjectSelectionIndex = Mathf.Clamp(_knownObjectSelectionIndex, 0, _knownObjectView.Count - 1);
+            // Don't force the section header here: the filter announcement already gives context,
+            // and when a single section is filtered the header just echoes it ("met only. Met, 8.").
+            // Speak the header only if the resulting view still spans both sections.
+            bool viewSpansBothSections = false;
+            for (int i = 1; i < _knownObjectView.Count; i++)
+            {
+                if (_knownObjectView[i].Section != _knownObjectView[0].Section)
+                {
+                    viewSpansBothSections = true;
+                    break;
+                }
+            }
+            ScreenReader.Say(filterAnnouncement + ". " + ComposeKnownObjectItemText(_knownObjectSelectionIndex, includeSectionHeader: viewSpansBothSections));
+        }
+
+        // Spoken when the picker opens: the title, then ONLY the filters that are off their
+        // default (an unfiltered open shouldn't announce "all floors, showing all" — stating the
+        // absence of filters is noise), then the current item with its section header.
+        private void AnnounceKnownObjectPickerTitleAndItem()
+        {
+            if (_knownObjectView == null || _knownObjectView.Count == 0)
                 return;
 
-            _knownObjectSelectionIndex = Mathf.Clamp(_knownObjectSelectionIndex, 0, _knownObjectTargets.Count - 1);
-            KnownObjectTarget target = _knownObjectTargets[_knownObjectSelectionIndex];
-            string option = Loc.Get(
-                "navigation_object_picker_option",
-                _knownObjectSelectionIndex + 1,
-                _knownObjectTargets.Count,
-                target.Label);
-            ScreenReader.Say(Loc.Get("navigation_object_picker_title") + ". " + option);
+            _knownObjectSelectionIndex = Mathf.Clamp(_knownObjectSelectionIndex, 0, _knownObjectView.Count - 1);
+
+            string title = Loc.Get("navigation_object_picker_title");
+            // Sort is always stated (there's no "default" the player can assume); floor/section
+            // are stated only when active.
+            if (_pickerSortMode == PickerSortMode.Alphabetical)
+                title += ". " + Loc.Get("navigation_object_picker_sort_alpha");
+            if (_pickerFloorCurrentOnly)
+                title += ". " + Loc.Get("navigation_object_picker_filter_floor_current");
+            if (_pickerSectionFilter != PickerSectionFilter.All)
+                title += ". " + Loc.Get(SectionFilterLocKey(_pickerSectionFilter));
+            if (_pickerDoorsOnly)
+                title += ". " + Loc.Get("navigation_object_picker_filter_doors_on");
+
+            ScreenReader.Say(title + ". " + ComposeKnownObjectItemText(_knownObjectSelectionIndex, includeSectionHeader: true));
+        }
+
+        private void AnnounceCurrentKnownObjectPickerItem()
+        {
+            if (_knownObjectView == null || _knownObjectView.Count == 0)
+                return;
+
+            _knownObjectSelectionIndex = Mathf.Clamp(_knownObjectSelectionIndex, 0, _knownObjectView.Count - 1);
+            // Speak the section header only when crossing into a new section, so a run of items
+            // in the same section doesn't repeat "Met." on every arrow press.
+            bool atSectionStart = _knownObjectSelectionIndex == 0 ||
+                _knownObjectView[_knownObjectSelectionIndex - 1].Section != _knownObjectView[_knownObjectSelectionIndex].Section;
+            ScreenReader.Say(ComposeKnownObjectItemText(_knownObjectSelectionIndex, includeSectionHeader: atSectionStart));
+        }
+
+        // Build the spoken string for one entry: optional section header, the position counter,
+        // the name (character for Met / object for Encountered), the object, zone, floor tag and
+        // distance.
+        private string ComposeKnownObjectItemText(int index, bool includeSectionHeader)
+        {
+            KnownObjectTarget target = _knownObjectView[index];
+
+            string sectionHeader = string.Empty;
+            if (includeSectionHeader)
+            {
+                int sectionCount = 0;
+                for (int i = 0; i < _knownObjectView.Count; i++)
+                {
+                    if (_knownObjectView[i].Section == target.Section)
+                        sectionCount++;
+                }
+                sectionHeader = Loc.Get(target.Section == PickerSection.Met
+                    ? "navigation_object_picker_section_met"
+                    : "navigation_object_picker_section_encountered", sectionCount) + ". ";
+            }
+
+            // Met entries lead with the character name; Encountered entries use the object name
+            // only and must not reveal a character. CharacterName falls back to the object label
+            // when the save can't resolve a distinct character name (GetInteractableDisplayName ->
+            // GetObjectFacingDisplayName), so only prepend it when it actually DIFFERS from the
+            // label — otherwise the line echoes the name twice ("door, door").
+            bool hasDistinctCharacterName = target.Section == PickerSection.Met &&
+                !string.IsNullOrEmpty(target.CharacterName) &&
+                !string.Equals(target.CharacterName, target.Label, StringComparison.CurrentCultureIgnoreCase);
+            string name = hasDistinctCharacterName
+                ? Loc.Get("navigation_object_picker_met_name", target.CharacterName, target.Label)
+                : target.Label;
+
+            string zone = string.IsNullOrWhiteSpace(target.Zone) ? string.Empty : ", " + target.Zone;
+            // Only call out the floor when it ISN'T the player's — "this floor" on nearly every
+            // entry is noise; the cross-floor exception is the only informative case.
+            string floorTagText = DescribeFloorTag(target);
+            string floorTag = string.IsNullOrEmpty(floorTagText) ? string.Empty : ", " + floorTagText;
+            string distance = ", " + Loc.Get("navigation_object_picker_distance_m", Mathf.RoundToInt(target.Distance));
+
+            // Lead with the object details; the "x of y" position counter trails so the player
+            // hears what the entry IS first, then where it sits in the list.
+            string position = ". " + Loc.Get(
+                "navigation_object_picker_position",
+                index + 1,
+                _knownObjectView.Count);
+            return sectionHeader + name + zone + floorTag + distance + position;
+        }
+
+        // Floor call-out for an entry, or empty when the target is on the player's floor (the
+        // common case — suppressed to avoid speaking "this floor" on every item). Returns the
+        // resolved floor label (e.g. "upper floor") for cross-floor targets, or a generic
+        // other-floor phrase when the floor is unknown.
+        private string DescribeFloorTag(KnownObjectTarget target)
+        {
+            if (target.IsOnPlayerFloor)
+                return string.Empty;
+            if (!string.IsNullOrEmpty(target.FloorLabel))
+                return Loc.Get("navigation_object_picker_floor_named", target.FloorLabel);
+            return Loc.Get("navigation_object_picker_floor_other");
         }
 
         private void SelectCurrentKnownObjectPickerItem()
         {
-            if (_knownObjectTargets == null || _knownObjectTargets.Count == 0)
+            if (_knownObjectView == null || _knownObjectView.Count == 0)
             {
                 CloseKnownObjectPicker(announceClosed: false);
                 return;
             }
 
-            _knownObjectSelectionIndex = Mathf.Clamp(_knownObjectSelectionIndex, 0, _knownObjectTargets.Count - 1);
-            KnownObjectTarget target = _knownObjectTargets[_knownObjectSelectionIndex];
+            _knownObjectSelectionIndex = Mathf.Clamp(_knownObjectSelectionIndex, 0, _knownObjectView.Count - 1);
+            KnownObjectTarget target = _knownObjectView[_knownObjectSelectionIndex];
             InteractableObj interactable = target.Interactable;
 
             CloseKnownObjectPicker(announceClosed: false);
@@ -2556,6 +2792,11 @@ namespace DateEverythingAccess
             _pickerDownWasDown = (GetAsyncKeyState(VkDown) & 0x8000) != 0;
             _pickerReturnWasDown = (GetAsyncKeyState(VkReturn) & 0x8000) != 0;
             _pickerEscapeWasDown = (GetAsyncKeyState(VkEscape) & 0x8000) != 0;
+            _pickerLeftWasDown = (GetAsyncKeyState(VkLeft) & 0x8000) != 0;
+            _pickerRightWasDown = (GetAsyncKeyState(VkRight) & 0x8000) != 0;
+            _pickerFloorKeyWasDown = (GetAsyncKeyState(0x46) & 0x8000) != 0;
+            _pickerSectionKeyWasDown = (GetAsyncKeyState(0x4D) & 0x8000) != 0;
+            _pickerDoorsKeyWasDown = (GetAsyncKeyState(0x44) & 0x8000) != 0;
         }
 
         private bool TryBuildKnownObjectTargets(out List<KnownObjectTarget> targets)
@@ -2569,6 +2810,14 @@ namespace DateEverythingAccess
                 ? BetterPlayerControl.Instance.transform
                 : null;
             Vector3 playerPosition = playerTransform != null ? playerTransform.position : Vector3.zero;
+
+            // Resolve the player's floor once so each candidate can be tagged same-floor vs
+            // other-floor. When the bake can't resolve it (planner not ready / Y off all
+            // floors), playerFloorLabel stays null and every target is treated as same-floor,
+            // degrading gracefully to the old flat XZ sort.
+            string playerFloorLabel = null;
+            if (playerTransform != null)
+                SimpleNavPlanner.TryGetPlayerFloorLabel(playerPosition.y, out playerFloorLabel);
 
             for (int i = 0; i < interactables.Length; i++)
             {
@@ -2594,13 +2843,37 @@ namespace DateEverythingAccess
                     ? GetFlatDistance(playerPosition, candidatePos)
                     : 0f;
 
+                // Floor the player stands on to reach this target. Unresolved (null) floors are
+                // treated as same-floor so they sort by XZ alone rather than being banished.
+                string candidateFloor = null;
+                SimpleNavPlanner.TryGetTargetFloorLabel(candidatePos.y, out candidateFloor);
+                bool onPlayerFloor = playerFloorLabel == null || candidateFloor == null ||
+                    string.Equals(candidateFloor, playerFloorLabel, StringComparison.OrdinalIgnoreCase);
+
+                // Met (dated) → DateADex-style entry by character name; otherwise Encountered
+                // (examined/interacted, datable still Unmet) → object name only, no character.
+                bool isMet = IsDatedInteractable(candidate);
+                PickerSection section = isMet ? PickerSection.Met : PickerSection.Encountered;
+                string characterName = isMet ? GetInteractableDisplayName(candidate) : null;
+                TryGetZoneNameForInteractable(candidate, out string zone);
+                bool isDoor = IsDoorInteractable(candidate);
+
                 if (TryFindEquivalentKnownObjectTarget(targets, candidate, label, out KnownObjectTarget existing))
                 {
-                    if (playerTransform != null && distance < existing.Distance)
+                    // Keep the better instance of the same logical object: prefer one on the
+                    // player's floor, then the nearer XZ distance.
+                    if (playerTransform != null &&
+                        CompareFloorAwareDistance(onPlayerFloor, distance, existing.IsOnPlayerFloor, existing.Distance) < 0)
                     {
                         existing.Interactable = candidate;
                         existing.Label = label;
                         existing.Distance = distance;
+                        existing.FloorLabel = candidateFloor;
+                        existing.IsOnPlayerFloor = onPlayerFloor;
+                        existing.Section = section;
+                        existing.Zone = zone;
+                        existing.CharacterName = characterName;
+                        existing.IsDoor = isDoor;
                     }
                     continue;
                 }
@@ -2610,11 +2883,73 @@ namespace DateEverythingAccess
                     Interactable = candidate,
                     Label = label,
                     Distance = distance,
+                    FloorLabel = candidateFloor,
+                    IsOnPlayerFloor = onPlayerFloor,
+                    Section = section,
+                    Zone = zone,
+                    CharacterName = characterName,
+                    IsDoor = isDoor,
                 });
             }
 
-            targets.Sort((a, b) => a.Distance.CompareTo(b.Distance));
             return targets.Count > 0;
+        }
+
+        // Build the displayed list from the full candidate set by applying the live filters,
+        // then ordering by section (Met before Encountered) and the active sort mode. Distance
+        // sort is floor-aware (player's floor first, nearest-XZ within); alphabetical sorts by
+        // label then zone. Section grouping is always primary so the spoken section headers stay
+        // coherent.
+        private List<KnownObjectTarget> BuildFilteredKnownObjectView()
+        {
+            List<KnownObjectTarget> view = new List<KnownObjectTarget>();
+            if (_knownObjectTargets == null)
+                return view;
+
+            for (int i = 0; i < _knownObjectTargets.Count; i++)
+            {
+                KnownObjectTarget t = _knownObjectTargets[i];
+                if (t == null)
+                    continue;
+                if (_pickerDoorsOnly && !t.IsDoor)
+                    continue;
+                if (_pickerFloorCurrentOnly && !t.IsOnPlayerFloor)
+                    continue;
+                if (_pickerSectionFilter == PickerSectionFilter.MetOnly && t.Section != PickerSection.Met)
+                    continue;
+                if (_pickerSectionFilter == PickerSectionFilter.EncounteredOnly && t.Section != PickerSection.Encountered)
+                    continue;
+                view.Add(t);
+            }
+
+            view.Sort(CompareKnownObjectForView);
+            return view;
+        }
+
+        private int CompareKnownObjectForView(KnownObjectTarget a, KnownObjectTarget b)
+        {
+            // Met before Encountered, always — keeps the inline section headers contiguous.
+            if (a.Section != b.Section)
+                return a.Section == PickerSection.Met ? -1 : 1;
+
+            if (_pickerSortMode == PickerSortMode.Alphabetical)
+            {
+                int byLabel = string.Compare(a.Label, b.Label, StringComparison.CurrentCultureIgnoreCase);
+                if (byLabel != 0)
+                    return byLabel;
+                return string.Compare(a.Zone, b.Zone, StringComparison.CurrentCultureIgnoreCase);
+            }
+
+            return CompareFloorAwareDistance(a.IsOnPlayerFloor, a.Distance, b.IsOnPlayerFloor, b.Distance);
+        }
+
+        // Orders two targets by (same-as-player-floor first, then ascending XZ distance).
+        // Returns <0 when 'a' should sort before 'b'.
+        private static int CompareFloorAwareDistance(bool aOnPlayerFloor, float aDistance, bool bOnPlayerFloor, float bDistance)
+        {
+            if (aOnPlayerFloor != bOnPlayerFloor)
+                return aOnPlayerFloor ? -1 : 1;
+            return aDistance.CompareTo(bDistance);
         }
 
         private static bool IsStartupOfficeDoorObject(InteractableObj interactable, string label)
@@ -2692,6 +3027,19 @@ namespace DateEverythingAccess
             return false;
         }
 
+        // An object is "encountered" (and thus a valid picker target) if the player has met
+        // its datable, normally interacted with it, or examined it. The first two are persisted
+        // by the game (GetDateStatus / ObjectSaveData.hasNormalInteracted) and survive a reload,
+        // so they form the durable starting list.
+        //
+        // KNOWN LIMITATION: the game does NOT persist that an object was examined. ObjectSaveData
+        // stores only activeSelf/activatedAnimation/isClean/hasNormalInteracted. (The save's
+        // boxExamenDictionary is NOT an examine history — it is only the moving-box "Boxing Day"
+        // achievement tally, keyed by a running counter, and covers no other objects.) So examine
+        // evidence lives solely in our session-only _examinedObjectKeys set, and examine-only
+        // entries DROP from the picker after a save/reload. Accepted for now: examine is an extra
+        // encounter signal on top of the persisted set, and the player re-examines objects over a
+        // play session. Revisit with a mod-side persisted examine history if this proves limiting.
         private static bool IsEncounteredKnownObject(InteractableObj interactable)
         {
             if (interactable == null)
@@ -2707,58 +3055,27 @@ namespace DateEverythingAccess
             return IsExaminedInteractable(interactable);
         }
 
+        // True only when the player has examined THIS interactable during the session.
+        // Examine evidence is session-only: the game persists no general "examined" flag
+        // (see IsEncounteredKnownObject), so the only source is _examinedObjectKeys, which
+        // RememberExaminedObject populates with the owning interactable's identity keys at
+        // examine time (ObjectExamine.ShowExamine postfix).
+        //
+        // The previous implementation also (1) walked GetComponentInParent<ObjectExamine>,
+        // attributing a shared parent's examine to every child interactable, and (2) matched
+        // the achievement-only box counter (GetBoxExamenData) by InkNode. Both leaked the
+        // examine onto neighbouring objects — InkNode is a SHARED ink content node, and the
+        // box counter is just the moving-box "Boxing Day" achievement tally, not a per-object
+        // examine record. Both paths removed; identity-key match is the sole, correct signal.
         private static bool IsExaminedInteractable(InteractableObj interactable)
         {
             if (interactable == null)
                 return false;
 
-            if (HasRememberedExaminedObjectKey(interactable.Id) ||
+            return HasRememberedExaminedObjectKey(interactable.Id) ||
                 HasRememberedExaminedObjectKey(interactable.name) ||
                 HasRememberedExaminedObjectKey(interactable.InternalName()) ||
-                HasRememberedExaminedObjectKey(interactable.inkFileName))
-            {
-                return true;
-            }
-
-            ObjectExamine[] childExamines = interactable.GetComponentsInChildren<ObjectExamine>(includeInactive: true);
-            if (childExamines != null)
-            {
-                for (int i = 0; i < childExamines.Length; i++)
-                {
-                    if (IsRememberedOrSavedExamine(childExamines[i]))
-                        return true;
-                }
-            }
-
-            return IsRememberedOrSavedExamine(interactable.GetComponentInParent<ObjectExamine>());
-        }
-
-        private static bool IsRememberedOrSavedExamine(ObjectExamine examine)
-        {
-            if (examine == null)
-                return false;
-
-            if (HasRememberedExaminedObjectKey(examine.InkNode) ||
-                (examine.gameObject != null && HasRememberedExaminedObjectKey(examine.gameObject.name)))
-            {
-                return true;
-            }
-
-            Save save = null;
-            try { save = Singleton<Save>.Instance; }
-            catch { save = null; }
-            if (save == null || string.IsNullOrWhiteSpace(examine.InkNode))
-                return false;
-
-            try
-            {
-                Dictionary<string, int> examinedBoxes = save.GetBoxExamenData();
-                return examinedBoxes != null && examinedBoxes.ContainsKey(examine.InkNode);
-            }
-            catch
-            {
-                return false;
-            }
+                HasRememberedExaminedObjectKey(interactable.inkFileName);
         }
 
         private static bool HasRememberedExaminedObjectKey(string value)
