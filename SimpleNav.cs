@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using UnityEngine;
 
 namespace DateEverythingAccess
@@ -71,14 +70,6 @@ namespace DateEverythingAccess
             {
                 return null;
             }
-        }
-
-        // Logging helper consistent with the rest of the mod.
-        public static string DescribeTarget(string toZone, Vector3 target, string reason)
-        {
-            var ci = CultureInfo.InvariantCulture;
-            string posStr = "(" + target.x.ToString("0.00", ci) + ", " + target.y.ToString("0.00", ci) + ", " + target.z.ToString("0.00", ci) + ")";
-            return "SimpleNav toZone=" + (toZone ?? "<null>") + " target=" + posStr + " reason=" + (reason ?? "<ok>");
         }
     }
 }

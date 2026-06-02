@@ -96,11 +96,6 @@ namespace DateEverythingAccess
             Logger.LogInfo("Startup announcement queued");
         }
 
-        internal static string GetPluginVersion()
-        {
-            return PluginMetadata.Version;
-        }
-
         internal static string GetRuntimeBuildStamp()
         {
             return string.IsNullOrWhiteSpace(RuntimeBuildStamp)

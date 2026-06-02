@@ -224,16 +224,6 @@ namespace DateEverythingAccess
         /// </summary>
         public static bool IsTracking => _isTracking;
 
-        /// <summary>
-        /// Gets the current tracked target state when tracking is active.
-        /// </summary>
-        public static bool TryGetCurrentTargetState(out Vector3 targetPosition, out bool requiresInteraction)
-        {
-            targetPosition = _targetPosition;
-            requiresInteraction = _requiresInteraction;
-            return _isTracking;
-        }
-
         private static void StartTonePlayback()
         {
             if (_toneClip == null)

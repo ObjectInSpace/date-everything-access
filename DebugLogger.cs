@@ -31,37 +31,14 @@ namespace DateEverythingAccess
             Main.Log.LogInfo("[SR] " + text);
         }
 
-        public static void LogInput(string keyName, string action = null)
-        {
-            if (!Main.DebugMode)
-                return;
-
-            string msg = action != null ? keyName + " -> " + action : keyName;
-            Main.Log.LogInfo("[INPUT] " + msg);
-        }
-
-        public static void LogState(string description)
-        {
-            if (!Main.DebugMode)
-                return;
-
-            Main.Log.LogInfo("[STATE] " + description);
-        }
-
         private static string GetPrefix(LogCategory category)
         {
             switch (category)
             {
-                case LogCategory.ScreenReader:
-                    return "[SR]";
-                case LogCategory.Input:
-                    return "[INPUT]";
                 case LogCategory.State:
                     return "[STATE]";
                 case LogCategory.Handler:
                     return "[HANDLER]";
-                case LogCategory.Game:
-                    return "[GAME]";
                 default:
                     return "[DEBUG]";
             }
@@ -73,10 +50,7 @@ namespace DateEverythingAccess
     /// </summary>
     public enum LogCategory
     {
-        ScreenReader,
-        Input,
         State,
-        Handler,
-        Game
+        Handler
     }
 }

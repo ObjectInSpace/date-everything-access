@@ -222,26 +222,11 @@ namespace DateEverythingAccess
             Add("chat_latest_message_with_contact", "{0}. {1}. Letzte Nachricht. {2}", "{0}. {1}. Latest message. {2}");
             Add("chat_options", "Optionen. {0}", "Options. {0}");
             Add("navigation_no_objective", "Kein aktuelles Ziel.", "No current objective.");
-            Add("navigation_navigating", "Navigiert zu {0}. Naechster Raum: {1}", "Navigating to {0}. Next zone: {1}");
-            Add("navigation_tracking", "Verfolge {0}.", "Tracking {0}.");
             Add("navigation_arrived", "Ziel erreicht.", "Arrived at target.");
             Add("navigation_blocked", "Navigation blockiert oder unterbrochen.", "Navigation blocked or interrupted.");
             Add("navigation_no_path", "Kein Weg zu {0} gefunden.", "No path found to {0}.");
             Add("navigation_tutorial_gift_delivery_trigger", "Geschenk-Lieferausloeser", "Gift delivery trigger");
-            Add("navigation_tutorial_drone_threshold", "Drohne im vorderen Flur", "Drone in front hall");
-            Add("navigation_tutorial_hallway_bathroom_door", "Badezimmertuer im Flur", "Hallway bathroom door");
-            Add("navigation_tutorial_hallway_stairs", "Treppe im Flur", "Hallway stairs");
-            Add("navigation_tutorial_office_hallway_clear", "Buerotuer zum Flur", "Office doorway to hall");
             Add("navigation_planner_not_ready", "Navigationsdaten noch nicht bereit.", "Navigation data not ready yet.");
-            Add("navigation_select_target_title", "Navigationsziel waehlen", "Select navigation target");
-            Add("navigation_room_list_title", "Raeume im Haus", "Rooms in house");
-            Add("navigation_no_rooms", "Keine Raeume in der Navigationskarte verfuegbar.", "No rooms are available in the navigation graph.");
-            Add("navigation_room_option", "Raum {0} von {1}. {2}", "Room {0} of {1}. {2}");
-            Add("navigation_room_picker_closed", "Raumliste geschlossen.", "Room list closed.");
-            Add("navigation_room_object_list_title", "Objekte im Raum {0}", "Objects in room {0}");
-            Add("navigation_no_room_objects", "Keine verfolgbaren Objekte im aktuellen Raum.", "No trackable objects in the current room.");
-            Add("navigation_room_object_option", "Objekt {0} von {1}. {2}", "Object {0} of {1}. {2}");
-            Add("navigation_room_object_picker_closed", "Objektliste geschlossen.", "Object list closed.");
             Add("navigation_object_picker_title", "Bekannte Objekte", "Known objects");
             // Trailing position counter spoken AFTER the entry details: {0}=index, {1}=total.
             Add("navigation_object_picker_position", "{0} von {1}", "{0} of {1}");
@@ -254,7 +239,6 @@ namespace DateEverythingAccess
             // Met entry name: {0}=character, {1}=object.
             Add("navigation_object_picker_met_name", "{0}, {1}", "{0}, {1}");
             // Floor tags.
-            Add("navigation_object_picker_floor_this", "diese Etage", "this floor");
             Add("navigation_object_picker_floor_named", "Etage {0}", "{0} floor");
             Add("navigation_object_picker_floor_other", "andere Etage", "other floor");
             // Distance: {0}=metres.
@@ -286,9 +270,7 @@ namespace DateEverythingAccess
             Add("room_scan_direction_behind_left", "Hinten links", "Behind left");
             Add("room_scan_direction_left", "Links", "Left");
             Add("room_scan_direction_ahead_left", "Vorne links", "Ahead left");
-            Add("navigation_target_option", "Option {0} von {1}. {2}", "Option {0} of {1}. {2}");
             Add("navigation_target_in_current_room", "Aktueller Raum", "Current room");
-            Add("navigation_target_awakened", "Geweckt", "Awakened");
             Add("navigation_autowalk_started", "Auto-Lauf begonnen.", "Auto-walk started.");
             Add("navigation_autowalk_stopped", "Auto-Lauf gestoppt.", "Auto-walk stopped.");
         }
