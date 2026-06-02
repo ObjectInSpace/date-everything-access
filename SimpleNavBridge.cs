@@ -504,29 +504,6 @@ namespace DateEverythingAccess
         public static bool IsActiveDoorMoving() => IsDoorMoving(_activeDoor);
 
         /// <summary>
-        /// True when the door's <c>collidedWithPlayer</c> flag is latched. This is the game's
-        /// own "player is in the swing arc" check (see <c>Door.OnCollisionEnter</c> and the
-        /// early-returns in <c>OpenDoor</c>/<c>CloseDoor</c>/<c>changeDoorRot</c>): when true,
-        /// the door will refuse to open or will halt mid-swing. Used by the watcher to back the
-        /// player off when an Interact() call doesn't take effect.
-        /// </summary>
-        public static bool IsDoorCollidedWithPlayer(Door door)
-        {
-            if (door == null) return false;
-            FieldInfo fi = GetDoorCollidedField();
-            if (fi == null) return false;
-            try
-            {
-                object v = fi.GetValue(door);
-                return v is bool b && b;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        /// <summary>
         /// True while the given door's swing animation is in flight (Door.moving = true).
         /// Reflected read; returns false if reflection failed.
         /// </summary>

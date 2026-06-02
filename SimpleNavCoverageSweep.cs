@@ -116,8 +116,6 @@ namespace DateEverythingAccess
         // a doorway, so a single wall failure poisons its immediate neighbourhood.
         private const int FailedNeighborhoodCells = 5;
 
-        public static bool IsActive => _phase != Phase.Idle;
-
         /// <summary>Toggle the sweep on/off. Wired to the Ctrl+Alt+Shift+F8 hotkey.</summary>
         public static void RequestToggle()
         {

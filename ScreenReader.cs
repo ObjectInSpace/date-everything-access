@@ -37,14 +37,6 @@ namespace DateEverythingAccess
         private static string _lastRepeatableText;
 
         /// <summary>
-        /// Gets whether Tolk and a speech-capable screen reader are available.
-        /// </summary>
-        public static bool IsAvailable
-        {
-            get { return _available; }
-        }
-
-        /// <summary>
         /// Loads Tolk and detects the active screen reader.
         /// </summary>
         public static void Initialize()
