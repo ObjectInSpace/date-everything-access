@@ -120,35 +120,54 @@ PROGRESS_EPS_M = 0.03           # min net progress per window to count as "movin
 STALL_WINDOW_TICKS = 90         # ~3s at 30Hz with no progress ⇒ pinned (real stall)
 
 
-def _try_step(floor, px, pz, dx, dz):
-    """Axis-separated sliding move. Returns the new (px, pz) after attempting to
-    move by (dx, dz): full move if clear, else slide along whichever axis stays
-    navigable (mirrors the physics solver deflecting velocity along the wall).
-    Returns the unchanged position only if BOTH the full and both axis sub-moves
-    are blocked (a true corner pin)."""
+# Lateral strafe magnitude injected by the wall-slide escape, mirroring
+# AutoWalkEscapeStrafeMagnitude in AccessibilityWatcher.cs. The real follower
+# does NOT free-slide along walls: its move command is player-local and, when
+# aligned, is essentially pure forward, so a head-on jamb graze pins the capsule
+# (velocity→0) until the escape injects a lateral term. Modeling free axis-slide
+# here made the sim too optimistic — it silently passed the very doorframe grazes
+# that stalled in-game. See [[project-navigation-runtime-stall-catalog-2026-05-29]].
+ESCAPE_STRAFE_MAG = 0.8
+
+
+def _try_step(floor, px, pz, fwd_x, fwd_z, right_x, right_z, speed_dt, escaping):
+    """Move one tick under the real controller's model. `fwd_*`/`right_*` are the
+    player-local forward/right unit axes (XZ); `speed_dt` is forward distance this
+    tick. Returns (new_px, new_pz, touched, want_escape).
+
+    The controller commands pure forward (no free axis-slide). If the forward move
+    is blocked we do NOT silently slide — we report `want_escape` so the caller can
+    fire the side-probe strafe, exactly as the C# follower does. When `escaping`,
+    a lateral strafe is already mixed into the move, so a blocked forward still
+    advances laterally if that side is clear (the capsule peeling off the jamb)."""
     def nav(x, z):
         ix, iz = floor.world_to_cell(x, z)
         return floor.in_bounds(ix, iz) and floor.navigable(ix, iz)
-    # 1. Full diagonal move.
-    if nav(px + dx, pz + dz):
-        return px + dx, pz + dz, False
-    # 2. Slide on X only (wall is roughly Z-aligned).
-    slid_x = nav(px + dx, pz)
-    # 3. Slide on Z only (wall is roughly X-aligned).
-    slid_z = nav(px, pz + dz)
-    if slid_x and not slid_z:
-        return px + dx, pz, True
-    if slid_z and not slid_x:
-        return px, pz + dz, True
-    if slid_x and slid_z:
-        # Both axes individually clear but the diagonal isn't: a 1-cell corner
-        # pinhole the capsule can't thread. Pick the axis with the larger
-        # component so the player still slides the dominant direction.
-        if abs(dx) >= abs(dz):
-            return px + dx, pz, True
-        return px, pz + dz, True
-    # Fully pinned this tick.
-    return px, pz, True
+
+    mx = fwd_x * speed_dt
+    mz = fwd_z * speed_dt
+    if escaping:
+        mx += right_x * ESCAPE_STRAFE_MAG * speed_dt
+        mz += right_z * ESCAPE_STRAFE_MAG * speed_dt
+
+    # Full move clear → take it.
+    if nav(px + mx, pz + mz):
+        return px + mx, pz + mz, False, False
+    # Blocked. While escaping, allow the lateral component alone (the wall deflects
+    # the forward part but the strafe peels the capsule sideways).
+    if escaping and nav(px + right_x * ESCAPE_STRAFE_MAG * speed_dt,
+                        pz + right_z * ESCAPE_STRAFE_MAG * speed_dt):
+        return (px + right_x * ESCAPE_STRAFE_MAG * speed_dt,
+                pz + right_z * ESCAPE_STRAFE_MAG * speed_dt, True, False)
+    # Pinned pressing forward → ask for an escape next tick.
+    return px, pz, True, True
+
+
+def _side_clear(floor, px, pz, dir_x, dir_z, dist):
+    """True if a short probe `dist` m along (dir_x, dir_z) stays navigable — the
+    offline analogue of the chest side-cast the C# escape uses to pick its side."""
+    ix, iz = floor.world_to_cell(px + dir_x * dist, pz + dir_z * dist)
+    return floor.in_bounds(ix, iz) and floor.navigable(ix, iz)
 
 
 def simulate(floor, wps, door_xz=None):
@@ -172,6 +191,15 @@ def simulate(floor, wps, door_xz=None):
     contacts = []                       # positions where the player touched a wall (slid)
     best_remaining = math.inf           # closest approach to the final waypoint so far
     ticks_since_progress = 0
+    # Wall-slide escape state, mirroring AccessibilityWatcher.cs. escape_sign locks
+    # the strafe direction for a burst; escape_ticks counts it down; pinned_ticks
+    # tracks how long forward has been pressed without moving before the escape arms.
+    SIDE_PROBE_M = 0.9                   # AutoWalkEscapeSideProbeDistance
+    ESCAPE_TRIGGER_TICKS = max(1, int(0.4 / STEP_DT))   # AutoWalkEscapeTriggerSeconds
+    ESCAPE_BURST_TICKS = max(1, int(0.5 / STEP_DT))     # AutoWalkEscapeBurstSeconds
+    escape_sign = 0
+    escape_ticks = 0
+    pinned_ticks = 0
     for _ in range(MAX_TICKS):
         # Advance discrete waypoint when within arrival radius (mirrors TryAdvanceWaypoint).
         while wp_index < len(wps) - 1 and math.hypot(wps[wp_index][0] - px, wps[wp_index][1] - pz) <= WAYPOINT_ARRIVE_M:
@@ -192,10 +220,44 @@ def simulate(floor, wps, door_xz=None):
         # it here in lockstep so the sim tests the same controller the game runs.
         align = max(0.0, math.cos(dyaw))
         speed = MOVE_SPEED_MPS * align
-        dx = math.cos(facing) * speed * STEP_DT
-        dz = math.sin(facing) * speed * STEP_DT
-        # Move with sliding collision response.
-        npx, npz, touched = _try_step(floor, px, pz, dx, dz)
+        speed_dt = speed * STEP_DT
+        fwd_x, fwd_z = math.cos(facing), math.sin(facing)
+        # Player-local right = forward rotated -90° about up (right-handed XZ).
+        right_x, right_z = fwd_z, -fwd_x
+
+        # Wall-slide escape: pick the strafe side once pinned-while-forward exceeds
+        # the trigger window, lock it for a burst (mirrors ApplyWallSlideEscape).
+        commanding_fwd = align > 0.25
+        if escape_ticks <= 0:
+            escape_sign = 0
+        if escape_sign == 0 and commanding_fwd and pinned_ticks >= ESCAPE_TRIGGER_TICKS:
+            right_clear = _side_clear(floor, px, pz, right_x, right_z, SIDE_PROBE_M)
+            left_clear = _side_clear(floor, px, pz, -right_x, -right_z, SIDE_PROBE_M)
+            if right_clear and not left_clear:
+                escape_sign, escape_ticks = +1, ESCAPE_BURST_TICKS
+            elif left_clear and not right_clear:
+                escape_sign, escape_ticks = -1, ESCAPE_BURST_TICKS
+            elif right_clear and left_clear:
+                # Both open: strafe toward the side the goal lies on.
+                tx, tz = wps[-1]
+                escape_sign = +1 if ((tx - px) * right_x + (tz - pz) * right_z) >= 0 else -1
+                escape_ticks = ESCAPE_BURST_TICKS
+            # else both blocked: genuine pinch, no escape (escape_sign stays 0).
+            pinned_ticks = 0
+
+        escaping = escape_sign != 0 and escape_ticks > 0
+        if escaping:
+            right_x, right_z = right_x * escape_sign, right_z * escape_sign
+            escape_ticks -= 1
+
+        # Move under the controller's pure-forward(+optional strafe) model.
+        npx, npz, touched, want_escape = _try_step(
+            floor, px, pz, fwd_x, fwd_z, right_x, right_z, speed_dt, escaping)
+        # Arm the escape if forward is pinned and we're not already escaping.
+        if want_escape and not escaping and commanding_fwd:
+            pinned_ticks += 1
+        elif math.hypot(npx - px, npz - pz) >= 0.02:
+            pinned_ticks = 0
         if touched:
             near_door = any(math.hypot(npx - ddx, npz - ddz) <= DOOR_OPEN_SPAN_M
                             for ddx, ddz in door_xz)

@@ -118,6 +118,36 @@ namespace DateEverythingAccess
         // but large enough to avoid jitter. ~1 capsule-diameter + margin.
         // See [[project-navigation-executor-corner-stall]].
         private const float AutoWalkPursuitLookahead = 1.5f;
+        // Wall-slide escape (doorframe-graze recovery). The follower's model is
+        // turn-to-face-then-press-forward, so when it is aligned it commands pure
+        // local +z (forward). At a doorframe jamb the capsule wedges against the
+        // wall and velocity drops to ~0 while moveCmd stays (0,0,1) — confirmed in
+        // the BepInEx log: chest=SM_Walls_Bedroom ~0.45-0.53m, one side clear, back
+        // clear, velocity 0, until the 2s timeout gives up. The fix is a follower
+        // escape: when forward is commanded but the player is not moving, probe both
+        // sides and inject a lateral strafe toward the clear one to slide the capsule
+        // off the jamb and thread the doorway. See
+        // [[project-navigation-stair-ramp-polyline]], [[project-navigation-runtime-stall-catalog-2026-05-29]].
+        //
+        // Below this per-frame displacement (m) while commanding forward, the player
+        // counts as "not moving" (pinned). Generous: a sliding capsule still covers
+        // far more than this per frame.
+        private const float AutoWalkEscapeStuckDisplacement = 0.02f;
+        // Seconds of continuous no-move-while-forward before the escape strafe fires.
+        // Short enough to recover well inside the 2s blocked timeout, long enough to
+        // ignore the momentary contact of a normal door-threshold pass.
+        private const float AutoWalkEscapeTriggerSeconds = 0.4f;
+        // How long one escape strafe burst lasts once triggered (s). The strafe
+        // direction is locked for the burst so the player commits to one side instead
+        // of oscillating at the jamb.
+        private const float AutoWalkEscapeBurstSeconds = 0.5f;
+        // Side-probe cast distance (m) used to pick the clear escape side. ~1 capsule
+        // radius + margin; matches the doorframe-clearance scale in the stall logs.
+        private const float AutoWalkEscapeSideProbeDistance = 0.9f;
+        // Strafe input magnitude during an escape burst (player-local x). Kept below
+        // full so the player still carries some forward bias and threads the gap
+        // diagonally rather than scraping straight sideways into the far jamb.
+        private const float AutoWalkEscapeStrafeMagnitude = 0.8f;
         private const float TrackedInteractableApproachClearanceDistance = 0.9f;
         private const float TrackedInteractableApproachRetargetDistance = 0.75f;
         private const float TrackedInteractableApproachMinimumExtent = 0.35f;
@@ -306,6 +336,16 @@ namespace DateEverythingAccess
         private float _suppressCreditsSelectionUntil;
         private float _suppressPendingSpecsTutorialUntil;
         private float _lastAutoWalkProgressTime;
+        // Wall-slide escape state. When the follower commands forward but the
+        // capsule is pinned against a wall (doorframe jamb graze), we inject a
+        // lateral strafe toward the clear side to peel off. _autoWalkEscapeSign is
+        // the locked strafe direction (+1 = player-local right, -1 = left, 0 = not
+        // escaping) so we don't oscillate; _autoWalkEscapeUntil is when the burst
+        // expires. See [[project-navigation-stair-ramp-polyline]] (residual grazes).
+        private int _autoWalkEscapeSign;
+        private float _autoWalkEscapeUntil;
+        private Vector3 _autoWalkLastEscapeProbePos;
+        private float _autoWalkNoMoveSince;
         private SpecsAnnouncementMode _lastSpecsAnnouncementMode;
         private InteractableObj _trackedInteractable;
         private string _trackedInteractableId;
@@ -1168,6 +1208,16 @@ namespace DateEverythingAccess
             // See [[project-navigation-executor-corner-stall]].
             float facing = Vector3.Dot(playerTransform.forward, walkDir); // cos(turn), -1..1
             move *= Mathf.Clamp01(facing);
+
+            // Wall-slide escape. The command above is player-LOCAL and, when the
+            // player faces walkDir, is essentially pure forward (+z) with no lateral
+            // term — so a doorframe-jamb graze pins the capsule and it presses
+            // straight into the wall until the blocked timeout. Detect "commanding
+            // forward but not moving" and inject a lateral strafe toward the clear
+            // side to peel the capsule off the jamb. Only while genuinely trying to
+            // move forward (not during the look-to-align phase, where move≈0 is
+            // expected). See the AutoWalkEscape* constants.
+            ApplyWallSlideEscape(ref move, playerTransform, playerPos);
 
             // Hold position while the segment's door is mid-swing. Same reasoning as the step path:
             // walking into a moving door trips Door.OnCollisionEnter and pins the swing.
@@ -3604,7 +3654,105 @@ namespace DateEverythingAccess
                 ? BetterPlayerControl.Instance.transform.position
                 : Vector3.zero;
             _lastAutoWalkProgressTime = Time.unscaledTime;
+            _autoWalkEscapeSign = 0;
+            _autoWalkEscapeUntil = 0f;
+            _autoWalkNoMoveSince = 0f;
+            _autoWalkLastEscapeProbePos = _lastAutoWalkPosition;
             ClearNavigationBlockedDetail();
+        }
+
+        // Inject a lateral strafe into the player-local <paramref name="move"/> command
+        // when the follower is commanding forward but the capsule is pinned against a
+        // wall (the doorframe-jamb graze). See the AutoWalkEscape* constants and
+        // [[project-navigation-runtime-stall-catalog-2026-05-29]].
+        private void ApplyWallSlideEscape(ref Vector3 move, Transform playerTransform, Vector3 playerPos)
+        {
+            float now = Time.unscaledTime;
+
+            // Continue an in-flight escape burst: keep strafing the locked side until
+            // it expires or the player has clearly broken free.
+            if (_autoWalkEscapeSign != 0 && now < _autoWalkEscapeUntil)
+            {
+                move.x = Mathf.Clamp(move.x + _autoWalkEscapeSign * AutoWalkEscapeStrafeMagnitude, -1f, 1f);
+                return;
+            }
+            _autoWalkEscapeSign = 0;
+
+            // Only consider escaping while actively trying to move forward. During the
+            // turn-to-align phase the speed gate legitimately zeroes the forward term,
+            // and that is not a stall.
+            bool commandingForward = move.z > 0.25f;
+            if (!commandingForward)
+            {
+                _autoWalkNoMoveSince = 0f;
+                _autoWalkLastEscapeProbePos = playerPos;
+                return;
+            }
+
+            // Track how long the player has been pressing forward without moving.
+            float moved = Vector3.Distance(
+                new Vector3(playerPos.x, 0f, playerPos.z),
+                new Vector3(_autoWalkLastEscapeProbePos.x, 0f, _autoWalkLastEscapeProbePos.z));
+            _autoWalkLastEscapeProbePos = playerPos;
+            if (moved >= AutoWalkEscapeStuckDisplacement)
+            {
+                _autoWalkNoMoveSince = 0f;
+                return;
+            }
+            if (_autoWalkNoMoveSince <= 0f)
+            {
+                _autoWalkNoMoveSince = now;
+                return;
+            }
+            if (now - _autoWalkNoMoveSince < AutoWalkEscapeTriggerSeconds)
+                return;
+
+            // Pinned while pushing forward. Probe both sides (chest height, where the
+            // wall graze is) and strafe toward whichever is clear so the capsule slides
+            // off the jamb. Right-handed: right = forward rotated -90° about up.
+            Vector3 fwd = playerTransform.forward; fwd.y = 0f; fwd.Normalize();
+            Vector3 right = new Vector3(fwd.z, 0f, -fwd.x);
+            Vector3 chest = playerPos + new Vector3(0f, 1.0f, 0f);
+            RuntimeBlockerProbe.Hit rightHit = ProbeOne(chest, right, AutoWalkEscapeSideProbeDistance);
+            RuntimeBlockerProbe.Hit leftHit = ProbeOne(chest, -right, AutoWalkEscapeSideProbeDistance);
+            bool rightClear = rightHit == null;
+            bool leftClear = leftHit == null;
+
+            int sign;
+            if (rightClear && !leftClear) sign = +1;
+            else if (leftClear && !rightClear) sign = -1;
+            else if (rightClear && leftClear)
+                // Both sides open (wedged on a head-on jamb): pick the side with the
+                // larger door-clearance, i.e. the side the route's next waypoint lies
+                // toward, so we strafe into the doorway rather than away from it.
+                sign = WaypointSideSign(playerTransform, playerPos) >= 0 ? +1 : -1;
+            else
+            {
+                // Both sides blocked too — a genuine pinch, not a graze. Nothing the
+                // strafe can do; let the blocked timeout report it honestly.
+                _autoWalkNoMoveSince = now; // re-arm so we don't spin probes every frame
+                return;
+            }
+
+            _autoWalkEscapeSign = sign;
+            _autoWalkEscapeUntil = now + AutoWalkEscapeBurstSeconds;
+            _autoWalkNoMoveSince = 0f;
+            move.x = Mathf.Clamp(move.x + sign * AutoWalkEscapeStrafeMagnitude, -1f, 1f);
+            if (Main.DebugMode)
+                LogNavigationAutoWalkDebug("Auto-walk wall-slide escape sign=" + sign +
+                    " rightClear=" + rightClear + " leftClear=" + leftClear +
+                    " player=" + FormatVector3(playerPos));
+        }
+
+        // +1 if the active waypoint lies to the player's local right, -1 if left.
+        // Used to choose an escape side when both sides are open. XZ only.
+        private static int WaypointSideSign(Transform playerTransform, Vector3 playerPos)
+        {
+            Vector3 to = SimpleNavBridge.LastResolvedTarget - playerPos;
+            to.y = 0f;
+            if (to.sqrMagnitude <= 1e-4f) return +1;
+            Vector3 right = new Vector3(playerTransform.forward.z, 0f, -playerTransform.forward.x);
+            return Vector3.Dot(to, right) >= 0f ? +1 : -1;
         }
 
 
