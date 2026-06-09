@@ -23,7 +23,7 @@ The planner is independent of the runtime; it produces a route artifact the
 O5 executor will consume.
 """
 from __future__ import annotations
-import argparse, heapq, json, math, sys
+import argparse, heapq, json, math, re, sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -767,6 +767,113 @@ def goal_cells_around(floor, wx, wz, radius_m):
             if (wcx - wx) ** 2 + (wcz - wz) ** 2 <= r2:
                 goals.append((ix, iz))
     return goals
+
+
+# ---------- object-node resolution (for the object-reachability sweep) ----------
+
+# Mirror of AccessibilityWatcher.StripModelAuthoringTokens so an object's offline
+# node name matches the human-readable label the in-game picker speaks. Operates on
+# the raw underscore-joined Unity name and leaves a clean stem ("Clock", "Bush").
+_MODEL_INSTANCE_RE = re.compile(r"\s*\(\d+\)\s*$")
+_MODEL_UPDATE_RE = re.compile(r"_MODEL_UPDATE\d*", re.IGNORECASE)
+_MODEL_PREFIX_RE = re.compile(r"^(?:SM|SK)_+", re.IGNORECASE)
+
+
+def strip_model_authoring_tokens(value):
+    if not value or not value.strip():
+        return value
+    stripped = _MODEL_INSTANCE_RE.sub("", value)
+    stripped = _MODEL_UPDATE_RE.sub("", stripped)
+    stripped = _MODEL_PREFIX_RE.sub("", stripped)
+    stripped = stripped.strip().strip("_").strip()
+    return value if not stripped.strip() else stripped
+
+
+def object_display_name(item):
+    """Human-readable stem for an interactable, used as the node label. Returns the
+    cleaned GameObjectName; objects whose name still collapses to nothing meaningful
+    (pure punctuation/empty) are caller-rejected via the None return."""
+    raw = item.get("GameObjectName") or ""
+    cleaned = strip_model_authoring_tokens(raw)
+    if not cleaned or not cleaned.strip():
+        return None
+    return cleaned
+
+
+# Unity layers that carry navigable interactable props in this scene's export.
+# Layer 0 (Default) and 31 (the interactable layer) hold the real objects; the
+# stray layer-2 (Ignore Raycast) and layer-18 entries are scaffolding, not
+# player-facing interactables. Matches the picker's "real object" intent.
+OBJECT_NODE_LAYERS = (0, 31)
+
+
+def is_statically_pickable(item):
+    """Static (save-independent) half of the picker's eligibility rule: active, on a
+    navigable interactable layer, and resolving to a real human-readable name. The
+    runtime encounter filter (met/interacted/examined) is intentionally NOT applied —
+    the sweep tests what the player COULD navigate to, not what this save has seen."""
+    if not item.get("IsActive"):
+        return False
+    if item.get("Layer") not in OBJECT_NODE_LAYERS:
+        return False
+    return object_display_name(item) is not None
+
+
+def resolve_object_node(planner, item):
+    """Snap one interactable to its interaction stand-cell, mirroring plan()'s target
+    resolution: floor-by-Y, then the nearest navigable cell within the (clamped)
+    interaction radius, falling back to nearest-navigable search. Returns
+    (floor_label, ix, iz) or None when the object sits off every navigable floor (e.g.
+    walled off behind a gate the current door/state-wall params keep closed)."""
+    pos = item.get("Position") or {}
+    tx, ty, tz = pos.get("x"), pos.get("y"), pos.get("z")
+    if tx is None or ty is None or tz is None:
+        return None
+    tfloor = planner._floor_for_target_y(ty)
+    if tfloor is None:
+        return None
+    floor = planner.floors[tfloor]
+    radius = item.get("InteractionRadius", 1.0) or 1.0
+    radius = max(MIN_INTERACTION_RADIUS_M, min(radius, MAX_INTERACTION_RADIUS_M))
+    goals = goal_cells_around(floor, tx, tz, radius)
+    if goals:
+        # Stand-cell = the navigable cell nearest the object centre (deterministic).
+        best = min(goals, key=lambda c: (floor.cell_to_world(*c)[0] - tx) ** 2 +
+                                        (floor.cell_to_world(*c)[1] - tz) ** 2)
+        return (tfloor, best[0], best[1])
+    n = floor.nearest_navigable(tx, tz, max_radius_m=NEAREST_NAVIGABLE_SEARCH_M)
+    if n is None:
+        return None
+    return (tfloor, n[0], n[1])
+
+
+def object_sweep_nodes(planner, items):
+    """Build the deduped object-node list for the sweep. Each node is a stand-cell the
+    player would occupy to interact with one or more objects. Objects that snap to the
+    SAME stand-cell collapse into a single node (kills the 48-books / SM_-duplicate
+    redundancy) — the merged node carries all member object names so the report can
+    attribute a covered cell back to every object it serves.
+
+    Returns a list of dicts: {floor, cell:(ix,iz), names:[...], object_ids:[...],
+    representative:item}. Objects that resolve to no navigable cell (off-floor or
+    gate-blocked under the current door/state-wall params) are returned separately as
+    `unreachable` so the manifest can report them as no_path without a drive."""
+    by_cell = {}
+    unreachable = []
+    for item in items:
+        if not is_statically_pickable(item):
+            continue
+        node = resolve_object_node(planner, item)
+        name = object_display_name(item)
+        if node is None:
+            unreachable.append({"name": name, "object_id": item.get("GameObjectId"),
+                                "position": item.get("Position")})
+            continue
+        slot = by_cell.setdefault(node, {"floor": node[0], "cell": (node[1], node[2]),
+                                         "names": [], "object_ids": [], "representative": item})
+        slot["names"].append(name)
+        slot["object_ids"].append(item.get("GameObjectId"))
+    return list(by_cell.values()), unreachable
 
 
 # ---------- top-level plan() ----------
