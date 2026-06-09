@@ -378,8 +378,9 @@ namespace DateEverythingAccess
             FinishSweep();
         }
 
-        // Teleport to a clean source-object cell, re-plan to the dest object with the C#
-        // planner, and start driving. Shared by the first attempt and every retry.
+        // FIRST attempt of a leg: teleport to a clean stand-cell at the SOURCE object (high
+        // clearance, so the player doesn't spawn hard against a collider/door), then plan +
+        // drive to the dest. This establishes the leg's honest starting point.
         private static void BeginCurrentLeg()
         {
             ManifestEntry entry = _manifest.entries[_currentManifestIndex];
@@ -391,8 +392,6 @@ namespace DateEverythingAccess
                 return;
             }
 
-            // 1. Teleport to a clean stand-cell at the SOURCE object (high clearance, so the
-            //    player doesn't spawn hard against a collider/door and stall immediately).
             if (!TryResolveCleanSourceCell(entry, out Vector3 startWorld))
             {
                 // Source object can't be resolved / has no clean cell — fall back to the
@@ -408,12 +407,43 @@ namespace DateEverythingAccess
             // (the route must open every door it needs itself).
             ForceCloseAllDoors();
 
-            // 2. Resolve the live DEST object and plan to it exactly as in-game WalkTo does.
+            PlanAndDriveFrom(startWorld);
+        }
+
+        // RETRY of a stalled/looped leg: re-plan from the player's CURRENT (stuck) position to
+        // the same dest and drive that — do NOT teleport back to the source. Re-running the
+        // identical source->dest plan is deterministic (same start, same A*, same failure), so
+        // it only confirms what we already know. Re-planning from where the player is wedged
+        // tests the real question: can a fresh plan recover and reach the target from here?
+        // Doors are left in their current state (a person doesn't re-close doors to retry).
+        private static void RetryCurrentLegFromHere()
+        {
+            if (BetterPlayerControl.Instance == null)
+            {
+                RecordCurrentRouteAsException("no-player");
+                AdvanceToNextEntry();
+                return;
+            }
+            Transform playerTransform = BetterPlayerControl.Instance.transform;
+            Rigidbody rb = BetterPlayerControl.Instance.GetComponent<Rigidbody>();
+            if (rb != null) { rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+            PlanAndDriveFrom(playerTransform.position);
+        }
+
+        // Resolve the live DEST object, plan to it from `startWorld` exactly as in-game WalkTo
+        // does, face the first heading, and hand the route to the driver. Shared by the first
+        // attempt (teleported source) and retries (current stuck position).
+        private static void PlanAndDriveFrom(Vector3 startWorld)
+        {
+            ManifestEntry entry = _manifest.entries[_currentManifestIndex];
+            Transform playerTransform = BetterPlayerControl.Instance.transform;
+
             SimpleNavRoute route = PlanLegToObject(entry, startWorld);
             if (route == null)
             {
-                // C# planner refused (no_path / off-bake / door-missing-operable-cells). This
-                // is a planner verdict, not a drive stall — don't retry it; record and advance.
+                // C# planner refused (no_path / off-bake / door-missing-operable-cells). On a
+                // retry from a stuck spot this is a real verdict too: no plan recovers from
+                // here. Either way it's a planner verdict, not a drive stall — record + advance.
                 FinishLeg("no_path");
                 return;
             }
@@ -681,10 +711,10 @@ namespace DateEverythingAccess
                 if (Main.Log != null)
                     Main.Log.LogInfo("SimpleNavCoverageSweep retry idx=" + _currentManifestIndex +
                         " attempt=" + _currentAttempt + "/" + MaxLegAttempts + " outcome=" + outcome +
-                        " — re-teleport + re-plan");
+                        " — re-plan from current position (recovery test)");
                 _currentAttempt++;
                 _currentRoute = null;
-                BeginCurrentLeg();   // re-teleport to a clean source cell, re-plan, re-drive
+                RetryCurrentLegFromHere();   // re-plan from where the player is stuck, no teleport
                 return;
             }
 
