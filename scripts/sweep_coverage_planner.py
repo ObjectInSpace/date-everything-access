@@ -117,7 +117,7 @@ def plan_to_cell(planner, start_node, target_floor_label, target_ix, target_iz,
         "path_length_cells": len(path),
         "waypoint_count": len(waypoints),
         "total_cost_m": round(total_cost, 3),
-        "waypoints": [_mod._node_to_dict(w, planner) for w in waypoints],
+        "waypoints": _mod._waypoints_to_dicts(waypoints, planner),
         "segments": segments,
         "edge_kinds_used": sorted({e.get("kind", "walk") for e in edges if e}),
         "params": {
@@ -365,8 +365,54 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
 
     counts = {"ok": 0, "no_path": 0, "trivially_at_target": 0, "target_not_navigable": 0}
     t0 = time.time()
+    # Object-to-object chaining: each leg starts at the PREVIOUS object's reached
+    # stand-cell, not a single fixed house start. This makes the sweep measure
+    # "can you get from one object to the next" (true object reachability) instead
+    # of "can you get from the front door to every object", which funnelled all
+    # 1045 legs through one chokepoint and stalled the whole run. The first leg on
+    # each floor uses that floor's resolved start; thereafter `cur_start` advances
+    # only to cells we actually reached (no_path / trivially-at-target legs keep the
+    # prior source, so a leg we couldn't plan to never becomes a bogus source).
+    #
+    # SAME-FLOOR CHAINING: the chain must NEVER cross floors. The in-game follower
+    # cannot drive the staircase, so a cross-floor leg (ground->upper or vice versa)
+    # is unexecutable in-game even though the offline A* happily routes it over the
+    # stairs — it surfaces as a staircase loop / near-zero stall and drowns out every
+    # real same-floor result (36% of legs, terminated run 2026-06-09). We sort the
+    # nodes by floor and reset `cur_start` to that floor's own resolved start at each
+    # floor boundary, so every leg is a same-floor route the follower can actually
+    # validate. Cross-floor reachability is answered separately by walk mode's BFS.
+    nodes = sorted(nodes, key=lambda n: n["floor"])
+    floor_starts = {}  # floor_label -> resolved (floor,ix,iz) start node, cached
+
+    def _floor_start(label):
+        cached = floor_starts.get(label)
+        if cached is not None:
+            return cached
+        if label == start_node[0]:
+            node = start_node
+        else:
+            # Snap the house-start XZ onto this floor; fall back to nearest-navigable
+            # to (0,0) on the floor if that spot isn't navigable here.
+            f = planner.floors[label]
+            n = f.nearest_navigable(start_world[0], start_world[1], max_radius_m=8.0)
+            if n is None:
+                n = f.nearest_navigable(0.0, 0.0, max_radius_m=30.0)
+            node = (label, n[0], n[1]) if n is not None else start_node
+        floor_starts[label] = node
+        return node
+
+    cur_floor = None
+    cur_start = start_node
+    cur_start_name = "<house-start>"
     for nd in nodes:
         floor_label = nd["floor"]
+        # Floor boundary: reset the chain to this floor's own start so no leg ever
+        # plans across the stairs.
+        if floor_label != cur_floor:
+            cur_floor = floor_label
+            cur_start = _floor_start(floor_label)
+            cur_start_name = "<%s-start>" % floor_label
         ix, iz = nd["cell"]
         floor = planner.floors[floor_label]
         wx, wz = floor.cell_to_world(ix, iz)
@@ -384,7 +430,7 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
             "MemberNames": sorted(set(nd["names"])),
             "MemberObjectIds": nd["object_ids"],
         }
-        result = plan_to_cell(planner, start_node, floor_label, ix, iz,
+        result = plan_to_cell(planner, cur_start, floor_label, ix, iz,
                                target_stanza=target_stanza, goal_cells=nd["goal_cells"])
         status = result["status"]
         counts[status] = counts.get(status, 0) + 1
@@ -398,6 +444,9 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
             rf = planner.floors[floor_label]
             reached_ix, reached_iz = rf.world_to_cell(last["wx"], last["wz"])
         rwx, rwz = planner.floors[floor_label].cell_to_world(reached_ix, reached_iz)
+        sf = planner.floors[cur_start[0]]
+        s_wx, s_wz = sf.cell_to_world(cur_start[1], cur_start[2])
+        rep_pos = rep.get("Position") or {}
         entry = {
             "floor": floor_label,
             "cell": [reached_ix, reached_iz],
@@ -405,14 +454,39 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
             "status": status,
             "name": target_stanza["Name"],
             "member_count": len(target_stanza["MemberNames"]),
+            # The DEST object's stable scene id + true transform position + interaction
+            # radius. The in-game sweep re-plans each leg LIVE with SimpleNavPlanner.Plan
+            # (validating the C# planner's own routes, not these offline ones), resolving
+            # the live InteractableObj by this id — object names are NOT unique (42 shared),
+            # so the id+position disambiguate which instance a leg targets.
+            "object_id": rep.get("GameObjectId", 0),
+            "object_xyz": [round(rep_pos.get("x", rwx), 4),
+                           round(rep_pos.get("y", planner.floors[floor_label].floor_y), 4),
+                           round(rep_pos.get("z", rwz), 4)],
+            "interaction_radius": round(min(7.5, max(0.5, rep.get("InteractionRadius", 1.0) or 1.0)), 3),
+            # Source object this leg departed from, so the runtime + analysis can see
+            # the object->object pairing rather than assuming the fixed house start.
+            "from_floor": cur_start[0],
+            "from_cell": [cur_start[1], cur_start[2]],
+            "from_world_xz": [round(s_wx, 4), round(s_wz, 4)],
+            "from_name": cur_start_name,
         }
         if status == "ok":
-            route_name = f"route.{floor_label}.{reached_ix}.{reached_iz}.json"
+            # Filename keyed on the manifest index (NOT just the reached cell): with
+            # per-source chaining, two legs that arrive at the same stand-cell from
+            # DIFFERENT source objects are distinct routes and must not overwrite each
+            # other. (Keying on the dest cell silently collided 74 legs and pointed
+            # their manifest entry at another leg's route file / source.)
+            entry_idx = len(manifest["entries"])
+            route_name = f"route.{entry_idx}.{floor_label}.{reached_ix}.{reached_iz}.json"
             (out_dir / route_name).write_text(json.dumps(result, indent=2), encoding="utf-8")
             entry["route"] = route_name
             entry["cost_m"] = result["total_cost_m"]
             entry["waypoint_count"] = result["waypoint_count"]
             entry["edge_kinds"] = result["edge_kinds_used"]
+            # Advance the chain: the next object departs from where this leg arrived.
+            cur_start = (floor_label, reached_ix, reached_iz)
+            cur_start_name = target_stanza["Name"]
         manifest["entries"].append(entry)
 
     # Off-floor / gate-blocked objects: report as no_path, no route file, no drive.
