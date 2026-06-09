@@ -13,6 +13,23 @@ Outputs:
 
 Use this to separate "bake bug" from "planner bug": isolated targets cannot be
 fixed by changing the planner.
+
+NOT the ground truth for "can the player reach this object" — it deliberately
+over-reports isolation. Two reasons, both by design:
+  - No door semantics: the default Planner here has doors_open=None (every door
+    CLOSED). Any object reachable only THROUGH an openable door counts as
+    isolated, even though the in-game autowalk opens doors on the route. Pass
+    --all-doors-open / --doors-open to relax this.
+  - Per-object, not per-stand-cell-deduped, and a pure connected-component test
+    (no A*).
+For the real "is every object reachable" answer use the object-reachability
+sweep (scripts/sweep_coverage_planner.py --mode objects), which is door-aware
+(doors_open='unlocked') and snaps to the full stand-cell set. As of 2026-06-09
+the sweep reports 778/780 nodes reachable (2 isolated exterior bushes) while
+this matrix reports isolated~90 — the gap is the closed-door + no-dedup posture
+above, NOT a bake regression. See [[project-navigation-object-reachability-sweep]].
+This script writes no artifact and nothing consumes its output; it's an offline
+eyeball check before online route validation.
 """
 from __future__ import annotations
 
