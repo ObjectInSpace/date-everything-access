@@ -77,6 +77,10 @@ namespace DateEverythingAccess
         private static Dictionary<NodeKey, List<EdgeRef>> _interFloorEdges;
         // Min cost across all inter-floor edges, cached for the heuristic.
         private static float _minInterFloorCost;
+        // Ramp interior points (world XYZ) keyed by the directed landing-cell pair, so a
+        // route crossing the stair seam can be expanded into a walkable polyline up the
+        // run. Direction matters: ascending and descending share geometry but reversed.
+        private static Dictionary<(NodeKey, NodeKey), Vector3[]> _stairRampInteriors;
         private static bool _loadAttempted;
         private static bool _loadOk;
 
@@ -305,6 +309,11 @@ namespace DateEverythingAccess
 
             List<NodeKey> waypoints = SmoothPath(path);
             List<List<string>> segmentDoorNames = TagDoors(waypoints, targetName, targetPos);
+            // segmentDoorNames is per cell-waypoint segment (length waypoints.Count-1). The
+            // ramp-interior insertion below adds waypoints at the stair seam, splitting that
+            // one seam segment into several; expandedSegmentDoors mirrors the insertion with
+            // empty (no-door) entries so door tags stay aligned to their segments.
+            List<List<string>> expandedSegmentDoors = new List<List<string>>(segmentDoorNames.Count);
 
             SimpleNavRoute route = new SimpleNavRoute();
             route.TargetName = targetName;
@@ -313,16 +322,46 @@ namespace DateEverythingAccess
             route.TargetInteractionRadius = radius;
             route.TargetIsDatable = targetIsDatable;
             route.TargetInkFileName = targetInkFileName;
+            // expandedSegmentDoors[j] is the door list for the segment STARTING at
+            // rawRouteWaypoints[j] (the same convention AddRouteWaypoints reads). For each
+            // source cell-waypoint i (i < last) we append exactly one door entry —
+            // segmentDoorNames[i] — for the segment leaving waypoint i. When we insert K
+            // ramp-interior points BEFORE landing waypoint i, the K extra segments they add
+            // all belong to the seam (no door), so we append K empty entries at that point.
             List<Vector3> rawRouteWaypoints = new List<Vector3>(waypoints.Count);
             for (int i = 0; i < waypoints.Count; i++)
             {
                 NodeKey w = waypoints[i];
                 Floor f = FloorByLabel(w.Floor);
                 if (f == null) continue;
+                // Stair seam: the previous waypoint is on a different floor and this directed
+                // landing pair has a baked ramp polyline — insert its interior points so the
+                // follower walks the diagonal run (real XZ progression + true Y) instead of a
+                // single stacked landing-to-landing jump it can't steer along.
+                if (i > 0 && _stairRampInteriors != null)
+                {
+                    NodeKey prev = waypoints[i - 1];
+                    if (prev.Floor != w.Floor &&
+                        _stairRampInteriors.TryGetValue((prev, w), out Vector3[] interior))
+                    {
+                        for (int k = 0; k < interior.Length; k++)
+                        {
+                            rawRouteWaypoints.Add(interior[k]);
+                            expandedSegmentDoors.Add(new List<string>(0)); // seam sub-segment, no door
+                        }
+                    }
+                }
                 Vector2 xz = f.CellToWorld(w.Ix, w.Iz);
                 rawRouteWaypoints.Add(new Vector3(xz.x, f.FloorY, xz.y));
+                // Door list for the segment LEAVING this cell-waypoint (i -> i+1), appended
+                // only for non-terminal waypoints to keep one entry per emitted segment.
+                if (i < waypoints.Count - 1)
+                {
+                    List<string> seg = i < segmentDoorNames.Count ? segmentDoorNames[i] : null;
+                    expandedSegmentDoors.Add(seg ?? new List<string>(0));
+                }
             }
-            AddRouteWaypoints(rawRouteWaypoints, segmentDoorNames, route);
+            AddRouteWaypoints(rawRouteWaypoints, expandedSegmentDoors, route);
             route.EnsureSemanticWaypoints();
             while (route.SegmentDoorNames.Count < route.Waypoints.Count - 1)
                 route.SegmentDoorNames.Add(new List<string>(0));
@@ -485,6 +524,52 @@ namespace DateEverythingAccess
             return floorLabel != null;
         }
 
+        // Pick a CLEAN stand-cell near a world point: the navigable cell within radiusM whose
+        // clearance (cells-to-nearest-wall, the same metric A* uses) is highest, tie-broken by
+        // closeness to the anchor. Used by the coverage sweep to teleport the player to a source
+        // object without spawning hard against a collider/door (which stalls the leg instantly).
+        // The floor is chosen by FloorForTargetY (the floor a player stands on for a target at
+        // anchorY). Returns false if no navigable cell is in range.
+        public static bool TryGetCleanStandCell(float anchorX, float anchorY, float anchorZ,
+                                                float radiusM, out Vector3 cleanWorld)
+        {
+            cleanWorld = Vector3.zero;
+            if (!EnsureLoaded() || _floors == null) return false;
+            Floor floor = FloorForTargetY(anchorY);
+            if (floor == null) return false;
+
+            int cx, cz;
+            floor.WorldToCell(anchorX, anchorZ, out cx, out cz);
+            int r = Mathf.Max(1, Mathf.CeilToInt(radiusM / floor.CellSize));
+            float r2 = radiusM * radiusM;
+
+            int bestClear = -1;
+            float bestDist2 = float.PositiveInfinity;
+            bool found = false;
+            int bIx = 0, bIz = 0;
+            for (int dx = -r; dx <= r; dx++)
+            {
+                for (int dz = -r; dz <= r; dz++)
+                {
+                    int ix = cx + dx, iz = cz + dz;
+                    if (!floor.Navigable(ix, iz)) continue;
+                    Vector2 w = floor.CellToWorld(ix, iz);
+                    float ddx = w.x - anchorX, ddz = w.y - anchorZ;
+                    float d2 = ddx * ddx + ddz * ddz;
+                    if (d2 > r2) continue;
+                    int clear = floor.Clearance(ix, iz);
+                    if (clear > bestClear || (clear == bestClear && d2 < bestDist2))
+                    {
+                        bestClear = clear; bestDist2 = d2; bIx = ix; bIz = iz; found = true;
+                    }
+                }
+            }
+            if (!found) return false;
+            Vector2 bw = floor.CellToWorld(bIx, bIz);
+            cleanWorld = new Vector3(bw.x, floor.FloorY, bw.y);
+            return true;
+        }
+
         // ---- bake load ----
 
         private static bool EnsureLoaded()
@@ -546,6 +631,7 @@ namespace DateEverythingAccess
         private static void BuildInterFloorEdges()
         {
             _interFloorEdges = new Dictionary<NodeKey, List<EdgeRef>>();
+            _stairRampInteriors = new Dictionary<(NodeKey, NodeKey), Vector3[]>();
             _minInterFloorCost = float.PositiveInfinity;
 
             InterFloorEdges ife = _bake.inter_floor_edges;
@@ -562,6 +648,20 @@ namespace DateEverythingAccess
                     AddInterFloor(a, b, e.cost_m, "stairs");
                     AddInterFloor(b, a, e.cost_m, "stairs");
                     if (e.cost_m > 0f && e.cost_m < _minInterFloorCost) _minInterFloorCost = e.cost_m;
+
+                    // Interior ramp points (world XYZ, excluding the two landing endpoints):
+                    // emitted between the landings when a route crosses this seam so the
+                    // follower walks the diagonal run instead of one stacked jump. The bake
+                    // path is ordered bottom->top (ground->upper); store both directions.
+                    Vector3[] interior = ExtractRampInterior(e.path);
+                    if (interior != null && interior.Length > 0)
+                    {
+                        _stairRampInteriors[(a, b)] = interior;            // ground->upper
+                        Vector3[] rev = new Vector3[interior.Length];
+                        for (int k = 0; k < interior.Length; k++)
+                            rev[k] = interior[interior.Length - 1 - k];
+                        _stairRampInteriors[(b, a)] = rev;                 // upper->ground
+                    }
                 }
             }
 
@@ -833,6 +933,23 @@ namespace DateEverythingAccess
                 _interFloorEdges[from] = list;
             }
             list.Add(new EdgeRef(to, cost, kind));
+        }
+
+        // The ramp polyline minus its two landing endpoints (those are the A* landing cells,
+        // already emitted as waypoints). Returns the interior world-XYZ points bottom->top,
+        // or null when the bake edge has no path or only the two endpoints.
+        private static Vector3[] ExtractRampInterior(float[][] path)
+        {
+            if (path == null || path.Length <= 2) return null;
+            int n = path.Length - 2;
+            Vector3[] interior = new Vector3[n];
+            for (int i = 0; i < n; i++)
+            {
+                float[] p = path[i + 1];
+                if (p == null || p.Length < 3) return null;
+                interior[i] = new Vector3(p[0], p[1], p[2]);
+            }
+            return interior;
         }
 
         // ---- floor utilities ----
@@ -1864,6 +1981,10 @@ namespace DateEverythingAccess
             [DataMember] public StairCellEndpoint ground;
             [DataMember] public StairCellEndpoint upper;
             [DataMember] public float cost_m;
+            // Ordered bottom->top ramp polyline of world-space [x,y,z] points (the stair
+            // run the follower walks). Endpoints are the two landings; interiors give the
+            // follower an XZ-progressing line up the diagonal instead of one stacked jump.
+            [DataMember] public float[][] path;
         }
 
         [DataContract]

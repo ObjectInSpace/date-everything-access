@@ -38,6 +38,7 @@ STAIR_SLICE_PLANE_TOL = 1.5   # |segment.PlaneY - floor_Y| ≤ this counts as th
 MAX_STAIR_AREA = 200.0        # exclude wall-meshes mis-tagged as stairs
 MIN_STAIR_AREA = 1.0          # exclude micro-segments
 FLOOR_TOUCH_TOL = 1.5         # |surface_endY - floor_Y| ≤ this counts as "touching"
+RAMP_SAMPLE_BIN_M = 1.5       # ramp-path sample spacing (one waypoint per ~1.5m of rise)
 # The walkable exporter's SlopeKind classifier marks any tall-vertical-extent mesh
 # as "stairs" (it uses VerticalExtent only). Walls and fireplaces match. Restrict
 # to surfaces whose authored path mentions stairs/ramp to filter the false positives.
@@ -138,6 +139,39 @@ def landing_from_slice(floor, segments, floor_y):
     return None
 
 
+def ramp_path_between_landings(g_world, u_world, gy, uy):
+    """Synthesize an ordered bottom->top polyline of (x, y, z) points between the two
+    resolved stair landings by linear interpolation in X, Z, and Y.
+
+    WHY interpolate instead of trace the collider: the blocker export only slices the
+    stair collider at the two FLOOR planes (PlaneY ∈ {ground, upper}) — there is no
+    mid-incline cross-section in the data to sample (confirmed: the Stairs collider
+    exports segments only at Y≈0.5/12.5/13.5). The Date Everything staircase is a
+    single straight diagonal run (one 131m² mesh, ~18.8m along X at near-constant Z),
+    so a straight interpolation faithfully traces it. The point of the polyline is to
+    give the follower an XZ-PROGRESSING line to pursue up the run instead of one
+    18.8m diagonal jump across the stairwell (the cause of the stair loop/stall): the
+    player walks the diagonal while Y rises smoothly, rather than being told to reach
+    a waypoint stacked far away with no intermediate heading.
+
+    Emits one interior sample per ~RAMP_SAMPLE_BIN_M of rise. Returns >= 2 points
+    ordered bottom->top, endpoints exactly the resolved landings so the path meets
+    the floor-plane A* nodes."""
+    gx, gz = g_world
+    ux, uz = u_world
+    rise = abs(uy - gy)
+    n = max(2, int(round(rise / RAMP_SAMPLE_BIN_M)) + 1)
+    path = []
+    for i in range(n):
+        t = i / (n - 1)
+        path.append([
+            round(gx + (ux - gx) * t, 3),
+            round(gy + (uy - gy) * t, 3),
+            round(gz + (uz - gz) * t, 3),
+        ])
+    return path
+
+
 def main():
     bake = json.load(open(BAKE, encoding="utf-8"))
     walk = json.load(open(WALK, encoding="utf-8"))
@@ -213,10 +247,25 @@ def main():
             "cell": [uix, uiz], "world_xz": [round(ucx,3), round(ucz,3)],
             "floor_y": uy,
         }
-        # Cost estimate: straight-line 3D distance between endpoints
-        dxz = math.hypot(ucx - gcx, ucz - gcz)
-        dy = abs(uy - gy)
-        edge_record["cost_m"] = round(math.hypot(dxz, dy), 3)
+        # Ramp polyline: the ordered bottom->top run of (x,y,z) samples the follower
+        # walks up, so it has a real XZ-progressing line instead of one diagonal jump
+        # across the stairwell (the cause of the stair loop/stall). Falls back to the
+        # bare two-endpoint edge when the slices are too coarse to improve on it.
+        ramp_path = ramp_path_between_landings((gcx, gcz), (ucx, ucz), gy, uy)
+        if ramp_path:
+            edge_record["path"] = ramp_path
+        # Cost estimate: length along the ramp polyline if we have one, else the
+        # straight-line 3D distance between endpoints.
+        if ramp_path:
+            total = 0.0
+            for i in range(len(ramp_path) - 1):
+                a, b = ramp_path[i], ramp_path[i + 1]
+                total += math.sqrt((b[0]-a[0])**2 + (b[1]-a[1])**2 + (b[2]-a[2])**2)
+            edge_record["cost_m"] = round(total, 3)
+        else:
+            dxz = math.hypot(ucx - gcx, ucz - gcz)
+            dy = abs(uy - gy)
+            edge_record["cost_m"] = round(math.hypot(dxz, dy), 3)
         edges.append(edge_record)
 
     # Crawlspace teleporter

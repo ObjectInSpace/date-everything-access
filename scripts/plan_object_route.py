@@ -255,8 +255,16 @@ class Planner:
             a = ("ground", g["cell"][0], g["cell"][1])
             b = ("upper",  u["cell"][0], u["cell"][1])
             cost = e["cost_m"]
-            self.edges_from.setdefault(a, []).append((b, cost, {"kind": "stairs", "path": e["source_path"]}))
-            self.edges_from.setdefault(b, []).append((a, cost, {"kind": "stairs", "path": e["source_path"]}))
+            # Ramp interior points (world [x,y,z], excluding the two landing endpoints):
+            # emitted between the landings when a route crosses this seam so the offline
+            # route matches the C# planner's stair expansion (parity). Directed: the bake
+            # path is bottom->top (ground->upper); reverse for the descending edge.
+            full = e.get("path") or []
+            interior = full[1:-1] if len(full) > 2 else []
+            self.edges_from.setdefault(a, []).append(
+                (b, cost, {"kind": "stairs", "path": e["source_path"], "ramp_xyz": list(interior)}))
+            self.edges_from.setdefault(b, []).append(
+                (a, cost, {"kind": "stairs", "path": e["source_path"], "ramp_xyz": list(reversed(interior))}))
         for t in bake.get("inter_floor_edges", {}).get("teleporter", []):
             up_xyz = t["up"]["world_xyz"]
             up_floor = self._floor_for_y(up_xyz[1])
@@ -652,34 +660,113 @@ def smooth_path(path, planner):
     return dedup
 
 
-def door_positions():
-    """DoorObjects in the nav-data export is a superset of real doors — it includes
-    bumper colliders, camera placeholders, wall remnants, and many entries stacked at
-    a canonical front-door XZ. O4 emits door tags as hints; O5's executor resolves
-    them against the runtime door FSM. Here we just dedupe by (rounded XZ) and skip
-    names that obviously aren't doors the player opens."""
+# Only entries whose name the runtime SimpleNav.FindDoorByName can resolve to a live
+# Door component are worth tagging. The DoorObjects export is a superset: alongside the
+# openable Door leaves (Doors_Bathroom1, Doors_Office, ...) it lists the STATIC DOORFRAME
+# meshes (SM_Doorframe_*), particle emitters, knobs, cameras, and per-node transform
+# duplicates (_TRS / _MASTER / _MODEL_UPDATE). Tagging any of those gives the route a name
+# FindDoorByName returns null for, so ResolveActiveDoorForSegment leaves ActiveDoor null and
+# the executor never opens the door — the player drives into the closed leaf and stalls.
+# Critically the frame mesh and its door leaf are ~1–2m apart (the leaf swings clear of the
+# frame), so they are NOT deduped by XZ and the frame can out-compete the door on segment
+# proximity. Filtering to openable names is what makes the door actually open.
+# See [[project-navigation-object-sweep-door-tag-bug]].
+_DOOR_SKIP_SUBSTR = (
+    "Doorframe", "Particle", "Knob", "knob", "Collider", "Camera_", "LightOcclusion",
+    "Lights", "bumper", "Boxes", "SM_", "Cupboards", "BreakerBox", "Dishwasher",
+    "Stairs", "PF_", "Wall",
+)
+_DOOR_SKIP_SUFFIX = ("_TRS", "_MASTER", "_MODEL_UPDATE", "_Cam")
+
+
+def _is_openable_door_name(name):
+    if not name:
+        return False
+    if "door" not in name.lower() and "trapdoor" not in name.lower():
+        return False
+    if any(s in name for s in _DOOR_SKIP_SUBSTR):
+        return False
+    if name.endswith(_DOOR_SKIP_SUFFIX):
+        return False
+    return True
+
+
+def _openable_doors_raw():
+    """Openable Door leaves from the export: names the runtime FindDoorByName resolves to
+    a real Door component. Origin placeholders (0,0) and off-map (vehicle) doors dropped."""
     nav = json.loads(NAVDATA.read_text(encoding="utf-8-sig"))
     seen = set()
-    doors = []
-    SKIP_NAME_PATTERNS = ("Camera_", "bumper", "Wall")
+    out = []
     for d in nav.get("DoorObjects", []):
         p = d.get("Position") or {}
         if "x" not in p:
             continue
         name = d.get("Name") or ""
-        if any(s in name for s in SKIP_NAME_PATTERNS):
+        if not _is_openable_door_name(name):
+            continue
+        if abs(p["x"]) < 0.01 and abs(p["z"]) < 0.01:
+            continue
+        if abs(p["x"]) > 60 or abs(p["z"]) > 60:
             continue
         key = (round(p["x"], 2), round(p["z"], 2), round(p["y"], 2))
         if key in seen:
             continue
         seen.add(key)
-        doors.append({
-            "id": d.get("Id"),
-            "name": name,
-            "xz": (p["x"], p["z"]),
+        out.append({"id": d.get("Id"), "name": name, "xz": (p["x"], p["z"]), "y": p["y"]})
+    return out
+
+
+# Max XZ gap to consider a doorframe and an openable Door the same doorway.
+_FRAME_DOOR_PAIR_RADIUS_M = 2.8
+
+
+def door_positions():
+    """Door tag table for tag_doors: each entry's POSITION marks where a route crosses the
+    doorway, and its NAME is the openable Door the runtime can resolve + open.
+
+    Why split position from name: the export gives the openable Door leaf's transform at its
+    HINGE/PIVOT, offset ~1–2.5m to the side of the opening the player walks through, while the
+    static SM_Doorframe_* mesh sits on the doorway CENTERLINE — exactly where the route
+    segment passes. Tagging by the door pivot misses (route never comes within DOOR_TAG_RADIUS
+    of the pivot); tagging by the frame name gives a name FindDoorByName can't open. So we pair
+    each frame to its nearest openable Door and emit a tag AT THE FRAME with the DOOR'S name.
+    Frames with no openable Door nearby are open archways (no leaf) — no tag needed. Openable
+    doors with no frame (Trapdoor, sliding) fall back to tagging at their own position.
+    See [[project-navigation-object-sweep-door-tag-bug]]."""
+    nav = json.loads(NAVDATA.read_text(encoding="utf-8-sig"))
+    doors = _openable_doors_raw()
+    frames = [d for d in nav.get("DoorObjects", [])
+              if "Doorframe" in (d.get("Name") or "") and "x" in (d.get("Position") or {})]
+
+    table = []
+    paired_door_keys = set()
+    for fr in frames:
+        p = fr["Position"]
+        best = None
+        for dr in doors:
+            if abs(dr["y"] - p["y"]) > 3.5:
+                continue
+            dist = math.hypot(p["x"] - dr["xz"][0], p["z"] - dr["xz"][1])
+            if best is None or dist < best[0]:
+                best = (dist, dr)
+        if best is None or best[0] > _FRAME_DOOR_PAIR_RADIUS_M:
+            continue  # open archway — no leaf to open
+        dist, dr = best
+        paired_door_keys.add((round(dr["xz"][0], 2), round(dr["xz"][1], 2), round(dr["y"], 2)))
+        table.append({
+            "id": dr["id"],
+            "name": dr["name"],          # resolvable Door name
+            "xz": (p["x"], p["z"]),       # frame centerline (where the route crosses)
             "y": p["y"],
         })
-    return doors
+
+    # Openable doors with no paired frame (sliding doors, trapdoor): tag at their own pose.
+    for dr in doors:
+        k = (round(dr["xz"][0], 2), round(dr["xz"][1], 2), round(dr["y"], 2))
+        if k in paired_door_keys:
+            continue
+        table.append({"id": dr["id"], "name": dr["name"], "xz": dr["xz"], "y": dr["y"]})
+    return table
 
 
 def tag_doors(waypoints, planner, doors):
@@ -711,6 +798,44 @@ def _point_segment_distance(p, a, b):
     t = max(0.0, min(1.0, ((px - ax) * vx + (pz - az) * vz) / L2))
     cx, cz = ax + t * vx, az + t * vz
     return math.hypot(px - cx, pz - cz)
+
+
+def _ramp_interior_between(planner, prev, node):
+    """Ramp interior world points for the directed stair seam prev->node, or [] if this
+    pair has no baked ramp polyline. Mirrors the C# planner's stair-seam expansion so the
+    offline route (and the parity check) include the same intermediate stair waypoints."""
+    if prev[0] == node[0]:
+        return []
+    for nbr, _cost, meta in planner.edges_from.get(prev, ()):  # type: ignore[attr-defined]
+        if nbr == node and meta and meta.get("kind") == "stairs":
+            return meta.get("ramp_xyz") or []
+    return []
+
+
+def _ramp_point_to_dict(floor_label, xyz, planner):
+    """A ramp interior waypoint dict in the same shape as _node_to_dict, but positioned at
+    the ramp's true world XYZ (not a cell center) — the seam has no grid cell."""
+    return {
+        "floor": floor_label,
+        "cell": None,
+        "world_xz": [round(xyz[0], 4), round(xyz[2], 4)],
+        "wx": round(xyz[0], 4),
+        "wz": round(xyz[2], 4),
+        "floor_y": round(xyz[1], 4),
+    }
+
+
+def _waypoints_to_dicts(waypoints, planner):
+    """Serialize the smoothed cell-waypoint list, inserting ramp interior points at each
+    stair seam so the offline route walks the diagonal run (parity with the C# planner)."""
+    out = []
+    for i, w in enumerate(waypoints):
+        if i > 0:
+            seam_floor = waypoints[i - 1][0]  # interiors belong to the floor we depart
+            for xyz in _ramp_interior_between(planner, waypoints[i - 1], w):
+                out.append(_ramp_point_to_dict(seam_floor, xyz, planner))
+        out.append(_node_to_dict(w, planner))
+    return out
 
 
 def _node_to_dict(node, planner):
@@ -954,7 +1079,7 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
         "path_length_cells": len(path),
         "waypoint_count": len(waypoints),
         "total_cost_m": round(total_cost, 3),
-        "waypoints": [_node_to_dict(w, planner) for w in waypoints],
+        "waypoints": _waypoints_to_dicts(waypoints, planner),
         "segments": segments,
         "edge_kinds_used": sorted({e.get("kind", "walk") for e in edges if e}),
         "params": {
