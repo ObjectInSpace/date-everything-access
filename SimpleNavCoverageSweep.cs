@@ -94,6 +94,13 @@ namespace DateEverythingAccess
         private static readonly Queue<Vector3> _loopWindow = new Queue<Vector3>(LoopSampleWindow + 1);
         private static float _doorCloseObservedSince;  // 0 = not currently waiting on a door
 
+        // Per-leg retry: a person who stalls in-game just tries again, so a single transient
+        // stall/loop/budget shouldn't be recorded as a true failure. Retry the SAME leg (re-
+        // teleport to a clean source cell + re-plan) up to MaxLegAttempts times; only the final
+        // attempt's outcome is recorded, and any arrival short-circuits to a pass.
+        private const int MaxLegAttempts = 3;
+        private static int _currentAttempt;          // 1-based attempt number for the active leg
+
         // Per-floor verified-reachable bitmap. cells[ix * nz + iz] = true once any traversal
         // has put the player's cell-ring on that cell. Allocated lazily per floor.
         private static readonly Dictionary<string, bool[]> _verified =
@@ -358,26 +365,12 @@ namespace DateEverythingAccess
                     _failedSkipCounts[failedKey] = 0;
                 }
 
-                // Load the route. If load fails, record and move on.
-                string routePath = Path.Combine(_runDir, entry.route ?? "");
-                SimpleNavRoute route = SimpleNavRoute.Load(routePath);
-                if (route == null)
-                {
-                    _results.Add(new RouteResult
-                    {
-                        manifest_index = _entryIndex,
-                        floor = entry.floor,
-                        cell = entry.cell,
-                        outcome = "load_failed",
-                        name = entry.name,
-                    });
-                    _entryIndex++;
-                    continue;
-                }
-
-                _currentRoute = route;
+                // Object mode: re-plan this leg LIVE with the C# planner so the sweep
+                // validates the routes the game would actually pick (the offline route
+                // files are kept only for offline diffing). First attempt of this leg.
                 _currentManifestIndex = _entryIndex;
-                BeginCurrentRoute();
+                _currentAttempt = 1;
+                BeginCurrentLeg();
                 return;
             }
 
@@ -385,10 +378,12 @@ namespace DateEverythingAccess
             FinishSweep();
         }
 
-        private static void BeginCurrentRoute()
+        // Teleport to a clean source-object cell, re-plan to the dest object with the C#
+        // planner, and start driving. Shared by the first attempt and every retry.
+        private static void BeginCurrentLeg()
         {
-            // Teleport to the manifest's start. The route's first waypoint is the start cell,
-            // so we use that to avoid drift from earlier route's end positions.
+            ManifestEntry entry = _manifest.entries[_currentManifestIndex];
+
             if (BetterPlayerControl.Instance == null)
             {
                 RecordCurrentRouteAsException("no-player");
@@ -396,32 +391,141 @@ namespace DateEverythingAccess
                 return;
             }
 
-            Vector3 startWorld = _currentRoute.Waypoints[0];
+            // 1. Teleport to a clean stand-cell at the SOURCE object (high clearance, so the
+            //    player doesn't spawn hard against a collider/door and stall immediately).
+            if (!TryResolveCleanSourceCell(entry, out Vector3 startWorld))
+            {
+                // Source object can't be resolved / has no clean cell — fall back to the
+                // recorded source XZ so the leg still runs from a sane place.
+                startWorld = SourceFallbackWorld(entry);
+            }
             Transform playerTransform = BetterPlayerControl.Instance.transform;
             playerTransform.position = startWorld;
+            Rigidbody rb = BetterPlayerControl.Instance.GetComponent<Rigidbody>();
+            if (rb != null) { rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+
+            // Force-close all doors so an earlier leg's open door doesn't make this one easier
+            // (the route must open every door it needs itself).
+            ForceCloseAllDoors();
+
+            // 2. Resolve the live DEST object and plan to it exactly as in-game WalkTo does.
+            SimpleNavRoute route = PlanLegToObject(entry, startWorld);
+            if (route == null)
+            {
+                // C# planner refused (no_path / off-bake / door-missing-operable-cells). This
+                // is a planner verdict, not a drive stall — don't retry it; record and advance.
+                FinishLeg("no_path");
+                return;
+            }
+
+            _currentRoute = route;
 
             // Face the second waypoint so the first input doesn't waste a turn.
-            if (_currentRoute.Waypoints.Count > 1)
+            if (route.Waypoints != null && route.Waypoints.Count > 1)
             {
-                Vector3 toNext = _currentRoute.Waypoints[1] - startWorld;
+                Vector3 toNext = route.Waypoints[1] - startWorld;
                 toNext.y = 0f;
                 if (toNext.sqrMagnitude > 0.0001f)
                     playerTransform.rotation = Quaternion.LookRotation(toNext.normalized, Vector3.up);
             }
 
-            // Zero rigidbody so the player doesn't slide into the start.
-            Rigidbody rb = BetterPlayerControl.Instance.GetComponent<Rigidbody>();
-            if (rb != null)
-            {
-                rb.velocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
-            }
-
-            // Force-close all doors so an earlier run's open door doesn't make this run easier.
-            ForceCloseAllDoors();
-
             _phase = Phase.Teleporting;
             _nextActionTime = Time.unscaledTime + WaitAfterTeleportSeconds;
+        }
+
+        // Clean source-cell teleport: pick the highest-clearance navigable cell within the
+        // SOURCE object's interaction radius (so we don't spawn against a collider/door). The
+        // source object is `from_*` on the entry; resolve it live by name + position, then ask
+        // the planner for the cleanest nearby cell. Falls back to the recorded from_world_xz.
+        private static bool TryResolveCleanSourceCell(ManifestEntry entry, out Vector3 cleanWorld)
+        {
+            cleanWorld = Vector3.zero;
+            if (entry.from_world_xz == null || entry.from_world_xz.Length < 2) return false;
+
+            // Anchor: the source object's true transform if we can resolve it, else the recorded
+            // source stand-cell XZ. Y comes from the source floor frame for floor selection.
+            float ax = entry.from_world_xz[0];
+            float az = entry.from_world_xz[1];
+            float ay = SourceFloorY(entry);
+            InteractableObj src = ResolveLiveObject(entry.from_name, ax, ay, az);
+            if (src != null && src.transform != null)
+            {
+                ax = src.transform.position.x;
+                ay = src.transform.position.y;
+                az = src.transform.position.z;
+            }
+
+            float radius = entry.interaction_radius > 0.5f ? entry.interaction_radius : 1.0f;
+            return SimpleNavPlanner.TryGetCleanStandCell(ax, ay, az, radius, out cleanWorld);
+        }
+
+        private static float SourceFloorY(ManifestEntry entry)
+        {
+            if (entry.from_floor != null && _manifest.floor_frames != null &&
+                _manifest.floor_frames.TryGetValue(entry.from_floor, out FloorFrame f))
+                return f.floor_y;
+            return 0f;
+        }
+
+        private static Vector3 SourceFallbackWorld(ManifestEntry entry)
+        {
+            float x = entry.from_world_xz != null && entry.from_world_xz.Length > 0 ? entry.from_world_xz[0] : 0f;
+            float z = entry.from_world_xz != null && entry.from_world_xz.Length > 1 ? entry.from_world_xz[1] : 0f;
+            return new Vector3(x, SourceFloorY(entry), z);
+        }
+
+        // Resolve the live DEST object and plan to it with the C# planner exactly as the in-game
+        // WalkTo does — so the sweep validates the routes the game itself would choose. We resolve
+        // by name + nearest position because the object id in the manifest is a serialized id, not
+        // the runtime GetInstanceID the planner keys on; the live object's own InstanceID is used.
+        private static SimpleNavRoute PlanLegToObject(ManifestEntry entry, Vector3 startWorld)
+        {
+            float tx = entry.object_xyz != null && entry.object_xyz.Length > 0 ? entry.object_xyz[0] : 0f;
+            float ty = entry.object_xyz != null && entry.object_xyz.Length > 1 ? entry.object_xyz[1] : 0f;
+            float tz = entry.object_xyz != null && entry.object_xyz.Length > 2 ? entry.object_xyz[2] : 0f;
+
+            InteractableObj dst = ResolveLiveObject(entry.name, tx, ty, tz);
+            Vector3 targetPos = dst != null && dst.transform != null ? dst.transform.position : new Vector3(tx, ty, tz);
+            int goId = dst != null && dst.gameObject != null ? dst.gameObject.GetInstanceID() : 0;
+            string goName = dst != null && dst.gameObject != null ? dst.gameObject.name : entry.name;
+            float radius = entry.interaction_radius > 0.5f ? entry.interaction_radius : 1.0f;
+            bool isDatable = dst != null && !string.IsNullOrWhiteSpace(dst.inkFileName);
+            string inkFile = dst != null ? dst.inkFileName : null;
+
+            return SimpleNavPlanner.Plan(startWorld, targetPos, radius, goName, goId, isDatable, inkFile);
+        }
+
+        // Find the live InteractableObj whose name matches and whose transform is nearest the
+        // expected position. Names aren't unique, so position disambiguates the instance.
+        private static InteractableObj ResolveLiveObject(string name, float x, float y, float z)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            InteractableObj[] all = UnityEngine.Object.FindObjectsOfType<InteractableObj>();
+            InteractableObj best = null;
+            float bestD2 = float.PositiveInfinity;
+            for (int i = 0; i < all.Length; i++)
+            {
+                InteractableObj o = all[i];
+                if (o == null || o.gameObject == null) continue;
+                // Match the cleaned/base name OR the raw GameObject name — the manifest stores the
+                // picker's display name, which may be a stripped form of the GameObject name.
+                if (!NameMatches(o.gameObject.name, name)) continue;
+                Vector3 p = o.transform.position;
+                float dx = p.x - x, dy = p.y - y, dz = p.z - z;
+                float d2 = dx * dx + dy * dy + dz * dz;
+                if (d2 < bestD2) { bestD2 = d2; best = o; }
+            }
+            return best;
+        }
+
+        private static bool NameMatches(string goName, string manifestName)
+        {
+            if (string.IsNullOrEmpty(goName) || string.IsNullOrEmpty(manifestName)) return false;
+            if (string.Equals(goName, manifestName, StringComparison.OrdinalIgnoreCase)) return true;
+            // The manifest name is the picker's stripped label; accept a contains-match either way
+            // so "glass" matches "glass_MODEL_UPDATE" and stripped forms match their raw names.
+            return goName.IndexOf(manifestName, StringComparison.OrdinalIgnoreCase) >= 0
+                || manifestName.IndexOf(goName, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static void StepTeleporting()
@@ -436,7 +540,7 @@ namespace DateEverythingAccess
             _doorCloseObservedSince = 0f;
             if (!AccessibilityWatcher.TryStartCoverageSweepRoute(_currentRoute, out string detail))
             {
-                FinishRoute("input_failed:" + detail);
+                FinishLeg("input_failed:" + detail);
                 return;
             }
 
@@ -451,7 +555,7 @@ namespace DateEverythingAccess
         {
             if (BetterPlayerControl.Instance == null)
             {
-                FinishRoute("exception:no-player");
+                FinishLeg("exception:no-player");
                 return;
             }
 
@@ -463,18 +567,25 @@ namespace DateEverythingAccess
 
             // 1. Arrival vs stall: did the route succeed, or did the autowalk give up?
             // Both end with HasActiveRoute=false; disambiguate by checking proximity to target.
-            // HasArrivedAtRouteTarget uses target XZ + clamped interaction radius, matching the
-            // planner's goal-cell expansion.
-            bool arrived = SimpleNavBridge.HasArrivedAtRouteTarget(playerPos);
-            if (arrived)
+            //
+            // SWEEP ARRIVAL = reaching the route's final waypoint (the goal STAND-CELL), NOT
+            // SimpleNavBridge.HasArrivedAtRouteTarget. That shared method's object-target branch
+            // also requires being within the OBJECT TRANSFORM's interaction radius — but sweep
+            // objects sit on shelves / walls / beds whose transform is up to ~12m (median ~7.4m)
+            // from the nearest reachable floor cell, so 251/757 routes can NEVER satisfy it even
+            // standing perfectly on the goal cell. That made every driven leg fall through to the
+            // progress-timeout and log "stalled" (arrived=0/1045). The sweep's question is "can
+            // the player REACH the navigable stand-cell next to this object", i.e. the final
+            // waypoint the planner already placed at the closest reachable floor. Use that.
+            if (HasReachedGoalWaypoint(playerPos))
             {
-                FinishRoute("arrived");
+                FinishLeg("arrived");
                 return;
             }
             if (!SimpleNavBridge.HasActiveRoute)
             {
-                // Autowalk ended the step but we're not at the target → it gave up (stall).
-                FinishRoute("stalled");
+                // Autowalk ended the step but we're not at the goal cell → it gave up (stall).
+                FinishLeg("stalled");
                 return;
             }
 
@@ -489,7 +600,7 @@ namespace DateEverythingAccess
                     if (_doorCloseObservedSince <= 0f) _doorCloseObservedSince = Time.unscaledTime;
                     else if (Time.unscaledTime - _doorCloseObservedSince > DoorOpenTimeoutSeconds)
                     {
-                        FinishRoute("door_failed:" + (door.gameObject != null ? door.gameObject.name : "<null>"));
+                        FinishLeg("door_failed:" + (door.gameObject != null ? door.gameObject.name : "<null>"));
                         return;
                     }
                 }
@@ -512,7 +623,7 @@ namespace DateEverythingAccess
                 while (_loopWindow.Count > LoopSampleWindow) _loopWindow.Dequeue();
                 if (_loopWindow.Count == LoopSampleWindow && AllSamplesWithinRadius(_loopWindow, LoopRadiusMeters))
                 {
-                    FinishRoute("looped");
+                    FinishLeg("looped");
                     return;
                 }
             }
@@ -520,7 +631,7 @@ namespace DateEverythingAccess
             // 4. Budget ceiling — safety net.
             if (Time.unscaledTime - _routeStartUnscaledTime > _routeBudgetSeconds)
             {
-                FinishRoute("budget");
+                FinishLeg("budget");
                 return;
             }
 
@@ -530,7 +641,58 @@ namespace DateEverythingAccess
             // _lastAutoWalkProgressTime detector is the stall signal.
         }
 
-        private static void FinishRoute(string outcome)
+        // Sweep arrival: the player is within one cell-and-a-bit of the route's FINAL waypoint
+        // (the goal stand-cell), on the same floor level. XZ-only proximity plus a Y gate that
+        // rejects mid-stair poses (player still descending reads close in XZ but is meters up in
+        // Y). Deliberately independent of the object transform — see the StepRunning note.
+        private const float GoalWaypointArrivalRadiusM = 1.35f;   // mirrors WaypointArrivalRadius
+        private const float GoalWaypointMaxYDeltaM = 1.5f;        // mirrors ArrivalMaxYDeltaM
+
+        private static bool HasReachedGoalWaypoint(Vector3 playerPos)
+        {
+            if (_currentRoute == null || _currentRoute.Waypoints == null || _currentRoute.Waypoints.Count == 0)
+                return false;
+            Vector3 goal = _currentRoute.Waypoints[_currentRoute.Waypoints.Count - 1];
+            if (Mathf.Abs(playerPos.y - goal.y) > GoalWaypointMaxYDeltaM)
+                return false;
+            float dx = goal.x - playerPos.x;
+            float dz = goal.z - playerPos.z;
+            return (dx * dx + dz * dz) <= GoalWaypointArrivalRadiusM * GoalWaypointArrivalRadiusM;
+        }
+
+        // Retry gate: classify the leg outcome and either retry the SAME leg (transient drive
+        // failure, attempts remain) or record the final result + advance. Arrivals and planner
+        // verdicts (no_path / input_failed / exception) are recorded immediately — retrying a
+        // planner refusal or a clean success is pointless.
+        private static bool IsRetryableOutcome(string outcome)
+        {
+            if (string.IsNullOrEmpty(outcome)) return false;
+            return outcome == "stalled" || outcome == "looped" || outcome == "budget"
+                   || outcome.StartsWith("door_failed");
+        }
+
+        private static void FinishLeg(string outcome)
+        {
+            // Tear down the autowalk for this attempt regardless of what we do next.
+            try { AccessibilityWatcher.StopCoverageSweepRoute(); } catch { }
+
+            if (outcome != "arrived" && IsRetryableOutcome(outcome) && _currentAttempt < MaxLegAttempts)
+            {
+                if (Main.Log != null)
+                    Main.Log.LogInfo("SimpleNavCoverageSweep retry idx=" + _currentManifestIndex +
+                        " attempt=" + _currentAttempt + "/" + MaxLegAttempts + " outcome=" + outcome +
+                        " — re-teleport + re-plan");
+                _currentAttempt++;
+                _currentRoute = null;
+                BeginCurrentLeg();   // re-teleport to a clean source cell, re-plan, re-drive
+                return;
+            }
+
+            RecordLegResult(outcome);
+            AdvanceToNextEntry();
+        }
+
+        private static void RecordLegResult(string outcome)
         {
             var entry = _manifest.entries[_currentManifestIndex];
             Vector3 endPos = BetterPlayerControl.Instance != null
@@ -569,7 +731,8 @@ namespace DateEverythingAccess
             if (Main.Log != null)
                 Main.Log.LogInfo("SimpleNavCoverageSweep result idx=" + _currentManifestIndex +
                     " floor=" + entry.floor + " cell=(" + entry.cell[0] + "," + entry.cell[1] + ")" +
-                    " outcome=" + outcome + " elapsed=" + (Time.unscaledTime - _routeStartUnscaledTime).ToString("0.0") +
+                    " outcome=" + outcome + " attempts=" + _currentAttempt + "/" + MaxLegAttempts +
+                    " elapsed=" + (Time.unscaledTime - _routeStartUnscaledTime).ToString("0.0") +
                     " start=" + startPos.ToString("F2") + " end=" + endPos.ToString("F2") +
                     " moved=" + displacement.ToString("0.00") + "m");
 
@@ -581,9 +744,6 @@ namespace DateEverythingAccess
             {
                 StampFailureCell(BetterPlayerControl.Instance.transform.position);
             }
-
-            try { AccessibilityWatcher.StopCoverageSweepRoute(); } catch { }
-            AdvanceToNextEntry();
         }
 
         private static void RecordCurrentRouteAsException(string detail)
@@ -1569,6 +1729,18 @@ namespace DateEverythingAccess
             // Object-mode only: the human-readable object name this stand-cell serves
             // (mode="objects"). Null/absent for cell-targeted (walk/dispersed) manifests.
             [DataMember] public string name;
+            // Object-mode C#-replan inputs: the DEST object's stable scene id, true
+            // transform position, and interaction radius. The sweep resolves the live
+            // InteractableObj by these and re-plans with SimpleNavPlanner.Plan so it
+            // validates the C# planner's routes (not the offline ones). from_* describe
+            // the SOURCE object the leg teleports to before planning.
+            [DataMember] public long object_id;
+            [DataMember] public float[] object_xyz;
+            [DataMember] public float interaction_radius;
+            [DataMember] public string from_floor;
+            [DataMember] public int[] from_cell;
+            [DataMember] public float[] from_world_xz;
+            [DataMember] public string from_name;
         }
 #pragma warning restore CS0649
 
