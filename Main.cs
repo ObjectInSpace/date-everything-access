@@ -14,7 +14,7 @@ namespace DateEverythingAccess
     {
         internal const string Guid = "com.amock.dateeverythingaccess";
         internal const string Name = "Date Everything Access";
-        internal const string Version = "0.5.0";
+        internal const string Version = "0.6.0";
     }
 
     [BepInPlugin(PluginMetadata.Guid, PluginMetadata.Name, PluginMetadata.Version)]
