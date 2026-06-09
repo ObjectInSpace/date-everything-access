@@ -820,11 +820,18 @@ def is_statically_pickable(item):
 
 
 def resolve_object_node(planner, item):
-    """Snap one interactable to its interaction stand-cell, mirroring plan()'s target
-    resolution: floor-by-Y, then the nearest navigable cell within the (clamped)
-    interaction radius, falling back to nearest-navigable search. Returns
-    (floor_label, ix, iz) or None when the object sits off every navigable floor (e.g.
-    walled off behind a gate the current door/state-wall params keep closed)."""
+    """Resolve one interactable to its interaction stand-cell set, mirroring plan()'s
+    target resolution: floor-by-Y, then ALL navigable cells within the (clamped)
+    interaction radius, falling back to a single nearest-navigable cell.
+
+    Returns (floor_label, representative_cell, goal_cells) or None when the object sits
+    off every navigable floor. representative_cell is the cell nearest the object centre
+    (used for deduping + a stable node id); goal_cells is the FULL candidate set so the
+    route planner can target whichever one is actually reachable from the start — a
+    closer cell may be marooned inside furniture footprint-rasterization while a slightly
+    farther cell on the same object is on the reachable floor. Snapping to the single
+    nearest cell (the old behaviour) produced ~140 false no_path objects whose real
+    stand-spot was 0.7–2.9m away and reachable. goal_cells are (ix, iz) tuples."""
     pos = item.get("Position") or {}
     tx, ty, tz = pos.get("x"), pos.get("y"), pos.get("z")
     if tx is None or ty is None or tz is None:
@@ -836,15 +843,15 @@ def resolve_object_node(planner, item):
     radius = item.get("InteractionRadius", 1.0) or 1.0
     radius = max(MIN_INTERACTION_RADIUS_M, min(radius, MAX_INTERACTION_RADIUS_M))
     goals = goal_cells_around(floor, tx, tz, radius)
-    if goals:
-        # Stand-cell = the navigable cell nearest the object centre (deterministic).
-        best = min(goals, key=lambda c: (floor.cell_to_world(*c)[0] - tx) ** 2 +
-                                        (floor.cell_to_world(*c)[1] - tz) ** 2)
-        return (tfloor, best[0], best[1])
-    n = floor.nearest_navigable(tx, tz, max_radius_m=NEAREST_NAVIGABLE_SEARCH_M)
-    if n is None:
-        return None
-    return (tfloor, n[0], n[1])
+    if not goals:
+        n = floor.nearest_navigable(tx, tz, max_radius_m=NEAREST_NAVIGABLE_SEARCH_M)
+        if n is None:
+            return None
+        goals = [(n[0], n[1])]
+    # Representative = the navigable cell nearest the object centre (deterministic).
+    rep = min(goals, key=lambda c: (floor.cell_to_world(*c)[0] - tx) ** 2 +
+                                    (floor.cell_to_world(*c)[1] - tz) ** 2)
+    return (tfloor, rep, goals)
 
 
 def object_sweep_nodes(planner, items):
@@ -854,10 +861,14 @@ def object_sweep_nodes(planner, items):
     redundancy) — the merged node carries all member object names so the report can
     attribute a covered cell back to every object it serves.
 
-    Returns a list of dicts: {floor, cell:(ix,iz), names:[...], object_ids:[...],
-    representative:item}. Objects that resolve to no navigable cell (off-floor or
-    gate-blocked under the current door/state-wall params) are returned separately as
-    `unreachable` so the manifest can report them as no_path without a drive."""
+    Returns a list of dicts: {floor, cell:(ix,iz), goal_cells:[(ix,iz),...],
+    names:[...], object_ids:[...], representative:item}. `cell` is the representative
+    stand-cell (used for dedup + node id); `goal_cells` is the union of every member
+    object's candidate stand-cells, so the route planner targets the whole set and A*
+    finds whichever cell is reachable. Objects that resolve to no navigable cell
+    (off-floor or gate-blocked under the current door/state-wall params) are returned
+    separately as `unreachable` so the manifest can report them as no_path without a
+    drive."""
     by_cell = {}
     unreachable = []
     for item in items:
@@ -869,11 +880,20 @@ def object_sweep_nodes(planner, items):
             unreachable.append({"name": name, "object_id": item.get("GameObjectId"),
                                 "position": item.get("Position")})
             continue
-        slot = by_cell.setdefault(node, {"floor": node[0], "cell": (node[1], node[2]),
-                                         "names": [], "object_ids": [], "representative": item})
+        floor_label, rep, goals = node
+        key = (floor_label, rep)
+        slot = by_cell.setdefault(key, {"floor": floor_label, "cell": rep,
+                                        "goal_cells": set(), "names": [],
+                                        "object_ids": [], "representative": item})
+        slot["goal_cells"].update(goals)
         slot["names"].append(name)
         slot["object_ids"].append(item.get("GameObjectId"))
-    return list(by_cell.values()), unreachable
+    # Freeze goal_cells to a sorted list for deterministic output.
+    result = []
+    for slot in by_cell.values():
+        slot["goal_cells"] = sorted(slot["goal_cells"])
+        result.append(slot)
+    return result, unreachable
 
 
 # ---------- top-level plan() ----------
