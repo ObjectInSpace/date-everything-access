@@ -227,16 +227,17 @@ namespace DateEverythingAccess
 
             try
             {
-                RegisterHotkeyOrThrow(HelpHotkeyId, VkF1, "F1");
-                RegisterHotkeyOrThrow(DebugHotkeyId, VkF9, "F9");
-                RegisterHotkeyOrThrow(SettingsHotkeyId, ModControl | ModNoRepeat, VkF9, "Ctrl+F9");
-                RegisterHotkeyOrThrow(RepeatSpeechHotkeyId, ModControl | ModNoRepeat, VkF1, "Ctrl+F1");
-                RegisterHotkeyOrThrow(DescribeCurrentRoomHotkeyId, VkF6, "F6");
-                RegisterHotkeyOrThrow(NavigateToObjectiveHotkeyId, ModControl | ModNoRepeat, VkF6, "Ctrl+F6");
-                RegisterHotkeyOrThrow(SelectNavigationTargetHotkeyId, ModControl | ModShift | ModNoRepeat, VkF6, "Ctrl+Shift+F6");
-                RegisterHotkeyOrThrow(AutoWalkHotkeyId, ModControl | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+F6");
-                RegisterHotkeyOrThrow(CoverageSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF8, "Ctrl+Alt+Shift+F8");
-                Logger.LogInfo("Background hotkey message loop active");
+                int registered = 0;
+                registered += TryRegisterHotkey(HelpHotkeyId, VkF1, "F1") ? 1 : 0;
+                registered += TryRegisterHotkey(DebugHotkeyId, VkF9, "F9") ? 1 : 0;
+                registered += TryRegisterHotkey(SettingsHotkeyId, ModControl | ModNoRepeat, VkF9, "Ctrl+F9") ? 1 : 0;
+                registered += TryRegisterHotkey(RepeatSpeechHotkeyId, ModControl | ModNoRepeat, VkF1, "Ctrl+F1") ? 1 : 0;
+                registered += TryRegisterHotkey(DescribeCurrentRoomHotkeyId, VkF6, "F6") ? 1 : 0;
+                registered += TryRegisterHotkey(NavigateToObjectiveHotkeyId, ModControl | ModNoRepeat, VkF6, "Ctrl+F6") ? 1 : 0;
+                registered += TryRegisterHotkey(SelectNavigationTargetHotkeyId, ModControl | ModShift | ModNoRepeat, VkF6, "Ctrl+Shift+F6") ? 1 : 0;
+                registered += TryRegisterHotkey(AutoWalkHotkeyId, ModControl | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+F6") ? 1 : 0;
+                registered += TryRegisterHotkey(CoverageSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF8, "Ctrl+Alt+Shift+F8") ? 1 : 0;
+                Logger.LogInfo("Background hotkey message loop active (" + registered + " hotkey(s) registered)");
 
                 NativeMessage message;
                 while (_hotkeyThreadRunning)
@@ -270,21 +271,26 @@ namespace DateEverythingAccess
             }
         }
 
-        private void RegisterHotkeyOrThrow(int id, uint virtualKey, string label)
+        private bool TryRegisterHotkey(int id, uint virtualKey, string label)
         {
-            RegisterHotkeyOrThrow(id, ModNoRepeat, virtualKey, label);
+            return TryRegisterHotkey(id, ModNoRepeat, virtualKey, label);
         }
 
-        private void RegisterHotkeyOrThrow(int id, uint modifiers, uint virtualKey, string label)
+        private bool TryRegisterHotkey(int id, uint modifiers, uint virtualKey, string label)
         {
             if (RegisterHotKey(IntPtr.Zero, id, modifiers, virtualKey))
             {
                 Logger.LogInfo("Registered hotkey: " + label);
-                return;
+                return true;
             }
 
             int error = Marshal.GetLastWin32Error();
-            throw new InvalidOperationException("RegisterHotKey failed for " + label + " with Win32 error " + error);
+            // Error 1409 (ERROR_HOTKEY_ALREADY_REGISTERED) means another app owns this
+            // combo. Skip just this binding and keep the thread + message loop alive so
+            // the remaining hotkeys still work, rather than tearing down all of them.
+            Logger.LogWarning("Could not register hotkey " + label + " (Win32 error " + error +
+                "); skipping it. Other hotkeys are unaffected.");
+            return false;
         }
 
         private void ProcessRegisteredHotkey(int hotkeyId)
