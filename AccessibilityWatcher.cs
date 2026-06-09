@@ -367,6 +367,12 @@ namespace DateEverythingAccess
         // encountered/datable filter. So a flat Y gate cleanly separates crawlspace from house.
         private const float CrawlspaceCeilingY = -3.5f;
 
+        // Two same-labelled interactables within this 3D distance (metres) are treated as the
+        // same physical object and collapsed in the picker. Sized to span an object's own
+        // interactable components (mesh + interaction proxy on one prop) without reaching a
+        // neighbouring prop that happens to share a generic name.
+        private const float DuplicateObjectMergeRadiusSq = 1.5f * 1.5f;
+
         private static readonly HashSet<string> _examinedObjectKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // Full, unfiltered candidate set built on open. The displayed list (_knownObjectView) is
         // derived from this each time a filter/sort toggle changes, so toggling never re-scans
@@ -3293,6 +3299,7 @@ namespace DateEverythingAccess
 
             string candidateId = candidate.Id;
             string candidateInternal = candidate.InternalName();
+            Vector3 candidatePos = candidate.transform != null ? candidate.transform.position : Vector3.zero;
             for (int i = 0; i < targets.Count; i++)
             {
                 KnownObjectTarget existing = targets[i];
@@ -3309,6 +3316,20 @@ namespace DateEverythingAccess
                 if (!string.IsNullOrEmpty(candidateInternal) &&
                     string.Equals(existing.Interactable.InternalName(), candidateInternal, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(existing.Label, label, StringComparison.OrdinalIgnoreCase))
+                {
+                    equivalent = existing;
+                    return true;
+                }
+
+                // Same physical object reached through two interactable components (e.g. a
+                // "Bathtub" interactable plus the raw "SM_Bathtub" mesh, which now clean to the
+                // same label). They sit at the same spot, so a same-label + co-located match
+                // collapses the duplicate WITHOUT merging genuinely distinct same-named objects
+                // (the 48 Books, 22 Frames, etc. are spread across the house and stay separate).
+                if (!string.IsNullOrEmpty(label) &&
+                    string.Equals(existing.Label, label, StringComparison.OrdinalIgnoreCase) &&
+                    existing.Interactable.transform != null &&
+                    (existing.Interactable.transform.position - candidatePos).sqrMagnitude <= DuplicateObjectMergeRadiusSq)
                 {
                     equivalent = existing;
                     return true;
@@ -7644,6 +7665,16 @@ namespace DateEverythingAccess
 
         private static string NormalizeObjectIdentifierName(string value)
         {
+            // Object names that reach here are raw Unity GameObject names used as a last-resort
+            // label (the game gave us no human-facing mainText). Strip the model-authoring noise
+            // first so the player hears "Bathtub", not "SM Bathtub" or "SM Clock MODEL UPDATE":
+            //   - "SM_" / "SK_" static- and skeletal-mesh prefixes
+            //   - the "_MODEL_UPDATE" re-authoring marker (and its "MODEL_UPDATE2" variant)
+            //   - Unity's duplicate-instance suffix " (13)"
+            // This runs on the underscore-joined raw value, BEFORE NormalizeIdentifierName turns
+            // "_" into spaces, so the token boundaries are still intact.
+            value = StripModelAuthoringTokens(value);
+
             string normalized = NormalizeIdentifierName(value);
             if (string.IsNullOrEmpty(normalized))
                 return null;
@@ -7657,6 +7688,31 @@ namespace DateEverythingAccess
             }
 
             return normalized.Trim();
+        }
+
+        // Removes mesh-authoring decoration from a raw Unity object name. Operates on the
+        // underscore-joined form (e.g. "SM_Clock_MODEL_UPDATE", "SM_Bush (43)") and leaves a
+        // clean stem ("Clock", "Bush"). Returns the input unchanged when there is nothing to
+        // strip, and never returns an empty/whitespace stem (falls back to the original).
+        private static string StripModelAuthoringTokens(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return value;
+
+            string stripped = value;
+
+            // Unity duplicate-instance suffix, e.g. "SM_Bush (43)".
+            stripped = Regex.Replace(stripped, @"\s*\(\d+\)\s*$", "");
+
+            // "_MODEL_UPDATE", "_MODEL_UPDATE2" re-authoring marker anywhere in the name.
+            stripped = Regex.Replace(stripped, @"_MODEL_UPDATE\d*", "", RegexOptions.IgnoreCase);
+
+            // Leading static-/skeletal-mesh prefix.
+            stripped = Regex.Replace(stripped, @"^(?:SM|SK)_+", "", RegexOptions.IgnoreCase);
+
+            stripped = stripped.Trim().Trim('_').Trim();
+
+            return string.IsNullOrWhiteSpace(stripped) ? value : stripped;
         }
 
         private static bool IsActionStyleObjectLabel(string label)
