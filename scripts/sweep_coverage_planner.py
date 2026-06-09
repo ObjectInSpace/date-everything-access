@@ -62,22 +62,37 @@ def stratified_targets(floor, grid_m):
     return targets
 
 
-def plan_to_cell(planner, start_node, target_floor_label, target_ix, target_iz, target_stanza=None):
-    """Plan a route to a specific navigable cell. Returns the same dict shape as
+def plan_to_cell(planner, start_node, target_floor_label, target_ix, target_iz,
+                 target_stanza=None, goal_cells=None):
+    """Plan a route to a navigable cell (or cell set). Returns the same dict shape as
     Plan-ObjectRoute.plan() but with a synthetic target stanza, or a no_path entry.
 
     target_stanza lets the caller supply a richer target description (e.g. an object
-    node's name + merged members); when omitted a generic sweep_cell stanza is used."""
+    node's name + merged members); when omitted a generic sweep_cell stanza is used.
+
+    goal_cells (optional) is the FULL set of acceptable arrival cells — for object
+    targets this is every stand-cell around the object's interaction radius. A* accepts
+    whichever is reachable, so an object isn't reported no_path just because its single
+    nearest cell is marooned inside furniture footprint-rasterization while another of
+    its stand-cells is on the reachable floor. (target_ix, target_iz) is the
+    representative used for arrival-distance heuristic + coverage stamping. When
+    goal_cells is None, falls back to the single (target_ix, target_iz) goal."""
     target_floor = planner.floors[target_floor_label]
-    if not target_floor.navigable(target_ix, target_iz):
-        return {"status": "target_not_navigable"}
     wx, wz = target_floor.cell_to_world(target_ix, target_iz)
-    goal_node = (target_floor_label, target_ix, target_iz)
-    if start_node == goal_node:
+    if goal_cells:
+        goal_nodes = [(target_floor_label, ix, iz) for (ix, iz) in goal_cells
+                      if target_floor.navigable(ix, iz)]
+    else:
+        if not target_floor.navigable(target_ix, target_iz):
+            return {"status": "target_not_navigable"}
+        goal_nodes = [(target_floor_label, target_ix, target_iz)]
+    if not goal_nodes:
+        return {"status": "target_not_navigable"}
+    if start_node in goal_nodes:
         return {"status": "trivially_at_target"}
 
     path, total_cost, edges = planner.astar(
-        start_node, [goal_node], target_floor_label, wx, wz
+        start_node, goal_nodes, target_floor_label, wx, wz
     )
     if path is None:
         return {"status": "no_path"}
@@ -98,7 +113,7 @@ def plan_to_cell(planner, start_node, target_floor_label, target_ix, target_iz, 
         "status": "ok",
         "target": target_stanza,
         "start": _mod._node_to_dict(start_node, planner),
-        "goal_cell_count": 1,
+        "goal_cell_count": len(goal_nodes),
         "path_length_cells": len(path),
         "waypoint_count": len(waypoints),
         "total_cost_m": round(total_cost, 3),
@@ -369,19 +384,30 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
             "MemberNames": sorted(set(nd["names"])),
             "MemberObjectIds": nd["object_ids"],
         }
-        result = plan_to_cell(planner, start_node, floor_label, ix, iz, target_stanza=target_stanza)
+        result = plan_to_cell(planner, start_node, floor_label, ix, iz,
+                               target_stanza=target_stanza, goal_cells=nd["goal_cells"])
         status = result["status"]
         counts[status] = counts.get(status, 0) + 1
+        # On success the route may have arrived at a DIFFERENT stand-cell than the
+        # representative (A* chose whichever goal cell was reachable). Use that reached
+        # cell for the entry + route filename + coverage stamping so the runtime stamps
+        # the spot the player actually ends on; fall back to the representative otherwise.
+        reached_ix, reached_iz = ix, iz
+        if status == "ok" and result.get("waypoints"):
+            last = result["waypoints"][-1]
+            rf = planner.floors[floor_label]
+            reached_ix, reached_iz = rf.world_to_cell(last["wx"], last["wz"])
+        rwx, rwz = planner.floors[floor_label].cell_to_world(reached_ix, reached_iz)
         entry = {
             "floor": floor_label,
-            "cell": [ix, iz],
-            "world_xz": [round(wx, 4), round(wz, 4)],
+            "cell": [reached_ix, reached_iz],
+            "world_xz": [round(rwx, 4), round(rwz, 4)],
             "status": status,
             "name": target_stanza["Name"],
             "member_count": len(target_stanza["MemberNames"]),
         }
         if status == "ok":
-            route_name = f"route.{floor_label}.{ix}.{iz}.json"
+            route_name = f"route.{floor_label}.{reached_ix}.{reached_iz}.json"
             (out_dir / route_name).write_text(json.dumps(result, indent=2), encoding="utf-8")
             entry["route"] = route_name
             entry["cost_m"] = result["total_cost_m"]
