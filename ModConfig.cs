@@ -50,6 +50,7 @@ namespace DateEverythingAccess
         private static ConfigEntry<bool> _readNearbyObjects;
         private static ConfigEntry<bool> _readStatusChanges;
         private static ConfigEntry<bool> _captureNavRoutes;
+        private static ConfigEntry<string> _coverageSweepRunId;
         private static InputModeHandle _inputModeHandle;
         private static volatile bool _menuOpen;
         private static int _currentSettingIndex;
@@ -131,12 +132,26 @@ namespace DateEverythingAccess
                 "BepInEx/plugins/c_sharp_routes/route_<unix>_<idx>.json. Used by " +
                 "scripts/check_planner_parity.py to compare runtime planning against the " +
                 "Python planner. Off by default — turn on briefly to gather captures, then off.");
+            _coverageSweepRunId = config.Bind("Diagnostics", "CoverageSweepRunId", "default",
+                "Which artifacts/navigation/sweep/<run-id>/ manifest the coverage-sweep hotkey " +
+                "(Ctrl+Alt+Shift+F8) drives. 'default' = the walk-mode cell sweep; 'objects' = the " +
+                "object-reachability sweep (one route per deduped object stand-cell).");
         }
 
         /// <summary>
         /// When true, SimpleNavPlanner writes each plan output to disk for the offline parity check.
         /// </summary>
         public static bool CaptureNavRoutes => _captureNavRoutes != null && _captureNavRoutes.Value;
+
+        /// <summary>
+        /// The sweep run-id (subdirectory under artifacts/navigation/sweep/) the coverage-sweep
+        /// hotkey drives. Defaults to "default" when unset. Set to "objects" for the
+        /// object-reachability sweep.
+        /// </summary>
+        public static string CoverageSweepRunId =>
+            _coverageSweepRunId != null && !string.IsNullOrWhiteSpace(_coverageSweepRunId.Value)
+                ? _coverageSweepRunId.Value
+                : "default";
 
         /// <summary>
         /// Opens or closes the spoken settings menu.

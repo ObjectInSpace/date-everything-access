@@ -150,7 +150,10 @@ namespace DateEverythingAccess
 
         private static void StartSweep()
         {
-            string runId = "default";
+            // Run-id selects which sweep manifest to drive: "default" (walk-mode cell sweep)
+            // or "objects" (object-reachability sweep). Configurable via ModConfig so the same
+            // hotkey can run either without a rebuild.
+            string runId = ModConfig.CoverageSweepRunId;
             string sweepBase = Environment.GetEnvironmentVariable("COVERAGE_SWEEP_DIR");
             if (string.IsNullOrEmpty(sweepBase) || !Directory.Exists(sweepBase))
                 sweepBase = DefaultSweepSourceDir;
@@ -211,8 +214,11 @@ namespace DateEverythingAccess
 
             _phase = Phase.BetweenRoutes;
             _nextActionTime = 0f;
-            if (Main.Log != null) Main.Log.LogInfo("SimpleNavCoverageSweep: started, entries=" + _manifest.entries.Length);
-            ScreenReader.Say("Coverage sweep started, " + _manifest.entries.Length + " routes", remember: false);
+            bool objectMode = string.Equals(_manifest.mode, "objects", StringComparison.OrdinalIgnoreCase);
+            if (Main.Log != null) Main.Log.LogInfo("SimpleNavCoverageSweep: started, mode=" +
+                (_manifest.mode ?? "dispersed") + " entries=" + _manifest.entries.Length);
+            ScreenReader.Say((objectMode ? "Object reachability sweep started, " : "Coverage sweep started, ")
+                + _manifest.entries.Length + (objectMode ? " objects" : " routes"), remember: false);
         }
 
         private static void InitWalkMode()
@@ -305,6 +311,7 @@ namespace DateEverythingAccess
                         floor = entry.floor,
                         cell = entry.cell,
                         outcome = entry.status, // e.g. "no_path"
+                        name = entry.name,
                     });
                     _entryIndex++;
                     continue;
@@ -319,6 +326,7 @@ namespace DateEverythingAccess
                         floor = entry.floor,
                         cell = entry.cell,
                         outcome = "skipped_already_covered",
+                        name = entry.name,
                     });
                     _entryIndex++;
                     continue;
@@ -339,6 +347,7 @@ namespace DateEverythingAccess
                             floor = entry.floor,
                             cell = entry.cell,
                             outcome = "skipped_known_blocker:" + failedKey,
+                            name = entry.name,
                         });
                         _entryIndex++;
                         continue;
@@ -360,6 +369,7 @@ namespace DateEverythingAccess
                         floor = entry.floor,
                         cell = entry.cell,
                         outcome = "load_failed",
+                        name = entry.name,
                     });
                     _entryIndex++;
                     continue;
@@ -539,6 +549,7 @@ namespace DateEverythingAccess
                 outcome = outcome,
                 cost_m = entry.cost_m,
                 elapsed_s = Time.unscaledTime - _routeStartUnscaledTime,
+                name = entry.name,
             };
             if (outcome != "arrived")
             {
@@ -585,6 +596,7 @@ namespace DateEverythingAccess
                 floor = entry.floor,
                 cell = entry.cell,
                 outcome = "exception:" + detail,
+                name = entry.name,
             });
         }
 
@@ -1398,7 +1410,12 @@ namespace DateEverythingAccess
                         sw.Write(",\"floor\":\""); sw.Write(r.floor ?? "");
                         sw.Write("\",\"cell\":["); sw.Write(r.cell != null && r.cell.Length > 0 ? r.cell[0] : 0);
                         sw.Write(","); sw.Write(r.cell != null && r.cell.Length > 1 ? r.cell[1] : 0);
-                        sw.Write("],\"outcome\":\""); sw.Write(JsonEscape(r.outcome ?? ""));
+                        sw.Write("]");
+                        if (!string.IsNullOrEmpty(r.name))
+                        {
+                            sw.Write(",\"name\":\""); sw.Write(JsonEscape(r.name)); sw.Write("\"");
+                        }
+                        sw.Write(",\"outcome\":\""); sw.Write(JsonEscape(r.outcome ?? ""));
                         sw.Write("\",\"cost_m\":"); sw.Write(r.cost_m.ToString("0.000", ci));
                         sw.Write(",\"elapsed_s\":"); sw.Write(r.elapsed_s.ToString("0.000", ci));
                         if (!string.IsNullOrEmpty(r.blocker_path))
@@ -1549,6 +1566,9 @@ namespace DateEverythingAccess
             [DataMember] public string status;
             [DataMember] public string route;
             [DataMember] public float cost_m;
+            // Object-mode only: the human-readable object name this stand-cell serves
+            // (mode="objects"). Null/absent for cell-targeted (walk/dispersed) manifests.
+            [DataMember] public string name;
         }
 #pragma warning restore CS0649
 
@@ -1572,6 +1592,9 @@ namespace DateEverythingAccess
             public string outcome;
             public float cost_m;
             public float elapsed_s;
+            // Object-mode: the object name this entry targets, copied from the manifest
+            // entry so sweep_results.json names the object, not just a cell. Null otherwise.
+            public string name;
             // Populated only for non-arrival outcomes when ProbeRuntimeBlocker found a collider.
             // Mode is one of "footprint" | "state" | "classification" | "unknown" — a coarse
             // triage hint, not a final verdict. See RuntimeBlockerProbe + the offline triage tool.

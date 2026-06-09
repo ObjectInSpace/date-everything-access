@@ -62,9 +62,12 @@ def stratified_targets(floor, grid_m):
     return targets
 
 
-def plan_to_cell(planner, start_node, target_floor_label, target_ix, target_iz):
+def plan_to_cell(planner, start_node, target_floor_label, target_ix, target_iz, target_stanza=None):
     """Plan a route to a specific navigable cell. Returns the same dict shape as
-    Plan-ObjectRoute.plan() but with a synthetic target stanza, or a no_path entry."""
+    Plan-ObjectRoute.plan() but with a synthetic target stanza, or a no_path entry.
+
+    target_stanza lets the caller supply a richer target description (e.g. an object
+    node's name + merged members); when omitted a generic sweep_cell stanza is used."""
     target_floor = planner.floors[target_floor_label]
     if not target_floor.navigable(target_ix, target_iz):
         return {"status": "target_not_navigable"}
@@ -81,15 +84,16 @@ def plan_to_cell(planner, start_node, target_floor_label, target_ix, target_iz):
 
     waypoints = _mod.smooth_path(path, planner)
     segments = _mod.tag_doors(waypoints, planner, _mod.door_positions())
-    target_stanza = {
-        "GameObjectId": 0,
-        "Name": f"sweep_cell:{target_floor_label}:{target_ix}:{target_iz}",
-        "Path": None,
-        "Position": {"x": wx, "y": target_floor.floor_y, "z": wz},
-        "IsDatable": False,
-        "InkFileName": None,
-        "InteractionRadius": planner.cell_size * 1.5,  # arrival within ~1.5 cells (~0.3m)
-    }
+    if target_stanza is None:
+        target_stanza = {
+            "GameObjectId": 0,
+            "Name": f"sweep_cell:{target_floor_label}:{target_ix}:{target_iz}",
+            "Path": None,
+            "Position": {"x": wx, "y": target_floor.floor_y, "z": wz},
+            "IsDatable": False,
+            "InkFileName": None,
+            "InteractionRadius": planner.cell_size * 1.5,  # arrival within ~1.5 cells (~0.3m)
+        }
     return {
         "status": "ok",
         "target": target_stanza,
@@ -146,9 +150,11 @@ def main():
                     help="Override the state-walls-open set; default releases every wall.")
     ap.add_argument("--state-walls-active", action="store_true",
                     help="Sweep with state-gated walls active (matches scene-load state).")
-    ap.add_argument("--mode", choices=("walk", "dispersed"), default="walk",
+    ap.add_argument("--mode", choices=("walk", "dispersed", "objects"), default="walk",
                     help="walk: emit one reachable-cell bitmap, runtime walks a single continuous "
-                         "route hitting every unvisited cell. dispersed: legacy per-cell route catalogue.")
+                         "route hitting every unvisited cell. dispersed: legacy per-cell route "
+                         "catalogue. objects: one route per deduped object stand-cell (the picker's "
+                         "static object set) — the object-reachability sweep.")
     args = ap.parse_args()
 
     bake = _mod.load_bake()
@@ -175,9 +181,10 @@ def main():
         state_walls_open = None
     elif args.state_walls_open is not None:
         state_walls_open = args.state_walls_open
-    elif args.mode == "walk":
-        # Walk-sweep default: every state-wall (DaemonWall, DresserWall, ...) closed.
-        # Those are the quest gates the user wants to exclude from the reachable set.
+    elif args.mode in ("walk", "objects"):
+        # Walk- and object-sweep default: every state-wall (DaemonWall, DresserWall,
+        # ...) closed. Those are the quest gates the user wants to EXCLUDE — objects
+        # only reachable past a closed gate report no_path rather than being driven.
         # Override with --state-walls-open or --state-walls-active=False semantics
         # if a specific quest state is being tested.
         state_walls_open = None
@@ -239,6 +246,10 @@ def main():
 
     if args.mode == "walk":
         _emit_walk_manifest(planner, start_node, manifest, out_dir, floors_to_sweep)
+        return
+
+    if args.mode == "objects":
+        _emit_object_manifest(planner, start_node, start_world, manifest, out_dir)
         return
 
     counts = {"ok": 0, "no_path": 0, "trivially_at_target": 0, "target_not_navigable": 0}
@@ -317,6 +328,123 @@ def main():
 
     print(f"wrote {manifest_path}")
     print(f"counts: {counts}  elapsed: {manifest['elapsed_s']}s")
+
+
+def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
+    """Object-reachability sweep (mode=objects). Targets are the deduped object
+    stand-cells from plan_object_route.object_sweep_nodes — the picker's STATIC object
+    set (active + named + navigable kind), collapsed so objects sharing a stand-cell
+    are one node. Plans start->each node; the in-game harness then drives them in
+    dispersed order and uses its existing skip-already-covered pruning so the reachable
+    cells stamped by one drive retire every later node sitting on covered ground.
+
+    Objects that snap to no navigable cell under the current door/state-wall params
+    (exterior decor, or anything walled off behind a still-closed gate) are emitted as
+    no_path entries WITHOUT a drive — they ARE the report of "unreachable".
+    """
+    items = _mod.load_interactables()
+    nodes, unreachable = _mod.object_sweep_nodes(planner, items)
+    print(f"object nodes: {len(nodes)} deduped stand-cells "
+          f"({sum(len(n['names']) for n in nodes)} objects); "
+          f"{len(unreachable)} objects off-floor/gate-blocked")
+
+    counts = {"ok": 0, "no_path": 0, "trivially_at_target": 0, "target_not_navigable": 0}
+    t0 = time.time()
+    for nd in nodes:
+        floor_label = nd["floor"]
+        ix, iz = nd["cell"]
+        floor = planner.floors[floor_label]
+        wx, wz = floor.cell_to_world(ix, iz)
+        rep = nd["representative"]
+        # Real-object target stanza: primary name is the cleaned display name, and the
+        # merged member list rides along so a covered cell credits every object it serves.
+        target_stanza = {
+            "GameObjectId": rep.get("GameObjectId", 0),
+            "Name": _mod.object_display_name(rep),
+            "Path": rep.get("Path"),
+            "Position": {"x": wx, "y": floor.floor_y, "z": wz},
+            "IsDatable": rep.get("IsDatable", False),
+            "InkFileName": rep.get("InkFileName"),
+            "InteractionRadius": planner.cell_size * 1.5,
+            "MemberNames": sorted(set(nd["names"])),
+            "MemberObjectIds": nd["object_ids"],
+        }
+        result = plan_to_cell(planner, start_node, floor_label, ix, iz, target_stanza=target_stanza)
+        status = result["status"]
+        counts[status] = counts.get(status, 0) + 1
+        entry = {
+            "floor": floor_label,
+            "cell": [ix, iz],
+            "world_xz": [round(wx, 4), round(wz, 4)],
+            "status": status,
+            "name": target_stanza["Name"],
+            "member_count": len(target_stanza["MemberNames"]),
+        }
+        if status == "ok":
+            route_name = f"route.{floor_label}.{ix}.{iz}.json"
+            (out_dir / route_name).write_text(json.dumps(result, indent=2), encoding="utf-8")
+            entry["route"] = route_name
+            entry["cost_m"] = result["total_cost_m"]
+            entry["waypoint_count"] = result["waypoint_count"]
+            entry["edge_kinds"] = result["edge_kinds_used"]
+        manifest["entries"].append(entry)
+
+    # Off-floor / gate-blocked objects: report as no_path, no route file, no drive.
+    for u in unreachable:
+        manifest["entries"].append({
+            "floor": None,
+            "cell": None,
+            "world_xz": [round((u.get("position") or {}).get("x", 0.0), 4),
+                         round((u.get("position") or {}).get("z", 0.0), 4)],
+            "status": "no_path",
+            "name": u.get("name"),
+            "member_count": 1,
+            "unreachable_reason": "off_floor_or_gate_blocked",
+        })
+        counts["no_path"] = counts.get("no_path", 0) + 1
+
+    _disperse_entries(manifest, start_world)
+    manifest["mode"] = "objects"
+    manifest["counts"] = counts
+    manifest["object_node_count"] = len(nodes)
+    manifest["object_member_count"] = sum(len(n["names"]) for n in nodes)
+    manifest["elapsed_s"] = round(time.time() - t0, 2)
+    manifest_path = out_dir / "sweep_manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    print(f"wrote {manifest_path}")
+    print(f"counts: {counts}  elapsed: {manifest['elapsed_s']}s")
+
+
+def _disperse_entries(manifest, start_world):
+    """Farthest-point dispersion ordering (shared with dispersed mode): seed with the
+    nearest planned target, then repeatedly pick the planned entry farthest from the
+    running centroid, tie-breaking toward higher cost. No-path entries trail in stable
+    order. Long, house-crossing routes run first so their stamped cells prune the most
+    later nodes under the runtime's skip-already-covered rule."""
+    entries = manifest["entries"]
+    planned = [e for e in entries if "cost_m" in e]
+    unplanned = [e for e in entries if "cost_m" not in e]
+    if not planned:
+        manifest["entries"] = unplanned
+        return
+    sx, sz = start_world
+    planned.sort(key=lambda e: (e["world_xz"][0] - sx) ** 2 + (e["world_xz"][1] - sz) ** 2)
+    picked = [planned.pop(0)]
+    cx, cz = picked[0]["world_xz"]
+    while planned:
+        best_idx, best_key = 0, (-1.0, -1.0)
+        for i, e in enumerate(planned):
+            dx = e["world_xz"][0] - cx
+            dz = e["world_xz"][1] - cz
+            key = (dx * dx + dz * dz, e["cost_m"])
+            if key > best_key:
+                best_key, best_idx = key, i
+        nxt = planned.pop(best_idx)
+        picked.append(nxt)
+        n = len(picked)
+        cx = ((n - 1) * cx + nxt["world_xz"][0]) / n
+        cz = ((n - 1) * cz + nxt["world_xz"][1]) / n
+    manifest["entries"] = picked + unplanned
 
 
 def _emit_walk_manifest(planner, start_node, manifest, out_dir, floors_to_sweep):
