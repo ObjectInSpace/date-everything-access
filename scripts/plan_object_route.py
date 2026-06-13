@@ -54,6 +54,15 @@ MAX_INTERACTION_RADIUS_M = 7.5
 # so the old 4.0m caused no_path + repeated replans. See SimpleNavPlanner.cs.
 NEAREST_NAVIGABLE_SEARCH_M = 6.0
 
+# Classifying an unreachable object as exterior decor vs gate-blocked interior. Probe out to
+# EXTERIOR_CLASSIFY_RADIUS_M for ANY walkable cell; if the nearest one is farther than
+# GATE_BLOCKED_MAX_DISTANCE_M the object is across-the-street decor (fence/tree/drone), not a
+# gate we failed to open. The threshold is comfortably past the widest real interior pocket
+# (a closet/gate puts floor within a couple metres on the far side) and well short of the
+# tens-of-metres gap to exterior props.
+EXTERIOR_CLASSIFY_RADIUS_M = 60.0
+GATE_BLOCKED_MAX_DISTANCE_M = 8.0
+
 
 # ---------- bake loading + cell/world conversions ----------
 
@@ -963,7 +972,8 @@ def resolve_object_node(planner, item):
         return None
     tfloor = planner._floor_for_target_y(ty)
     if tfloor is None:
-        return None
+        # Y falls outside every baked floor band: clearly exterior/off-floor decor.
+        return "off_floor"
     floor = planner.floors[tfloor]
     radius = item.get("InteractionRadius", 1.0) or 1.0
     radius = max(MIN_INTERACTION_RADIUS_M, min(radius, MAX_INTERACTION_RADIUS_M))
@@ -971,7 +981,22 @@ def resolve_object_node(planner, item):
     if not goals:
         n = floor.nearest_navigable(tx, tz, max_radius_m=NEAREST_NAVIGABLE_SEARCH_M)
         if n is None:
-            return None
+            # No navigable cell within the normal search radius. The Y-band test alone does
+            # NOT separate exterior decor from gate-blocked interior objects — the ground
+            # frame's bbox spans the whole street, so fences/trees 100m out still pass it.
+            # The real discriminator is HORIZONTAL distance to the nearest walkable cell:
+            # an interior object walled off by a closed gate has floor a couple metres away
+            # on the blocked side; a fence across the road has nothing for tens of metres.
+            # Probe much wider; classify by that distance.
+            far = floor.nearest_navigable(tx, tz, max_radius_m=EXTERIOR_CLASSIFY_RADIUS_M)
+            if far is None:
+                return "off_floor"   # nothing walkable anywhere near → exterior decor
+            fwx, fwz = floor.cell_to_world(*far)
+            if math.hypot(fwx - tx, fwz - tz) > GATE_BLOCKED_MAX_DISTANCE_M:
+                return "off_floor"   # nearest floor is far → exterior, not a gate
+            # Close to walkable floor but unreachable within radius → genuinely gate-blocked
+            # / marooned in footprint rasterization. A real candidate navigation problem.
+            return "gate_blocked"
         goals = [(n[0], n[1])]
     # Representative = the navigable cell nearest the object centre (deterministic).
     rep = min(goals, key=lambda c: (floor.cell_to_world(*c)[0] - tx) ** 2 +
@@ -1001,9 +1026,13 @@ def object_sweep_nodes(planner, items):
             continue
         node = resolve_object_node(planner, item)
         name = object_display_name(item)
-        if node is None:
+        if node is None or isinstance(node, str):
+            # node is a string sentinel ("off_floor" / "gate_blocked") describing WHY it
+            # resolved nowhere; None is the legacy/no-position case. Carry the reason so
+            # the manifest can separate expected-exterior from real gate-blocked objects.
+            reason = node if isinstance(node, str) else "unresolved"
             unreachable.append({"name": name, "object_id": item.get("GameObjectId"),
-                                "position": item.get("Position")})
+                                "position": item.get("Position"), "reason": reason})
             continue
         floor_label, rep, goals = node
         key = (floor_label, rep)

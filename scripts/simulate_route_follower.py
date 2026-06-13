@@ -129,6 +129,17 @@ STALL_WINDOW_TICKS = 90         # ~3s at 30Hz with no progress ⇒ pinned (real 
 # that stalled in-game. See [[project-navigation-runtime-stall-catalog-2026-05-29]].
 ESCAPE_STRAFE_MAG = 0.8
 
+# Forward (move.z) multiplier WHILE an escape burst is active, mirroring
+# AutoWalkEscapeForwardDuringBurst. The old escape left forward at full during the
+# strafe, so it kept shoving the capsule back into the jamb — a limit cycle (the
+# 2026-06-11 in-game thrash). Attenuating forward lets the lateral slide dominate.
+ESCAPE_FWD_DURING_BURST = 0.15
+# Net XZ a burst must produce to count as productive; below this it's a wasted
+# thrash. After ESCAPE_MAX_WASTED consecutive wasted bursts the follower gives up
+# escaping for the pinned episode and lets the stall window declare honestly.
+ESCAPE_BURST_PROGRESS_M = 0.12
+ESCAPE_MAX_WASTED = 3
+
 
 def _try_step(floor, px, pz, fwd_x, fwd_z, right_x, right_z, speed_dt, escaping):
     """Move one tick under the real controller's model. `fwd_*`/`right_*` are the
@@ -144,8 +155,12 @@ def _try_step(floor, px, pz, fwd_x, fwd_z, right_x, right_z, speed_dt, escaping)
         ix, iz = floor.world_to_cell(x, z)
         return floor.in_bounds(ix, iz) and floor.navigable(ix, iz)
 
-    mx = fwd_x * speed_dt
-    mz = fwd_z * speed_dt
+    # During an escape burst the forward term is attenuated (mirrors C#) so the
+    # lateral strafe dominates and the capsule peels off the jamb instead of being
+    # shoved back into it.
+    fwd_scale = ESCAPE_FWD_DURING_BURST if escaping else 1.0
+    mx = fwd_x * speed_dt * fwd_scale
+    mz = fwd_z * speed_dt * fwd_scale
     if escaping:
         mx += right_x * ESCAPE_STRAFE_MAG * speed_dt
         mz += right_z * ESCAPE_STRAFE_MAG * speed_dt
@@ -194,12 +209,20 @@ def simulate(floor, wps, door_xz=None):
     # Wall-slide escape state, mirroring AccessibilityWatcher.cs. escape_sign locks
     # the strafe direction for a burst; escape_ticks counts it down; pinned_ticks
     # tracks how long forward has been pressed without moving before the escape arms.
+    # burst_start_(px,pz) marks where the active burst began so we can judge whether
+    # it actually moved the capsule; wasted counts consecutive unproductive bursts
+    # (give up after ESCAPE_MAX_WASTED); last_sign persists the chosen side across
+    # bursts so a head-on jamb doesn't flip L/R.
     SIDE_PROBE_M = 0.9                   # AutoWalkEscapeSideProbeDistance
     ESCAPE_TRIGGER_TICKS = max(1, int(0.4 / STEP_DT))   # AutoWalkEscapeTriggerSeconds
     ESCAPE_BURST_TICKS = max(1, int(0.5 / STEP_DT))     # AutoWalkEscapeBurstSeconds
     escape_sign = 0
     escape_ticks = 0
     pinned_ticks = 0
+    burst_start_px = px
+    burst_start_pz = pz
+    escape_wasted = 0
+    escape_last_sign = 0
     for _ in range(MAX_TICKS):
         # Advance discrete waypoint when within arrival radius (mirrors TryAdvanceWaypoint).
         while wp_index < len(wps) - 1 and math.hypot(wps[wp_index][0] - px, wps[wp_index][1] - pz) <= WAYPOINT_ARRIVE_M:
@@ -228,9 +251,21 @@ def simulate(floor, wps, door_xz=None):
         # Wall-slide escape: pick the strafe side once pinned-while-forward exceeds
         # the trigger window, lock it for a burst (mirrors ApplyWallSlideEscape).
         commanding_fwd = align > 0.25
-        if escape_ticks <= 0:
+        # A burst just ended: judge whether it moved the capsule. Productive → clear
+        # the wasted/last-sign episode state; wasted → tally it.
+        if escape_sign != 0 and escape_ticks <= 0:
+            burst_moved = math.hypot(px - burst_start_px, pz - burst_start_pz)
+            if burst_moved >= ESCAPE_BURST_PROGRESS_M:
+                escape_wasted = 0
+                escape_last_sign = 0
+            else:
+                escape_wasted += 1
             escape_sign = 0
-        if escape_sign == 0 and commanding_fwd and pinned_ticks >= ESCAPE_TRIGGER_TICKS:
+        # Latched give-up: too many dead bursts → stop escaping this episode and let
+        # the stall window declare honestly (cleared on real progress, below).
+        if escape_wasted >= ESCAPE_MAX_WASTED:
+            pass
+        elif escape_sign == 0 and commanding_fwd and pinned_ticks >= ESCAPE_TRIGGER_TICKS:
             right_clear = _side_clear(floor, px, pz, right_x, right_z, SIDE_PROBE_M)
             left_clear = _side_clear(floor, px, pz, -right_x, -right_z, SIDE_PROBE_M)
             if right_clear and not left_clear:
@@ -238,11 +273,19 @@ def simulate(floor, wps, door_xz=None):
             elif left_clear and not right_clear:
                 escape_sign, escape_ticks = -1, ESCAPE_BURST_TICKS
             elif right_clear and left_clear:
-                # Both open: strafe toward the side the goal lies on.
-                tx, tz = wps[-1]
-                escape_sign = +1 if ((tx - px) * right_x + (tz - pz) * right_z) >= 0 else -1
+                # Both open (head-on jamb): reuse the side chosen earlier this episode
+                # if any, else strafe toward the side the goal lies on. Committing for
+                # the whole episode stops the L/R flip that stalled the capsule.
+                if escape_last_sign != 0:
+                    escape_sign = escape_last_sign
+                else:
+                    tx, tz = wps[-1]
+                    escape_sign = +1 if ((tx - px) * right_x + (tz - pz) * right_z) >= 0 else -1
                 escape_ticks = ESCAPE_BURST_TICKS
             # else both blocked: genuine pinch, no escape (escape_sign stays 0).
+            if escape_sign != 0:
+                escape_last_sign = escape_sign
+                burst_start_px, burst_start_pz = px, pz
             pinned_ticks = 0
 
         escaping = escape_sign != 0 and escape_ticks > 0
@@ -267,6 +310,9 @@ def simulate(floor, wps, door_xz=None):
         # Progress check: did we get materially closer to the goal?
         if remaining < best_remaining - PROGRESS_EPS_M:
             best_remaining = remaining
+            # Real progress ends the pinned episode: clear the escape give-up latch.
+            escape_wasted = 0
+            escape_last_sign = 0
             ticks_since_progress = 0
         else:
             ticks_since_progress += 1

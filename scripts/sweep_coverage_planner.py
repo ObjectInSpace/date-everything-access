@@ -489,8 +489,30 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
             cur_start_name = target_stanza["Name"]
         manifest["entries"].append(entry)
 
-    # Off-floor / gate-blocked objects: report as no_path, no route file, no drive.
+    # Unreachable objects, split by WHY they resolved nowhere:
+    #   off_floor    -> exterior decor (Y outside every floor band). Expected-unreachable;
+    #                   the player can't walk to a fence/tree/drone. These are NOT sweep
+    #                   targets at all: emitting them as entries made the runtime record 264
+    #                   `off_floor` results (floor="", cost=0) that never drove anything, so
+    #                   they inflated the results denominator and buried the real pass rate
+    #                   (arrived/attempted). Record them only in counts + an `excluded_exterior`
+    #                   roster for visibility; do NOT add a drive entry.
+    #   gate_blocked -> on a floor but walled off / behind a closed gate. A real candidate
+    #                   navigation problem -> keep reporting as a no_path ENTRY so it stays
+    #                   visible and re-validated in-game.
+    excluded_exterior = []
     for u in unreachable:
+        reason = u.get("reason") or "unresolved"
+        is_exterior = reason == "off_floor"
+        if is_exterior:
+            excluded_exterior.append({
+                "name": u.get("name"),
+                "world_xz": [round((u.get("position") or {}).get("x", 0.0), 4),
+                             round((u.get("position") or {}).get("z", 0.0), 4)],
+                "unreachable_reason": reason,
+            })
+            counts["off_floor"] = counts.get("off_floor", 0) + 1
+            continue
         manifest["entries"].append({
             "floor": None,
             "cell": None,
@@ -499,9 +521,10 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
             "status": "no_path",
             "name": u.get("name"),
             "member_count": 1,
-            "unreachable_reason": "off_floor_or_gate_blocked",
+            "unreachable_reason": reason,
         })
         counts["no_path"] = counts.get("no_path", 0) + 1
+    manifest["excluded_exterior"] = excluded_exterior
 
     _disperse_entries(manifest, start_world)
     manifest["mode"] = "objects"

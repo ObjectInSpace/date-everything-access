@@ -135,7 +135,8 @@ namespace DateEverythingAccess
             _coverageSweepRunId = config.Bind("Diagnostics", "CoverageSweepRunId", "default",
                 "Which artifacts/navigation/sweep/<run-id>/ manifest the coverage-sweep hotkey " +
                 "(Ctrl+Alt+Shift+F8) drives. 'default' = the walk-mode cell sweep; 'objects' = the " +
-                "object-reachability sweep (one route per deduped object stand-cell).");
+                "object-reachability sweep (walk-chain: start where you are, walk to the nearest " +
+                "object, then the next; relocate-teleport only after several failures in a row).");
         }
 
         /// <summary>
