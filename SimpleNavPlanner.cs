@@ -95,6 +95,16 @@ namespace DateEverythingAccess
         // treated as openable when planning so A* can route through it and the
         // executor opens it en route. Populated by IndexDoorFreedCells.
         private static readonly HashSet<string> _lockedDoorNames = new HashSet<string>();
+        // Names of every door the BAKE modelled — the real PASSAGE/closet doors the player walks
+        // through or operates from a standpoint. A live GameObject can carry a Door component yet
+        // NOT be in here: fridge/cupboard "doors" are CONTAINERS the player opens in place and
+        // never walks through, so the exporter's door-detection rule deliberately skips them.
+        // The planner uses this to tell the two apart: a target Door IN this set takes the
+        // door-operability branch (and a missing operability set is a real bake bug → fail fast);
+        // a target Door NOT in this set is a container, routed like any other prop via the
+        // collider-band branch (front-approach; its swing is still a footprint blocker for
+        // pathing). See [[project-navigation-sweep-three-buckets-2026-06-12]].
+        private static readonly HashSet<string> _bakedDoorNames = new HashSet<string>();
         // Monotonic counter for capture filenames. Restarted at process start.
         private static int _captureSeq;
 
@@ -200,7 +210,22 @@ namespace DateEverythingAccess
             //     A* picks the cheapest-from-start; falls back to the unfiltered disc if
             //     the band has no nav-eligible cells.
             // See [[project-navigation-collider-band-filter]], [[project-navigation-door-operability-cells]].
+            // A live Door component alone doesn't make this a passage door: fridge/cupboard
+            // containers carry one too. Only treat it as a door target if the bake actually
+            // modelled it (it's in the passage-door set). Container doors — present live, absent
+            // from the bake — are dropped to null here so they route through the prop collider
+            // branch below: front-approach, swing arc as a footprint blocker, no operable-cell
+            // requirement (which would fail-fast on them). See the three-buckets memo.
             Door targetDoor = ResolveTargetDoor(targetGameObjectId);
+            if (targetDoor != null && targetDoor.gameObject != null &&
+                !_bakedDoorNames.Contains(targetDoor.gameObject.name))
+            {
+                if (Main.Log != null)
+                    Main.Log.LogInfo("SimpleNavPlanner.Plan: target=" + (targetName ?? "<null>") +
+                        " (" + targetDoor.gameObject.name + ") has a Door component but isn't a baked " +
+                        "passage door — treating as a container/prop (collider-band approach).");
+                targetDoor = null;
+            }
             Collider targetCollider = targetDoor == null ? ResolveTargetCollider(targetGameObjectId) : null;
 
             // Door target: the goal set is the bake's operable_from_cells — the
@@ -526,12 +551,17 @@ namespace DateEverythingAccess
 
         // Pick a CLEAN stand-cell near a world point: the navigable cell within radiusM whose
         // clearance (cells-to-nearest-wall, the same metric A* uses) is highest, tie-broken by
-        // closeness to the anchor. Used by the coverage sweep to teleport the player to a source
-        // object without spawning hard against a collider/door (which stalls the leg instantly).
-        // The floor is chosen by FloorForTargetY (the floor a player stands on for a target at
-        // anchorY). Returns false if no navigable cell is in range.
+        // closeness to the anchor. Used by the coverage sweep to teleport the player without
+        // spawning hard against a collider/door (which stalls the leg instantly). Picking the
+        // HIGHEST-clearance cell already lands the player as far off walls as the 0.8m clearance
+        // cap allows — that is the anti-wedge guard. `minClearanceCells` additionally REQUIRES the
+        // chosen cell to be at least that far off any wall (so the relocation teleport can refuse a
+        // too-tight spot rather than drop the player somewhere a downstream leg would fail from for
+        // a bad-teleport reason); pass 0 to accept the best available. Floor is chosen by
+        // FloorForTargetY. Returns false if no qualifying navigable cell is in range.
         public static bool TryGetCleanStandCell(float anchorX, float anchorY, float anchorZ,
-                                                float radiusM, out Vector3 cleanWorld)
+                                                float radiusM, out Vector3 cleanWorld,
+                                                int minClearanceCells = 0)
         {
             cleanWorld = Vector3.zero;
             if (!EnsureLoaded() || _floors == null) return false;
@@ -553,11 +583,12 @@ namespace DateEverythingAccess
                 {
                     int ix = cx + dx, iz = cz + dz;
                     if (!floor.Navigable(ix, iz)) continue;
+                    int clear = floor.Clearance(ix, iz);
+                    if (clear < minClearanceCells) continue;
                     Vector2 w = floor.CellToWorld(ix, iz);
                     float ddx = w.x - anchorX, ddz = w.y - anchorZ;
                     float d2 = ddx * ddx + ddz * ddz;
                     if (d2 > r2) continue;
-                    int clear = floor.Clearance(ix, iz);
                     if (clear > bestClear || (clear == bestClear && d2 < bestDist2))
                     {
                         bestClear = clear; bestDist2 = d2; bIx = ix; bIz = iz; found = true;
@@ -696,6 +727,7 @@ namespace DateEverythingAccess
         {
             if (_bake?.floors == null) return;
             _lockedDoorNames.Clear();
+            _bakedDoorNames.Clear();
             for (int fi = 0; fi < _bake.floors.Length; fi++)
             {
                 BakeFloor raw = _bake.floors[fi];
@@ -708,6 +740,9 @@ namespace DateEverythingAccess
                     {
                         DoorRecord d = raw.doors[di];
                         if (d == null || string.IsNullOrEmpty(d.name)) continue;
+                        // Every modelled door name — used to distinguish passage doors (in here)
+                        // from container doors (carry a Door component but were never baked).
+                        _bakedDoorNames.Add(d.name);
                         // Locked is authoritative regardless of record ordering.
                         if (d.locked) _lockedDoorNames.Add(d.name);
                         if (d.freed_cells != null)

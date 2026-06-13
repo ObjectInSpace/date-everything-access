@@ -26,7 +26,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 WALK = REPO / "artifacts/navigation/thirdpersongreybox-walkable.json"
-BLOCK = REPO / "artifacts/navigation/thirdpersongreybox-blockers.json"
+# Per-cell vertical-span column export (replaces fixed-Y slice segments as the
+# blocking primitive). See [[project-navigation-bake-percell-vertical-span]].
+BLOCK = REPO / "artifacts/navigation/thirdpersongreybox-blockers.COLUMNS.json"
 INTER = REPO / "artifacts/navigation/thirdpersongreybox-interactables.json"
 NAVDATA = REPO / "artifacts/navigation/thirdpersongreybox-navigation-data.json"
 OUT_JSON = REPO / "artifacts/navigation/navigable_region.bake.json"
@@ -42,9 +44,27 @@ OUT_PNG_DIR = REPO / "artifacts/navigation"
 # grazes return, address them with per-mesh inflation rather than a global
 # bump that closes legitimate doorways.
 CAPSULE_R = 0.40
-CAPSULE_H = 2.50
+# Live-measured player capsule height (floor .. floor + 3.2m). The old 2.50
+# value was a stale under-measurement: it let chest-to-head-height geometry
+# (e.g. an open cupboard/fridge door panel at world Y ~2.3-2.7) sit just above
+# the band and slip through unblocked. 3.2m matches the export's capsule band
+# ([-0.7,2.9] ground = floorY-0.2 .. floorY+3.2) and the live capsule-probe in
+# [[project-navigation-capsule-radius-groundtruth-2026-05-29]].
+CAPSULE_H = 3.20
 STEP_UP_TOL = 0.25
+# A column whose top clears the floor by less than this is a sill/threshold/lip
+# the capsule's FOOT steps over — the one honest physical rule that survives the
+# slice-artifact-gate deletion. Calibrated in
+# [[project-navigation-bake-percell-vertical-span]]: SM_Walls_* tops poke ~0.05m
+# proud of the upper floor (step over), while SM_Ceiling_Hall pokes 0.45m and
+# CeilingStairsFix spans floor-to-ceiling (both correctly keep blocking).
+STEP_OVER_HEIGHT_M = 0.30
 CELL = 0.20  # rasterization resolution
+# XZ cell size of the exporter's per-cell column raster. Columns index cells on
+# a fixed global origin (colIX = floor(worldX / COL_CELL)); the bake maps each
+# column's cell centre back through world space into its own padded grid. Equal
+# to CELL by design (1:1 mapping); validated against the export at load time.
+COL_CELL = 0.20
 DILATE_CELLS = int(math.ceil(CAPSULE_R / CELL))  # 2 cells
 # Surface vertical extent above which we treat the surface as a column/prop
 # (not a floor slab). Lets SM_Ceiling_* slabs through while keeping lightbulbs,
@@ -92,53 +112,70 @@ def in_scene(x, z):
     return abs(x) < SCENE_MAX_ABS and abs(z) < SCENE_MAX_ABS
 
 
-def _rasterize_segment(blocked_bm, ax, az, bx, bz, minx, minz, nx, nz, cell):
-    """Mark every cell that segment (A,B) crosses. Supercover variant of
-    Bresenham — guarantees no diagonal pass-throughs that would let a
-    rasterized wall leak."""
-    # Convert to cell coordinates.
-    fx0 = (ax - minx) / cell
-    fz0 = (az - minz) / cell
-    fx1 = (bx - minx) / cell
-    fz1 = (bz - minz) / cell
-    dx = abs(fx1 - fx0)
-    dz = abs(fz1 - fz0)
-    ix = int(math.floor(fx0))
-    iz = int(math.floor(fz0))
-    n = 1
-    if dx == 0:
-        x_inc = 0
-        t_next_x = math.inf
-    elif fx1 > fx0:
-        x_inc = 1
-        n += int(math.floor(fx1)) - ix
-        t_next_x = (math.floor(fx0) + 1 - fx0) / dx
-    else:
-        x_inc = -1
-        n += ix - int(math.floor(fx1))
-        t_next_x = (fx0 - math.floor(fx0)) / dx
-    if dz == 0:
-        z_inc = 0
-        t_next_z = math.inf
-    elif fz1 > fz0:
-        z_inc = 1
-        n += int(math.floor(fz1)) - iz
-        t_next_z = (math.floor(fz0) + 1 - fz0) / dz
-    else:
-        z_inc = -1
-        n += iz - int(math.floor(fz1))
-        t_next_z = (fz0 - math.floor(fz0)) / dz
-    dt_x = (1.0 / dx) if dx > 0 else math.inf
-    dt_z = (1.0 / dz) if dz > 0 else math.inf
-    for _ in range(n):
-        if 0 <= ix < nx and 0 <= iz < nz:
-            blocked_bm[ix][iz] = True
-        if t_next_x < t_next_z:
-            ix += x_inc
-            t_next_x += dt_x
-        else:
-            iz += z_inc
-            t_next_z += dt_z
+def _column_blocks_floor(col_min_y, col_max_y, floor_y):
+    """The one physical question the bake answers per cell: does a collider whose
+    vertical span over this cell is [col_min_y, col_max_y] intersect the player
+    capsule's volume when the player stands on the surface at height `floor_y`?
+
+    `floor_y` is the REAL walkable surface height at this cell (floor_y_bm), not
+    the nominal band Y — otherwise the floor slab the player stands on (its top
+    is ~0.34m above the round band Y) would block itself.
+
+    True iff [col_min_y, col_max_y] overlaps the capsule extent
+    [floor_y, floor_y+CAPSULE_H] AND the column top is not a step-over sill
+    (clears the surface by < STEP_OVER). No slice planes, no top-lip / borrow /
+    void-plug gates — those were all compensation for the fixed-Y slicing this
+    column raster replaces.
+    """
+    cap_lo = floor_y
+    cap_hi = floor_y + CAPSULE_H
+    # No vertical overlap with the capsule -> can't block the player here.
+    if col_max_y < cap_lo or col_min_y > cap_hi:
+        return False
+    # Step-over: a sill/lip/threshold whose whole top sits below knee height is
+    # walked over by the capsule foot. Measured against the surface the player
+    # actually stands on (so the floor mesh itself, top == floor_y, is a 0m lip
+    # = walkable, never a self-block).
+    if col_max_y - floor_y < STEP_OVER_HEIGHT_M:
+        return False
+    return True
+
+
+def _rasterize_columns_into(blocked_bm, columns, floor_y_bm, band_floor_y,
+                            minx, minz, nx, nz, cell, col_cell):
+    """Mark every bake cell whose column interval blocks the player standing on
+    that cell's real floor surface.
+
+    `columns` is the exporter's flat per-cell list [colIX, colIZ, minY, maxY]
+    where colIX = floor(worldX / col_cell) on a FIXED global origin (0,0). The
+    bake grid has its own padded per-floor origin (minx, minz), so map each
+    column's cell CENTER back through world space into the bake grid. col_cell
+    matches CELL (0.2) so this is a 1:1 index shift, but going through world
+    coordinates keeps it correct regardless.
+
+    The blocking decision is per-cell because the capsule floor is per-cell:
+    floor_y_bm[ix][iz] (the walkable surface there, default band_floor_y where no
+    surface exists). Returns the number of cells newly marked blocked.
+    """
+    marked = 0
+    for col in columns:
+        cmin = col[2]
+        cmax = col[3]
+        wx = (col[0] + 0.5) * col_cell
+        wz = (col[1] + 0.5) * col_cell
+        if not in_scene(wx, wz):
+            continue
+        ix = int(math.floor((wx - minx) / cell))
+        iz = int(math.floor((wz - minz) / cell))
+        if ix < 0 or ix >= nx or iz < 0 or iz >= nz:
+            continue
+        floor_y = floor_y_bm[ix][iz] if floor_y_bm is not None else band_floor_y
+        if not _column_blocks_floor(cmin, cmax, floor_y):
+            continue
+        if not blocked_bm[ix][iz]:
+            marked += 1
+        blocked_bm[ix][iz] = True
+    return marked
 
 
 def _rasterize_bounds(blocked_bm, bb, minx, minz, nx, nz, cell):
@@ -177,86 +214,9 @@ def _is_structural_mesh(record):
     return any(marker in text for marker in structural_markers)
 
 
-def _rasterize_closed_segment_regions(blocked_bm, segments, minx, minz, nx, nz, cell):
-    """Fill areas enclosed by a mesh's slice segments.
-
-    Segment traces alone represent only the collider surface. For solid furniture
-    with closed slice loops, the interior must be blocked too or the planner can
-    thread a path through the object.
-    """
-    if not segments:
-        return 0
-
-    sx0 = min(min(s["AX"], s["BX"]) for s in segments)
-    sx1 = max(max(s["AX"], s["BX"]) for s in segments)
-    sz0 = min(min(s["AZ"], s["BZ"]) for s in segments)
-    sz1 = max(max(s["AZ"], s["BZ"]) for s in segments)
-    ix0 = max(0, int(math.floor((sx0 - minx) / cell)) - 2)
-    ix1 = min(nx, int(math.ceil((sx1 - minx) / cell)) + 3)
-    iz0 = max(0, int(math.floor((sz0 - minz) / cell)) - 2)
-    iz1 = min(nz, int(math.ceil((sz1 - minz) / cell)) + 3)
-    lx = ix1 - ix0
-    lz = iz1 - iz0
-    if lx <= 2 or lz <= 2:
-        return 0
-
-    local = [[False] * lz for _ in range(lx)]
-    local_minx = minx + ix0 * cell
-    local_minz = minz + iz0 * cell
-    for s in segments:
-        _rasterize_segment(
-            local,
-            s["AX"], s["AZ"],
-            s["BX"], s["BZ"],
-            local_minx, local_minz, lx, lz, cell,
-        )
-
-    outside = [[False] * lz for _ in range(lx)]
-    queue = []
-    for ix in range(lx):
-        for iz in (0, lz - 1):
-            if not local[ix][iz] and not outside[ix][iz]:
-                outside[ix][iz] = True
-                queue.append((ix, iz))
-    for iz in range(lz):
-        for ix in (0, lx - 1):
-            if not local[ix][iz] and not outside[ix][iz]:
-                outside[ix][iz] = True
-                queue.append((ix, iz))
-
-    head = 0
-    while head < len(queue):
-        ix, iz = queue[head]
-        head += 1
-        for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            jx = ix + dx
-            jz = iz + dz
-            if jx < 0 or jx >= lx or jz < 0 or jz >= lz:
-                continue
-            if local[jx][jz] or outside[jx][jz]:
-                continue
-            outside[jx][jz] = True
-            queue.append((jx, jz))
-
-    filled = 0
-    for ix in range(lx):
-        for iz in range(lz):
-            if local[ix][iz] or outside[ix][iz]:
-                continue
-            gx = ix0 + ix
-            gz = iz0 + iz
-            if not blocked_bm[gx][gz]:
-                filled += 1
-            blocked_bm[gx][gz] = True
-    return filled
-
-
-FOOTPRINT_PERIMETER_MAX_DIM_M = 4.0
-
-
 # Open-archway carve. Doorframe meshes (SM_Doorframe_*, Door_frame_*) are thin
-# walls with an opening, rasterized from their collision-slice segments like any
-# other mesh. But the frame's footprint is a CLOSED loop — its threshold/sill
+# walls with an opening, rasterized from their per-cell columns like any other
+# mesh. But the frame's footprint is a CLOSED loop — its threshold/sill
 # and lintel cross-pieces span the opening width and
 # seal the doorway line at floor level, so a narrow archway (e.g.
 # SM_Doorframe_Small_13, 1.23m throat) gets walled off, isolating whole rooms.
@@ -271,46 +231,6 @@ FOOTPRINT_PERIMETER_MAX_DIM_M = 4.0
 def _is_doorframe(record):
     text = f"{record.get('Name', '')} {record.get('GameObjectName', '')} {record.get('Path', '')}".lower()
     return "doorframe" in text or "door_frame" in text
-
-
-def _rasterize_footprint_perimeter(blocked_bm, record, minx, minz, nx, nz, cell):
-    fp = record.get("Footprint") or {}
-    vertices = fp.get("Vertices") or []
-    if len(vertices) < 2:
-        return 0
-
-    xs = [v.get("x") for v in vertices if v.get("x") is not None]
-    zs = [v.get("z") for v in vertices if v.get("z") is not None]
-    if xs and zs:
-        width = max(xs) - min(xs)
-        depth = max(zs) - min(zs)
-        # Footprint perimeter tracing assumes the vertices describe a
-        # furniture-sized convex hull. Multi-meter hulls (kitchen counter run,
-        # fireplace, monitor) trace phantom walls across walkable space, so
-        # skip them and rely on the actual slice segments instead.
-        if max(width, depth) > FOOTPRINT_PERIMETER_MAX_DIM_M:
-            return 0
-
-    hits_before = 0
-    for ix in range(nx):
-        hits_before += sum(1 for blocked in blocked_bm[ix] if blocked)
-
-    for i, a in enumerate(vertices):
-        b = vertices[(i + 1) % len(vertices)]
-        ax = a.get("x")
-        az = a.get("z")
-        bx = b.get("x")
-        bz = b.get("z")
-        if ax is None or az is None or bx is None or bz is None:
-            continue
-        if not (in_scene(ax, az) or in_scene(bx, bz)):
-            continue
-        _rasterize_segment(blocked_bm, ax, az, bx, bz, minx, minz, nx, nz, cell)
-
-    hits_after = 0
-    for ix in range(nx):
-        hits_after += sum(1 for blocked in blocked_bm[ix] if blocked)
-    return max(0, hits_after - hits_before)
 
 
 def _is_solid_blocker(record):
@@ -334,102 +254,16 @@ def _is_solid_blocker(record):
     # that had no collider never produced a blocker in the first place. See
     # [[project-navigation-model-update-meshes-2026-05-29]],
     # [[project-navigation-capsule-radius-groundtruth-2026-05-29]].
-    path = record.get("Path") or ""
-
-    # Ceiling void-plug colliders (e.g. CeilingStairsFix1/2 under
-    # House/MultiRoom/Ceilings/). These are tall, floor-to-ceiling boxes the
-    # game authored to plug the open stairwell void in the ceiling so the
-    # player can't fall through from the attic side. Their body is centered
-    # near the ceiling (~Y18), but their bottom face dips to ~12.38 — a hair
-    # below the upper floor (12.5) — so they get admitted to the upper bake
-    # band and rasterize as an 11.6m wall sealing the stair landing from the
-    # upstairs hall (the entire upper floor isolates from the stairs).
-    #
-    # Discriminator (all three required, to avoid freeing real geometry):
-    #   1. parented under a /Ceilings/ node — authored ceiling fixup, not a
-    #      wall or furniture collider;
-    #   2. a sliver footprint — one XZ axis <= 0.1m (CeilingStairsFix1 is
-    #      0.04m deep, Fix2 is 0.02m wide). Real walls and furniture have
-    #      substantial footprints on both axes. NOTE the */Fix suffix alone
-    #      is NOT safe: TreadmillColliderFix is a real 8.5x2.2m equipment
-    #      collider that must keep blocking.
-    #   3. a tall body (>= 3m) — it spans floor to ceiling, confirming it's a
-    #      vertical void-plug rather than a low lip.
-    # See [[project-navigation-upper-hall2-archway-seal]].
-    if "/ceilings/" in path.lower():
-        bb = record.get("Bounds2D") or {}
-        by = record.get("BottomY")
-        ty = record.get("TopY")
-        if bb and by is not None and ty is not None:
-            width = bb.get("Width", bb.get("MaxX", 0) - bb.get("MinX", 0))
-            depth = bb.get("Depth", bb.get("MaxZ", 0) - bb.get("MinZ", 0))
-            if min(width, depth) <= 0.1 and (ty - by) >= 3.0:
-                return False
+    # The former /ceilings/ void-plug gate, the top-lip gate, MIN_BORROW_HEIGHT_M
+    # and the _is_vertical_wall shape test all lived here and just above. Every
+    # one of them compensated for the fixed-Y slice export: a tall ground wall
+    # sliced at 12.5 looked like an upper-floor wall, and a void-plug box's slice
+    # silhouette sprawled across the landing. The per-cell column raster paints
+    # each collider only where its real triangles sit, so those phantoms never
+    # appear and no gate is needed. The step-over rule (_column_blocks_floor)
+    # carries the one genuine physical case (a wall top poking ~5cm proud of the
+    # floor above). See [[project-navigation-bake-percell-vertical-span]].
     return True
-
-
-MIN_BORROW_HEIGHT_M = 0.75  # ~ a player's hip; below this, walk over it
-
-# Vertical-extrusion threshold for the top-lip gate. A wall is a tall vertical
-# extrusion (floor-to-ceiling, vertical extent ~13m); a ceiling/floor is a flat
-# horizontal slab (vertical extent < 1m). Only the former's sub-knee top-lip
-# should be suppressed on the floor above; a flat ceiling-edge slab that
-# genuinely sits in the band must keep blocking. Measured: the 7 SM_Walls_*
-# top-lip cases have vext ~13.2m; the SM_Ceiling_Hall slab has vext 0.58m, so
-# 1.0m cleanly separates wall from slab. This is a SHAPE test (physical, survives
-# an asset re-rip / new scene), replacing the old IsWallLikeFatVictim flag.
-WALL_VERTICAL_EXTENT_MIN_M = 1.0
-
-
-def _is_vertical_wall(mesh_record):
-    """True when the collider is a tall vertical extrusion (a wall), not a flat
-    horizontal slab (ceiling/floor) or a low prop. The top-lip gate uses this to
-    scope sub-knee-lip suppression to walls only."""
-    by = mesh_record.get("BottomY"); ty = mesh_record.get("TopY")
-    if by is None or ty is None:
-        return False
-    return (ty - by) >= WALL_VERTICAL_EXTENT_MIN_M
-
-
-def _segments_in_floor_band(mesh_record, y_lo, y_hi):
-    fp = mesh_record.get("Footprint") or {}
-    segs = fp.get("Segments") or []
-    if not segs:
-        return []
-
-    # Top-lip gate. Several ground-floor walls (SM_Walls_Hall1/Kitchen/Living/
-    # Office/Dining/Laundry/Closet_Office) have TopY ~12.54-12.59 — i.e. their
-    # tops poke only 0.04-0.09m above the upper floor (12.5). The exporter
-    # slices at PlaneY=12.5 (a plane added to catch walls whose tops sit just
-    # above the upper floor), so these walls DO produce in-band segments at
-    # 12.5 — but those segments are just the wall-top silhouette of a
-    # ground-floor wall, a sub-knee lip the player capsule walks straight over.
-    # Rasterizing them draws phantom upper-floor walls that seal real passages
-    # (notably SM_Walls_Hall1 sealing the stair-landing→bedroom archway, which
-    # isolated the whole stair landing). A wall whose TopY clears the band's
-    # lower edge by < MIN_BORROW_HEIGHT_M is not a real obstacle on this floor;
-    # skip it. Real upper walls (SM_Walls_Bedroom/Hall2, TopY~25.8) clear by 13m
-    # and are unaffected. Scoped by _is_vertical_wall so a genuine flat ceiling-
-    # edge slab in the band (SM_Ceiling_Hall, vext 0.58m) is NOT suppressed.
-    # See [[project-navigation-upper-hall2-archway-seal]],
-    # [[project-navigation-borrow-height-gate]],
-    # [[project-navigation-iswalllikefatvictim-followup]].
-    ty_lip = mesh_record.get("TopY")
-    if (_is_vertical_wall(mesh_record) and ty_lip is not None
-            and ty_lip - y_lo < MIN_BORROW_HEIGHT_M):
-        return []
-
-    in_band = []
-    for segment in segs:
-        py = segment.get("PlaneY")
-        if py is not None and (py < y_lo or py > y_hi):
-            continue
-        ax = segment["AX"]; az = segment["AZ"]
-        bx = segment["BX"]; bz = segment["BZ"]
-        if not (in_scene(ax, az) or in_scene(bx, bz)):
-            continue
-        in_band.append(segment)
-    return in_band
 
 
 def _dilate_disc(bm, nx, nz, d):
@@ -449,30 +283,6 @@ def _dilate_disc(bm, nx, nz, d):
                 if jz < 0 or jz >= nz: continue
                 out[jx][jz] = True
     return out
-
-
-def _rasterize_segments_into(bm, segments, minx, minz, nx, nz, cell):
-    for s in segments:
-        _rasterize_segment(bm, s["AX"], s["AZ"], s["BX"], s["BZ"], minx, minz, nx, nz, cell)
-
-
-def _door_panels_with_floor_segments(door_records, floor_y_lo, floor_y_hi):
-    """Yield (door_record, panel) pairs where the panel has at least one closed
-    or open segment whose PlaneY sits inside the floor band. PlaneY values come
-    straight from the exporter's slice planes (0.5 and 13.5)."""
-    for d in door_records:
-        for p in d.get("Panels", []):
-            def _band(segs):
-                return [s for s in segs
-                        if floor_y_lo <= s.get("PlaneY", -1e9) <= floor_y_hi]
-            closed = _band(p.get("SegmentsClosed", []))
-            open_sets = []
-            for os in p.get("OpenSegmentSets", []):
-                bs = _band(os.get("Segments", []))
-                open_sets.append({"Tag": os.get("Tag"), "Segments": bs})
-            if not closed and not any(s["Segments"] for s in open_sets):
-                continue
-            yield d, p, closed, open_sets
 
 
 def _door_operable_cells(navigable_bm, panel_closed_dil, panel_open_dil,
@@ -594,32 +404,43 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
     else:
         band_top_y = max(w["TopY"] for w in floor_walks)
 
+    # walkable_bm: can the player stand here. floor_y_bm: the Y of the surface
+    # they stand ON at that cell — the capsule's FOOT. The nominal band Y (fy) is
+    # a round number that does NOT equal the real floor mesh (upper floors sit at
+    # ~12.84, not 12.5; ground at ~-0.57, not -0.5). Column blocking and the
+    # step-over rule must measure the capsule from the REAL surface, or the floor
+    # slab the player stands on (TopY 12.84, 0.34m above fy=12.5) blocks itself.
+    # Cells with no walkable surface default to band_top_y so blocker columns off
+    # the walkable area still have a sane floor reference for the overlap test.
     walkable_bm = [[False] * nz for _ in range(nx)]
+    floor_y_bm = [[band_top_y] * nz for _ in range(nx)]
     for w in floor_walks:
         if band_top_y - w["TopY"] > VAULTED_DROP_M:
             continue
         fp = w["Footprint"]
+        top_y = w["TopY"]
         ix0 = max(0, int(math.floor((fp["MinX"] - minx) / CELL)))
         ix1 = min(nx, int(math.ceil((fp["MaxX"] - minx) / CELL)))
         iz0 = max(0, int(math.floor((fp["MinZ"] - minz) / CELL)))
         iz1 = min(nz, int(math.ceil((fp["MaxZ"] - minz) / CELL)))
         for ix in range(ix0, ix1):
             for iz in range(iz0, iz1):
-                walkable_bm[ix][iz] = True
+                if not walkable_bm[ix][iz] or top_y > floor_y_bm[ix][iz]:
+                    walkable_bm[ix][iz] = True
+                    floor_y_bm[ix][iz] = top_y
 
-    # Y range for blocker intersection
+    # Coarse vertical band for the cheap per-record TopY/BottomY prefilter only
+    # (the authoritative test is the per-cell column overlap below). Widened a
+    # touch around the real surface span so a record sitting on the 12.84 floor
+    # isn't prefiltered out before its columns are measured against floor_y_bm.
     y_lo = fy - STEP_UP_TOL
     y_hi = fy + CAPSULE_H
 
     blocked_bm = [[False] * nz for _ in range(nx)]
     blocker_hits = 0
     primitive_blocker_hits = 0
-    mesh_segment_blocker_hits = 0
-    mesh_segments_rasterized = 0
-    mesh_closed_region_blocker_hits = 0
-    mesh_closed_region_cells = 0
-    mesh_footprint_edge_blocker_hits = 0
-    mesh_footprint_edge_cells = 0
+    mesh_column_blocker_hits = 0  # mesh colliders that blocked >=1 cell here
+    mesh_column_cells = 0         # total cells blocked by mesh-collider columns
     # Mesh collider pass: this is the 2.5D capsule-clearance approximation.
     # Any active, enabled, non-trigger mesh collider that has player-height
     # triangle-slice segments contributes its actual surface traces, regardless
@@ -676,64 +497,44 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             continue
         if m["TopY"] < y_lo or m["BottomY"] > y_hi:
             continue
-        segments = _segments_in_floor_band(m, y_lo, y_hi)
-        if not segments:
+        columns = (m.get("Footprint") or {}).get("Columns") or []
+        if not columns:
             continue
+        # Cells this mesh blocks on THIS floor, by per-cell vertical-span overlap.
+        # Columns replace the old segment-trace + footprint-perimeter + closed-
+        # region passes in one shot: a thin wall's columns are a thin cell line
+        # (interior untouched, like the old segments), while a solid object's
+        # top-surface triangles paint every interior cell, so the interior fills
+        # itself with no hull/flood-fill heuristic.
         if _is_doorframe(m) and not _frame_has_door(m):
             bb = m.get("Bounds2D")
             if bb:
-                # Keep the frame's own in-band segments alongside its bbox: the
-                # carve must open the threshold gap but PRESERVE the capsule-
-                # clearance dilation around the frame's solid jamb posts, or the
-                # player walks into a post the bake marked navigable.
-                archway_carves.append((bb, segments))
-        mesh_had_segment = False
-        for s in segments:
-            _rasterize_segment(
-                blocked_bm,
-                s["AX"], s["AZ"],
-                s["BX"], s["BZ"],
-                minx, minz, nx, nz, CELL,
-            )
-            mesh_segments_rasterized += 1
-            mesh_had_segment = True
-        if mesh_had_segment:
-            mesh_segment_blocker_hits += 1
-            if not _is_structural_mesh(m):
-                edge_cells = _rasterize_footprint_perimeter(
-                    blocked_bm,
-                    m,
-                    minx, minz, nx, nz, CELL,
-                )
-                if edge_cells > 0:
-                    mesh_footprint_edge_blocker_hits += 1
-                    mesh_footprint_edge_cells += edge_cells
-                filled = _rasterize_closed_segment_regions(
-                    blocked_bm,
-                    segments,
-                    minx, minz, nx, nz, CELL,
-                )
-                if filled > 0:
-                    mesh_closed_region_blocker_hits += 1
-                    mesh_closed_region_cells += filled
+                # Keep the frame's own in-band columns alongside its bbox so the
+                # archway carve can rebuild the jamb-post halo and open only the
+                # threshold gap between the posts.
+                archway_carves.append((bb, columns))
+        marked = _rasterize_columns_into(
+            blocked_bm, columns, floor_y_bm, band_top_y,
+            minx, minz, nx, nz, CELL, COL_CELL,
+        )
+        if marked > 0:
+            mesh_column_blocker_hits += 1
+            mesh_column_cells += marked
 
-    # Door panels in CLOSED pose: rasterize as blockers. The regular mesh-
-    # collider pass excludes door-connector meshes (IsDoorConnector filter)
-    # because the legacy bake treated all doors as always-open. Now that we
-    # track per-door open/closed state via freed-cells, the closed-pose panel
+    # Door panels in CLOSED pose: block cells via their closed-pose columns. The
+    # regular mesh-collider pass excludes door-connector meshes (IsDoorConnector
+    # filter) because the legacy bake treated all doors as always-open. Now that
+    # we track per-door open/closed state via freed-cells, the closed-pose panel
     # must contribute to the blocked bitmap — otherwise the doorway is always
-    # passable in the bake and "freed when open" is meaningless. Both
-    # MeshCollider- and MeshFilter-sourced panels go through this path; the
-    # exporter's slicing is identical for both.
+    # passable in the bake and "freed when open" is meaningless. Container doors
+    # (fridge/cupboard) live entirely at chest height; their columns block the
+    # floor band correctly where fixed-Y slice planes missed them.
     for door_rec in door_records:
         for panel in door_rec.get("Panels", []):
-            for s in panel.get("SegmentsClosed", []):
-                py = s.get("PlaneY")
-                if py is None or py < y_lo or py > y_hi:
-                    continue
-                _rasterize_segment(blocked_bm,
-                                   s["AX"], s["AZ"], s["BX"], s["BZ"],
-                                   minx, minz, nx, nz, CELL)
+            _rasterize_columns_into(
+                blocked_bm, panel.get("ColumnsClosed") or [],
+                floor_y_bm, band_top_y, minx, minz, nx, nz, CELL, COL_CELL,
+            )
 
     for b in blockers:
         if not _is_solid_blocker(b): continue
@@ -830,31 +631,35 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
     # landing from the upstairs archway corridor — the newel post + jamb
     # dilation close a ~1m doorway about one capsule-width past the
     # SM_Doorframe_Small_13 frame, and a 0.5m box stops just short of it. The
-    # upper floor is safe to carve wider because the top-lip gate (above) has
-    # already removed the phantom ground-wall lips a wide carve would graze.
-    # See [[project-navigation-upper-hall2-archway-seal]].
+    # upper floor is safe to carve wider because the per-cell column raster no
+    # longer paints phantom ground-wall lips on the upper floor for a wide carve
+    # to graze (a ground wall's top only blocks the upper floor where it genuinely
+    # rises >0.30m above the 12.84 surface — the step-over rule in
+    # _column_blocks_floor — so there is nothing spurious near the carve).
+    # See [[project-navigation-upper-hall2-archway-seal]],
+    # [[project-navigation-bake-percell-vertical-span]].
     # POST-CLEARANCE GUARD: a doorframe is not a clean hole — it has solid jamb
     # POSTS. The carve must open the threshold GAP between the posts but must NOT
     # remove the capsule-clearance dilation hugging the posts, or the planner
     # routes the player flush against a post and the runtime collider stops them
     # (e.g. SM_Doorframe_Small_7's east post: bake said navigable, player walked
-    # into it and stalled). For each frame, re-rasterize its own segments and
+    # into it and stalled). For each frame, re-rasterize its own columns and
     # dilate by the capsule radius; that post-halo is preserved (never cleared),
     # while the threshold gap — which is >1 capsule-width from either post — is
     # opened. See [[project-navigation-executor-corner-stall]].
     ARCHWAY_CARVE_MARGIN_M = 1.2 if fy > 6.0 else 0.5
     mgn = ARCHWAY_CARVE_MARGIN_M
-    for bb, segments in archway_carves:
+    for bb, columns in archway_carves:
         bx0 = int((bb["MinX"] - mgn - minx) / CELL)
         bx1 = int((bb["MaxX"] + mgn - minx) / CELL)
         bz0 = int((bb["MinZ"] - mgn - minz) / CELL)
         bz1 = int((bb["MaxZ"] + mgn - minz) / CELL)
 
-        # Build the frame's own post-halo (raw post cells dilated by capsule R).
+        # Build the frame's own post-halo (raw post cells dilated by capsule R)
+        # from the frame's in-band columns — same cells that blocked above.
         post_raw = [[False] * nz for _ in range(nx)]
-        for s in segments:
-            _rasterize_segment(post_raw, s["AX"], s["AZ"], s["BX"], s["BZ"],
-                               minx, minz, nx, nz, CELL)
+        _rasterize_columns_into(post_raw, columns, floor_y_bm, band_top_y,
+                                minx, minz, nx, nz, CELL, COL_CELL)
         post_halo = _dilate_disc(post_raw, nx, nz, DILATE_CELLS)
 
         for jx in range(max(0, bx0), min(nx, bx1 + 1)):
@@ -884,22 +689,16 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         has_closed_in_band = False
         has_open_in_band = False
         for panel in door_rec.get("Panels", []):
-            for s in panel.get("SegmentsClosed", []):
-                py = s.get("PlaneY")
-                if py is None or py < y_lo or py > y_hi:
-                    continue
-                _rasterize_segment(panel_closed_raw,
-                                   s["AX"], s["AZ"], s["BX"], s["BZ"],
-                                   minx, minz, nx, nz, CELL)
+            cm = _rasterize_columns_into(
+                panel_closed_raw, panel.get("ColumnsClosed") or [],
+                floor_y_bm, band_top_y, minx, minz, nx, nz, CELL, COL_CELL)
+            if cm > 0:
                 has_closed_in_band = True
             for os in panel.get("OpenSegmentSets", []):
-                for s in os.get("Segments", []):
-                    py = s.get("PlaneY")
-                    if py is None or py < y_lo or py > y_hi:
-                        continue
-                    _rasterize_segment(panel_open_raw,
-                                       s["AX"], s["AZ"], s["BX"], s["BZ"],
-                                       minx, minz, nx, nz, CELL)
+                om = _rasterize_columns_into(
+                    panel_open_raw, os.get("Columns") or [],
+                    floor_y_bm, band_top_y, minx, minz, nx, nz, CELL, COL_CELL)
+                if om > 0:
                     has_open_in_band = True
         if not has_closed_in_band and not has_open_in_band:
             continue
@@ -1158,16 +957,12 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         "walkable_surface_count": len(floor_walks),
         "blocker_hits": blocker_hits,
         "primitive_blocker_hits": primitive_blocker_hits,
-        "mesh_segment_blocker_hits": mesh_segment_blocker_hits,
-        "mesh_segments_rasterized": mesh_segments_rasterized,
-        "mesh_closed_region_blocker_hits": mesh_closed_region_blocker_hits,
-        "mesh_closed_region_cells": mesh_closed_region_cells,
-        "mesh_footprint_edge_blocker_hits": mesh_footprint_edge_blocker_hits,
-        "mesh_footprint_edge_cells": mesh_footprint_edge_cells,
+        "mesh_column_blocker_hits": mesh_column_blocker_hits,
+        "mesh_column_cells": mesh_column_cells,
         # Legacy metric names retained for older diagnostics. These now mean
-        # all mesh segment traces, not only path/name-classified walls.
-        "wall_meshes_rasterized": mesh_segment_blocker_hits,
-        "wall_segments_rasterized": mesh_segments_rasterized,
+        # all mesh-collider column blocks, not only path/name-classified walls.
+        "wall_meshes_rasterized": mesh_column_blocker_hits,
+        "wall_segments_rasterized": mesh_column_cells,
         "door_carves": door_carves,
         "doors": doors_per_floor,
         "state_walls": state_walls_per_floor,
@@ -1226,7 +1021,7 @@ def write_png(floor_result, path):
             f.write(bytes(line))
 
 
-def _verify_bake_invariants(report, mesh_colliders, slice_planes):
+def _verify_bake_invariants(report, mesh_colliders):
     """Assert structural invariants on a freshly-baked report. Each failure is
     a recurring bug shape we want to catch at bake time, not at runtime.
 
@@ -1398,12 +1193,25 @@ def append_inter_floor_edges():
 
 def main():
     walk = json.load(open(WALK, encoding="utf-8"))
-    blok = json.load(open(BLOCK, encoding="utf-8"))
+    blok = json.load(open(BLOCK, encoding="utf-8-sig"))
     walkables = walk["WalkableSurfaces"]
     blockers = blok["NavigationBlockers"]
     mesh_colliders = blok.get("MeshColliders", [])
     door_records = blok.get("Doors", [])
     state_walls = blok.get("StateWalls", [])
+
+    # Validate the column-raster cell size matches the bake grid (the column
+    # index->world->bake-cell mapping in _rasterize_columns_into assumes
+    # COL_CELL; a mismatch would silently shift every blocker). Read the first
+    # mesh record carrying a ColumnCellSize and assert.
+    for _m in mesh_colliders:
+        _ccs = (_m.get("Footprint") or {}).get("ColumnCellSize")
+        if _ccs is not None:
+            if abs(_ccs - COL_CELL) > 1e-9:
+                raise SystemExit(
+                    f"Export ColumnCellSize={_ccs} != bake COL_CELL={COL_CELL}; "
+                    f"re-export or update COL_CELL.")
+            break
 
     # Doors from interactables. Each entry: {x, y, z, name}. Used to carve
     # navigability discs that survive wall-mesh asymmetric-cut artifacts.
@@ -1483,10 +1291,8 @@ def main():
         print(f"  walkable={c['walkable']}  blocked_raw={c['blocked_raw']}  "
               f"blocked_dilated={c['blocked_dilated']}  navigable={c['navigable']}")
         print(f"  primitive_blockers={result['primitive_blocker_hits']}  "
-              f"mesh_segment_blockers={result['mesh_segment_blocker_hits']}  "
-              f"mesh_segments={result['mesh_segments_rasterized']}  "
-              f"mesh_footprint_edges={result['mesh_footprint_edge_blocker_hits']}  "
-              f"mesh_closed_regions={result['mesh_closed_region_blocker_hits']}  "
+              f"mesh_column_blockers={result['mesh_column_blocker_hits']}  "
+              f"mesh_column_cells={result['mesh_column_cells']}  "
               f"door_carves={result['door_carves']}")
         png_path = OUT_PNG_DIR / f"navigable_region.{floor['label']}.ppm"
         write_png(result, png_path)
@@ -1499,10 +1305,7 @@ def main():
 
     # Re-load after the inter-floor pass so invariant 5 sees the edges.
     full_report = json.loads(OUT_JSON.read_text(encoding="utf-8"))
-    slice_planes = (blok.get("Filtering") or {}).get("MeshSlicePlanes") or []
-    errors, warnings = _verify_bake_invariants(
-        full_report, mesh_colliders, slice_planes
-    )
+    errors, warnings = _verify_bake_invariants(full_report, mesh_colliders)
     if warnings:
         print("\nBake invariant warnings:")
         for w in warnings:

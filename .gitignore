@@ -39,6 +39,11 @@ tools/
 *.lscache
 artifacts/navigation/mesh_guid_index.cache.json
 
+# Per-cell vertical-span blocker export (148MB intermediate, regenerable via
+# Export-SceneBlockerData.ps1; the consumed output is navigable_region.bake.json,
+# which is committed). Over GitHub's 100MB per-file push limit, so not tracked.
+artifacts/navigation/thirdpersongreybox-blockers.COLUMNS.json
+
 # Python bytecode cache
 **/__pycache__/
 *.pyc

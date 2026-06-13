@@ -148,8 +148,8 @@ def main() -> int:
                 continue
             print(
                 f"  {floor['label']}: "
-                f"mesh_segment_blockers={floor.get('mesh_segment_blocker_hits')} "
-                f"mesh_segments={floor.get('mesh_segments_rasterized')} "
+                f"mesh_column_blockers={floor.get('mesh_column_blocker_hits')} "
+                f"mesh_column_cells={floor.get('mesh_column_cells')} "
                 f"primitive_blockers={floor.get('primitive_blocker_hits')} "
                 f"navigable={floor.get('cells', {}).get('navigable')}"
             )

@@ -29,17 +29,41 @@ param(
     # opening is clear at capsule-middle height; see the bedroom-door analysis
     # in the slope-filter-retirement follow-up.
     [Parameter()]
-    # Slice planes are positioned at player-eye height above each floor band.
-    # 0.5 = ground floor (floor_y -0.5 + 1.0m); 12.5 catches walls whose tops
-    # sit just above the upper floor (upper floor_y 12.5); 13.5 catches walls
-    # that extend higher into the upper-floor band.
-    # Adding 12.5: many ground-floor walls (SM_Walls_Living, SM_Walls_Hall1,
-    # Fireplace, etc.) have TopY in [12.39, 12.59], i.e. between the upper
-    # floor level and the next slice plane at 13.5. Without a slice at 12.5
-    # they emit zero segments inside the upper-floor bake band [12.25, 15.0],
-    # leaving the staircase region apparently wall-free in upper routing.
-    # See [[project-navigation-walls-living-upper-slice-gap]].
+    # RETIRED as the blocking primitive — kept only as an optional diagnostic for
+    # tools that still want plane silhouettes. The bake no longer consumes slice
+    # segments: fixed-Y slicing is SAMPLING and missed any collider living between
+    # planes (notably the chest-height fridge/cupboard door panels at world Y
+    # ~1.0-2.5, between the old 0.5 and 12.5 planes), while also manufacturing
+    # phantom blockers (a ground wall's top sliced at 12.5 looked like an
+    # upper-floor wall) that needed a stack of suppression gates. Replaced by the
+    # per-cell vertical-span column raster in Get-MeshColliderRecord, which records
+    # the true [minY,maxY] each collider occupies over every XZ cell it covers. The
+    # bake then blocks a cell iff that interval overlaps the player capsule's
+    # vertical extent [floorY, floorY+CapsuleHeight] — a tolerance-free physical
+    # measurement, no slice artifacts, no gates.
+    # See [[project-navigation-bake-percell-vertical-span]].
     [double[]]$MeshSlicePlanes = @(0.5, 12.5, 13.5),
+
+    # XZ cell size (m) for the per-cell vertical-span column raster. Matches the
+    # bake grid (CELL=0.2 in bake_navigable_region.py) so columns map 1:1 to bake
+    # cells without resampling.
+    [Parameter()]
+    [double]$ColumnCellSize = 0.2,
+
+    # Capsule bands (world Y intervals the player capsule occupies, one per floor)
+    # used to PRUNE columns at export: a column whose [minY,maxY] overlaps NO band
+    # can never block any floor, so it's dropped (exterior trees, between-floor
+    # geometry, above-ceiling clutter — ~the bulk of the raster). Pruning here is
+    # exact, not a heuristic: the bake would ignore these columns anyway. Each band
+    # is floor_y .. floor_y + capsule_height. Ground floor_y=-0.5, upper=12.5,
+    # capsule height=3.2m (live-measured). A small margin is folded in so a column
+    # grazing a band edge is kept.
+    # See [[project-navigation-bake-percell-vertical-span]].
+    # Flat [lo0,hi0,lo1,hi1] pairs: ground band [-0.7,2.9], upper band [12.3,15.9]
+    # (floor_y .. floor_y+capsule_height 3.2m, with a small edge margin). Flat (not
+    # jagged [double[][]]) because PowerShell flattens jagged arrays across calls.
+    [Parameter()]
+    [double[]]$CapsuleBandPairs = @(-0.7, 2.9, 12.3, 15.9),
 
     # NOTE: the former MaxMeshFootprintAreaSqM / Wall* (wall-FAT bypass) and
     # ThinFrame* (doorframe AABB-suppression) parameters are retired. They tuned
@@ -834,6 +858,142 @@ function Get-QuaternionFromEulerYXZ {
     return [System.Numerics.Quaternion]::Normalize($qy * $qx * $qz)
 }
 
+function Get-ColumnSpans {
+    # Per-cell VERTICAL SPAN raster — the tolerance-free blocking primitive that
+    # replaces fixed-Y slicing. Rasterizes the collider's world-space triangles
+    # into XZ cells of size $CellSize against a FIXED GLOBAL origin (0,0), so
+    # cell IX = floor(worldX / CellSize). For every cell a triangle's XZ
+    # projection touches, fold that triangle's [minVertY, maxVertY] into the
+    # cell's running [MinY, MaxY]. The UNION across all triangles gives, per cell,
+    # the true vertical interval the collider occupies there: a thin vertical wall
+    # contributes a thin line of tall columns (interior cells untouched, exactly
+    # like the old segment line-traces); a chest-height door panel contributes a
+    # patch of columns spanning its real Y range; an L-shaped/sloped mesh gets the
+    # correct height per cell because each triangle only paints the cells under it.
+    #
+    # The bake consumes these: a cell is blocked on floor F iff some collider's
+    # column [MinY,MaxY] there overlaps the capsule extent [F_floorY, F_floorY +
+    # CapsuleHeight], with one honest step-over rule (MaxY - F_floorY < StepHeight
+    # => the foot clears it). No slice planes, no top-lip/borrow/void-plug gates.
+    # See [[project-navigation-bake-percell-vertical-span]].
+    #
+    # Returns a flat array of [IX, IZ, MinY, MaxY] (cell index + world-Y interval).
+    param(
+        [Parameter(Mandatory = $true)][System.Numerics.Vector3[]]$WorldVerts,
+        [Parameter(Mandatory = $true)][int[]]$Triangles,
+        [Parameter(Mandatory = $true)][double]$CellSize,
+        # Optional capsule bands as a FLAT [lo0,hi0,lo1,hi1,...] array (PowerShell
+        # flattens jagged [double[][]] when passing as an argument, so we use a flat
+        # pair-list to keep the shape stable). A column is kept only if it overlaps
+        # at least one [lo,hi] pair; empty = keep all (no pruning).
+        [Parameter(Mandatory = $false)][double[]]$CapsuleBandPairs = @()
+    )
+
+    # cellKey (packed IX,IZ as long) -> [double]@(minY, maxY)
+    $cols = @{}
+    $inv = 1.0 / $CellSize
+    $triCount = [int]($Triangles.Length / 3)
+    for ($t = 0; $t -lt $triCount; $t++) {
+        $a = $WorldVerts[$Triangles[$t * 3]]
+        $b = $WorldVerts[$Triangles[$t * 3 + 1]]
+        $c = $WorldVerts[$Triangles[$t * 3 + 2]]
+
+        $triMinY = [Math]::Min($a.Y, [Math]::Min($b.Y, $c.Y))
+        $triMaxY = [Math]::Max($a.Y, [Math]::Max($b.Y, $c.Y))
+
+        # XZ bounding cells of this triangle.
+        $minX = [Math]::Min($a.X, [Math]::Min($b.X, $c.X))
+        $maxX = [Math]::Max($a.X, [Math]::Max($b.X, $c.X))
+        $minZ = [Math]::Min($a.Z, [Math]::Min($b.Z, $c.Z))
+        $maxZ = [Math]::Max($a.Z, [Math]::Max($b.Z, $c.Z))
+        $ix0 = [int][Math]::Floor($minX * $inv)
+        $ix1 = [int][Math]::Floor($maxX * $inv)
+        $iz0 = [int][Math]::Floor($minZ * $inv)
+        $iz1 = [int][Math]::Floor($maxZ * $inv)
+
+        for ($ix = $ix0; $ix -le $ix1; $ix++) {
+            for ($iz = $iz0; $iz -le $iz1; $iz++) {
+                # Cover the cell if the triangle's XZ projection overlaps it. Test
+                # the cell-center against the triangle (catches area fills) OR the
+                # triangle's bbox spanning a single cell (catches thin slivers a
+                # center test would miss between sample points). For thin walls the
+                # bbox is sub-cell on one axis, so the bbox-overlap branch keeps the
+                # wall line continuous even when no center lands inside.
+                $cx = ($ix + 0.5) * $CellSize
+                $cz = ($iz + 0.5) * $CellSize
+                $inside = Test-PointInTriangleXZ -PX $cx -PZ $cz -A $a -B $b -C $c
+                if (-not $inside) {
+                    # bbox-overlap fallback for sub-cell-thin triangles: the
+                    # triangle's XZ bbox intersects this cell's square.
+                    $cellMinX = $ix * $CellSize; $cellMaxX = $cellMinX + $CellSize
+                    $cellMinZ = $iz * $CellSize; $cellMaxZ = $cellMinZ + $CellSize
+                    if ($maxX -lt $cellMinX -or $minX -gt $cellMaxX -or `
+                        $maxZ -lt $cellMinZ -or $minZ -gt $cellMaxZ) { continue }
+                }
+                # Pack (ix,iz) into one long key. Both indices are biased by
+                # COL_KEY_OFFSET first so NEGATIVE cell coordinates pack and
+                # unpack correctly — without the bias, floor-division and the
+                # modulo recovered the wrong (ix,iz) for any cell at world X<0
+                # or Z<0 (half the scene), corrupting e.g. the dining table and
+                # every stair/ceiling column. World coords are within ±200m
+                # (±1000 cells); offset 100000 keeps biased indices in
+                # [99000,101000] << the 1,000,000 multiplier, so no collision.
+                $key = ([long]($ix + 100000)) * 1000000L + [long]($iz + 100000)
+                $existing = $cols[$key]
+                if ($null -eq $existing) {
+                    $cols[$key] = @($triMinY, $triMaxY)
+                } else {
+                    if ($triMinY -lt $existing[0]) { $existing[0] = $triMinY }
+                    if ($triMaxY -gt $existing[1]) { $existing[1] = $triMaxY }
+                }
+            }
+        }
+    }
+
+    $pairs = @($CapsuleBandPairs)
+    $havePrune = ($pairs.Count -ge 2)
+    $out = New-Object System.Collections.Generic.List[object]
+    foreach ($kv in $cols.GetEnumerator()) {
+        $cMin = [double]$kv.Value[0]
+        $cMax = [double]$kv.Value[1]
+        # Prune columns that overlap no capsule band — they can't block any floor.
+        if ($havePrune) {
+            $keep = $false
+            for ($p = 0; $p + 1 -lt $pairs.Count; $p += 2) {
+                if (-not ($cMax -lt $pairs[$p] -or $cMin -gt $pairs[$p + 1])) { $keep = $true; break }
+            }
+            if (-not $keep) { continue }
+        }
+        $biasedIx = [long][Math]::Floor($kv.Key / 1000000L)
+        $ix = [int]($biasedIx - 100000)
+        $iz = [int]($kv.Key - $biasedIx * 1000000L - 100000)
+        $out.Add(@(
+            $ix,
+            $iz,
+            [Math]::Round($cMin, 4),
+            [Math]::Round($cMax, 4)
+        ))
+    }
+    return $out.ToArray()
+}
+
+function Test-PointInTriangleXZ {
+    param(
+        [Parameter(Mandatory = $true)][double]$PX,
+        [Parameter(Mandatory = $true)][double]$PZ,
+        [Parameter(Mandatory = $true)][System.Numerics.Vector3]$A,
+        [Parameter(Mandatory = $true)][System.Numerics.Vector3]$B,
+        [Parameter(Mandatory = $true)][System.Numerics.Vector3]$C
+    )
+    # Barycentric sign test in the XZ plane.
+    $d1 = ($PX - $B.X) * ($A.Z - $B.Z) - ($A.X - $B.X) * ($PZ - $B.Z)
+    $d2 = ($PX - $C.X) * ($B.Z - $C.Z) - ($B.X - $C.X) * ($PZ - $C.Z)
+    $d3 = ($PX - $A.X) * ($C.Z - $A.Z) - ($C.X - $A.X) * ($PZ - $A.Z)
+    $hasNeg = ($d1 -lt 0) -or ($d2 -lt 0) -or ($d3 -lt 0)
+    $hasPos = ($d1 -gt 0) -or ($d2 -gt 0) -or ($d3 -gt 0)
+    return -not ($hasNeg -and $hasPos)
+}
+
 function Get-MeshColliderRecord {
     param(
         [Parameter(Mandatory = $true)][object]$Component,
@@ -843,7 +1003,9 @@ function Get-MeshColliderRecord {
         [Parameter(Mandatory = $true)][object]$MeshData,
         [Parameter(Mandatory = $true)][double[]]$SlicePlanes,
         [Parameter(Mandatory = $true)][double]$MinTopY,
-        [Parameter(Mandatory = $true)][double]$MaxBottomY
+        [Parameter(Mandatory = $true)][double]$MaxBottomY,
+        [Parameter(Mandatory = $false)][double]$ColumnCellSize = 0.2,
+        [Parameter(Mandatory = $false)][double[]]$CapsuleBandPairs = @()
     )
 
     $worldVerts = New-Object System.Numerics.Vector3[] $MeshData.Vertices.Length
@@ -958,6 +1120,11 @@ function Get-MeshColliderRecord {
         }
     }
 
+    # Per-cell vertical-span columns — the bake's blocking primitive (replaces the
+    # slice Segments below, which are retained only as a diagnostic). See
+    # Get-ColumnSpans / [[project-navigation-bake-percell-vertical-span]].
+    $columns = @(Get-ColumnSpans -WorldVerts $worldVerts -Triangles $tris -CellSize $ColumnCellSize -CapsuleBandPairs $CapsuleBandPairs)
+
     $footprint = [ordered]@{
         Kind = "ConvexHull2D"
         Center = Convert-Vector3ToObject $worldCenter
@@ -965,9 +1132,14 @@ function Get-MeshColliderRecord {
         AreaSqM = [Math]::Round($area, 6)
         IntersectedTriangleCount = $pointBag.IntersectedTriangleCount
         SegmentCount = $segments.Count
+        ColumnCellSize = $ColumnCellSize
+        ColumnCount = $columns.Count
     }
     if ($segments.Count -gt 0) {
         $footprint.Segments = $segments.ToArray()
+    }
+    if ($columns.Count -gt 0) {
+        $footprint.Columns = $columns
     }
 
     $record = New-ColliderRecord -Component $componentForRecord `
@@ -1551,7 +1723,8 @@ if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($
         $record = Get-MeshColliderRecord -Component $component -GameObject $gameObject -Path $path `
             -WorldTransform $worldTransform -MeshData $meshData `
             -SlicePlanes $MeshSlicePlanes `
-            -MinTopY $MinimumBlockingTopY -MaxBottomY $MaximumBlockingBottomY
+            -MinTopY $MinimumBlockingTopY -MaxBottomY $MaximumBlockingBottomY `
+            -ColumnCellSize $ColumnCellSize -CapsuleBandPairs $CapsuleBandPairs
 
         if ($null -eq $record) {
             Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "EmptyFootprint"
@@ -1807,7 +1980,13 @@ function Slice-PanelInDoorPose {
         $worldOpen[$i] = $openPos + [System.Numerics.Vector3]::Transform($localToDoor, $openRot)
     }
 
-    return ,(Get-MeshSegmentsAtPlanes -WorldVerts $worldOpen -Triangles $Triangles -SlicePlanes $SlicePlanes)
+    # Return the open-pose world verts (Vector3[]). The caller slices these for the
+    # diagnostic open-pose segments AND column-rasters them for the blocking
+    # primitive — critical for container doors (fridge/cupboard) whose chest-height
+    # panels slice to nothing but DO occupy floor-capsule cells when open. Returning
+    # a single typed array (not a wrapper object) keeps parameter binding clean.
+    # See [[project-navigation-bake-percell-vertical-span]].
+    return ,$worldOpen
 }
 
 function Get-DoorPanels {
@@ -1868,26 +2047,29 @@ function Get-DoorPanels {
         $worldVertsClosed = Transform-MeshVertsToWorld -WorldTransform $panelWorld -LocalVerts $meshData.Vertices
 
         $segmentsClosed = Get-MeshSegmentsAtPlanes -WorldVerts $worldVertsClosed -Triangles $meshData.Triangles -SlicePlanes $MeshSlicePlanes
+        # Per-cell vertical-span columns for the CLOSED pose (the blocking primitive
+        # that replaces slice segments — catches chest-height panels segments miss).
+        $columnsClosed = @(Get-ColumnSpans -WorldVerts $worldVertsClosed -Triangles $meshData.Triangles -CellSize $script:ColumnCellSize -CapsuleBandPairs $script:CapsuleBandPairs)
 
         $openSliceSets = New-Object System.Collections.Generic.List[object]
         foreach ($openPose in $openPoses) {
-            try {
-                $segs = Slice-PanelInDoorPose `
-                    -PanelWorldVertsClosed $worldVertsClosed `
-                    -DoorWorldClosed $DoorWorldClosed `
-                    -DoorWorldOpen $openPose `
-                    -Triangles $meshData.Triangles `
-                    -SlicePlanes $script:MeshSlicePlanes
-            } catch {
-                Write-Host ("Slice-PanelInDoorPose threw: {0}" -f $_.Exception.Message)
-                throw
-            }
-            if ($null -eq $segs) { $segs = New-Object System.Collections.Generic.List[object] }
+            # Re-pose the panel verts into the open door transform.
+            $worldOpen = Slice-PanelInDoorPose `
+                -PanelWorldVertsClosed $worldVertsClosed `
+                -DoorWorldClosed $DoorWorldClosed `
+                -DoorWorldOpen $openPose `
+                -Triangles $meshData.Triangles `
+                -SlicePlanes $script:MeshSlicePlanes
+            # Diagnostic open-pose slice segments + the blocking-primitive columns.
+            $segs = Get-MeshSegmentsAtPlanes -WorldVerts $worldOpen -Triangles $meshData.Triangles -SlicePlanes $script:MeshSlicePlanes
             $segsArr = $segs.ToArray()
+            $openColumns = @(Get-ColumnSpans -WorldVerts $worldOpen -Triangles $meshData.Triangles -CellSize $script:ColumnCellSize -CapsuleBandPairs $script:CapsuleBandPairs)
             $entry = [pscustomobject]@{
                 Tag = [string]$openPose["Tag"]
                 SegmentCount = $segsArr.Length
                 Segments = $segsArr
+                ColumnCount = $openColumns.Count
+                Columns = $openColumns
             }
             [void]$openSliceSets.Add($entry)
         }
@@ -1906,6 +2088,8 @@ function Get-DoorPanels {
             TriangleCount = [int]($meshData.Triangles.Length / 3)
             ClosedSegmentCount = $segmentsClosed.Count
             SegmentsClosed = $segmentsClosed.ToArray()
+            ClosedColumnCount = @($columnsClosed).Count
+            ColumnsClosed = @($columnsClosed)
             OpenSegmentSets = $openSliceSets.ToArray()
         }
         [void]$panels.Add($panelEntry)
