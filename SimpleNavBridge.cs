@@ -18,7 +18,9 @@ namespace DateEverythingAccess
         private static string _activeStepKey;
         private static Vector3 _activeTarget;
         private static bool _activeTargetValid;
-        private static Door _activeDoor;
+        // Active barrier on the current segment, abstracted over Door + SlidingDoor (container
+        // doors). See DoorPortal in SimpleNav.cs and [[project_navigation_container_open_on_interact]].
+        private static DoorPortal _activeDoor;
         // Waypoint sequence for the active route. _activeTarget mirrors _waypoints[_waypointIndex].
         private static readonly System.Collections.Generic.List<Vector3> _waypoints =
             new System.Collections.Generic.List<Vector3>(8);
@@ -257,21 +259,20 @@ namespace DateEverythingAccess
                 return (tdx * tdx + tdz * tdz) <= WorldTargetArrivalRadius * WorldTargetArrivalRadius;
             }
 
+            // Arrival = the player reached the planner's final waypoint (the goal STAND-CELL),
+            // within the normal waypoint radius. The planner already placed that cell inside the
+            // target's interaction band (<=1.5m from the collider face, LOS-preferred), so reaching
+            // it IS being in interaction range — there is no need to also test the raw
+            // InteractionRadius disc, and doing so was actively harmful: a large-radius object
+            // (charcoal/log/food, radius up to 7.5m) let the drive declare "arrived" up to ~6m short
+            // of the goal cell, stopping the player far from where the planner parked them. If the
+            // goal cell is NOT in the interaction radius, that's a bad route to fix in the planner,
+            // not something the drive should paper over by stopping early. The final selection is
+            // still finalized by the first-person look/raycast after arrival.
             Vector3 finalWaypoint = _waypoints[_waypoints.Count - 1];
             float wdx = finalWaypoint.x - playerPos.x;
             float wdz = finalWaypoint.z - playerPos.z;
-            if (wdx * wdx + wdz * wdz > WaypointArrivalRadius * WaypointArrivalRadius)
-                return false;
-
-            Vector3 t = _activeRoute.TargetPosition;
-            float dx = t.x - playerPos.x;
-            float dz = t.z - playerPos.z;
-            float r = _activeRoute.TargetInteractionRadius;
-            if (r < 0.5f) r = 0.5f;
-            // Match InteractableObj.InteractionRadius bounds used by the planner. Arrival is
-            // still finalized only after the game selects the target in first-person.
-            if (r > 7.5f) r = 7.5f;
-            return (dx * dx + dz * dz) <= r * r;
+            return (wdx * wdx + wdz * wdz) <= WaypointArrivalRadius * WaypointArrivalRadius;
         }
 
         // Resolve _activeDoor from the route's segment door tags. Multiple doors per segment
@@ -285,15 +286,16 @@ namespace DateEverythingAccess
             if (names == null || names.Count == 0) return;
             for (int i = 0; i < names.Count; i++)
             {
-                Door d = SimpleNav.FindDoorByName(names[i]);
+                DoorPortal d = SimpleNav.FindPortalByName(names[i]);
                 if (d != null) { _activeDoor = d; return; }
             }
         }
 
         /// <summary>
-        /// The Door for the current route segment, when the route has a door tag. Null otherwise.
+        /// The barrier (swinging Door or sliding container door) for the current route segment,
+        /// when the route has a door tag. Null otherwise.
         /// </summary>
-        public static Door ActiveDoor => _activeDoor;
+        public static DoorPortal ActiveDoor => _activeDoor;
 
         public static SimpleNavWaypoint ActiveWaypoint
         {
@@ -344,27 +346,31 @@ namespace DateEverythingAccess
             return _doorStartRotField;
         }
 
-        // Reflected access to Door.moving (private bool set true while changeDoorRot is
-        // animating the swing).
-        private static FieldInfo _doorMovingField;
-        private static bool _doorMovingFieldResolved;
-        private static FieldInfo GetDoorMovingField()
+        // Reflected access to the private bool `moving` on a barrier component. Both Door
+        // (swing animation) and SlidingDoor (translation) declare it with the same name, so we
+        // cache the FieldInfo per concrete type. Door's field is on Door itself; for any type
+        // we walk up to find a private instance `moving`.
+        private static readonly System.Collections.Generic.Dictionary<Type, FieldInfo> _movingFieldByType =
+            new System.Collections.Generic.Dictionary<Type, FieldInfo>();
+        private static FieldInfo GetMovingField(Type t)
         {
-            if (!_doorMovingFieldResolved)
+            if (t == null) return null;
+            if (_movingFieldByType.TryGetValue(t, out FieldInfo cached)) return cached;
+            FieldInfo fi = null;
+            try
             {
-                _doorMovingFieldResolved = true;
-                try
-                {
-                    _doorMovingField = typeof(Door).GetField("moving", BindingFlags.Instance | BindingFlags.NonPublic);
-                }
-                catch (Exception ex)
-                {
-                    if (Main.Log != null) Main.Log.LogWarning("SimpleNav reflect Door.moving failed: " + ex.Message);
-                    _doorMovingField = null;
-                }
+                for (Type cur = t; cur != null && fi == null; cur = cur.BaseType)
+                    fi = cur.GetField("moving", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
             }
-            return _doorMovingField;
+            catch (Exception ex)
+            {
+                if (Main.Log != null) Main.Log.LogWarning("SimpleNav reflect " + t.Name + ".moving failed: " + ex.Message);
+                fi = null;
+            }
+            _movingFieldByType[t] = fi;
+            return fi;
         }
+        private static FieldInfo GetDoorMovingField() => GetMovingField(typeof(Door));
 
         // Reflected access to Door.collidedWithPlayer (private bool latched true when the
         // player rigidbody touches the door collider). Cleared manually during sweep teleports.
@@ -481,23 +487,56 @@ namespace DateEverythingAccess
         }
 
         /// <summary>
+        /// Reset a sliding container door to its closed state for the sweep. A SlidingDoor
+        /// translates (it has no swing rotation / OcclusionPortal field), so closing is just its
+        /// own CloseDoor() — we stop any in-flight slide first so the coroutine can't fight it.
+        /// </summary>
+        public static void ForceSliderClosed(SlidingDoor slider)
+        {
+            if (slider == null) return;
+            string name = slider.gameObject != null ? slider.gameObject.name : "<null>";
+            try { slider.StopAllCoroutines(); }
+            catch (Exception ex)
+            {
+                if (Main.Log != null) Main.Log.LogWarning("SimpleNav ForceSliderClosed StopAllCoroutines threw door=" + name + " ex=" + ex.Message);
+            }
+            // Clear the private `moving` flag (StopAllCoroutines leaves it latched) so a later
+            // Interact() isn't rejected by the moving guard.
+            FieldInfo movingField = GetMovingField(typeof(SlidingDoor));
+            if (movingField != null)
+            {
+                try { movingField.SetValue(slider, false); } catch { }
+            }
+            try { slider.CloseDoor(0.5f); }
+            catch (Exception ex)
+            {
+                if (Main.Log != null) Main.Log.LogWarning("SimpleNav ForceSliderClosed CloseDoor threw door=" + name + " ex=" + ex.Message);
+            }
+            if (Main.Log != null)
+                Main.Log.LogInfo("SimpleNav ForceSliderClosed door=" + name);
+        }
+
+        /// <summary>
         /// True when the active route's door is currently animating its swing. The autowalk
         /// should hold the player in place while this is true.
         /// </summary>
         public static bool IsActiveDoorMoving() => IsDoorMoving(_activeDoor);
 
         /// <summary>
-        /// True while the given door's swing animation is in flight (Door.moving = true).
-        /// Reflected read; returns false if reflection failed.
+        /// True while the given barrier's animation is in flight — Door swing OR SlidingDoor
+        /// translation; both expose a private bool `moving` of the same name. Reflected read;
+        /// returns false if reflection failed.
         /// </summary>
-        public static bool IsDoorMoving(Door door)
+        public static bool IsDoorMoving(DoorPortal door)
         {
             if (door == null) return false;
-            FieldInfo fi = GetDoorMovingField();
+            object component = door.IsSwing ? (object)door.SwingDoor : door.SlideComponent;
+            if (component == null) return false;
+            FieldInfo fi = GetMovingField(component.GetType());
             if (fi == null) return false;
             try
             {
-                object v = fi.GetValue(door);
+                object v = fi.GetValue(component);
                 return v is bool b && b;
             }
             catch
@@ -506,10 +545,13 @@ namespace DateEverythingAccess
             }
         }
 
-        // Returns the angular distance (deg) between the door's live rotation and its
-        // authored startRot (closed orientation). Returns -1 if reflection failed.
-        private static float ReadDoorVisualRotationDelta(Door door)
+        // Returns the angular distance (deg) between a swinging door's live rotation and its
+        // authored startRot (closed orientation). Returns -1 if reflection failed OR the portal
+        // is a SLIDER (sliders translate, not rotate — no swing delta concept).
+        private static float ReadDoorVisualRotationDelta(DoorPortal portal)
         {
+            if (portal == null || !portal.IsSwing) return -1f;
+            Door door = portal.SwingDoor;
             if (door == null) return -1f;
             FieldInfo fi = GetDoorStartRotField();
             if (fi == null) return -1f;
@@ -537,7 +579,7 @@ namespace DateEverythingAccess
         /// <see cref="TryOpenActiveDoorIfNeeded"/> wrapper) and for routes whose target is
         /// itself a door (via <see cref="GetRouteTargetDoor"/>).
         /// </summary>
-        public static bool TryOpenDoorIfNeeded(Door door, Vector3 playerPos)
+        public static bool TryOpenDoorIfNeeded(DoorPortal door, Vector3 playerPos)
         {
             string skipReason = null;
             float dist = -1f;
@@ -556,12 +598,13 @@ namespace DateEverythingAccess
                 if (door != null)
                 {
                     Vector3 entryOrigin = Camera.main != null ? Camera.main.transform.position : playerPos;
-                    Collider entryCol = door.GetComponent<Collider>();
+                    Collider entryCol = door.GetComponent();
                     Vector3 entryNearest = entryCol != null ? entryCol.ClosestPointOnBounds(entryOrigin) : door.transform.position;
                     entryDist = Vector3.Distance(entryNearest, entryOrigin);
                 }
                 Main.Log.LogInfo("SimpleNav door entry step=" + (_activeStepKey ?? "<null>") +
                     " door=" + entryDoorName +
+                    " kind=" + (door != null ? (door.IsSwing ? "swing" : "slider") : "<null>") +
                     " open=" + entryOpen +
                     " range=" + entryRange.ToString("0.00", CultureInfo.InvariantCulture) +
                     " visualRotDelta=" + entryVisualRot.ToString("0.00", CultureInfo.InvariantCulture) +
@@ -576,19 +619,23 @@ namespace DateEverythingAccess
             }
             else if (door.open)
             {
-                visualRotDelta = ReadDoorVisualRotationDelta(door);
-                float openThreshold = door.range * DoorFullyOpenRotationFraction;
-                bool swingStillRunning = IsActiveDoorMoving();
-                if (swingStillRunning)
+                bool animStillRunning = IsActiveDoorMoving();
+                if (animStillRunning)
                 {
                     skipReason = "door-swing-in-progress";
                 }
-                else if (visualRotDelta >= 0f && visualRotDelta < openThreshold)
+                else if (door.IsSwing)
                 {
-                    // Door.open is true but the swing finished short of the open pose —
-                    // the game's changeDoorRot broke on collidedWithPlayer. Skip honestly
-                    // and let the step time out so the failure is visible.
-                    skipReason = "door-stuck-player-blocking";
+                    // SWING door: open=true but the swing may have finished short of the open pose
+                    // (the game's changeDoorRot broke on collidedWithPlayer). Check rotation.
+                    // Sliders translate and have no such partial-pose desync, so this is skipped
+                    // for them — open=true + not moving is simply open.
+                    visualRotDelta = ReadDoorVisualRotationDelta(door);
+                    float openThreshold = door.range * DoorFullyOpenRotationFraction;
+                    if (visualRotDelta >= 0f && visualRotDelta < openThreshold)
+                        skipReason = "door-stuck-player-blocking";
+                    else
+                        skipReason = "door-already-open";
                 }
                 else
                 {
@@ -600,7 +647,7 @@ namespace DateEverythingAccess
                 // Mirror the game's in-range test (BetterPlayerControl.cs:499):
                 //   Distance(door.collider.ClosestPointOnBounds(camPos), camPos) < InteractionRadius
                 Vector3 origin = Camera.main != null ? Camera.main.transform.position : playerPos;
-                Collider doorCol = door.GetComponent<Collider>();
+                Collider doorCol = door.GetComponent();
                 Vector3 nearestOnDoor = doorCol != null ? doorCol.ClosestPointOnBounds(origin) : door.transform.position;
                 dist = Vector3.Distance(nearestOnDoor, origin);
                 float radius = door.interactableObj != null ? door.interactableObj.InteractionRadius : DoorInteractRadiusFallback;

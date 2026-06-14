@@ -98,7 +98,12 @@ def plan_to_cell(planner, start_node, target_floor_label, target_ix, target_iz,
         return {"status": "no_path"}
 
     waypoints = _mod.smooth_path(path, planner)
-    segments = _mod.tag_doors(waypoints, planner, _mod.door_positions())
+    # Door tags now come from the bake's uniform opening-center table inside tag_doors
+    # (swing + sliding doors). target_name force-tags a door target on the final segment;
+    # cell-targets have no door name so pass None.
+    _tname = target_stanza.get("Name") if isinstance(target_stanza, dict) else None
+    _trad = target_stanza.get("InteractionRadius", 0.0) if isinstance(target_stanza, dict) else 0.0
+    segments = _mod.tag_doors(waypoints, planner, target_name=_tname, target_radius=_trad)
     if target_stanza is None:
         target_stanza = {
             "GameObjectId": 0,

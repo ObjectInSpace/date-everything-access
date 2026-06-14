@@ -60,7 +60,7 @@ def project_param_xz(ax, az, bx, bz, px, pz):
 PURSUIT_MAX_CROSSTRACK_M = 0.6
 
 
-def pursuit_target(wps, wp_index, px, pz, lookahead):
+def pursuit_target(wps, wp_index, px, pz, lookahead, floor=None):
     """Mirror SimpleNavBridge.PursuitTarget: project player onto the remaining
     polyline; return the projection point if the player is farther than
     PURSUIT_MAX_CROSSTRACK_M off the line (steer back onto the corridor),
@@ -119,70 +119,41 @@ DOOR_OPEN_SPAN_M = 1.5
 PROGRESS_EPS_M = 0.03           # min net progress per window to count as "moving"
 STALL_WINDOW_TICKS = 90         # ~3s at 30Hz with no progress ⇒ pinned (real stall)
 
-
-# Lateral strafe magnitude injected by the wall-slide escape, mirroring
-# AutoWalkEscapeStrafeMagnitude in AccessibilityWatcher.cs. The real follower
-# does NOT free-slide along walls: its move command is player-local and, when
-# aligned, is essentially pure forward, so a head-on jamb graze pins the capsule
-# (velocity→0) until the escape injects a lateral term. Modeling free axis-slide
-# here made the sim too optimistic — it silently passed the very doorframe grazes
-# that stalled in-game. See [[project-navigation-runtime-stall-catalog-2026-05-29]].
-ESCAPE_STRAFE_MAG = 0.8
-
-# Forward (move.z) multiplier WHILE an escape burst is active, mirroring
-# AutoWalkEscapeForwardDuringBurst. The old escape left forward at full during the
-# strafe, so it kept shoving the capsule back into the jamb — a limit cycle (the
-# 2026-06-11 in-game thrash). Attenuating forward lets the lateral slide dominate.
-ESCAPE_FWD_DURING_BURST = 0.15
-# Net XZ a burst must produce to count as productive; below this it's a wasted
-# thrash. After ESCAPE_MAX_WASTED consecutive wasted bursts the follower gives up
-# escaping for the pinned episode and lets the stall window declare honestly.
-ESCAPE_BURST_PROGRESS_M = 0.12
-ESCAPE_MAX_WASTED = 3
+# Move magnitude (= cos(turn) alignment) below which the follower is turning in
+# place, not translating — mirrors AutoWalkMovingThreshold. The deployed watchdog
+# does NOT accumulate the no-progress clock while the body is turning (move≈0 by
+# the facing gate), so a sharp pivot toward the next heading is not a stall. The
+# sim must do the same or it false-flags every big-turn corner.
+MOVING_THRESHOLD = 0.2
 
 
-def _try_step(floor, px, pz, fwd_x, fwd_z, right_x, right_z, speed_dt, escaping):
-    """Move one tick under the real controller's model. `fwd_*`/`right_*` are the
-    player-local forward/right unit axes (XZ); `speed_dt` is forward distance this
-    tick. Returns (new_px, new_pz, touched, want_escape).
+def _try_step(floor, px, pz, fwd_x, fwd_z, speed_dt):
+    """Move one tick under the current controller's model. `fwd_*` is the player's
+    forward unit axis (XZ); `speed_dt` is forward distance this tick. Returns
+    (new_px, new_pz, touched).
 
-    The controller commands pure forward (no free axis-slide). If the forward move
-    is blocked we do NOT silently slide — we report `want_escape` so the caller can
-    fire the side-probe strafe, exactly as the C# follower does. When `escaping`,
-    a lateral strafe is already mixed into the move, so a blocked forward still
-    advances laterally if that side is clear (the capsule peeling off the jamb)."""
+    The deployed follower has NO wall-slide escape: it commands move = the steer
+    direction and the game's non-kinematic Rigidbody is deflected ALONG walls by
+    the physics solver (it slides — that is how the 1.6m capsule threads ~1.0m
+    doors). We model that deflection with axis-separated sliding: try the full
+    move; if blocked, try X-only then Z-only and take whichever stays navigable.
+    `touched` flags wall contact (the move was deflected) for diagnostics."""
     def nav(x, z):
         ix, iz = floor.world_to_cell(x, z)
         return floor.in_bounds(ix, iz) and floor.navigable(ix, iz)
 
-    # During an escape burst the forward term is attenuated (mirrors C#) so the
-    # lateral strafe dominates and the capsule peels off the jamb instead of being
-    # shoved back into it.
-    fwd_scale = ESCAPE_FWD_DURING_BURST if escaping else 1.0
-    mx = fwd_x * speed_dt * fwd_scale
-    mz = fwd_z * speed_dt * fwd_scale
-    if escaping:
-        mx += right_x * ESCAPE_STRAFE_MAG * speed_dt
-        mz += right_z * ESCAPE_STRAFE_MAG * speed_dt
-
+    mx = fwd_x * speed_dt
+    mz = fwd_z * speed_dt
     # Full move clear → take it.
     if nav(px + mx, pz + mz):
-        return px + mx, pz + mz, False, False
-    # Blocked. While escaping, allow the lateral component alone (the wall deflects
-    # the forward part but the strafe peels the capsule sideways).
-    if escaping and nav(px + right_x * ESCAPE_STRAFE_MAG * speed_dt,
-                        pz + right_z * ESCAPE_STRAFE_MAG * speed_dt):
-        return (px + right_x * ESCAPE_STRAFE_MAG * speed_dt,
-                pz + right_z * ESCAPE_STRAFE_MAG * speed_dt, True, False)
-    # Pinned pressing forward → ask for an escape next tick.
-    return px, pz, True, True
-
-
-def _side_clear(floor, px, pz, dir_x, dir_z, dist):
-    """True if a short probe `dist` m along (dir_x, dir_z) stays navigable — the
-    offline analogue of the chest side-cast the C# escape uses to pick its side."""
-    ix, iz = floor.world_to_cell(px + dir_x * dist, pz + dir_z * dist)
-    return floor.in_bounds(ix, iz) and floor.navigable(ix, iz)
+        return px + mx, pz + mz, False
+    # Blocked: slide along the wall — keep whichever single axis stays navigable.
+    if nav(px + mx, pz):
+        return px + mx, pz, True
+    if nav(px, pz + mz):
+        return px, pz + mz, True
+    # Pinned: both axes blocked (a genuine head-on pinch).
+    return px, pz, True
 
 
 def simulate(floor, wps, door_xz=None):
@@ -206,23 +177,6 @@ def simulate(floor, wps, door_xz=None):
     contacts = []                       # positions where the player touched a wall (slid)
     best_remaining = math.inf           # closest approach to the final waypoint so far
     ticks_since_progress = 0
-    # Wall-slide escape state, mirroring AccessibilityWatcher.cs. escape_sign locks
-    # the strafe direction for a burst; escape_ticks counts it down; pinned_ticks
-    # tracks how long forward has been pressed without moving before the escape arms.
-    # burst_start_(px,pz) marks where the active burst began so we can judge whether
-    # it actually moved the capsule; wasted counts consecutive unproductive bursts
-    # (give up after ESCAPE_MAX_WASTED); last_sign persists the chosen side across
-    # bursts so a head-on jamb doesn't flip L/R.
-    SIDE_PROBE_M = 0.9                   # AutoWalkEscapeSideProbeDistance
-    ESCAPE_TRIGGER_TICKS = max(1, int(0.4 / STEP_DT))   # AutoWalkEscapeTriggerSeconds
-    ESCAPE_BURST_TICKS = max(1, int(0.5 / STEP_DT))     # AutoWalkEscapeBurstSeconds
-    escape_sign = 0
-    escape_ticks = 0
-    pinned_ticks = 0
-    burst_start_px = px
-    burst_start_pz = pz
-    escape_wasted = 0
-    escape_last_sign = 0
     for _ in range(MAX_TICKS):
         # Advance discrete waypoint when within arrival radius (mirrors TryAdvanceWaypoint).
         while wp_index < len(wps) - 1 and math.hypot(wps[wp_index][0] - px, wps[wp_index][1] - pz) <= WAYPOINT_ARRIVE_M:
@@ -232,88 +186,39 @@ def simulate(floor, wps, door_xz=None):
         if remaining <= TARGET_ARRIVE_M:
             return "arrived", None, contacts
         # Steer toward pursuit lookahead point.
-        tx, tz = pursuit_target(wps, wp_index, px, pz, PURSUIT_LOOKAHEAD_M)
+        tx, tz = pursuit_target(wps, wp_index, px, pz, PURSUIT_LOOKAHEAD_M, floor)
         desired = math.atan2(tz - pz, tx - px)
         # Turn toward desired at limited rate.
         dyaw = (desired - facing + math.pi) % (2 * math.pi) - math.pi
         max_step = math.radians(MAX_TURN_DEG_PER_S) * STEP_DT
         facing += max(-max_step, min(max_step, dyaw))
-        # Alignment speed gate: move = clamp01(cos(turn)). NOTE: this mirrors the
-        # CURRENT follower. The velocity-preserving fix changes this term; update
-        # it here in lockstep so the sim tests the same controller the game runs.
+        # Heading gate: move = clamp01(cos(turn)) — mirrors the deployed follower
+        # (move *= Clamp01(facing)). No wall-slide escape: it was removed from the
+        # game, so the sim must not model it either.
         align = max(0.0, math.cos(dyaw))
         speed = MOVE_SPEED_MPS * align
         speed_dt = speed * STEP_DT
         fwd_x, fwd_z = math.cos(facing), math.sin(facing)
-        # Player-local right = forward rotated -90° about up (right-handed XZ).
-        right_x, right_z = fwd_z, -fwd_x
 
-        # Wall-slide escape: pick the strafe side once pinned-while-forward exceeds
-        # the trigger window, lock it for a burst (mirrors ApplyWallSlideEscape).
-        commanding_fwd = align > 0.25
-        # A burst just ended: judge whether it moved the capsule. Productive → clear
-        # the wasted/last-sign episode state; wasted → tally it.
-        if escape_sign != 0 and escape_ticks <= 0:
-            burst_moved = math.hypot(px - burst_start_px, pz - burst_start_pz)
-            if burst_moved >= ESCAPE_BURST_PROGRESS_M:
-                escape_wasted = 0
-                escape_last_sign = 0
-            else:
-                escape_wasted += 1
-            escape_sign = 0
-        # Latched give-up: too many dead bursts → stop escaping this episode and let
-        # the stall window declare honestly (cleared on real progress, below).
-        if escape_wasted >= ESCAPE_MAX_WASTED:
-            pass
-        elif escape_sign == 0 and commanding_fwd and pinned_ticks >= ESCAPE_TRIGGER_TICKS:
-            right_clear = _side_clear(floor, px, pz, right_x, right_z, SIDE_PROBE_M)
-            left_clear = _side_clear(floor, px, pz, -right_x, -right_z, SIDE_PROBE_M)
-            if right_clear and not left_clear:
-                escape_sign, escape_ticks = +1, ESCAPE_BURST_TICKS
-            elif left_clear and not right_clear:
-                escape_sign, escape_ticks = -1, ESCAPE_BURST_TICKS
-            elif right_clear and left_clear:
-                # Both open (head-on jamb): reuse the side chosen earlier this episode
-                # if any, else strafe toward the side the goal lies on. Committing for
-                # the whole episode stops the L/R flip that stalled the capsule.
-                if escape_last_sign != 0:
-                    escape_sign = escape_last_sign
-                else:
-                    tx, tz = wps[-1]
-                    escape_sign = +1 if ((tx - px) * right_x + (tz - pz) * right_z) >= 0 else -1
-                escape_ticks = ESCAPE_BURST_TICKS
-            # else both blocked: genuine pinch, no escape (escape_sign stays 0).
-            if escape_sign != 0:
-                escape_last_sign = escape_sign
-                burst_start_px, burst_start_pz = px, pz
-            pinned_ticks = 0
-
-        escaping = escape_sign != 0 and escape_ticks > 0
-        if escaping:
-            right_x, right_z = right_x * escape_sign, right_z * escape_sign
-            escape_ticks -= 1
-
-        # Move under the controller's pure-forward(+optional strafe) model.
-        npx, npz, touched, want_escape = _try_step(
-            floor, px, pz, fwd_x, fwd_z, right_x, right_z, speed_dt, escaping)
-        # Arm the escape if forward is pinned and we're not already escaping.
-        if want_escape and not escaping and commanding_fwd:
-            pinned_ticks += 1
-        elif math.hypot(npx - px, npz - pz) >= 0.02:
-            pinned_ticks = 0
+        # Move under the current controller's model (axis-separated wall slide).
+        npx, npz, touched = _try_step(floor, px, pz, fwd_x, fwd_z, speed_dt)
         if touched:
             near_door = any(math.hypot(npx - ddx, npz - ddz) <= DOOR_OPEN_SPAN_M
                             for ddx, ddz in door_xz)
             if not near_door:
                 contacts.append((round(npx, 2), round(npz, 2)))
         px, pz = npx, npz
-        # Progress check: did we get materially closer to the goal?
+
+        # Turn-aware stall check, mirroring the deployed watchdog: only count a tick
+        # toward a stall when the follower is actually TRYING to translate (align
+        # above the move dead-zone). While turning in place (align ≤ MOVING_THRESHOLD)
+        # no positional progress is expected, so don't accumulate — that is exactly
+        # the big-turn false-stall the turn-aware watchdog fixes.
         if remaining < best_remaining - PROGRESS_EPS_M:
             best_remaining = remaining
-            # Real progress ends the pinned episode: clear the escape give-up latch.
-            escape_wasted = 0
-            escape_last_sign = 0
             ticks_since_progress = 0
+        elif align <= MOVING_THRESHOLD:
+            ticks_since_progress = 0  # turning, not stalled
         else:
             ticks_since_progress += 1
             if ticks_since_progress >= STALL_WINDOW_TICKS:
@@ -342,16 +247,16 @@ def upper_or_floor_wps(route, planner):
 def _door_positions_by_floor(route, planner):
     """Collect the world XZ of every door this route is tagged to pass through,
     grouped by floor label. Door tags live on route segments (tag_doors); their
-    XZ comes from the planner's door_positions() table keyed by id/name."""
+    XZ is the door's doorway-opening centroid from the planner's per-floor
+    opening_center_by_name (uniform over swing + sliding doors)."""
     by_floor = {}
-    pos_by_id = {d["id"]: d["xz"] for d in planner_mod.door_positions()}
-    pos_by_name = {d["name"]: d["xz"] for d in planner_mod.door_positions()}
     for seg in route.get("segments", []):
         fl = seg.get("from", {}).get("floor")
-        if fl is None:
+        if fl is None or fl not in planner.floors:
             continue
+        centers = planner.floors[fl].opening_center_by_name
         for d in seg.get("doors", []):
-            xz = pos_by_id.get(d.get("id")) or pos_by_name.get(d.get("name"))
+            xz = centers.get(d.get("name"))
             if xz is not None:
                 by_floor.setdefault(fl, []).append((xz[0], xz[1]))
     return by_floor
