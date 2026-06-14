@@ -103,9 +103,50 @@ namespace DateEverythingAccess
         // manual DebugMode toggle, or a sweep can't report on its own escape logic.
         public static bool IsActive => _phase != Phase.Idle;
 
+        // Suppress the in-game phone for the whole sweep. The phone IS the game's pause: opening it
+        // freezes the player (playerState=CantMove) and plays an open/close animation, during which
+        // the controller refuses navigation input. An unattended sweep has no reason to open the
+        // phone, but a stray keypress (Esc/the phone button) during a run did — and every leg that
+        // tried to start while it was up/animating failed as input_failed, with the chain frozen in
+        // place until it cleared. Setting PhoneManager.BlockPhoneOpening makes the game's own input
+        // handler refuse to open the phone, so the pause state can't occur mid-run. This is the
+        // game's sanctioned mechanism (AtticDoorUnlocker / CinematicBars use it identically). We
+        // restore the prior value on every sweep teardown so manual play is unaffected afterward.
+        private static bool _phoneBlockSet;
+        private static bool _phoneBlockPrev;
+
+        private static void SetPhoneBlockedForSweep(bool blocked)
+        {
+            try
+            {
+                var phone = Singleton<PhoneManager>.Instance;
+                if (phone == null) return;
+                if (blocked)
+                {
+                    if (_phoneBlockSet) return;          // already engaged for this run
+                    _phoneBlockPrev = phone.BlockPhoneOpening;
+                    phone.BlockPhoneOpening = true;
+                    _phoneBlockSet = true;
+                }
+                else
+                {
+                    if (!_phoneBlockSet) return;         // nothing to restore
+                    phone.BlockPhoneOpening = _phoneBlockPrev;
+                    _phoneBlockSet = false;
+                }
+            }
+            catch { /* never let a phone-state hiccup break sweep start/teardown */ }
+        }
+
         private static SweepManifest _manifest;
         private static int _entryIndex;
         private static string _runDir;
+        // Per-run stamp set once at StartSweep. The run dir is fixed (it holds the input manifest,
+        // keyed by run-id), so the canonical sweep_results.json is OVERWRITTEN every run — a game
+        // relaunch right after a sweep clobbers the prior run's detail before it can be reviewed.
+        // We additionally write a timestamped copy (sweep_results.<stamp>.json) that no later run
+        // touches, so every run's per-result data survives. Canonical name is kept for tooling.
+        private static string _runStamp;
         private static float _nextActionTime;
         private static List<RouteResult> _results;
 
@@ -148,6 +189,14 @@ namespace DateEverythingAccess
         // with its failures already recorded. This is what GUARANTEES the sweep terminates.
         private static readonly Dictionary<int, int> _objectFailCount = new Dictionary<int, int>();
         private const int MaxObjectFailures = 3;
+        // Relocate destinations already shown to strand the sweep (every leg out re-stalled). These
+        // are isolated/gated pockets — e.g. the quest-gated attic the recovery teleport dropped the
+        // player into on 2026-06-13, which has no graph edge back out — so we refuse to relocate
+        // INTO them again and skip objects whose stand-cell sits in one. Keyed by manifest index.
+        private static readonly HashSet<int> _strandedRegionObjects = new HashSet<int>();
+        // Manifest index of the object we last relocated TO, so if the very next legs all re-stall
+        // we can mark that destination as a stranded region rather than re-seeding it.
+        private static int _lastRelocateTargetIdx = -1;
 
         // Per-floor verified-reachable bitmap. cells[ix * nz + iz] = true once any traversal
         // has put the player's cell-ring on that cell. Allocated lazily per floor.
@@ -196,6 +245,7 @@ namespace DateEverythingAccess
             if (string.IsNullOrEmpty(sweepBase) || !Directory.Exists(sweepBase))
                 sweepBase = DefaultSweepSourceDir;
             _runDir = Path.Combine(sweepBase, runId);
+            _runStamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
             string manifestPath = Path.Combine(_runDir, "sweep_manifest.json");
             if (!File.Exists(manifestPath))
             {
@@ -228,6 +278,9 @@ namespace DateEverythingAccess
             _objectVisited.Clear();
             _recentlyFailed.Clear();
             _objectFailCount.Clear();
+            _strandedRegionObjects.Clear();
+            _lastRelocateTargetIdx = -1;
+            _lastArrivedIdx = -1;
             _consecutiveFailures = 0;
             if (_manifest.floor_frames != null)
             {
@@ -240,6 +293,10 @@ namespace DateEverythingAccess
 
             _results = new List<RouteResult>(_manifest.entries?.Length ?? 0);
             _entryIndex = 0;
+
+            // Block the phone for the whole run (both modes) so a stray keypress can't open the
+            // game's pause mid-sweep and strand the chain. Restored in every teardown path.
+            SetPhoneBlockedForSweep(true);
 
             if (walkMode)
             {
@@ -317,6 +374,7 @@ namespace DateEverythingAccess
             try { SimpleNavBridge.EndStep(); } catch { }
             FlushResults();
             FlushWalkResults();
+            SetPhoneBlockedForSweep(false);
             _phase = Phase.Idle;
             _manifest = null;
             _currentRoute = null;
@@ -325,6 +383,9 @@ namespace DateEverythingAccess
             _objectVisited.Clear();
             _recentlyFailed.Clear();
             _objectFailCount.Clear();
+            _strandedRegionObjects.Clear();
+            _lastRelocateTargetIdx = -1;
+            _lastArrivedIdx = -1;
             _consecutiveFailures = 0;
             _walkState.Clear();
             _walkReachable.Clear();
@@ -437,9 +498,14 @@ namespace DateEverythingAccess
             SimpleNavRoute route = PlanLegToObject(entry, startWorld);
             if (route == null)
             {
-                // C# planner refused (no_path / off-bake / door-missing-operable-cells) from the
-                // player's current position. A planner verdict, not a drive stall — record + chain.
-                FinishLeg("no_path");
+                // C# planner refused from the player's current position — a planner verdict, not a
+                // drive stall. Record the SPECIFIC reason so an interactability defect doesn't hide
+                // inside the generic no_path bucket: TargetNoLineOfSight means the object is
+                // reachable but occluded from every navigable cell (a placement/occluder problem to
+                // investigate), distinct from genuinely can't-get-there. Then chain on.
+                FinishLeg(SimpleNavPlanner.LastFailure == SimpleNavPlanner.PlanFailure.TargetNoLineOfSight
+                    ? "no_los"
+                    : "no_path");
                 return;
             }
 
@@ -568,17 +634,26 @@ namespace DateEverythingAccess
             }
             if (!SimpleNavBridge.HasActiveRoute)
             {
-                // Autowalk ended the step but we're not at the goal cell → it gave up. Re-probe
-                // anyway: if we're actually in interaction range, it's a needless follower stall
-                // (promote to verified); if not, it stays a real stall.
-                BeginVerify(geometricallyAtCell: false);
+                // Autowalk ended the step but we're not within the tight 1.35m goal cell. Two very
+                // different reasons land here and the sweep MUST distinguish them, or it miscounts
+                // legitimate arrivals as stalls (the dominant artifact in the 2026-06-13 run):
+                //   - The follower ARRIVED: it stopped because the player is within the object's
+                //     InteractionRadius (HasArrivedAtRouteTarget), which for a large-radius object
+                //     (charcoal/log/food, radius up to 7.5m) is routinely >1.35m from the goal cell.
+                //     This is a real arrival by the game's own rule — verify selection from here.
+                //   - The follower GAVE UP: a progress timeout stopped it short. That's a stall.
+                // LastSweepDriveArrived carries which one it was. Either way we re-probe (a true
+                // arrival still needs the interaction/LOS check; a short stall may yet be in range),
+                // but the geometric verdict controls how a GaveUp probe is recorded:
+                // arrived_unconfirmed vs stalled. See [[project-navigation-stalls-are-proximity-miscount-2026-06-13]].
+                BeginVerify(geometricallyAtCell: AccessibilityWatcher.LastSweepDriveArrived);
                 return;
             }
 
             // 2. Door-open failure.
             if (SimpleNavBridge.ActiveDoor != null)
             {
-                Door door = SimpleNavBridge.ActiveDoor;
+                DoorPortal door = SimpleNavBridge.ActiveDoor;
                 bool open = door.open;
                 bool moving = SimpleNavBridge.IsActiveDoorMoving();
                 if (!open && !moving)
@@ -741,6 +816,11 @@ namespace DateEverythingAccess
                 _objectVisited.Add(_currentManifestIndex);
                 _consecutiveFailures = 0;
                 _recentlyFailed.Clear();
+                // An arrival proves the last relocate landed us somewhere connected — clear it so a
+                // later, unrelated failure streak can't wrongly banish this (good) region.
+                _lastRelocateTargetIdx = -1;
+                // This object is now a proven-connected anchor for the relocate reachability gate.
+                _lastArrivedIdx = _currentManifestIndex;
             }
             else
             {
@@ -767,6 +847,17 @@ namespace DateEverythingAccess
 
             if (_consecutiveFailures >= RelocateAfterConsecutiveFailures)
             {
+                // If we relocated here and then immediately failed our whole budget again WITHOUT a
+                // single arrival, the relocate destination is an isolated/gated pocket (e.g. the
+                // attic) — banish it so the next relocate doesn't re-seed the same trap.
+                if (_lastRelocateTargetIdx >= 0)
+                {
+                    _strandedRegionObjects.Add(_lastRelocateTargetIdx);
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNavCoverageSweep relocate target idx=" + _lastRelocateTargetIdx +
+                            " stranded (failed full budget with no arrival) — banishing region");
+                    _lastRelocateTargetIdx = -1;
+                }
                 RelocateToFreshRegion();
                 return;
             }
@@ -788,6 +879,15 @@ namespace DateEverythingAccess
         // region gets a full budget before bailing again.
         private const float RelocateMinDistanceM = 8.0f;  // "different region" = at least this far
         private const int RelocateMinClearanceCells = 2;  // ≥0.4m off any wall — the anti-wedge floor
+        // How many nearest candidates to consider before giving up. The reachability gate below can
+        // reject the nearest one (isolated pocket); we walk outward to the next rather than commit
+        // to a trap. Bounded so a relocate stays cheap (one Plan call per rejected candidate).
+        private const int RelocateMaxCandidates = 12;
+
+        // The most-recently ARRIVED object — provably reachable from the region the sweep has been
+        // traversing, so it's the anchor a relocate candidate must be able to route to. -1 until the
+        // first arrival (early relocates fall back to the unguarded nearest pick).
+        private static int _lastArrivedIdx = -1;
 
         private static void RelocateToFreshRegion()
         {
@@ -797,15 +897,18 @@ namespace DateEverythingAccess
             if (BetterPlayerControl.Instance == null) { _phase = Phase.BetweenRoutes; return; }
             Vector3 stuck = BetterPlayerControl.Instance.transform.position;
 
-            // Nearest unvisited object far enough away to be past the blocker, that has a stand-cell
-            // clear of walls. Skip any without one — those are the cramped spots to avoid landing on.
-            int bestIdx = -1;
-            float bestD2 = float.PositiveInfinity;
-            Vector3 bestCell = Vector3.zero;
+            // Collect the nearest unvisited candidates (far enough to be past the blocker, with a
+            // wall-clear stand-cell, not in a region we've already proven strands the sweep). We
+            // then pick the nearest that is REACHABLE from a known-connected anchor — this is the
+            // guard that stops the recovery teleport dropping the player into an isolated/gated
+            // pocket like the quest-gated attic (the 2026-06-13 strand: openness/clearance both
+            // passed there, but it has no graph edge back out).
             float minD2 = RelocateMinDistanceM * RelocateMinDistanceM;
+            var candidates = new List<KeyValuePair<float, KeyValuePair<int, Vector3>>>();
             for (int i = 0; i < _manifest.entries.Length; i++)
             {
                 if (_objectVisited.Contains(i)) continue;
+                if (_strandedRegionObjects.Contains(i)) continue;  // known dead pocket — never re-seed
                 var e = _manifest.entries[i];
                 if (e == null || !string.Equals(e.status, "ok", StringComparison.Ordinal)) continue;
                 if (e.object_xyz == null || e.object_xyz.Length < 3) continue;
@@ -813,33 +916,107 @@ namespace DateEverythingAccess
                 float dy = e.object_xyz[1] - stuck.y;
                 float dz = e.object_xyz[2] - stuck.z;
                 float d2 = dx * dx + dy * dy + dz * dz;
-                if (d2 < minD2 || d2 >= bestD2) continue;
+                if (d2 < minD2) continue;
                 float radius = e.interaction_radius > 0.5f ? e.interaction_radius : 1.0f;
                 if (!SimpleNavPlanner.TryGetCleanStandCell(
                         e.object_xyz[0], e.object_xyz[1], e.object_xyz[2], radius,
                         out Vector3 cell, RelocateMinClearanceCells))
                     continue;
-                bestD2 = d2; bestIdx = i; bestCell = cell;
+                candidates.Add(new KeyValuePair<float, KeyValuePair<int, Vector3>>(
+                    d2, new KeyValuePair<int, Vector3>(i, cell)));
+            }
+            candidates.Sort((a, b) => a.Key.CompareTo(b.Key));
+
+            int bestIdx = -1;
+            Vector3 bestCell = Vector3.zero;
+            int considered = 0;
+            foreach (var c in candidates)
+            {
+                if (considered++ >= RelocateMaxCandidates) break;
+                int idx = c.Value.Key;
+                Vector3 cell = c.Value.Value;
+                if (!RelocateCellIsConnected(cell, idx))
+                    continue;
+                bestIdx = idx; bestCell = cell;
+                break;
+            }
+
+            // If the reachability gate rejected everything (or we have no anchor yet and the list is
+            // empty), fall back to the unguarded nearest candidate so the sweep still makes progress
+            // rather than parking — a fresh angle from anywhere beats sitting in the same trap.
+            if (bestIdx < 0 && candidates.Count > 0)
+            {
+                bestIdx = candidates[0].Value.Key;
+                bestCell = candidates[0].Value.Value;
             }
 
             if (bestIdx < 0)
             {
-                // Nothing clear to relocate to (every remaining object is near where we're stuck, or
-                // none has a wall-clear cell). Let the picker run from here; if it also can't make
-                // progress the sweep keeps recording failures until the pool drains via the
-                // per-object give-up cap.
+                // Nothing to relocate to (every remaining object is near where we're stuck, or none
+                // has a wall-clear cell, or all are banished). Let the picker run from here; if it
+                // also can't make progress the sweep keeps recording failures until the pool drains
+                // via the per-object give-up cap.
                 _phase = Phase.BetweenRoutes;
                 return;
             }
 
+            // The bake's cell Y is the NOMINAL floor (floor_y), but the real walkable
+            // collider can sit well above it — the upper floor's slabs are at ~12.84 vs
+            // a nominal 12.5 (per the per-cell-span bake). The game grounds the player
+            // with a downward ray reaching only 0.25m below the transform origin, so a
+            // placement 0.32m under the real floor reads as NOT grounded → the controller
+            // applies y=-50 and the player can't walk (the upper-floor sweep "stalls"
+            // with moved≈0.1m). Snap the placement onto the real collider surface so the
+            // player lands grounded. See [[project-navigation-follower-speed-deadzone]].
+            Vector3 placeCell = SnapToFloor(bestCell);
+
             Transform pt = BetterPlayerControl.Instance.transform;
-            pt.position = bestCell;
+            pt.position = placeCell;
             Rigidbody rb = BetterPlayerControl.Instance.GetComponent<Rigidbody>();
             if (rb != null) { rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+            _lastRelocateTargetIdx = bestIdx;  // if the next legs all re-stall, this region gets banished
             if (Main.Log != null)
                 Main.Log.LogInfo("SimpleNavCoverageSweep relocate -> fresh region near idx=" + bestIdx +
-                    " cell=" + bestCell.ToString("F2") + " (was stuck at " + stuck.ToString("F2") + ")");
+                    " cell=" + placeCell.ToString("F2") + " (was stuck at " + stuck.ToString("F2") + ")");
             _phase = Phase.BetweenRoutes;
+        }
+
+        // Snap a bake cell (XZ correct, Y = nominal floor_y) onto the real walkable
+        // collider surface so the placed player reads as grounded. Cast down from well
+        // above; if nothing's hit (shouldn't happen on a navigable cell) keep the cell
+        // Y. A small lift keeps the capsule from spawning inside the floor collider.
+        private static Vector3 SnapToFloor(Vector3 cell)
+        {
+            const float castUp = 3.0f;     // start above any plausible nominal-vs-real gap
+            const float castLen = 6.0f;    // reach down past the nominal floor
+            const float standLift = 0.05f; // settle just above the surface, not inside it
+            Vector3 origin = cell + Vector3.up * castUp;
+            int mask = ~0;  // everything; we want the actual floor collider the game grounds on
+            if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, castLen, mask,
+                    QueryTriggerInteraction.Ignore))
+                return new Vector3(cell.x, hit.point.y + standLift, cell.z);
+            return cell;
+        }
+
+        // True if the planner can route from a relocate candidate cell to the last-arrived object —
+        // i.e. the candidate is in the same connected component the sweep has been traversing, not an
+        // isolated/gated pocket. With no anchor yet (no arrival), we can't test connectivity, so we
+        // accept (the early-run fallback). The anchor object is itself reachable (we arrived at it),
+        // so a NULL route means the candidate is severed from it.
+        private static bool RelocateCellIsConnected(Vector3 cell, int candidateIdx)
+        {
+            if (_lastArrivedIdx < 0) return true;
+            if (_lastArrivedIdx >= _manifest.entries.Length) return true;
+            var anchor = _manifest.entries[_lastArrivedIdx];
+            if (anchor == null || anchor.object_xyz == null || anchor.object_xyz.Length < 3) return true;
+            float radius = anchor.interaction_radius > 0.5f ? anchor.interaction_radius : 1.0f;
+            Vector3 target = new Vector3(anchor.object_xyz[0], anchor.object_xyz[1], anchor.object_xyz[2]);
+            try
+            {
+                var route = SimpleNavPlanner.Plan(cell, target, radius, anchor.name ?? "anchor", 0);
+                return route != null && route.Waypoints != null && route.Waypoints.Count > 0;
+            }
+            catch { return true; }  // planner hiccup shouldn't strand the recovery — accept and move on
         }
 
         private static void RecordLegResult(string outcome)
@@ -932,7 +1109,7 @@ namespace DateEverythingAccess
                 finalOutcome[idx] = BetterOutcome(prev, o);
             }
 
-            int passed = 0, skipped = 0, failed = 0, noPath = 0, offFloor = 0, gated = 0, unconfirmed = 0;
+            int passed = 0, skipped = 0, failed = 0, noPath = 0, noLos = 0, offFloor = 0, gated = 0, unconfirmed = 0;
             foreach (string o in finalOutcome.Values)
             {
                 if (IsArrivalOutcome(o)) passed++;
@@ -942,6 +1119,9 @@ namespace DateEverythingAccess
                 else if (o == "arrived_unconfirmed") unconfirmed++;
                 else if (o == "skipped_already_covered") skipped++;
                 else if (o == "no_path") noPath++;
+                // Reachable but occluded from every navigable cell (planner TargetNoLineOfSight):
+                // an interactability/placement defect, distinct from can't-get-there.
+                else if (o == "no_los") noLos++;
                 // Legacy manifests still emit off_floor as a (non-drive) result entry. Newer
                 // manifests exclude exterior decor from `entries` entirely (counted below from
                 // excluded_exterior), so this branch is a no-op for them.
@@ -954,7 +1134,7 @@ namespace DateEverythingAccess
                 else if (IsTransientGateOutcome(o)) gated++;
                 else failed++;
             }
-            ReportOutcome(passed, skipped, noPath, offFloor, gated, failed, unconfirmed);
+            ReportOutcome(passed, skipped, noPath, noLos, offFloor, gated, failed, unconfirmed);
         }
 
         // Collapse two outcomes for the SAME object to the one that best describes its final
@@ -979,7 +1159,7 @@ namespace DateEverythingAccess
             return 3;  // no_path / stalled / looped / budget / door_failed:* / exception:* / off_floor
         }
 
-        private static void ReportOutcome(int passed, int skipped, int noPath, int offFloor, int gated, int failed, int unconfirmed)
+        private static void ReportOutcome(int passed, int skipped, int noPath, int noLos, int offFloor, int gated, int failed, int unconfirmed)
         {
             // Exterior decor (fence/tree/drone, Y off every floor) is expected-unreachable and is
             // no longer driven: the planner drops it from `entries` and records the count here.
@@ -988,9 +1168,11 @@ namespace DateEverythingAccess
             offFloor += _manifest?.excluded_exterior_count ?? 0;
             if (Main.Log != null) Main.Log.LogInfo("SimpleNavCoverageSweep done passed=" + passed +
                 " unconfirmed=" + unconfirmed + " skipped=" + skipped + " no_path=" + noPath +
+                " no_los=" + noLos +
                 " off_floor=" + offFloor + " gated=" + gated + " failed=" + failed);
             ScreenReader.Say("Coverage sweep complete: " + passed + " passed, " + unconfirmed +
                 " unconfirmed, " + failed + " failed", remember: false);
+            SetPhoneBlockedForSweep(false);
             _phase = Phase.Idle;
             _manifest = null;
             _currentRoute = null;
@@ -1112,6 +1294,18 @@ namespace DateEverythingAccess
                 if (!d.open && !SimpleNavBridge.IsActiveDoorMoving()) continue;
                 try { SimpleNavBridge.ForceDoorClosed(d); } catch { }
             }
+
+            // Container doors are SlidingDoors, a separate component the Door[] sweep above
+            // misses. Reset any the previous leg opened so each leg starts from the closed
+            // state (sliders are default-closed, so we only need to undo our own opens). See
+            // [[project_navigation_container_open_on_interact]].
+            SlidingDoor[] sliders = UnityEngine.Object.FindObjectsOfType<SlidingDoor>();
+            for (int i = 0; i < sliders.Length; i++)
+            {
+                SlidingDoor s = sliders[i];
+                if (s == null || !s.open) continue;
+                try { SimpleNavBridge.ForceSliderClosed(s); } catch { }
+            }
         }
 
         // ---- Walk-mode loop ---------------------------------------------------------------
@@ -1207,7 +1401,7 @@ namespace DateEverythingAccess
             // Door-open failure (same logic as the dispersed path).
             if (SimpleNavBridge.ActiveDoor != null)
             {
-                Door door = SimpleNavBridge.ActiveDoor;
+                DoorPortal door = SimpleNavBridge.ActiveDoor;
                 bool open = door.open;
                 bool moving = SimpleNavBridge.IsActiveDoorMoving();
                 if (!open && !moving)
@@ -1525,6 +1719,7 @@ namespace DateEverythingAccess
                     " walkable=" + walked + " impassable=" + impass + " untested=" + untested +
                     " planner_failures=" + _walkPlannerFailureCount);
             ScreenReader.Say("Walk-sweep complete: " + walked + " walkable, " + impass + " blocked", remember: false);
+            SetPhoneBlockedForSweep(false);
             _phase = Phase.Idle;
             _manifest = null;
             _impassRecords = null;
@@ -1698,9 +1893,9 @@ namespace DateEverythingAccess
             if (_results == null || _runDir == null) return;
             try
             {
-                string path = Path.Combine(_runDir, "sweep_results.json");
                 var ci = CultureInfo.InvariantCulture;
-                using (var sw = new StreamWriter(path, false, System.Text.Encoding.UTF8))
+                var sb = new System.Text.StringBuilder(_results.Count * 96 + 64);
+                using (var sw = new StringWriter(sb, ci))
                 {
                     sw.Write("{\"run_id\":\"");
                     sw.Write(_manifest?.run_id ?? "default");
@@ -1735,6 +1930,13 @@ namespace DateEverythingAccess
                     }
                     sw.Write("]}");
                 }
+                string json = sb.ToString();
+                // Canonical name (latest run) for tooling that reads a stable path...
+                File.WriteAllText(Path.Combine(_runDir, "sweep_results.json"), json, System.Text.Encoding.UTF8);
+                // ...plus a per-run copy a later run/relaunch can't clobber.
+                if (!string.IsNullOrEmpty(_runStamp))
+                    File.WriteAllText(Path.Combine(_runDir, "sweep_results." + _runStamp + ".json"),
+                        json, System.Text.Encoding.UTF8);
             }
             catch (Exception ex)
             {
@@ -1780,6 +1982,10 @@ namespace DateEverythingAccess
                             sw.WriteLine();
                         }
                     }
+                    // Per-run copy alongside the canonical name, so a later run can't clobber it
+                    // before the overlay/review step (mirrors sweep_results.<stamp>.json).
+                    if (!string.IsNullOrEmpty(_runStamp))
+                        File.Copy(outPath, Path.Combine(_runDir, "verified." + label + "." + _runStamp + ".txt"), true);
                 }
             }
             catch (Exception ex)

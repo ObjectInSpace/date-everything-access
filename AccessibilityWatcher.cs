@@ -109,6 +109,15 @@ namespace DateEverythingAccess
         private const float EstimatedSpeechLeadInSeconds = 0.75f;
         private const float AutoWalkArrivalDistance = 2f;
         private const float AutoWalkLookScaleDegrees = 45f;
+        // Move magnitude above which we consider the follower to be genuinely trying to
+        // translate (vs. turning in place, where the facing-scale keeps move≈0). Only then
+        // does the no-progress watchdog count toward a blocked timeout.
+        private const float AutoWalkMovingThreshold = 0.2f;
+        // Max seconds the post-arrival turn-to-face phase runs before we accept arrival
+        // regardless of whether the game's raycast selected the target. Generous enough to
+        // complete a full turn-and-pitch toward an overhead/odd object, short enough that a
+        // never-selectable target doesn't hang. Looking counts as interaction.
+        private const float AutoWalkFaceTimeoutSeconds = 3f;
         private const float AutoWalkProgressDistance = 0.35f;
         private const float AutoWalkBlockedTimeoutSeconds = 2f;
         // Pure-pursuit lookahead distance (metres). The route executor aims at a
@@ -118,54 +127,6 @@ namespace DateEverythingAccess
         // but large enough to avoid jitter. ~1 capsule-diameter + margin.
         // See [[project-navigation-executor-corner-stall]].
         private const float AutoWalkPursuitLookahead = 1.5f;
-        // Wall-slide escape (doorframe-graze recovery). The follower's model is
-        // turn-to-face-then-press-forward, so when it is aligned it commands pure
-        // local +z (forward). At a doorframe jamb the capsule wedges against the
-        // wall and velocity drops to ~0 while moveCmd stays (0,0,1) — confirmed in
-        // the BepInEx log: chest=SM_Walls_Bedroom ~0.45-0.53m, one side clear, back
-        // clear, velocity 0, until the 2s timeout gives up. The fix is a follower
-        // escape: when forward is commanded but the player is not moving, probe both
-        // sides and inject a lateral strafe toward the clear one to slide the capsule
-        // off the jamb and thread the doorway. See
-        // [[project-navigation-stair-ramp-polyline]], [[project-navigation-runtime-stall-catalog-2026-05-29]].
-        //
-        // Below this per-frame displacement (m) while commanding forward, the player
-        // counts as "not moving" (pinned). Generous: a sliding capsule still covers
-        // far more than this per frame.
-        private const float AutoWalkEscapeStuckDisplacement = 0.02f;
-        // Seconds of continuous no-move-while-forward before the escape strafe fires.
-        // Short enough to recover well inside the 2s blocked timeout, long enough to
-        // ignore the momentary contact of a normal door-threshold pass.
-        private const float AutoWalkEscapeTriggerSeconds = 0.4f;
-        // How long one escape strafe burst lasts once triggered (s). The strafe
-        // direction is locked for the burst so the player commits to one side instead
-        // of oscillating at the jamb.
-        private const float AutoWalkEscapeBurstSeconds = 0.5f;
-        // Side-probe cast distance (m) used to pick the clear escape side. ~1 capsule
-        // radius + margin; matches the doorframe-clearance scale in the stall logs.
-        private const float AutoWalkEscapeSideProbeDistance = 0.9f;
-        // Strafe input magnitude during an escape burst (player-local x). Kept below
-        // full so the player still carries some forward bias and threads the gap
-        // diagonally rather than scraping straight sideways into the far jamb.
-        private const float AutoWalkEscapeStrafeMagnitude = 0.8f;
-        // Forward (move.z) multiplier WHILE an escape burst is active. The thrash
-        // diagnosed in the 2026-06-11 in-game sweep (82 legs firing 6+ times, ~0.4m
-        // moved) was a limit cycle: the burst added a strafe but left move.z at full,
-        // so forward kept shoving the capsule back into the same jamb every frame. We
-        // attenuate the forward term hard during the burst so the lateral slide
-        // dominates and the capsule actually peels off (a small residual keeps it
-        // threading the doorway diagonally rather than scraping the far jamb). See
-        // [[project-navigation-follower-wall-slide-escape]].
-        private const float AutoWalkEscapeForwardDuringBurst = 0.15f;
-        // Net XZ displacement (m) a burst must produce to count as "made progress".
-        // Below this the burst is a wasted thrash; we tally consecutive wasted bursts.
-        private const float AutoWalkEscapeBurstProgress = 0.12f;
-        // Consecutive wasted escape bursts before we stop thrashing and let the blocked
-        // timeout report the stall honestly. The old escape never gave up — it churned
-        // the strafe for the whole 2s window. Escalating after a few dead bursts both
-        // ends the limit cycle for players and (when the sweep gate is off) surfaces the
-        // genuine upstream defect instead of masking it.
-        private const int AutoWalkEscapeMaxWastedBursts = 3;
         private const float TrackedInteractableApproachClearanceDistance = 0.9f;
         private const float TrackedInteractableApproachRetargetDistance = 0.75f;
         private const float TrackedInteractableApproachMinimumExtent = 0.35f;
@@ -354,28 +315,28 @@ namespace DateEverythingAccess
         private float _suppressCreditsSelectionUntil;
         private float _suppressPendingSpecsTutorialUntil;
         private float _lastAutoWalkProgressTime;
+        // When the post-arrival turn-to-face phase began (0 = not facing). Bounds that phase
+        // so it completes (looking counts as interaction) or ends instead of spinning forever
+        // when the game's raycast never "selects" a small/odd-collider target.
+        private float _facingSince;
+        // Last move/look the follower commanded, re-applied each FixedUpdate so the game never
+        // reads its own end-of-FixedUpdate zeroed overwrite between our LateUpdate writes.
+        private Vector3 _lastAutoWalkMove;
+        private Vector3 _lastAutoWalkLook;
+        private bool _hasAutoWalkInput;
         // Start time of the current sweep interaction probe (turn-to-face episode). See
         // ProbeSweepInteraction.
         private float _sweepProbeStartTime;
-        // Wall-slide escape state. When the follower commands forward but the
-        // capsule is pinned against a wall (doorframe jamb graze), we inject a
-        // lateral strafe toward the clear side to peel off. _autoWalkEscapeSign is
-        // the locked strafe direction (+1 = player-local right, -1 = left, 0 = not
-        // escaping) so we don't oscillate; _autoWalkEscapeUntil is when the burst
-        // expires. _autoWalkEscapeBurstStartPos is the XZ at the burst's start, used to
-        // measure whether the burst actually moved the capsule; _autoWalkEscapeWasted
-        // counts consecutive bursts that didn't, so we escalate to an honest timeout
-        // instead of thrashing. See [[project-navigation-follower-wall-slide-escape]].
-        private int _autoWalkEscapeSign;
-        private float _autoWalkEscapeUntil;
-        private Vector3 _autoWalkLastEscapeProbePos;
-        private float _autoWalkNoMoveSince;
-        private Vector3 _autoWalkEscapeBurstStartPos;
-        private int _autoWalkEscapeWasted;
-        // The strafe side chosen for the current pinned episode. Persisted across bursts
-        // so a head-on jamb (both sides clear) doesn't flip L/R every burst — the other
-        // half of the 2026-06-11 thrash. Reset to 0 on real progress / a new leg.
-        private int _autoWalkEscapeLastSign;
+
+        // True when the sweep drive ended because the follower ARRIVED (reached the target's
+        // interaction radius per SimpleNavBridge.HasArrivedAtRouteTarget), as opposed to giving up
+        // on a progress timeout. Both leave HasActiveRoute=false, so the sweep can't otherwise tell
+        // a legitimate arrival (the follower correctly stops within InteractionRadius, often >1.35m
+        // from the tight goal cell for a large-radius object) from a real short stall. The sweep
+        // reads this to set the verify phase's geometricallyAtCell, so a GaveUp probe after a true
+        // arrival is recorded as arrived_unconfirmed (reached, couldn't select) not stalled (nav
+        // failure). Reset on each sweep route start. See [[project-navigation-stalls-are-proximity-miscount-2026-06-13]].
+        internal static bool LastSweepDriveArrived { get; private set; }
         private SpecsAnnouncementMode _lastSpecsAnnouncementMode;
         private InteractableObj _trackedInteractable;
         private string _trackedInteractableId;
@@ -556,6 +517,7 @@ namespace DateEverythingAccess
 
             SimpleNavBridge.EndStep();
             SimpleNavBridge.BeginRoute(route);
+            LastSweepDriveArrived = false;
             _instance._isAutoWalking = true;
             LogCapsuleDimensionsOnce();
             _instance._lastAutoWalkPosition = BetterPlayerControl.Instance != null
@@ -595,18 +557,24 @@ namespace DateEverythingAccess
         // See [[feedback-interaction-includes-look-and-glasses]].
         internal enum SweepProbeState { Turning, InRange, InRangeGated, GaveUp }
 
-        // Max time to keep turning toward the object before giving up the probe. The turn is a
-        // few frames in practice; this is the safety net so a probe that can never select (e.g.
-        // a wall between cell and object) ends instead of spinning forever.
-        private const float SweepProbeTurnTimeoutSeconds = 1.25f;
+        // Max time to keep turning toward the object before giving up the probe. A real player
+        // turning to face a target takes the better part of a second for a wide swing; 1.25s was
+        // tight enough that some legs timed out mid-turn (ray never landed) and were miscounted as
+        // not-interactable. 2.5s lets the camera complete the turn before we run the final
+        // line-of-sight check, while still bounding a probe that can never select (wall/occluder
+        // between cell and object) so it ends instead of spinning forever.
+        private const float SweepProbeTurnTimeoutSeconds = 2.5f;
 
         /// <summary>
         /// Drive one frame of the sweep interaction probe toward <paramref name="route"/>'s
         /// target. Call every frame while in the verify phase; pass <paramref name="reset"/>=true
         /// on the first frame of a probe. Returns the current <see cref="SweepProbeState"/>:
-        /// Turning (keep calling), InRange (player is positioned to interact), InRangeGated (in
-        /// range but the game's eligibility gate refuses), or GaveUp (turn timed out without the
-        /// game selecting the object — not interactable from this spot).
+        /// Turning (keep calling), InRange (the game would let the player interact: either
+        /// InteractableManager has our target selected and in-range, or a direct camera-forward
+        /// raycast hits our target within its InteractionRadius — line-of-sight confirmed),
+        /// InRangeGated (in range but the eligibility gate refuses), or GaveUp (turn timed out
+        /// without line-of-sight to the target — genuinely not interactable from here, as it would
+        /// be for a real player). See [[feedback-interaction-includes-look-and-glasses]].
         /// </summary>
         internal static SweepProbeState ProbeSweepInteraction(SimpleNavRoute route, bool reset)
         {
@@ -639,6 +607,16 @@ namespace DateEverythingAccess
             if (Time.unscaledTime - _instance._sweepProbeStartTime >= SweepProbeTurnTimeoutSeconds)
             {
                 ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                // InteractableManager never reported our exact target selected within the turn
+                // budget. Before declaring the spot un-interactable, run the game's OWN interaction
+                // test directly: a camera-forward raycast that hits the target within its
+                // InteractionRadius. This catches the case where the manager's per-frame selection
+                // hadn't latched yet but the player IS aimed at and in range of the target (a real,
+                // completable interaction). It does NOT accept proximity without line-of-sight — an
+                // occluded/clustered target the ray can't reach stays GaveUp, exactly as it would
+                // fail for a real player. See [[feedback-interaction-includes-look-and-glasses]].
+                if (HasInteractionLineOfSightToTarget(route))
+                    return SweepProbeState.InRange;
                 return SweepProbeState.GaveUp;
             }
 
@@ -649,6 +627,80 @@ namespace DateEverythingAccess
                 lookInput = new Vector3(0.2f, 0f, 0f); // nudge so a nominally-aligned-but-unselected target keeps searching
             ApplyNavigationInput(Vector3.zero, lookInput);
             return SweepProbeState.Turning;
+        }
+
+        // True when the player could actually interact with the route target from where it stands,
+        // using the GAME'S OWN test (BetterPlayerControl.cs): a camera-forward raycast must HIT the
+        // target object (or a child/parent of it) AND the hit must be within the object's
+        // InteractionRadius. Line-of-sight is mandatory — proximity alone is NOT enough; the glasses
+        // and bare interaction both go through this same raycast, so an object the ray can't reach
+        // (occluded by furniture, or a neighbour in a cluster the ray hits first) is genuinely not
+        // interactable from here, exactly as it would be for a real player. We mirror the game's ray
+        // origin (camera pos pulled back 0.25m along forward), direction, and ~dateviatorIgnores
+        // layer mask so the probe and the game agree.
+        private static bool HasInteractionLineOfSightToTarget(SimpleNavRoute route)
+        {
+            if (route == null)
+                return false;
+
+            GameObject targetObject = FindSimpleRouteTargetObject(route);
+            if (targetObject == null)
+                return false;
+
+            Camera cam = Camera.main;
+            if (cam == null)
+                return false;
+
+            BetterPlayerControl bpc = BetterPlayerControl.Instance;
+            if (bpc == null)
+                return false;
+
+            Vector3 origin = cam.transform.position - cam.transform.forward * 0.25f;
+            Vector3 dir = cam.transform.forward;
+            int mask = ~(int)bpc.dateviatorIgnores;
+            bool didHit = Physics.Raycast(new Ray(origin, dir), out RaycastHit hitInfo, float.PositiveInfinity, mask);
+
+            // The ray must land on our target (or its hierarchy), not a neighbour/occluder...
+            bool hitIsTarget = false;
+            GameObject hitGo = null;
+            if (didHit)
+            {
+                InteractableObj hitObj = hitInfo.transform.GetComponent<InteractableObj>();
+                hitGo = hitObj != null ? hitObj.gameObject : hitInfo.transform.gameObject;
+                hitIsTarget = IsSameOrRelatedInteractableTarget(targetObject, hitGo);
+            }
+
+            // ...AND the hit must be within the object's InteractionRadius (game's gate at
+            // BetterPlayerControl.cs:499). Use the same closest-bounds-to-camera distance.
+            float radius = route.TargetInteractionRadius > 0f ? route.TargetInteractionRadius : 0f;
+            float dist = didHit
+                ? Vector3.Distance(hitInfo.collider.ClosestPointOnBounds(cam.transform.position), cam.transform.position)
+                : float.PositiveInfinity;
+            bool result = didHit && hitIsTarget && radius > 0f && dist < radius;
+
+            // Structured LOS sample for the OFFLINE PARITY PROBE: logs the EXACT ray (origin +
+            // direction) the game cast, plus the hit + verdict, so validate_los.py can replay this
+            // precise ray against its offline collider BVH and diff. We log the exact ray, not a
+            // re-derived one, so parity tests the offline GEOMETRY/raycaster — isolated from whether
+            // a synthetic eye/aim approximation matches. Sweep-gated (diagnostic only). See
+            // [[project_navigation_planner_los_goal_cells_2026_06_13]].
+            if (SimpleNavCoverageSweep.IsActive && Main.Log != null)
+            {
+                Main.Log.LogInfo(
+                    "LOS_PROBE target=" + (route.TargetName ?? "<null>") + "#" + route.TargetGameObjectId +
+                    " origin=" + FormatVector3Precise(origin) +
+                    " dir=" + FormatVector3Precise(dir) +
+                    " mask=" + mask +
+                    " radius=" + radius.ToString("0.0000", CultureInfo.InvariantCulture) +
+                    " hit=" + (didHit ? (hitGo != null ? hitGo.name : "<go?>") : "<none>") +
+                    " hit_path=" + (didHit && hitInfo.collider != null ? GetTransformPath(hitInfo.collider.transform) : "<none>") +
+                    " hit_point=" + (didHit ? FormatVector3Precise(hitInfo.point) : "<none>") +
+                    " hit_dist=" + dist.ToString("0.0000", CultureInfo.InvariantCulture) +
+                    " hit_is_target=" + hitIsTarget +
+                    " verdict=" + result);
+            }
+
+            return result;
         }
 
         private static int _coverageSweepRequested;
@@ -767,6 +819,23 @@ namespace DateEverythingAccess
             AnnounceResultScreenIfNeeded();
             AnnounceTimeChangeIfNeeded();
             AnnounceProgressionChangesIfNeeded();
+        }
+
+        // The game reads `move`/`look` in FixedUpdate and OVERWRITES them from live input
+        // axes (which are 0 when idle) at the END of that same FixedUpdate. We compute and
+        // write our values in LateUpdate (once per rendered frame). When the frame rate dips
+        // toward the physics rate, more than one FixedUpdate can run before our next
+        // LateUpdate — and those extra FixedUpdates read the game's zeroed value, so the
+        // player intermittently stops dead mid-route with a valid command still cached
+        // (velocity=0, reflected=our value, CanControl). Re-assert the last command every
+        // FixedUpdate so the value is always present when the game actually reads it.
+        private void FixedUpdate()
+        {
+            if (Main.IsShuttingDown || !_isAutoWalking || !_hasAutoWalkInput)
+                return;
+            if (BetterPlayerControl.Instance == null)
+                return;
+            ApplyNavigationInput(_lastAutoWalkMove, _lastAutoWalkLook);
         }
 
         private void LateUpdate()
@@ -1209,6 +1278,10 @@ namespace DateEverythingAccess
             // goal cell inside this disc, so this matches the goal-cell expansion in O4.
             if (SimpleNavBridge.HasArrivedAtRouteTarget(playerPos))
             {
+                // Record that THIS drive reached interaction range — even when the stop point is
+                // outside the sweep's tight 1.35m goal cell (true for large-radius objects). The
+                // sweep uses this to treat the follow-up verify as an arrival, not a short stall.
+                LastSweepDriveArrived = true;
                 if (IsWorldRouteTarget(route))
                 {
                     ApplyNavigationInput(Vector3.zero, Vector3.zero);
@@ -1227,15 +1300,30 @@ namespace DateEverythingAccess
                 {
                     Vector3 lookPoint = ResolveSimpleRouteTargetLookPoint(route);
                     Vector3 lookInput = GetLookInputTowardRouteTarget(playerTransform, lookPoint);
-                    if (lookInput.sqrMagnitude <= 0.0001f)
+
+                    // Turn-to-face is the final phase: we're in range, now orient toward the
+                    // target so the game's first-person raycast selects it. Bound it so it
+                    // can't spin forever when the raycast never lands (small/odd colliders):
+                    // once we're pointed AT the target (look input ≈ 0, so we've finished
+                    // turning) OR we've been facing for AutoWalkFaceTimeoutSeconds, accept
+                    // arrival — looking IS the interaction for a blind player, who just needs
+                    // to be placed in range and oriented. See [[feedback-interaction-includes-look-and-glasses]].
+                    if (_facingSince == 0f) _facingSince = Time.unscaledTime;
+                    bool aimedAtTarget = lookInput.sqrMagnitude <= 0.0001f;
+                    bool facedLongEnough = Time.unscaledTime - _facingSince >= AutoWalkFaceTimeoutSeconds;
+                    if (aimedAtTarget || facedLongEnough)
                     {
-                        // If the camera is nominally pointed at the target but the game's
-                        // raycast still has not selected it, keep searching instead of
-                        // reporting proximity-only arrival.
-                        lookInput = new Vector3(0.2f, 0f, 0f);
+                        ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                        StopNavigationWithAnnouncement("navigation_arrived");
+                        return;
                     }
 
                     ApplyNavigationInput(Vector3.zero, lookInput);
+                    // Cache the facing command (no forward move) so FixedUpdate re-asserts THIS,
+                    // not the previous forward drive, between frames.
+                    _lastAutoWalkMove = Vector3.zero;
+                    _lastAutoWalkLook = lookInput;
+                    _hasAutoWalkInput = true;
                     LogSimpleRouteFrameDiagnostic(route, playerTransform, playerPos, lookPoint, Vector3.zero, lookInput, false);
                     return;
                 }
@@ -1250,80 +1338,49 @@ namespace DateEverythingAccess
             if (segmentHasDoor)
                 SimpleNavBridge.TryOpenActiveDoorIfNeeded(playerPos);
 
-            // Pure-pursuit steering. Instead of aiming straight at the next
-            // waypoint vertex (which lets the player drift off the corridor on
-            // corners / wall-hugging segments and get trapped against a wall),
-            // aim at a lookahead point that tracks the planned polyline: project
-            // the player onto the path and target a point AutoWalkPursuitLookahead
-            // metres ahead along it. This continuously pulls the player back onto
-            // the corridor, so it follows the path through corners rather than
-            // cutting toward vertices. Door resolution and arrival still key off
-            // the discrete waypoint index (advanced above); only the steering
-            // direction uses the lookahead. For door/world-target segments we
-            // keep aiming at the discrete target so the final approach is exact.
+            // Steer along the planned polyline with a short pure-pursuit lookahead so the
+            // player tracks the corridor through corners instead of cutting toward
+            // vertices. Door resolution and arrival key off the discrete waypoint index
+            // (advanced above); only the steering direction uses the lookahead.
             // See [[project-navigation-executor-corner-stall]].
-            Vector3 steerTarget;
-            SimpleNavWaypoint activeWp = SimpleNavBridge.ActiveWaypoint;
-            bool exactApproach = segmentHasDoor ||
-                (activeWp != null && (activeWp.Kind == SimpleNavWaypointKind.Target ||
-                                      activeWp.Kind == SimpleNavWaypointKind.DoorOpening ||
-                                      activeWp.Kind == SimpleNavWaypointKind.DoorExit ||
-                                      activeWp.Kind == SimpleNavWaypointKind.DoorApproach));
-            if (exactApproach)
-                steerTarget = target;
-            else
-                steerTarget = SimpleNavBridge.PursuitTarget(playerPos, AutoWalkPursuitLookahead);
-
+            Vector3 steerTarget = SimpleNavBridge.PursuitTarget(playerPos, AutoWalkPursuitLookahead);
             Vector3 toWaypoint = steerTarget - playerPos;
             toWaypoint.y = 0f;
             if (toWaypoint.sqrMagnitude <= 0.0001f)
             {
                 ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                _lastAutoWalkMove = Vector3.zero;
+                _lastAutoWalkLook = Vector3.zero;
                 return;
             }
 
+            // Drive movement and look exactly like real player input: `move` is the steer
+            // direction in player-local space (forward/strafe), `look` turns the body
+            // toward it.
+            //
+            // The `* Clamp01(facing)` is NOT a speed throttle — the game NORMALIZES move and
+            // multiplies by the player's own `speed`, so any move above the 0.2 dead-zone
+            // walks at full speed regardless of our magnitude. What the scale actually does
+            // is GATE move on/off by heading: as the turn passes ~78° it drops move under
+            // 0.2 and the player stops, so move and look are never both large at once. That
+            // matters because the game rebuilds world motion as forward*move.z + right*move.x
+            // using the CURRENT facing every physics tick — a big move while the body is
+            // still turning under a big look makes the motion direction thrash and cancel
+            // (spin-in-place). While turning, move≈0 (body pivots, no translation); once
+            // aligned, look→0 and move→full. (look IS analog — the game uses look.x linearly,
+            // unlike move — so the turn rate eases down proportionally as we align.)
             Vector3 walkDir = toWaypoint.normalized;
             Vector3 localDirection = playerTransform.InverseTransformDirection(walkDir);
-            localDirection.y = 0f;
             float turnDeg = Vector3.SignedAngle(playerTransform.forward, walkDir, Vector3.up);
+            float facing = Vector3.Dot(playerTransform.forward, walkDir); // cos(turn)
 
             Vector3 move = new Vector3(
-                Mathf.Clamp(localDirection.x, -1f, 1f),
-                0f,
-                Mathf.Clamp(localDirection.z, -1f, 1f));
+                Mathf.Clamp(localDirection.x, -1f, 1f), 0f,
+                Mathf.Clamp(localDirection.z, -1f, 1f)) * Mathf.Clamp01(facing);
             Vector3 look = new Vector3(Mathf.Clamp(turnDeg / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
 
-            // Turn-toward-then-walk: scale forward speed by how well the player
-            // already faces the direction they're being steered (the pursuit
-            // point). The move command is player-LOCAL (forward = facing), so if
-            // the player isn't facing walkDir, "move forward" sends them the
-            // wrong way — into a wall on a sharp corner. Gating speed on facing
-            // alignment makes them turn (look is still applied) before
-            // accelerating: full speed when aligned, easing to zero past ~90°.
-            //
-            // This single rule subsumes the earlier separate corner-pre-orient
-            // and stall-stop-and-turn layers. Because pure-pursuit already aims
-            // walkDir smoothly along the corridor (and swings it toward a corner's
-            // exit as the player nears it), the alignment is large only when the
-            // player genuinely faces the wrong way — i.e. exactly at sharp corners
-            // / when stuck — so gentle bends aren't slowed. No corner detection,
-            // stall timer, or release angle needed.
-            // See [[project-navigation-executor-corner-stall]].
-            float facing = Vector3.Dot(playerTransform.forward, walkDir); // cos(turn), -1..1
-            move *= Mathf.Clamp01(facing);
-
-            // Wall-slide escape. The command above is player-LOCAL and, when the
-            // player faces walkDir, is essentially pure forward (+z) with no lateral
-            // term — so a doorframe-jamb graze pins the capsule and it presses
-            // straight into the wall until the blocked timeout. Detect "commanding
-            // forward but not moving" and inject a lateral strafe toward the clear
-            // side to peel the capsule off the jamb. Only while genuinely trying to
-            // move forward (not during the look-to-align phase, where move≈0 is
-            // expected). See the AutoWalkEscape* constants.
-            ApplyWallSlideEscape(ref move, playerTransform, playerPos);
-
-            // Hold position while the segment's door is mid-swing. Same reasoning as the step path:
-            // walking into a moving door trips Door.OnCollisionEnter and pins the swing.
+            // Hold position while the segment's door is mid-swing — walking into a moving
+            // door trips Door.OnCollisionEnter and pins the swing.
             bool waitingForDoorSwing = segmentHasDoor && SimpleNavBridge.IsActiveDoorMoving();
             if (waitingForDoorSwing)
                 move = Vector3.zero;
@@ -1333,26 +1390,29 @@ namespace DateEverythingAccess
                 StopNavigationBlocked("simple-nav route input application failed target=" + (route.TargetName ?? "<null>"));
                 return;
             }
+            // Cache so FixedUpdate can re-assert this between LateUpdate frames (see FixedUpdate).
+            _lastAutoWalkMove = move;
+            _lastAutoWalkLook = look;
+            _hasAutoWalkInput = true;
 
             LogSimpleRouteFrameDiagnostic(route, playerTransform, playerPos, target, move, look, waitingForDoorSwing);
-
             SimpleNavBridge.RecordFrameProgress(playerPos);
 
-            if (waitingForDoorSwing)
-            {
-                _lastAutoWalkProgressTime = Time.unscaledTime;
-                return;
-            }
-
+            // Watchdog: report blocked only when the player is actually TRYING to translate
+            // (commanding meaningful forward move) but isn't moving. While turning in place
+            // (move≈0 by the facing scale) or holding for a door swing, no translation is
+            // expected, so don't accumulate the no-progress clock — that's what let big
+            // turns get killed as false stalls.
+            bool tryingToTranslate = !waitingForDoorSwing && move.sqrMagnitude > AutoWalkMovingThreshold * AutoWalkMovingThreshold;
             if (Vector3.Distance(playerPos, _lastAutoWalkPosition) >= AutoWalkProgressDistance)
             {
                 _lastAutoWalkPosition = playerPos;
                 _lastAutoWalkProgressTime = Time.unscaledTime;
-                // Real route progress ends the current pinned episode: clear the escape
-                // give-up latch so a later graze on the same leg can escape afresh.
-                _autoWalkEscapeWasted = 0;
-                _autoWalkEscapeLastSign = 0;
                 ClearNavigationBlockedDetail();
+            }
+            else if (!tryingToTranslate)
+            {
+                _lastAutoWalkProgressTime = Time.unscaledTime;  // turning / door-waiting: not a stall
             }
             else if (Time.unscaledTime - _lastAutoWalkProgressTime >= AutoWalkBlockedTimeoutSeconds)
             {
@@ -1458,7 +1518,7 @@ namespace DateEverythingAccess
 
         private static bool IsSimpleRouteDoorTargetComplete(SimpleNavRoute route)
         {
-            Door door = FindSimpleRouteTargetDoor(route);
+            DoorPortal door = FindSimpleRouteTargetDoor(route);
             if (door == null)
                 return false;
 
@@ -1468,7 +1528,10 @@ namespace DateEverythingAccess
             return IsSimpleRouteTargetSelected(route);
         }
 
-        private static Door FindSimpleRouteTargetDoor(SimpleNavRoute route)
+        // Resolve the route's TARGET barrier (when the target itself is a door) across both
+        // component types — Door and SlidingDoor — by GameObject instance id. Mirrors the
+        // tag/open path's uniform treatment so a closet/cabinet door can be a direct nav target.
+        private static DoorPortal FindSimpleRouteTargetDoor(SimpleNavRoute route)
         {
             if (route == null || route.TargetGameObjectId == 0)
                 return null;
@@ -1479,9 +1542,18 @@ namespace DateEverythingAccess
                 Door door = doors[i];
                 if (door == null || door.gameObject == null)
                     continue;
-
                 if (door.gameObject.GetInstanceID() == route.TargetGameObjectId)
-                    return door;
+                    return DoorPortal.For(door);
+            }
+
+            SlidingDoor[] sliders = FindObjectsOfType<SlidingDoor>();
+            for (int i = 0; i < sliders.Length; i++)
+            {
+                SlidingDoor sd = sliders[i];
+                if (sd == null || sd.gameObject == null)
+                    continue;
+                if (sd.gameObject.GetInstanceID() == route.TargetGameObjectId)
+                    return DoorPortal.For(sd);
             }
 
             return null;
@@ -1754,6 +1826,7 @@ namespace DateEverythingAccess
                 " autoWalk=" + _isAutoWalking);
             _isNavigationActive = false;
             _isAutoWalking = false;
+            _hasAutoWalkInput = false;  // stop re-asserting input in FixedUpdate
             _lastAutoWalkProgressTime = 0f;
             _nextSimpleRouteDiagnosticTime = 0f;
             _lastNavigationTargetDebugSnapshot = null;
@@ -3722,25 +3795,19 @@ namespace DateEverythingAccess
                 string.Equals(interactable.InternalName(), "skylar", StringComparison.OrdinalIgnoreCase);
         }
 
-        // APPROACH radius (metres) = the goal-disc the planner uses to choose where the
-        // player STOPS near a target. This is NOT the game's interaction gate: the game
-        // decides interaction success at runtime via the object's own InteractionRadius
-        // (Distance(camera, ClosestPointOnBounds) < InteractionRadius + a forward raycast).
-        // We default to the object's InteractionRadius so a target ~2m unreachable still
-        // gets a goal cell, then the collider-band filter narrows within it. Doors are NOT
-        // capped here: a door's goal cells come exclusively from the bake's
-        // operable_from_cells (which override this disc entirely), so the radius for a door
-        // only bounds a pre-snap that gets discarded — no cap needed. The Skylar gift IS
-        // capped (1.25m) because at the package's advertised 7.5m the route announces
-        // arrival ~7m short of a useful package stand point.
-        // See [[project-navigation-door-operability-cells]].
+        // APPROACH radius (metres) = the disc the planner uses to gather candidate goal cells.
+        // This is the object's OWN InteractionRadius, passed through unchanged — the game gates
+        // interaction on `Distance(camera, ClosestPointOnBounds) < InteractionRadius` + a forward
+        // raycast, and the planner now filters those candidates by mandatory line-of-sight and
+        // picks the fewest-legs / closest cell, so there's no reason to cap or override the radius
+        // here. (The former Skylar-gift 1.25m cap was a workaround for the OLD arrival rule that
+        // stopped anywhere in the radius — removed now that arrival is the goal cell; re-add if a
+        // specific target needs it.) Doors don't use this disc at all: their goal cells come from
+        // the bake's operable_from_cells. See [[project-navigation-door-operability-cells]].
         private static float GetInteractableApproachRadius(InteractableObj interactable)
         {
             if (interactable == null)
                 return 7.5f;
-
-            if (IsTutorialSkylarGiftTarget(interactable))
-                return TutorialGiftApproachRadius;
 
             return interactable.InteractionRadius > 0f
                 ? interactable.InteractionRadius
@@ -3761,176 +3828,8 @@ namespace DateEverythingAccess
                 ? BetterPlayerControl.Instance.transform.position
                 : Vector3.zero;
             _lastAutoWalkProgressTime = Time.unscaledTime;
-            _autoWalkEscapeSign = 0;
-            _autoWalkEscapeUntil = 0f;
-            _autoWalkNoMoveSince = 0f;
-            _autoWalkLastEscapeProbePos = _lastAutoWalkPosition;
-            _autoWalkEscapeBurstStartPos = _lastAutoWalkPosition;
-            _autoWalkEscapeWasted = 0;
-            _autoWalkEscapeLastSign = 0;
+            _facingSince = 0f;
             ClearNavigationBlockedDetail();
-        }
-
-        // Inject a lateral strafe into the player-local <paramref name="move"/> command
-        // when the follower is commanding forward but the capsule is pinned against a
-        // wall (the doorframe-jamb graze). See the AutoWalkEscape* constants and
-        // [[project-navigation-runtime-stall-catalog-2026-05-29]].
-        private void ApplyWallSlideEscape(ref Vector3 move, Transform playerTransform, Vector3 playerPos)
-        {
-            // The wall-slide escape is a player-facing autowalk feature: it nudges a
-            // pinned capsule off a doorframe jamb so a blind player isn't stuck. But it
-            // ruins the coverage sweep's diagnostic resolution — it collapses three
-            // distinct upstream defects (planner hugged the jamb / bake channel too
-            // narrow / follower overshoot) into a silent "arrived". During a sweep we
-            // want the PLAIN pure-pursuit follower to stall exactly where the baked
-            // centerline isn't walkable, so the failure signature attributes the defect.
-            // See [[project-navigation-follower-wall-slide-escape]].
-            if (SimpleNavCoverageSweep.IsActive)
-            {
-                _autoWalkEscapeSign = 0;
-                _autoWalkNoMoveSince = 0f;
-                _autoWalkLastEscapeProbePos = playerPos;
-                _autoWalkEscapeBurstStartPos = playerPos;
-                _autoWalkEscapeWasted = 0;
-                _autoWalkEscapeLastSign = 0;
-                return;
-            }
-
-            float now = Time.unscaledTime;
-
-            // Continue an in-flight escape burst: keep strafing the locked side and
-            // ATTENUATE the forward term. Full forward (the old behaviour) just shoved
-            // the capsule back into the jamb each frame, so the strafe never won — the
-            // limit cycle the 2026-06-11 sweep caught. Cutting move.z lets the lateral
-            // slide dominate so the capsule peels off; a small residual keeps it
-            // threading the doorway diagonally rather than scraping the far jamb.
-            if (_autoWalkEscapeSign != 0 && now < _autoWalkEscapeUntil)
-            {
-                move.z *= AutoWalkEscapeForwardDuringBurst;
-                move.x = Mathf.Clamp(move.x + _autoWalkEscapeSign * AutoWalkEscapeStrafeMagnitude, -1f, 1f);
-                return;
-            }
-
-            // A burst just expired. Judge whether it actually moved the capsule. A
-            // productive burst clears the wasted counter and lets the next pinned spell
-            // re-evaluate the side freshly; a wasted one is tallied, and after a few in a
-            // row we give up escaping entirely for this pinned episode so the blocked
-            // timeout reports the real upstream defect instead of thrashing for 2s.
-            if (_autoWalkEscapeSign != 0)
-            {
-                float burstMoved = Vector3.Distance(
-                    new Vector3(playerPos.x, 0f, playerPos.z),
-                    new Vector3(_autoWalkEscapeBurstStartPos.x, 0f, _autoWalkEscapeBurstStartPos.z));
-                if (burstMoved >= AutoWalkEscapeBurstProgress)
-                {
-                    _autoWalkEscapeWasted = 0;
-                    _autoWalkEscapeLastSign = 0; // episode resolved; re-evaluate side next time
-                }
-                else
-                    _autoWalkEscapeWasted++;
-                _autoWalkEscapeSign = 0;
-            }
-
-            // Latched give-up: too many dead bursts in a row. Stop injecting strafe and
-            // hold _autoWalkNoMoveSince pinned so the existing progress timeout fires.
-            // The latch clears only when real route progress resets it (in
-            // ResetAutoWalkProgress / on a productive frame below).
-            if (_autoWalkEscapeWasted >= AutoWalkEscapeMaxWastedBursts)
-            {
-                _autoWalkLastEscapeProbePos = playerPos;
-                return;
-            }
-
-            // Only consider escaping while actively trying to move forward. During the
-            // turn-to-align phase the speed gate legitimately zeroes the forward term,
-            // and that is not a stall.
-            bool commandingForward = move.z > 0.25f;
-            if (!commandingForward)
-            {
-                _autoWalkNoMoveSince = 0f;
-                _autoWalkLastEscapeProbePos = playerPos;
-                return;
-            }
-
-            // Track how long the player has been pressing forward without moving.
-            float moved = Vector3.Distance(
-                new Vector3(playerPos.x, 0f, playerPos.z),
-                new Vector3(_autoWalkLastEscapeProbePos.x, 0f, _autoWalkLastEscapeProbePos.z));
-            _autoWalkLastEscapeProbePos = playerPos;
-            if (moved >= AutoWalkEscapeStuckDisplacement)
-            {
-                _autoWalkNoMoveSince = 0f;
-                return;
-            }
-            if (_autoWalkNoMoveSince <= 0f)
-            {
-                _autoWalkNoMoveSince = now;
-                return;
-            }
-            if (now - _autoWalkNoMoveSince < AutoWalkEscapeTriggerSeconds)
-                return;
-
-            // Pinned while pushing forward. Probe both sides (chest height, where the
-            // wall graze is) and strafe toward whichever is clear so the capsule slides
-            // off the jamb. Right-handed: right = forward rotated -90° about up.
-            Vector3 fwd = playerTransform.forward; fwd.y = 0f; fwd.Normalize();
-            Vector3 right = new Vector3(fwd.z, 0f, -fwd.x);
-            Vector3 chest = playerPos + new Vector3(0f, 1.0f, 0f);
-            RuntimeBlockerProbe.Hit rightHit = ProbeOne(chest, right, AutoWalkEscapeSideProbeDistance);
-            RuntimeBlockerProbe.Hit leftHit = ProbeOne(chest, -right, AutoWalkEscapeSideProbeDistance);
-            bool rightClear = rightHit == null;
-            bool leftClear = leftHit == null;
-
-            int sign;
-            if (rightClear && !leftClear) sign = +1;
-            else if (leftClear && !rightClear) sign = -1;
-            else if (rightClear && leftClear)
-                // Both sides open (wedged on a head-on jamb): commit to ONE side for the
-                // whole pinned episode. If a previous burst this episode already chose a
-                // side, reuse it — re-deciding each burst is what flipped L/R and stalled
-                // the capsule on head-on jambs (the 2026-06-11 thrash). Only on the first
-                // burst do we pick the side the route's next waypoint lies toward, so we
-                // strafe into the doorway rather than away from it.
-                sign = _autoWalkEscapeLastSign != 0
-                    ? _autoWalkEscapeLastSign
-                    : (WaypointSideSign(playerTransform, playerPos) >= 0 ? +1 : -1);
-            else
-            {
-                // Both sides blocked too — a genuine pinch, not a graze. Nothing the
-                // strafe can do; let the blocked timeout report it honestly. Record it
-                // so the sweep can tell "escape gave up on a pinch" from "escape never
-                // armed" (the silent forward/alignment early-returns above).
-                LogNavigationAutoWalkDebug("Auto-walk wall-slide escape declined (both sides blocked) player=" +
-                    FormatVector3(playerPos));
-                _autoWalkNoMoveSince = now; // re-arm so we don't spin probes every frame
-                return;
-            }
-
-            _autoWalkEscapeSign = sign;
-            _autoWalkEscapeLastSign = sign;
-            _autoWalkEscapeBurstStartPos = playerPos;
-            _autoWalkEscapeUntil = now + AutoWalkEscapeBurstSeconds;
-            _autoWalkNoMoveSince = 0f;
-            // Attenuate forward on the arming frame too (not just the continuation
-            // frames) so the very first burst tick already favours the lateral slide.
-            move.z *= AutoWalkEscapeForwardDuringBurst;
-            move.x = Mathf.Clamp(move.x + sign * AutoWalkEscapeStrafeMagnitude, -1f, 1f);
-            // LogNavigationAutoWalkDebug self-gates (DebugMode or an active sweep); don't
-            // pre-gate here or the sweep loses its own escape-fire records.
-            LogNavigationAutoWalkDebug("Auto-walk wall-slide escape sign=" + sign +
-                " rightClear=" + rightClear + " leftClear=" + leftClear +
-                " player=" + FormatVector3(playerPos));
-        }
-
-        // +1 if the active waypoint lies to the player's local right, -1 if left.
-        // Used to choose an escape side when both sides are open. XZ only.
-        private static int WaypointSideSign(Transform playerTransform, Vector3 playerPos)
-        {
-            Vector3 to = SimpleNavBridge.LastResolvedTarget - playerPos;
-            to.y = 0f;
-            if (to.sqrMagnitude <= 1e-4f) return +1;
-            Vector3 right = new Vector3(playerTransform.forward.z, 0f, -playerTransform.forward.x);
-            return Vector3.Dot(to, right) >= 0f ? +1 : -1;
         }
 
 
@@ -4700,6 +4599,33 @@ namespace DateEverythingAccess
                 value.x.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
                 value.y.ToString("0.00", CultureInfo.InvariantCulture) + ", " +
                 value.z.ToString("0.00", CultureInfo.InvariantCulture) + ")";
+        }
+
+        // High-precision vector format for the LOS parity probe: the offline validator replays the
+        // EXACT logged ray, so origin/direction need enough precision that the replayed ray doesn't
+        // drift off a thin occluder. Comma-free, paren-wrapped so it's one whitespace-delimited
+        // token the log parser can split cleanly.
+        private static string FormatVector3Precise(Vector3 value)
+        {
+            return "(" +
+                value.x.ToString("0.000000", CultureInfo.InvariantCulture) + "," +
+                value.y.ToString("0.000000", CultureInfo.InvariantCulture) + "," +
+                value.z.ToString("0.000000", CultureInfo.InvariantCulture) + ")";
+        }
+
+        // Full hierarchy path of a transform (root/.../leaf), so the offline parity validator can
+        // match the hit collider against the export's collider Path field.
+        private static string GetTransformPath(Transform t)
+        {
+            if (t == null) return "<null>";
+            var sb = new System.Text.StringBuilder(t.name);
+            Transform p = t.parent;
+            while (p != null)
+            {
+                sb.Insert(0, p.name + "/");
+                p = p.parent;
+            }
+            return sb.ToString();
         }
 
         private static string DescribeInteractable(InteractableObj interactable)
