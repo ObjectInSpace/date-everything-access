@@ -139,9 +139,40 @@ def landing_from_slice(floor, segments, floor_y):
     return None
 
 
-def ramp_path_between_landings(g_world, u_world, gy, uy):
+def _nearest_navigable_xz(floor, x, z, max_radius_m=3.0):
+    """Spiral out from (x,z) to the nearest navigable cell center on `floor`. Returns
+    (cx, cz) or None. Same search as landing_from_slice, factored for ramp snapping."""
+    frame = floor["frame"]
+    ox, oz, cs = frame["origin_x"], frame["origin_z"], frame["cell_size"]
+    nx, nz = frame["nx"], frame["nz"]
+    rows = floor["bitmap_rows"]
+    ccx = int((x - ox) / cs); ccz = int((z - oz) / cs)
+    max_r = int(math.ceil(max_radius_m / cs))
+    for r in range(0, max_r + 1):
+        for dx in range(-r, r + 1):
+            for dz in range(-r, r + 1):
+                if max(abs(dx), abs(dz)) != r:
+                    continue
+                ix, iz = ccx + dx, ccz + dz
+                if 0 <= ix < nx and 0 <= iz < nz and rows[ix][iz] == 'N':
+                    return (ox + (ix + 0.5) * cs, oz + (iz + 0.5) * cs)
+    return None
+
+
+def ramp_path_between_landings(g_world, u_world, gy, uy, ground=None, upper=None):
     """Synthesize an ordered bottom->top polyline of (x, y, z) points between the two
-    resolved stair landings by linear interpolation in X, Z, and Y.
+    resolved stair landings by linear interpolation in X, Z, and Y, then SNAP each
+    interior point's XZ onto the nearest navigable cell of whichever floor frame its
+    Y is closest to.
+
+    Why snap: the straight bottom->top line can clip non-navigable cells near a
+    landing — at the Date Everything stairs the top run enters the railing-bounded
+    stairwell void (cells at z>=-1.0 are blocked) before the floor drops, so the top
+    interior points land on blocked cells and the follower stalls at the seam
+    (confirmed 2026-06-13, [[project-navigation-offline-validation-2026-06-13]]).
+    Snapping pulls those points back onto the walkable hallway band so the follower
+    has a reachable line. Endpoints are the resolved landings (already navigable) and
+    are left exact so the path still meets the floor-plane A* nodes.
 
     WHY interpolate instead of trace the collider: the blocker export only slices the
     stair collider at the two FLOOR planes (PlaneY ∈ {ground, upper}) — there is no
@@ -164,11 +195,19 @@ def ramp_path_between_landings(g_world, u_world, gy, uy):
     path = []
     for i in range(n):
         t = i / (n - 1)
-        path.append([
-            round(gx + (ux - gx) * t, 3),
-            round(gy + (uy - gy) * t, 3),
-            round(gz + (uz - gz) * t, 3),
-        ])
+        x = round(gx + (ux - gx) * t, 3)
+        y = round(gy + (uy - gy) * t, 3)
+        z = round(gz + (uz - gz) * t, 3)
+        # Snap interior points onto navigable cells; endpoints stay exact (they ARE
+        # the resolved, already-navigable landings and the A* seam nodes).
+        is_endpoint = (i == 0 or i == n - 1)
+        if not is_endpoint and ground is not None and upper is not None:
+            # Snap on whichever floor frame this point's Y is nearer.
+            floor = ground if abs(y - gy) <= abs(y - uy) else upper
+            snapped = _nearest_navigable_xz(floor, x, z)
+            if snapped is not None:
+                x, z = round(snapped[0], 3), round(snapped[1], 3)
+        path.append([x, y, z])
     return path
 
 
@@ -251,7 +290,7 @@ def main():
         # walks up, so it has a real XZ-progressing line instead of one diagonal jump
         # across the stairwell (the cause of the stair loop/stall). Falls back to the
         # bare two-endpoint edge when the slices are too coarse to improve on it.
-        ramp_path = ramp_path_between_landings((gcx, gcz), (ucx, ucz), gy, uy)
+        ramp_path = ramp_path_between_landings((gcx, gcz), (ucx, ucz), gy, uy, ground, upper)
         if ramp_path:
             edge_record["path"] = ramp_path
         # Cost estimate: length along the ramp polyline if we have one, else the

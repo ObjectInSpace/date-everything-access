@@ -13,11 +13,25 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 BLOCKERS_PATH = REPO / "artifacts" / "navigation" / "thirdpersongreybox-blockers.json"
+# Per-cell vertical-span columns (the primitive the span bake consumes) live in the
+# COLUMNS export, not the plain blockers export. The wall-like audit reads them from
+# here so it reports on what the bake actually uses.
+COLUMNS_PATH = REPO / "artifacts" / "navigation" / "thirdpersongreybox-blockers.COLUMNS.json"
 BAKE_PATH = REPO / "artifacts" / "navigation" / "navigable_region.bake.json"
+# Column cell size (XZ) of the exporter's per-cell raster — matches CELL in
+# bake_navigable_region; used only to convert column cell indices to world XZ for the
+# scene-point sanity filter.
+COLUMN_CELL_M = 0.20
 
 FLOORS = (("ground", -0.50), ("upper", 12.50))
-STEP_UP_TOL = 0.25
-CAPSULE_H = 2.50
+# Match the SPAN bake's blocking rule (bake_navigable_region._column_blocks_floor),
+# not the retired fixed-Y slice model: a column blocks a floor iff its vertical span
+# [minY,maxY] overlaps the capsule volume [floorY, floorY+CAPSULE_H] AND its top is
+# not a step-over sill (clears the floor by >= STEP_OVER_HEIGHT_M). Kept in sync with
+# the bake's CAPSULE_H=3.20 / STEP_OVER_HEIGHT_M=0.30 so the audit reports on the
+# primitive the bake actually consults (columns), not the dead slice segments.
+CAPSULE_H = 3.20
+STEP_OVER_HEIGHT_M = 0.30
 
 FURNITURE_RE = re.compile(
     r"(fireplace|book|shelf|table|chair|sofa|couch|bed|cabinet|dresser|desk|"
@@ -72,30 +86,49 @@ def is_structural_path(record: dict) -> bool:
     )
 
 
-def bake_used_walllike_records(mesh_records: list[dict]) -> list[tuple[str, dict, int]]:
+def _column_blocks_floor(col_min_y: float, col_max_y: float, floor_y: float) -> bool:
+    """Mirror bake_navigable_region._column_blocks_floor: does this column's vertical
+    span block the player capsule standing on `floor_y`?"""
+    cap_lo = floor_y
+    cap_hi = floor_y + CAPSULE_H
+    if col_max_y < cap_lo or col_min_y > cap_hi:
+        return False  # no overlap with the capsule
+    if col_max_y - floor_y < STEP_OVER_HEIGHT_M:
+        return False  # a low sill the capsule foot steps over
+    return True
+
+
+def furniture_blocking_records(columns_by_path: dict[str, tuple[dict, list]]) -> list[tuple[str, dict, int]]:
+    """FURNITURE-named mesh records whose per-cell COLUMNS actually block the player
+    band on a floor under the span bake's rule — the modern form of this audit's
+    question ("is furniture being treated as an obstacle the player can't pass?").
+
+    Replaces the retired wall-like check: that keyed off Footprint.IsWallLikeFatVictim,
+    a flag the SPAN exporter no longer emits (the wall-like/fat-victim slice gates were
+    deleted in the per-cell-span rewrite). We now look directly at furniture meshes
+    whose columns intersect the capsule band. `columns_by_path` maps a collider Path to
+    (record, flat column list [colIX, colIZ, minY, maxY])."""
     rows: list[tuple[str, dict, int]] = []
-    for record in mesh_records:
-        footprint = record.get("Footprint") or {}
-        if not footprint.get("IsWallLikeFatVictim"):
+    for path, (record, columns) in columns_by_path.items():
+        if not FURNITURE_RE.search(record_text(record)):
             continue
-        segments = footprint.get("Segments") or []
-        if not segments:
+        if not columns:
             continue
 
         for label, floor_y in FLOORS:
-            y_lo = floor_y - STEP_UP_TOL
-            y_hi = floor_y + CAPSULE_H
-            if record["TopY"] < y_lo or record["BottomY"] > y_hi:
-                continue
-
-            used_segments = [
-                segment for segment in segments
-                if (segment.get("PlaneY") is None or y_lo <= segment.get("PlaneY") <= y_hi)
-                and (is_scene_point(segment["AX"], segment["AZ"])
-                     or is_scene_point(segment["BX"], segment["BZ"]))
-            ]
-            if used_segments:
-                rows.append((label, record, len(used_segments)))
+            blocking = 0
+            for col in columns:
+                if len(col) < 4:
+                    continue
+                cix, ciz, cmin, cmax = col[0], col[1], col[2], col[3]
+                wx = (cix + 0.5) * COLUMN_CELL_M
+                wz = (ciz + 0.5) * COLUMN_CELL_M
+                if not is_scene_point(wx, wz):
+                    continue
+                if _column_blocks_floor(cmin, cmax, floor_y):
+                    blocking += 1
+            if blocking:
+                rows.append((label, record, blocking))
     return rows
 
 
@@ -122,10 +155,27 @@ def print_record(prefix: str, record: dict, extra: str = "") -> None:
     )
 
 
+def _load_columns_by_path() -> dict[str, tuple[dict, list]]:
+    """Map each MeshCollider Path -> (record, flat column list) from the COLUMNS export.
+    Empty if the export is missing (the audit then just skips the wall-like check)."""
+    if not COLUMNS_PATH.exists():
+        return {}
+    cdata = json.loads(COLUMNS_PATH.read_text(encoding="utf-8-sig"))
+    out: dict[str, tuple[dict, list]] = {}
+    for record in cdata.get("MeshColliders", []):
+        path = record.get("Path")
+        if not path:
+            continue
+        cols = (record.get("Footprint") or {}).get("Columns") or []
+        out[path] = (record, cols)
+    return out
+
+
 def main() -> int:
     data = json.loads(BLOCKERS_PATH.read_text(encoding="utf-8"))
     mesh_records = data["MeshColliders"]
     navigation_blockers = data["NavigationBlockers"]
+    columns_by_path = _load_columns_by_path()
     bake = json.loads(BAKE_PATH.read_text(encoding="utf-8")) if BAKE_PATH.exists() else None
 
     reasons = Counter((record.get("Footprint") or {}).get("RejectionReason") or "NavigationBlocker"
@@ -134,9 +184,9 @@ def main() -> int:
     for reason, count in sorted(reasons.items()):
         print(f"  {reason}: {count}")
 
-    walllike_rows = bake_used_walllike_records(mesh_records)
+    walllike_rows = furniture_blocking_records(columns_by_path)
     print()
-    print(f"Wall-segment bake records used: {len(walllike_rows)}")
+    print(f"Furniture meshes with player-band-blocking columns: {len(walllike_rows)}")
     for name, count in sorted(Counter(category(record) for _, record, _ in walllike_rows).items()):
         print(f"  {name}: {count}")
 
