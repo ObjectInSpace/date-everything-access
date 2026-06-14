@@ -85,6 +85,34 @@ def compare_waypoints(py_wps, cs_wps, tol):
     return diffs
 
 
+_INTERACTABLES_BY_NAME = None
+
+
+def _resolve_capture_target_path(target_name, target_pos):
+    """Map a capture's target_name → its export Path, disambiguating duplicate names by
+    nearest position to the capture's target_position. Returns None if no interactable
+    by that name (e.g. junk targets like 'Main Camera' / 'MiscDebug')."""
+    global _INTERACTABLES_BY_NAME
+    if _INTERACTABLES_BY_NAME is None:
+        _INTERACTABLES_BY_NAME = {}
+        for it in planner_mod.load_interactables():
+            _INTERACTABLES_BY_NAME.setdefault(it.get("GameObjectName"), []).append(it)
+    cand = _INTERACTABLES_BY_NAME.get(target_name)
+    if not cand:
+        return None
+    if len(cand) == 1:
+        return cand[0].get("Path")
+    best, bestd = None, None
+    for it in cand:
+        p = it.get("Position") or {}
+        d = ((p.get("x", 0) - target_pos[0]) ** 2 +
+             (p.get("y", 0) - target_pos[1]) ** 2 +
+             (p.get("z", 0) - target_pos[2]) ** 2)
+        if bestd is None or d < bestd:
+            best, bestd = it, d
+    return best.get("Path") if best else None
+
+
 def replan_with_python(capture, bake):
     """Run the Python planner with the same inputs as the captured C# plan."""
     planner = planner_mod.Planner(
@@ -114,9 +142,10 @@ def replan_with_python(capture, bake):
     target_floor_label = planner._floor_for_target_y(target_y)
     if target_floor_label is None:
         return None, f"python: target Y={target_y} not on a baked floor"
-    radius = capture.get("target_interaction_radius") or 1.0
-    radius = max(planner_mod.MIN_INTERACTION_RADIUS_M,
-                 min(radius, planner_mod.MAX_INTERACTION_RADIUS_M))
+    # Match plan(): radius is used as-is (no min/max clamp), falling back to 0.0
+    # when the capture has no interaction radius. goal_cells_around handles a 0
+    # radius by yielding the single nearest cell.
+    radius = capture.get("target_interaction_radius") or 0.0
     goals = planner_mod.goal_cells_around(
         planner.floors[target_floor_label], target_pos[0], target_pos[2], radius
     )
@@ -127,6 +156,23 @@ def replan_with_python(capture, bake):
         if nf is None:
             return None, "python: no nav cell near target"
         goals = [nf]
+    else:
+        # Apply the SAME interaction-LOS goal filter plan() now uses, so the parity
+        # check measures the LOS-aware planner against the LOS-aware C# runtime. The
+        # capture carries only target_name, so resolve its export Path by matching the
+        # name AND the capture's target_position (disambiguates duplicate leaf names
+        # like hanger10_BedroomCloset, which appear many times across instances).
+        tpath = _resolve_capture_target_path(capture.get("target_name"), target_pos)
+        if tpath is not None:
+            target_collider = planner_mod.resolve_target_collider_for_path(tpath)
+            if target_collider is not None:
+                los_goals = planner_mod.filter_goals_by_los(
+                    planner.floors[target_floor_label], goals,
+                    target_collider, target_pos[0], target_pos[2], radius
+                )
+                if not los_goals:
+                    return None, "python: no_los"
+                goals = los_goals
     goal_nodes = [(target_floor_label, ix, iz) for ix, iz in goals]
 
     path, total_cost, _ = planner.astar(

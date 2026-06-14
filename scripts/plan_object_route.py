@@ -26,6 +26,12 @@ from __future__ import annotations
 import argparse, heapq, json, math, re, sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Synthetic-eye interaction LOS — shared, parity-proven raycaster (see los_geometry +
+# [[project_navigation_offline_los_validator_2026_06_13]]). Used to filter goal cells
+# to those with a clear interaction line, mirroring SimpleNavPlanner exactly.
+import los_geometry as _los
+
 REPO = Path(__file__).resolve().parents[1]
 BAKE = REPO / "artifacts/navigation/navigable_region.bake.json"
 INTERACTABLES = REPO / "artifacts/navigation/thirdpersongreybox-interactables.json"
@@ -44,10 +50,27 @@ NAVIGABLE_CHAR = "N"
 # [[project-navigation-corner-dilation-severance-2026-05-29]].
 CLEARANCE_TARGET_CELLS = 4       # >= this many cells to nearest wall (0.8m) ⇒ no penalty
 CLEARANCE_PENALTY_PER_CELL_M = 0.15  # added per missing clearance-cell below target, in metres
+# NOTE (2026-06-13): a steep flat surcharge for clearance<=2 was TRIED to reroute the
+# tight-gap follower stalls and REVERTED — only 29→24 stalls, +1.8% length, and the
+# dominant upper-bedroom cluster was UNCHANGED because that furniture-dense area has
+# NO wider alternative (every approach is a 1-2 cell gap), so the surcharge applies
+# uniformly and can't reroute. Confirms the planner can't fix these; it's a follower
+# threading requirement. See [[project-navigation-offline-validation-2026-06-13]].
 CORNER_WAYPOINT_DEG = 30.0       # smoothing: keep vertices with turn > this
-DOOR_TAG_RADIUS_M = 0.8          # segment tagged with door if door XZ is within this distance of the segment
-MIN_INTERACTION_RADIUS_M = 0.5
-MAX_INTERACTION_RADIUS_M = 7.5
+# Fallback InteractionRadius for the DESTINATION door-tag rule when a target's own radius is
+# 0/unknown. Mirror of C# DoorInteractRadiusFallbackM. The old DOOR_TAG_RADIUS_M=2.5 magic
+# constant is GONE: on-path tagging uses each door's geometric opening radius (+1 cell), and the
+# destination rule uses the game's InteractionRadius. See tag_doors.
+DOOR_INTERACT_RADIUS_FALLBACK_M = 7.5
+# (No interaction-radius constant: the planner uses each object's own InteractionRadius verbatim —
+# parity with C# SimpleNavPlanner. Interaction is gated on radius + LOS, not on any bound we impose.)
+# Player-capsule + safety margin from the target's collider face: goal cells whose XZ distance to
+# the collider's nearest bounds point is below this are DROPPED (you can't stand inside the prop).
+# Mirrors SimpleNavPlanner.TargetColliderClearanceM (0.5m).
+TARGET_COLLIDER_CLEARANCE_M = 0.5
+# Performance safety valve (not a correctness limit): max A* node expansions while gathering goal
+# candidates for the fewest-legs pick. Parity with SimpleNavPlanner.GoalSearchMaxExpansions (3000).
+GOAL_SEARCH_MAX_EXPANSIONS = 3000
 # Radius to snap an explicit start/goal world position to the nearest navigable
 # cell. Kept in sync with SimpleNavPlanner.NearestNavigableSearchM (6.0m): real
 # runtime starts often land >4m off-mesh beside furniture (fireplace, closet),
@@ -95,6 +118,16 @@ class Floor:
         # Raw per-door freed-cell map keyed by door name: {name: set((ix,iz))}.
         # Planner builds this lazily for re-applying different doors-open sets.
         self.doors_freed_by_name = {}
+        # Per-door world doorway-opening centroid keyed by name: {name: (wx, wz)}.
+        # Centroid of the door's threshold cells — where a route crosses the opening.
+        # Uniform over swing Doors AND sliding container doors (mirror of C#
+        # Floor.OpeningCenterByName). Source for tag_doors. See
+        # [[project_navigation_container_open_on_interact]].
+        self.opening_center_by_name = {}
+        # Per-door opening RADIUS (world m): max threshold-cell distance from the centroid
+        # (half the doorway width). On-path tagging uses this + one cell — a geometric
+        # "route threads this doorway" test. Mirror of C# Floor.OpeningRadiusByName.
+        self.opening_radius_by_name = {}
         # Same shape, for state-gated walls (DresserWall and similar).
         self.state_walls_freed_by_name = {}
         # Lazily-built clearance map: per cell, distance (in cells, capped at
@@ -229,6 +262,32 @@ class Planner:
                     self._locked_doors.add(name)
                 else:
                     self._unlocked_doors.add(name)
+                # Doorway-opening centroid (world XZ) from threshold cells — uniform over
+                # swing + sliding doors, mirrors C# Floor.OpeningCenterByName. First record
+                # for a name wins (matches the C# ContainsKey guard).
+                thr = door.get("threshold_cells_list")
+                if thr and name not in floor.opening_center_by_name:
+                    sx = sz = 0.0
+                    n = 0
+                    for pair in thr:
+                        if not pair or len(pair) < 2:
+                            continue
+                        wx, wz = floor.cell_to_world(pair[0], pair[1])
+                        sx += wx
+                        sz += wz
+                        n += 1
+                    if n > 0:
+                        cx, cz = sx / n, sz / n
+                        floor.opening_center_by_name[name] = (cx, cz)
+                        max_r = 0.0
+                        for pair in thr:
+                            if not pair or len(pair) < 2:
+                                continue
+                            wx, wz = floor.cell_to_world(pair[0], pair[1])
+                            r = math.hypot(wx - cx, wz - cz)
+                            if r > max_r:
+                                max_r = r
+                        floor.opening_radius_by_name[name] = max_r
                 cells = {tuple(c) for c in door.get("freed_cells", [])}
                 if not cells:
                     continue
@@ -455,6 +514,14 @@ class Planner:
         came_from = {start_node: (None, None)}  # node → (prev_node, edge_meta)
         gscore = {start_node: 0.0}
         closed = set()
+        # Goal selection objective (parity with C# SimpleNavPlanner.AStar): FEWEST LEGS, then
+        # CLOSEST to the object, then cheapest walk. We consider ALL reachable goal cells (a far
+        # cell can be the SIMPLEST to reach, and legs is primary), bounded only by a generous
+        # expansion CAP as a perf safety valve — not a correctness limit. A* records the shortest
+        # cell-path to each reached goal, then we smooth + count legs per candidate. The C# LOS
+        # goal-cell filter + rim check are NOT mirrored here (live physics only).
+        reached_goals = []
+        expansions = 0
         while open_heap:
             _, g, node = heapq.heappop(open_heap)
             if g > gscore.get(node, math.inf):
@@ -462,18 +529,15 @@ class Planner:
             if node in closed:
                 continue
             closed.add(node)
+            expansions += 1
+            if expansions > GOAL_SEARCH_MAX_EXPANSIONS:
+                break
             if node in goal_set:
-                # Reconstruct.
-                path, edges = [], []
-                cur = node
-                while cur is not None:
-                    path.append(cur)
-                    prev, meta = came_from[cur]
-                    if prev is not None:
-                        edges.append(meta)
-                    cur = prev
-                path.reverse(); edges.reverse()
-                return path, g, edges
+                reached_goals.append(node)
+                if len(reached_goals) == len(goal_set):
+                    break
+                # Goal cells are terminal — don't expand past them.
+                continue
             for nbr, cost, meta in self.neighbors(node):
                 ng = g + cost
                 if ng < gscore.get(nbr, math.inf):
@@ -481,7 +545,35 @@ class Planner:
                     came_from[nbr] = (node, meta)
                     h = self.heuristic(nbr, goal_floor, goal_wx, goal_wz)
                     heapq.heappush(open_heap, (ng + h, ng, nbr))
-        return None, math.inf, []
+
+        if not reached_goals:
+            return None, math.inf, []
+
+        def reconstruct(goal):
+            path, edges = [], []
+            cur = goal
+            while cur is not None:
+                path.append(cur)
+                prev, meta = came_from[cur]
+                if prev is not None:
+                    edges.append(meta)
+                cur = prev
+            path.reverse(); edges.reverse()
+            return path, edges
+
+        best = None  # (legs, dist, gcost, path, edges)
+        for goal in reached_goals:
+            path, edges = reconstruct(goal)
+            legs = len(smooth_path(path, self)) - 1
+            f = self.floors[goal[0]]
+            wx, wz = f.cell_to_world(goal[1], goal[2])
+            dist = math.hypot(wx - goal_wx, wz - goal_wz)
+            gcost = gscore[goal]
+            key = (legs, dist, gcost)
+            if best is None or key < best[0]:
+                best = (key, path, edges, gcost)
+        _, best_path, best_edges, best_g = best
+        return best_path, best_g, best_edges
 
 
 # ---------- polyline smoothing + door tagging ----------
@@ -778,23 +870,55 @@ def door_positions():
     return table
 
 
-def tag_doors(waypoints, planner, doors):
-    """For each segment between waypoints, if any door's XZ lies within DOOR_TAG_RADIUS_M
-    of the segment AND the door's Y is near the segment's floor, attach the door id."""
+def tag_doors(waypoints, planner, target_name=None, target_radius=0.0):
+    """Tag doors on route segments with TWO rules (mirror of C# SimpleNavPlanner.TagDoors,
+    no magic radius constant). Source is the bake's per-floor opening_center_by_name —
+    uniform over swing Doors AND sliding container doors.
+
+      (1) ON-PATH: a door is tagged on a segment that THREADS its doorway — segment within the
+          door's own opening_radius (half the doorway width) + one cell of clearance. Tight
+          geometric "route goes through here" test; does not over-tag doors merely passed near.
+      (2) DESTINATION: the door gating the TARGET — nearest door opening within the target's
+          InteractionRadius of the final goal cell — is force-tagged on the last segment. This
+          is the game's real "can the player stand at the goal and reach to open it" test, and
+          covers both a door TARGET and an item gated by a container door.
+
+    See [[project_navigation_container_open_on_interact]], [[project-navigation-door-tag-radius]]."""
     segments = []
     for i in range(len(waypoints) - 1):
         a, b = waypoints[i], waypoints[i + 1]
         wa, wb = planner.world_of(a), planner.world_of(b)
         seg = {"from": _node_to_dict(a, planner), "to": _node_to_dict(b, planner), "doors": []}
         if wa is not None and wb is not None and a[0] == b[0]:
-            floor_y = planner.floors[a[0]].floor_y
-            for d in doors:
-                if abs(d["y"] - floor_y) > 3.0:
-                    continue
-                dist = _point_segment_distance(d["xz"], wa, wb)
-                if dist <= DOOR_TAG_RADIUS_M:
-                    seg["doors"].append({"id": d["id"], "name": d["name"], "distance_m": round(dist, 3)})
+            floor = planner.floors[a[0]]
+            for name, xz in floor.opening_center_by_name.items():
+                dist = _point_segment_distance(xz, wa, wb)
+                open_r = floor.opening_radius_by_name.get(name, 0.0)
+                if dist <= open_r + planner.cell_size:
+                    seg["doors"].append({"name": name, "distance_m": round(dist, 3)})
         segments.append(seg)
+
+    # Rule (2): destination barrier on the final segment.
+    if segments and waypoints:
+        goal = waypoints[-1]
+        gw = planner.world_of(goal)              # None for virtual (@) nodes
+        gf = planner.floors.get(goal[0])         # None for virtual (@) floors
+        if gw is not None and gf is not None:
+            radius = target_radius if target_radius and target_radius > 0 else DOOR_INTERACT_RADIUS_FALLBACK_M
+            best_name, best_dist = None, math.inf
+            for name, xz in gf.opening_center_by_name.items():
+                dist = math.hypot(xz[0] - gw[0], xz[1] - gw[1])
+                is_target_door = bool(target_name) and name == target_name
+                if dist <= radius and (is_target_door or dist < best_dist):
+                    best_name = name
+                    best_dist = -1.0 if is_target_door else dist
+                    if is_target_door:
+                        break
+            if best_name is not None:
+                last = segments[-1]["doors"]
+                if not any(d["name"] == best_name for d in last):
+                    last.append({"name": best_name,
+                                 "distance_m": round(max(0.0, best_dist), 3)})
     return segments
 
 
@@ -903,6 +1027,72 @@ def goal_cells_around(floor, wx, wz, radius_m):
     return goals
 
 
+# ---------- interaction line-of-sight goal filter (mirror of SimpleNavPlanner) ----------
+
+_LOS_OCCLUDERS = None       # lazily-built collider set (the whole scene's occluders)
+_LOS_BY_PATH = None         # {collider path: Collider} for target resolution
+_LOS_TARGET_PATHS = None    # {GameObjectName: [export Path, ...]} for name→path lookup
+
+
+def _ensure_los_context():
+    """Build the shared occluder set + path indices once. The mask matches the game's
+    interaction raycast: ~dateviatorIgnores. We don't have the live mask offline, so we
+    use the parity-default (exclude only Unity's built-in IgnoreRaycast layer 2), which
+    validate_los proved sufficient — the game's dateviatorIgnores is layer 2 plus a few
+    effect layers that carry no interaction-blocking geometry."""
+    global _LOS_OCCLUDERS, _LOS_BY_PATH, _LOS_TARGET_PATHS
+    if _LOS_OCCLUDERS is not None:
+        return
+    excl = {_los.IGNORE_RAYCAST_LAYER}
+    _LOS_OCCLUDERS = _los.load_colliders(excl)
+    _LOS_BY_PATH = {}
+    for c in _LOS_OCCLUDERS:
+        _LOS_BY_PATH.setdefault(c.path, c)
+    _LOS_TARGET_PATHS = {}
+    for it in load_interactables():
+        _LOS_TARGET_PATHS.setdefault(it.get("GameObjectName"), []).append(it.get("Path"))
+
+
+def resolve_target_collider_for_path(target_path):
+    """The target's own collider (or None) by full export path — mirror of
+    SimpleNavPlanner.ResolveTargetCollider + SelectBestTargetCollider. None ⇒ keep the
+    full disc (matches C# when its live component-walk also finds nothing)."""
+    _ensure_los_context()
+    return _los.resolve_target_collider(target_path, colliders_by_path=_LOS_BY_PATH)
+
+
+def filter_goals_by_los(floor, goals, target_collider, target_x, target_z, radius_m):
+    """Narrow goal cells to those that are valid interaction standpoints, exactly as
+    SimpleNavPlanner.Plan does for a non-door collider target:
+      (a) drop cells whose XZ distance to the target collider's nearest bounds point is
+          below TARGET_COLLIDER_CLEARANCE_M (standing inside the prop), and
+      (b) keep only cells with a clear synthetic-eye interaction line (cell_has_los).
+    Returns the filtered (ix, iz) list. If target_collider is None, returns goals
+    unchanged (no collider to test against — keep the full disc, like C#). If the
+    collider IS resolved but NO cell qualifies, returns [] so the caller can fail fast
+    with a no-LOS status, never routing to a provably un-interactable cell."""
+    if target_collider is None:
+        return goals
+    _ensure_los_context()
+    inner_sq = TARGET_COLLIDER_CLEARANCE_M * TARGET_COLLIDER_CLEARANCE_M
+    out = []
+    for (ix, iz) in goals:
+        wx, wz = floor.cell_to_world(ix, iz)
+        # (a) overlap drop: nearest bounds point to a 1m-high standpoint (matches C#'s
+        # cellWorld at FloorY+1.0 for the clearance test).
+        cell_world = (wx, floor.floor_y + 1.0, wz)
+        nearest = _los.closest_point_on_bounds(target_collider, cell_world)
+        dx = nearest[0] - cell_world[0]
+        dz = nearest[2] - cell_world[2]
+        if dx * dx + dz * dz < inner_sq:
+            continue
+        # (b) interaction LOS from the synthetic eye.
+        if _los.cell_has_los_to_target((wx, wz), floor.floor_y, target_collider,
+                                       radius_m, _LOS_OCCLUDERS):
+            out.append((ix, iz))
+    return out
+
+
 # ---------- object-node resolution (for the object-reachability sweep) ----------
 
 # Mirror of AccessibilityWatcher.StripModelAuthoringTokens so an object's offline
@@ -975,8 +1165,10 @@ def resolve_object_node(planner, item):
         # Y falls outside every baked floor band: clearly exterior/off-floor decor.
         return "off_floor"
     floor = planner.floors[tfloor]
-    radius = item.get("InteractionRadius", 1.0) or 1.0
-    radius = max(MIN_INTERACTION_RADIUS_M, min(radius, MAX_INTERACTION_RADIUS_M))
+    # Use the object's own InteractionRadius verbatim (no clamp, no default) — parity with C#
+    # Plan(): the game gates on radius + LOS, not on any bound we impose. Every real interactable
+    # carries a radius; a degenerate 0 yields no goal cells and is handled by the empty-goals path.
+    radius = item.get("InteractionRadius") or 0.0
     goals = goal_cells_around(floor, tx, tz, radius)
     if not goals:
         n = floor.nearest_navigable(tx, tz, max_radius_m=NEAREST_NAVIGABLE_SEARCH_M)
@@ -1061,11 +1253,25 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
         raise SystemExit(f"no interactable matches {target_spec!r}")
 
     tx = target["Position"]["x"]; ty = target["Position"]["y"]; tz = target["Position"]["z"]
+
+    # Correct a DEGENERATE target position (mirror of SimpleNavPlanner.Plan). Some interactables
+    # (animated cushions, curtains, the broken-glass door, ~30 objects) report a transform at
+    # their RIG ORIGIN, tens of metres from the geometry; the COLLIDER carries the true location.
+    # When the given position lies OUTSIDE the resolved collider's XZ bounds (+ pad), substitute
+    # the collider's bounds centre. See [[project_navigation_target_position_degenerate]].
+    target_collider = resolve_target_collider_for_path(target.get("Path"))
+    if target_collider is not None:
+        pad = 0.5
+        lo, hi = target_collider.aabb_lo, target_collider.aabb_hi
+        if tx < lo[0] - pad or tx > hi[0] + pad or tz < lo[2] - pad or tz > hi[2] + pad:
+            tx = (lo[0] + hi[0]) / 2.0
+            ty = (lo[1] + hi[1]) / 2.0
+            tz = (lo[2] + hi[2]) / 2.0
+
     tfloor = planner._floor_for_target_y(ty)
     if tfloor is None:
         raise SystemExit(f"target Y={ty} not on a baked floor")
-    radius = interaction_radius_override or target.get("InteractionRadius", 1.0)
-    radius = max(MIN_INTERACTION_RADIUS_M, min(radius, MAX_INTERACTION_RADIUS_M))
+    radius = interaction_radius_override or target.get("InteractionRadius") or 0.0
     goals = goal_cells_around(planner.floors[tfloor], tx, tz, radius)
     if not goals:
         # Fall back to the nearest navigable cell.
@@ -1073,6 +1279,20 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
         if n is None:
             raise SystemExit(f"no navigable cell near target {target['Path']}")
         goals = [n]
+    else:
+        # Interaction LOS goal filter (mirror of SimpleNavPlanner non-door branch): keep
+        # only cells that don't overlap the target collider and have a clear interaction
+        # line. None collider ⇒ keep the disc. A resolved collider with NO LOS cell ⇒
+        # the object is reachable but not interactable from anywhere → fail fast.
+        if target_collider is not None:
+            los_goals = filter_goals_by_los(planner.floors[tfloor], goals,
+                                            target_collider, tx, tz, radius)
+            if not los_goals:
+                return {
+                    "status": "no_los",
+                    "target": _summarize_target(target),
+                }
+            goals = los_goals
     goal_nodes = [(tfloor, ix, iz) for ix, iz in goals]
 
     # Start node.
@@ -1099,7 +1319,8 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
         }
 
     waypoints = smooth_path(path, planner)
-    segments = tag_doors(waypoints, planner, door_positions())
+    segments = tag_doors(waypoints, planner,
+                         target_name=target.get("GameObjectName"), target_radius=radius)
     return {
         "status": "ok",
         "target": _summarize_target(target),
@@ -1115,7 +1336,7 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
             "cell_size_m": planner.cell_size,
             "interaction_radius_used_m": radius,
             "corner_waypoint_deg": CORNER_WAYPOINT_DEG,
-            "door_tag_radius_m": DOOR_TAG_RADIUS_M,
+            "door_interact_radius_fallback_m": DOOR_INTERACT_RADIUS_FALLBACK_M,
         },
     }
 

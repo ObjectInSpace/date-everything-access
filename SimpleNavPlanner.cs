@@ -18,28 +18,23 @@ namespace DateEverythingAccess
         private const string BakeFileName = "navigable_region.bake.json";
         private const char NavigableChar = 'N';
         private const float CornerWaypointDeg = 30f;
-        // Door is tagged on a segment if its XZ is within this radius of the segment.
-        // 0.8m was too tight: a 5-waypoint route to Doors_Bedroom had the door 1.97m
-        // from the final segment because the planner approaches the door's interaction
-        // area, not its hinge. See [[project-navigation-door-tag-radius]].
-        private const float DoorTagRadiusM = 2.5f;
-        // Goal-disc radius bounds. The game's InteractableObj.InteractionRadius (default 7.5m)
-        // is the range at which the player can date OR interact with an object — the check in
-        // BetterPlayerControl is `Distance(camera, ClosestPointOnBounds) < InteractionRadius`
-        // plus a forward raycast. Since the planner can't distinguish whether the user will
-        // interact or just date, it uses the full radius so unreachable-by-2m targets still
-        // succeed. A* picks the cheapest goal cell, which is typically the closest reachable
-        // one, so stopping farther only happens when closer cells are blocked.
-        // Floor sets a minimum so degenerate radii (0) still produce at least a few cells.
-        private const float MaxInteractionRadiusM = 7.5f;
-        private const float MinInteractionRadiusM = 0.5f;
+        // Fallback interaction radius for the DESTINATION door-tag rule when a target's own
+        // InteractionRadius is 0/unknown. Doors in this scene are 7.5m; this only applies to a
+        // degenerate target. (The old constant DoorTagRadiusM=2.5 was a hand-tuned compromise; it
+        // is GONE — on-path tagging now uses each door's geometric opening radius, and the
+        // destination rule uses the game's InteractionRadius. See TagDoors +
+        // [[project-navigation-door-tag-radius]], [[project_navigation_container_open_on_interact]].)
+        private const float DoorInteractRadiusFallbackM = 7.5f;
+        // (No planner-side interaction-radius constant: the planner uses the object's own
+        // InteractionRadius verbatim — interaction is gated on radius + line of sight, not on any
+        // bound we impose. See the radius handling in Plan() and BetterPlayerControl.cs:493-499.)
         // Radius to snap a start/goal world position to the nearest navigable
         // cell. 4.0m was too tight for real runtime starts: the player, driven
         // by the executor, often ends up standing beside furniture (fireplace
         // hearth, closet) more than 4m from any navigable cell, so Plan()
         // returned no_path and the user had to reposition and replan
         // repeatedly. 6.0m gives margin for those off-mesh standing spots while
-        // staying under MaxInteractionRadiusM (7.5m) and small enough that it
+        // staying under the game's 7.5m default interaction radius and small enough that it
         // won't routinely snap across a wall into the wrong room. Kept in sync
         // with the Python planner's start/goal snap radius for parity.
         private const float NearestNavigableSearchM = 6.0f;
@@ -60,11 +55,10 @@ namespace DateEverythingAccess
         // a narrow band around the target so A* terminates near the collider rather than
         // anywhere in the InteractionRadius disc.
         private const float TargetColliderClearanceM = 0.5f;
-        // Outer edge of the collider band. Just under the game's 7.5m InteractionRadius, with
-        // headroom for camera-vs-cell-XZ Y-component slop. If the target's collider has no
-        // nav-eligible cells inside this band (e.g. tiny prop in a tight space), the planner
-        // falls back to the standard disc.
-        private const float TargetColliderBandOuterM = 1.5f;
+        // (The former TargetColliderBandOuterM 1.5m outer cap was removed: with a real per-cell
+        // line-of-sight test, distance within the InteractionRadius is no longer a quality signal,
+        // and the cap excluded the stand-back cells that give the cleanest line to an above-floor
+        // object. Goal cells are now bounded only by the InteractionRadius disc + LOS preference.)
         // NOTE: the DoorHingeBandInner/OuterM geometric door-approach band was retired. A
         // door target's goal cells now come exclusively from the bake's
         // operable_from_cells (authoritative, swing-arc-aware). If a door lacks those
@@ -128,6 +122,14 @@ namespace DateEverythingAccess
             // the door so the producer can be fixed. See
             // [[project-navigation-door-operability-cells]], [[feedback-fix-the-data-source-first]].
             DoorMissingOperableCells,
+            // No navigable cell within the target's InteractionRadius has a clear interaction
+            // line-of-sight to it. LOS is MANDATORY — the game's interaction needs the camera ray
+            // to hit the object (BetterPlayerControl.cs:493-499) — so a cell without it is not a
+            // valid standpoint. Rather than route the player to a spot they provably can't interact
+            // from, we fail here: the object is reachable but not interactable from anywhere on the
+            // mesh (occluded by furniture/geometry, or only reachable from cells the ray can't
+            // clear). Names the target so the cause (placement/occluder) can be investigated.
+            TargetNoLineOfSight,
         }
         public static PlanFailure LastFailure { get; private set; } = PlanFailure.None;
 
@@ -158,6 +160,34 @@ namespace DateEverythingAccess
             // opens them en route).
             ApplyLiveDoorState();
 
+            // Correct a DEGENERATE target position. Some interactables (animated cushions,
+            // curtains, the broken-glass front door, ~30 objects) report a transform.position at
+            // their RIG ORIGIN — often near (0,0,0) — tens of metres from where the object's
+            // geometry actually is. Planning to that bogus point centres the goal disc on empty
+            // space and the object is unreachable. The object's COLLIDER carries the true world
+            // location, so when the given targetPos lies OUTSIDE the resolved collider's bounds
+            // (with a small pad), substitute the collider's bounds centre. Inside-bounds positions
+            // (large objects whose pivot is off-centre but still on the object) are left untouched.
+            // See [[project_navigation_target_position_degenerate]].
+            Collider posCheckCollider = ResolveTargetCollider(targetGameObjectId);
+            if (posCheckCollider != null)
+            {
+                Bounds b = posCheckCollider.bounds;
+                const float pad = 0.5f;
+                bool outsideXZ =
+                    targetPos.x < b.min.x - pad || targetPos.x > b.max.x + pad ||
+                    targetPos.z < b.min.z - pad || targetPos.z > b.max.z + pad;
+                if (outsideXZ)
+                {
+                    Vector3 corrected = b.center;
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNavPlanner.Plan: corrected degenerate targetPos for " +
+                            (targetName ?? "<null>") + "#" + targetGameObjectId +
+                            " from " + targetPos.ToString("F2") + " to collider centre " + corrected.ToString("F2"));
+                    targetPos = corrected;
+                }
+            }
+
             Floor startFloor = FloorForY(startPos.y, StartFloorMatchToleranceM);
             Floor goalFloor = FloorForTargetY(targetPos.y);
             if (startFloor == null)
@@ -182,9 +212,13 @@ namespace DateEverythingAccess
             }
             NodeKey startNode = new NodeKey(startFloor.Label, sIx, sIz);
 
+            // Use the game's OWN interaction radius exactly as given — no planner clamp, no default.
+            // Interaction is gated purely on `Distance(camera, ClosestPointOnBounds) < InteractionRadius`
+            // + line of sight (BetterPlayerControl.cs:493-499). Every real interactable carries a
+            // radius (verified: 0/2612 missing; values include 10m and 25m the old 7.5 cap wrongly
+            // shrank). A degenerate radius (0 — only the junk "Main Camera" entry, never a real nav
+            // target) simply yields no goal cells and is handled by the goals.Count==0 path below.
             float radius = interactionRadius;
-            if (radius < MinInteractionRadiusM) radius = MinInteractionRadiusM;
-            if (radius > MaxInteractionRadiusM) radius = MaxInteractionRadiusM;
             List<NodeKey> goals = GoalCellsAround(goalFloor, targetPos.x, targetPos.z, radius);
             if (goals.Count == 0)
             {
@@ -197,19 +231,18 @@ namespace DateEverythingAccess
                 }
                 goals.Add(new NodeKey(goalFloor.Label, gIx, gIz));
             }
-            List<NodeKey> unfilteredGoals = new List<NodeKey>(goals);
 
-            // Narrow goal cells so A* terminates *near* the target rather than anywhere in
-            // the interaction disc. The strategy splits by target kind:
+            // Refine goal cells by target kind:
             //   - Door targets: goals come from the bake's operable_from_cells (handled
             //     just below) — authoritative swing-arc-aware standpoints; the disc above
             //     is discarded for doors.
-            //   - Non-door targets: keep cells in the
-            //     [TargetColliderClearanceM, TargetColliderBandOuterM] band measured from
-            //     the target's Collider via ClosestPointOnBounds (hugs prop geometry).
-            //     A* picks the cheapest-from-start; falls back to the unfiltered disc if
-            //     the band has no nav-eligible cells.
-            // See [[project-navigation-collider-band-filter]], [[project-navigation-door-operability-cells]].
+            //   - Non-door targets: keep the whole interaction-radius disc, drop cells that
+            //     overlap the collider (< TargetColliderClearanceM via ClosestPointOnBounds),
+            //     then PREFER cells with clear interaction line-of-sight. The game's gate is
+            //     radius + LOS, so any in-radius LOS-clear cell is valid — we no longer cap to
+            //     a tight near-the-collider band (that excluded the stand-back cells that are
+            //     the only clean line to an above-floor object).
+            // See [[project_navigation_planner_los_goal_cells_2026_06_13]], [[project-navigation-door-operability-cells]].
             // A live Door component alone doesn't make this a passage door: fridge/cupboard
             // containers carry one too. Only treat it as a door target if the bake actually
             // modelled it (it's in the passage-door set). Container doors — present live, absent
@@ -226,7 +259,10 @@ namespace DateEverythingAccess
                         "passage door — treating as a container/prop (collider-band approach).");
                 targetDoor = null;
             }
-            Collider targetCollider = targetDoor == null ? ResolveTargetCollider(targetGameObjectId) : null;
+            // Reuse the collider already resolved for the degenerate-position check above
+            // (avoids a second FindObjectsOfType). Null for door targets — they use
+            // operable_from_cells, not the collider-LOS goal filter.
+            Collider targetCollider = targetDoor == null ? posCheckCollider : null;
 
             // Door target: the goal set is the bake's operable_from_cells — the
             // authoritative navigable cells the player can stand in to operate this door
@@ -265,16 +301,25 @@ namespace DateEverythingAccess
                 }
                 goals = opGoals;
             }
-            // Non-door collider target: narrow goal cells to a band around the target's
-            // Collider (ClosestPointOnBounds, which hugs prop geometry) so A* terminates
-            // *near* the interactable instead of anywhere in the 7.5m InteractionRadius
-            // disc. Falls back to the unfiltered disc if the band is empty.
-            // See [[project-navigation-collider-band-filter]].
+            // Non-door collider target: the game's interaction gate is radius + LINE OF SIGHT, and
+            // nothing else — interaction needs the camera ray to HIT the object within
+            // InteractionRadius (BetterPlayerControl.cs:493-499). LOS is therefore MANDATORY, not a
+            // preference: a cell from which the ray can't reach the object is not a valid standpoint,
+            // and routing the player there would put them somewhere they provably can't interact.
+            // Distance within the radius is NOT a quality signal, so we do NOT narrow to a tight
+            // near-the-collider band (that crude pre-LOS proxy threw away the stand-BACK cells that
+            // are the only clean line to an above-floor object). Instead: from the whole radius disc,
+            // keep ONLY cells that (a) don't overlap the collider and (b) have clear interaction LOS.
+            // If none qualify, the object is reachable but not interactable from anywhere on the
+            // mesh → fail fast with TargetNoLineOfSight rather than route to a useless cell.
+            // LOS is live physics (C#-only); it doesn't change the route graph, only goal selection.
+            // See [[project_navigation_planner_los_goal_cells_2026_06_13]].
             else if (targetCollider != null)
             {
-                List<NodeKey> filtered = new List<NodeKey>(goals.Count);
+                List<NodeKey> losClear = new List<NodeKey>(goals.Count);
                 float innerSq = TargetColliderClearanceM * TargetColliderClearanceM;
-                float outerSq = TargetColliderBandOuterM * TargetColliderBandOuterM;
+                float bestClearance = 0f;
+                List<float> clearanceOf = new List<float>(goals.Count);
                 for (int i = 0; i < goals.Count; i++)
                 {
                     NodeKey g = goals[i];
@@ -284,40 +329,63 @@ namespace DateEverythingAccess
                     float dx = nearest.x - cellWorld.x;
                     float dz = nearest.z - cellWorld.z;
                     float d2 = dx * dx + dz * dz;
-                    if (d2 >= innerSq && d2 <= outerSq)
-                        filtered.Add(g);
+                    if (d2 < innerSq)
+                        continue; // cell overlaps the collider — can't stand here
+                    float margin = CellLineOfSightClearanceM(goalFloor, g, targetCollider, radius);
+                    if (margin >= 0f)
+                    {
+                        losClear.Add(g);
+                        clearanceOf.Add(margin);
+                        if (margin > bestClearance) bestClearance = margin;
+                    }
                 }
-                if (filtered.Count > 0) goals = filtered;
-                else if (Main.Log != null)
-                    Main.Log.LogInfo("SimpleNavPlanner.Plan: goal band empty for target=" +
-                        (targetName ?? "<null>") + " anchor=collider; keeping unfiltered goals=" + goals.Count);
+                if (losClear.Count > 0)
+                {
+                    // CLOSEST-CLEAR-CELL: prefer SOLIDLY-clear standpoints over edge-grazing ones.
+                    // When any cell clears with real side margin, drop the cells that only barely
+                    // clear (margin a full probe-step below the best). This removes the far doorframe-
+                    // grazed / furniture-skimming standpoints that pass the boolean test but fail the
+                    // game's real ray, while keeping the leg-optimal pick among the robust cells.
+                    // See [[project_navigation_noloss_full_classification_2026_06_14]].
+                    if (bestClearance > 0f)
+                    {
+                        float keepAbove = bestClearance - LosProbeSideOffsetsM[0] - 1e-4f;
+                        List<NodeKey> solid = new List<NodeKey>(losClear.Count);
+                        for (int i = 0; i < losClear.Count; i++)
+                            if (clearanceOf[i] >= keepAbove)
+                                solid.Add(losClear[i]);
+                        goals = solid.Count > 0 ? solid : losClear;
+                    }
+                    else
+                    {
+                        goals = losClear;
+                    }
+                }
+                else
+                {
+                    if (Main.Log != null)
+                        Main.Log.LogWarning("SimpleNavPlanner.Plan: no goal cell with interaction line-of-sight for target=" +
+                            (targetName ?? "<null>") + "#" + targetGameObjectId +
+                            " — object reachable but not interactable from any navigable cell (occluded / placement)");
+                    LastFailure = PlanFailure.TargetNoLineOfSight;
+                    return null;
+                }
             }
 
             List<NodeKey> path;
             float totalCost;
             if (!AStar(startNode, goals, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost))
             {
-                if (goals.Count != unfilteredGoals.Count &&
-                    AStar(startNode, unfilteredGoals, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost))
+                // The closed-state plan to the LOS goal cells failed. Retry only with DOORS
+                // RELAXED (every door assumed openable, state-walls released) on the SAME goal
+                // set — autowalk opens gating doors en route via the segment door-tags. We do NOT
+                // widen the goal set back to the full radius disc: LOS is mandatory, so a non-LOS
+                // cell is never an acceptable destination even when the LOS cells are unreachable.
+                // Bedroom-from-bedroom is the canonical relax case (all doors closed at scene load).
                 {
-                    goals = unfilteredGoals;
-                    if (Main.Log != null)
-                        Main.Log.LogInfo("SimpleNavPlanner.Plan: retried with full interaction radius for target=" +
-                            (targetName ?? "<null>") + "#" + targetGameObjectId);
-                }
-                else
-                {
-                    // Closed-state plan failed. Try a relaxed plan that assumes every door is
-                    // open and every state-wall released. If THAT succeeds, autowalk will open
-                    // doors as it crosses them via the segment door-tags from TagDoors().
-                    // Bedroom-from-bedroom is the canonical case: at scene load every door is
-                    // closed, so the closed-state planner finds nothing. Relax + tag gives the
-                    // player a single route that walks them to the first gating door, opens
-                    // it, continues, opens the next, etc.
                     if (TryRelaxedPlan(startNode, goals, goalFloor.Label, targetPos,
-                                       unfilteredGoals, out path, out totalCost, out List<NodeKey> relaxedGoals))
+                                       out path, out totalCost))
                     {
-                        goals = relaxedGoals;
                         if (Main.Log != null)
                             Main.Log.LogInfo("SimpleNavPlanner.Plan: retried with all-doors-open for target=" +
                                 (targetName ?? "<null>") + "#" + targetGameObjectId +
@@ -333,7 +401,7 @@ namespace DateEverythingAccess
             }
 
             List<NodeKey> waypoints = SmoothPath(path);
-            List<List<string>> segmentDoorNames = TagDoors(waypoints, targetName, targetPos);
+            List<List<string>> segmentDoorNames = TagDoors(waypoints, targetName, targetPos, radius);
             // segmentDoorNames is per cell-waypoint segment (length waypoints.Count-1). The
             // ramp-interior insertion below adds waypoints at the stair seam, splitting that
             // one seam segment into several; expandedSegmentDoors mirrors the insertion with
@@ -788,8 +856,24 @@ namespace DateEverythingAccess
                                 sx += w.x; sz += w.y; n++;
                             }
                             if (n > 0)
+                            {
+                                float cx = (float)(sx / n), cz = (float)(sz / n);
                                 floor.OpeningCenterByName[d.name] =
-                                    new Vector3((float)(sx / n), floor.FloorY, (float)(sz / n));
+                                    new Vector3(cx, floor.FloorY, cz);
+                                // Opening radius = max threshold-cell distance from the centroid
+                                // (half the doorway width). Second pass over the same cells.
+                                float maxR = 0f;
+                                for (int ci = 0; ci < d.threshold_cells_list.Length; ci++)
+                                {
+                                    int[] pair = d.threshold_cells_list[ci];
+                                    if (pair == null || pair.Length < 2) continue;
+                                    Vector2 w = floor.CellToWorld(pair[0], pair[1]);
+                                    float dx = w.x - cx, dz = w.y - cz;
+                                    float r = Mathf.Sqrt(dx * dx + dz * dz);
+                                    if (r > maxR) maxR = r;
+                                }
+                                floor.OpeningRadiusByName[d.name] = maxR;
+                            }
                         }
                     }
                 }
@@ -1093,11 +1177,10 @@ namespace DateEverythingAccess
         // assuming the player will open the right doors along the way" — segment door-tags
         // (TagDoors) then handle the actual opening at runtime.
         private static bool TryRelaxedPlan(NodeKey start, List<NodeKey> goals, string goalFloorLabel, Vector3 targetPos,
-            List<NodeKey> unfilteredGoals, out List<NodeKey> path, out float totalCost, out List<NodeKey> goalsUsed)
+            out List<NodeKey> path, out float totalCost)
         {
             path = null;
             totalCost = 0f;
-            goalsUsed = goals;
 
             // Snapshot current state and union all known freed cells.
             HashSet<long>[] saved = new HashSet<long>[_floors.Count];
@@ -1115,15 +1198,7 @@ namespace DateEverythingAccess
 
             try
             {
-                if (AStar(start, goals, goalFloorLabel, targetPos.x, targetPos.z, out path, out totalCost))
-                    return true;
-                if (goals.Count != unfilteredGoals.Count &&
-                    AStar(start, unfilteredGoals, goalFloorLabel, targetPos.x, targetPos.z, out path, out totalCost))
-                {
-                    goalsUsed = unfilteredGoals;
-                    return true;
-                }
-                return false;
+                return AStar(start, goals, goalFloorLabel, targetPos.x, targetPos.z, out path, out totalCost);
             }
             finally
             {
@@ -1160,6 +1235,26 @@ namespace DateEverythingAccess
             gScore[start] = 0f;
             open.Push(new HeapItem(Heuristic(start, goalFloorLabel, goalWx, goalWz), 0f, start));
 
+            // Goal selection objective: FEWEST LEGS, then CLOSEST to the object. Every goal cell is
+            // an equally-valid interaction standpoint (within InteractionRadius + LOS); among them
+            // we want the route that's simplest for the follower to drive — fewest direction changes
+            // (legs) — and, among equally-simple routes, the stand cell nearest the object (a few
+            // steps closer is more stable than stopping at the radius edge). "Legs" is a property of
+            // the SMOOTHED polyline, so we can't score it in the search; instead A* records the
+            // shortest cell-path to each reached goal, then we smooth + count legs per candidate.
+            //
+            // We consider ALL reachable goal cells (don't cut by walk distance): a far cell can be
+            // the SIMPLEST to reach (a straight shot to the radius edge vs weaving around the object
+            // to a near cell), and legs is the primary axis — a distance-based bound provably picked
+            // more-complex routes. The only bound is a generous expansion CAP as a safety valve: an
+            // un-clamped 7.5m radius yields ~2300 goal cells and reaching the farthest can take ~73k
+            // expansions (~2.9s). Profiling showed a 3000-expansion cap reproduces the uncapped
+            // leg-optimal pick on every sampled target at ~100ms, so the cap bounds the pathological
+            // tail without changing results in practice. It is a PERF safety valve, not a
+            // correctness limit. See [[project_navigation_planner_los_goal_cells_2026_06_13]].
+            var reachedGoals = new List<NodeKey>();
+            int expansions = 0;
+
             while (open.Count > 0)
             {
                 HeapItem cur = open.Pop();
@@ -1167,22 +1262,16 @@ namespace DateEverythingAccess
                 if (cur.G > gScore[node] + 1e-6f) continue;
                 if (!closed.Add(node))
                     continue;
+                if (++expansions > GoalSearchMaxExpansions)
+                    break;
 
                 if (goalSet.Contains(node))
                 {
-                    // Reconstruct.
-                    var rev = new List<NodeKey>();
-                    NodeKey c = node;
-                    rev.Add(c);
-                    while (came.TryGetValue(c, out NodeKey prev))
-                    {
-                        rev.Add(prev);
-                        c = prev;
-                    }
-                    rev.Reverse();
-                    path = rev;
-                    totalCost = cur.G;
-                    return true;
+                    reachedGoals.Add(node);
+                    if (reachedGoals.Count == goalSet.Count)
+                        break;
+                    // A goal cell is terminal, so don't expand its neighbours.
+                    continue;
                 }
                 foreach (var (nbr, cost) in Neighbors(node))
                 {
@@ -1194,7 +1283,70 @@ namespace DateEverythingAccess
                     open.Push(new HeapItem(f, ng, nbr));
                 }
             }
-            return false;
+
+            if (reachedGoals.Count == 0)
+                return false;
+
+            // Pick the reached goal with (fewest smoothed legs, then closest to the object, then
+            // cheapest walk as a final stable tiebreak).
+            List<NodeKey> bestPath = null;
+            int bestLegs = int.MaxValue;
+            float bestDist = float.PositiveInfinity;
+            float bestG = float.PositiveInfinity;
+            foreach (NodeKey goal in reachedGoals)
+            {
+                List<NodeKey> cellPath = ReconstructPath(came, goal);
+                int legs = SmoothPath(cellPath).Count - 1;
+                float dist = GoalDistanceToObjectM(goal, goalFloorLabel, goalWx, goalWz);
+                float gCost = gScore[goal];
+                bool better =
+                    legs < bestLegs ||
+                    (legs == bestLegs && dist < bestDist - 1e-4f) ||
+                    (legs == bestLegs && Mathf.Abs(dist - bestDist) <= 1e-4f && gCost < bestG);
+                if (better)
+                {
+                    bestLegs = legs;
+                    bestDist = dist;
+                    bestG = gCost;
+                    bestPath = cellPath;
+                }
+            }
+            path = bestPath;
+            totalCost = bestG;
+            return true;
+        }
+
+        // Performance safety valve (NOT a correctness limit): max A* node expansions while gathering
+        // goal candidates for the fewest-legs pick. Profiling: reaching every goal of an un-clamped
+        // 7.5m radius can hit ~73k expansions (~2.9s); a 3000 cap reproduced the same leg-optimal
+        // pick on every sampled target at ~100ms. Bounds the pathological tail without altering
+        // results in practice. Kept in sync with plan_object_route.py GOAL_SEARCH_MAX_EXPANSIONS.
+        private const int GoalSearchMaxExpansions = 3000;
+
+        private static List<NodeKey> ReconstructPath(Dictionary<NodeKey, NodeKey> came, NodeKey goal)
+        {
+            var rev = new List<NodeKey>();
+            NodeKey c = goal;
+            rev.Add(c);
+            while (came.TryGetValue(c, out NodeKey prev))
+            {
+                rev.Add(prev);
+                c = prev;
+            }
+            rev.Reverse();
+            return rev;
+        }
+
+        // Flat-XZ distance (m) from a goal cell to the target object position. Used by the goal
+        // closeness tiebreak in AStar.
+        private static float GoalDistanceToObjectM(NodeKey goal, string goalFloorLabel, float goalWx, float goalWz)
+        {
+            Floor f = FloorByLabel(goalFloorLabel);
+            if (f == null) return 0f;
+            Vector2 xz = f.CellToWorld(goal.Ix, goal.Iz);
+            float dx = xz.x - goalWx;
+            float dz = xz.y - goalWz;
+            return Mathf.Sqrt(dx * dx + dz * dz);
         }
 
         private static IEnumerable<(NodeKey, float)> Neighbors(NodeKey node)
@@ -1448,10 +1600,9 @@ namespace DateEverythingAccess
         // Cached live-door catalogue, rebuilt on each Plan() call since Door instances can be
         // destroyed/spawned across scene changes. Cheap: ~25 Doors in the house scene.
         //
-        // When the navigation target is itself a Door, the destination's Door is force-tagged
-        // on the final segment regardless of distance. The planner stops inside the target's
-        // interaction radius (clamped to 0.5–7.5m), which is typically farther than the static
-        // DoorTagRadiusM, so distance-based tagging would otherwise miss it.
+        // When the navigation target is itself a Door (or an item gated by a container door),
+        // the gating door is force-tagged on the final segment by the DESTINATION rule in
+        // TagDoors: nearest door opening within the target's InteractionRadius of the goal cell.
         // See [[project-navigation-door-tag-radius]].
         // Resolve the GameObject's primary Collider for the collider-clearance goal filter.
         // Matches the GameObject by InstanceID against all live InteractableObj components.
@@ -1469,6 +1620,207 @@ namespace DateEverythingAccess
                 if (d.gameObject.GetInstanceID() == targetGameObjectId) return d;
             }
             return null;
+        }
+
+        // Eye height (m above the floor) for the interaction line-of-sight test. The game's
+        // interaction ray originates at the player camera; ~1.6m is a standing eye height and
+        // matches where the camera sits on the player capsule.
+        private const float InteractionEyeHeightM = 1.6f;
+
+        // A cell is only a valid standpoint if its sightline to the target is comfortably inside the
+        // interaction radius, not grazing the rim. The outer edge of the radius is where the line is
+        // longest and the viewing angle most marginal — for a wide-radius object the player should
+        // be ALLOWED to stand back (that's why the radius is wide), but not at the extreme edge
+        // where it may be hard to see. We require the actual eye→target distance to be within this
+        // fraction of the radius, so the outer (1 - fraction) shell is rejected as a standpoint
+        // while everything inward stays valid. "Solid LOS, not edge-grazing." See user guidance in
+        // [[project_navigation_planner_los_goal_cells_2026_06_13]].
+        private const float InteractionRimFractionM = 0.9f;
+
+        // True if, standing on goal cell `g`, the player has a SOLID interaction line to the target:
+        // (1) the game's camera ray from eye height toward the collider's closest bounds point hits
+        // THAT collider first (no occluder) — mirrors BetterPlayerControl.cs:493-499 — AND (2) that
+        // sightline is within InteractionRimFractionM of the interaction radius (not edge-grazing).
+        // LOS is MANDATORY: a cell failing this is not a valid standpoint. Conservative on error.
+        private static bool CellHasLineOfSightToTarget(Floor floor, NodeKey g, Collider targetCollider, float radiusM)
+        {
+            return CellLineOfSightClearanceM(floor, g, targetCollider, radiusM) >= 0f;
+        }
+
+        // Sentinel returned by CellLineOfSightClearanceM when the cell has NO interaction line of
+        // sight at all (occluded, embedded origin, or edge-grazing rim). Any value >= 0 means the
+        // cell is a valid standpoint; the magnitude is the SIDE clearance margin (see below) used to
+        // prefer solidly-clear standpoints over ones whose line skims an occluder edge.
+        private const float NoLineOfSight = -1f;
+
+        // Returns the interaction-LOS CLEARANCE MARGIN (m) for standing on cell `g`, or NoLineOfSight
+        // if the cell can't interact at all. The boolean clear/blocked test (CellHasLineOfSightToTarget)
+        // is "margin >= 0". The margin is how far the sightline clears the NEAREST occluder edge:
+        // a center ray that passes but skims a doorframe/furniture edge has a SMALL margin, while a
+        // standpoint with open space around the line has a LARGE one. Goal selection prefers the
+        // larger margin so the planner parks the player where the game's real (camera-pose) ray has
+        // room to spare, not at the grazing rim where it passed offline but fails in-game — the
+        // doorframe-grazed light switches + furniture-occluded items in
+        // [[project_navigation_noloss_full_classification_2026_06_14]].
+        private static float CellLineOfSightClearanceM(Floor floor, NodeKey g, Collider targetCollider, float radiusM)
+        {
+            if (targetCollider == null)
+                return NoLineOfSight;
+            try
+            {
+                Vector2 xz = floor.CellToWorld(g.Ix, g.Iz);
+                Vector3 eye = new Vector3(xz.x, floor.FloorY + InteractionEyeHeightM, xz.y);
+                Vector3 aimPoint = targetCollider.ClosestPointOnBounds(eye);
+                Vector3 dir = aimPoint - eye;
+                float dist = dir.magnitude;
+                if (dist <= 0.0001f)
+                    return LosProbeSideOffsetsM[LosProbeSideOffsetsM.Length - 1]; // on the target — max clearance
+
+                // Reject edge-grazing standpoints: the sightline must be comfortably inside the
+                // radius, not out at the rim where the view is marginal. Measured HORIZONTALLY
+                // (XZ only): the rim is about not standing too far ACROSS the floor from the
+                // object. A ceiling light / high-mounted prop has a large UNAVOIDABLE vertical
+                // gap (recessed lights sit ~11m up in the ground-floor ceiling); counting that
+                // gap in the rim distance rejected every cell and made the object un-interactable
+                // offline, even though the player legitimately stands under it and looks up
+                // (look + dateviator beam count as interaction — [[feedback-interaction-includes-look-and-glasses]]).
+                // The full-3D sightline is still used for the occlusion raycast below.
+                float horizDist = new Vector2(aimPoint.x - eye.x, aimPoint.z - eye.z).magnitude;
+                if (radiusM > 0f && horizDist > radiusM * InteractionRimFractionM)
+                    return NoLineOfSight;
+
+                dir /= dist;
+                BetterPlayerControl bpc = BetterPlayerControl.Instance;
+                int mask = bpc != null ? ~(int)bpc.dateviatorIgnores : ~0;
+
+                // CAMERA-POSE MODEL (not an idealized eye point). The game does NOT cast from the
+                // standpoint toward the target — it casts from the THIRD-PERSON camera, pulled back
+                // 0.25m along the look direction: origin = camera.pos - camera.forward*0.25,
+                // dir = camera.forward (BetterPlayerControl.cs:493). When the player stands to
+                // interact they face the target, so camera.forward ≈ dir. The dominant, wall-
+                // independent piece of the rig that the old eye-point ray ignored is that 0.25m
+                // BACKWARD pullback: it moves the origin AWAY from the target, which near a wall
+                // lands the origin INSIDE the wall and self-collides at dist≈0 — the exact failure
+                // that made the planner mark wall-adjacent items (light switches, mirrors, towel
+                // rails, built-in cupboards) interactable while the game's own ray rejected them.
+                // We model that backward shift and reject any cell whose pulled-back origin starts
+                // embedded in a non-target collider. See
+                // [[project_navigation_los_camera_origin_mismatch_2026_06_14]].
+                const float CameraBackPullM = 0.25f;
+                Vector3 origin = eye - dir * CameraBackPullM;
+
+                // If the pulled-back origin is itself inside an occluder, the game's ray self-
+                // collides immediately (hit_dist≈0) and the object is not interactable from here.
+                Collider[] embedded = Physics.OverlapSphere(origin, 0.001f, mask, QueryTriggerInteraction.Ignore);
+                for (int e = 0; e < embedded.Length; e++)
+                {
+                    Collider c = embedded[e];
+                    if (c == null) continue;
+                    if (IsStructuralSlab(c)) continue; // standing on/under the floor/ceiling shell is normal
+                    if (!IsTargetCollider(c, targetCollider))
+                        return NoLineOfSight; // origin embedded in a wall/prop → game ray self-collides
+                }
+
+                // The CENTER ray must reach the target first (mirrors the game's single cast). If it's
+                // occluded, the cell is not a standpoint at all.
+                if (!CenterRayReachesTarget(origin, dir, dist + CameraBackPullM + 0.05f, mask, targetCollider))
+                    return NoLineOfSight;
+
+                // GRADED CLEARANCE: the center ray clears, but HOW MUCH room does the line have?
+                // Cast parallel side-probes offset perpendicular to the sightline (in the horizontal
+                // plane — doorframes/furniture edges the player skims are vertical) at increasing
+                // offsets. The largest offset that still reaches the target unobstructed is the side
+                // clearance margin. A standpoint whose line grazes a doorframe edge clears at 0.0 but
+                // fails the first side-probe (small margin); a standpoint with open space around the
+                // line passes wider probes (large margin). Selection prefers the larger margin.
+                Vector3 side = Vector3.Cross(dir, Vector3.up);
+                float sideLen = side.magnitude;
+                if (sideLen < 1e-4f)
+                    return LosProbeSideOffsetsM[LosProbeSideOffsetsM.Length - 1]; // ray vertical — no horizontal edge to graze
+                side /= sideLen;
+
+                float clearance = 0f;
+                for (int s = 0; s < LosProbeSideOffsetsM.Length; s++)
+                {
+                    float off = LosProbeSideOffsetsM[s];
+                    bool leftOk = CenterRayReachesTarget(origin + side * off, dir, dist + CameraBackPullM + 0.05f, mask, targetCollider);
+                    bool rightOk = CenterRayReachesTarget(origin - side * off, dir, dist + CameraBackPullM + 0.05f, mask, targetCollider);
+                    if (leftOk && rightOk)
+                        clearance = off; // both sides clear at this width → at least this much margin
+                    else
+                        break;          // skims an edge here → margin is the previous offset
+                }
+                return clearance;
+            }
+            catch
+            {
+                return NoLineOfSight;
+            }
+        }
+
+        // Perpendicular side-probe offsets (m) for the graded LOS clearance margin. Two steps keep
+        // the worst-case extra cost at 4 raycasts/cell (vs the center test's existing ~2): a near
+        // probe that a doorframe/furniture graze fails (≈ half the player's ~0.4m nav radius) and a
+        // wider one that confirms comfortable room clearance. Two steps is enough to rank "grazing"
+        // below "solid"; finer resolution buys nothing for selection and multiplies cost over the
+        // ~2300 goal cells of a wide-radius target. Ascending.
+        private static readonly float[] LosProbeSideOffsetsM = { 0.20f, 0.45f };
+
+        private static bool IsTargetCollider(Collider c, Collider targetCollider)
+        {
+            return c == targetCollider
+                || (c != null && c.transform.IsChildOf(targetCollider.transform))
+                || targetCollider.transform.IsChildOf(c.transform);
+        }
+
+        // True if a ray from `origin` along `dir` reaches the target collider first (no occluder) or
+        // hits nothing within `maxDist` (clear line to the surface). Mirrors the game's first-hit rule,
+        // with ONE deliberate leniency: a structural FLOOR/CEILING slab between the eye and a
+        // vertically-displaced target is NOT treated as an occluder. A recessed ceiling light sits
+        // ~8m above the floor and a desk drawer / floor item resolves its closest-bounds point at or
+        // below the floor plane — in both cases the only thing the straight eye→target ray hits is the
+        // horizontal slab of the player's own storey, yet the player legitimately interacts by looking
+        // up / down (and the dateviator beam counts as interaction). See
+        // [[feedback_interaction_includes_look_and_glasses]] and the floor/ceiling buckets in
+        // [[project_navigation_noloss_full_classification_2026_06_14]]. We "see past" such a slab by
+        // taking the first hit that is NOT a structural slab (RaycastAll, nearest-first).
+        private static bool CenterRayReachesTarget(Vector3 origin, Vector3 dir, float maxDist, int mask, Collider targetCollider)
+        {
+            RaycastHit[] hits = Physics.RaycastAll(new Ray(origin, dir), maxDist, mask);
+            if (hits == null || hits.Length == 0)
+                return true; // nothing between camera and target surface — clear line
+
+            RaycastHit firstReal = default;
+            float bestDist = float.PositiveInfinity;
+            bool found = false;
+            for (int i = 0; i < hits.Length; i++)
+            {
+                Collider c = hits[i].collider;
+                if (c == null) continue;
+                if (IsStructuralSlab(c)) continue; // floor/ceiling of the player's storey — look up/down past it
+                if (hits[i].distance < bestDist)
+                {
+                    bestDist = hits[i].distance;
+                    firstReal = hits[i];
+                    found = true;
+                }
+            }
+            if (!found)
+                return true; // only structural slabs in the way → clear by the look-up/down rule
+            return IsTargetCollider(firstReal.collider, targetCollider);
+        }
+
+        // A structural floor/ceiling slab — the horizontal building shell, named SM_Floor_* /
+        // SM_Ceiling_* under House/MultiRoom/{Floors,Ceilings}. These are the only colliders the
+        // look-up/look-down LOS rule sees past; everything else (walls, furniture, doors) still
+        // occludes normally. Name-based so it can't accidentally exempt a wall or prop.
+        private static bool IsStructuralSlab(Collider c)
+        {
+            if (c == null) return false;
+            string n = c.transform != null ? c.transform.name : null;
+            if (string.IsNullOrEmpty(n)) return false;
+            return n.StartsWith("SM_Floor_", StringComparison.Ordinal)
+                || n.StartsWith("SM_Ceiling_", StringComparison.Ordinal);
         }
 
         private static Collider ResolveTargetCollider(int targetGameObjectId)
@@ -1527,11 +1879,30 @@ namespace DateEverythingAccess
             }
         }
 
-        private static List<List<string>> TagDoors(List<NodeKey> waypoints, string targetName, Vector3 targetPos)
+        private static List<List<string>> TagDoors(List<NodeKey> waypoints, string targetName, Vector3 targetPos, float targetInteractionRadius)
         {
             List<List<string>> segs = new List<List<string>>(Mathf.Max(0, waypoints.Count - 1));
-            Door[] doors = UnityEngine.Object.FindObjectsOfType<Door>();
 
+            // Tag from the BAKE's uniform door list (per-floor OpeningCenterByName: the world
+            // doorway-opening centroid of each door's threshold cells), NOT live
+            // FindObjectsOfType<Door>(). The bake carries BOTH swinging Doors AND translating
+            // SlidingDoors (closet/cabinet/cupboard "container" doors) with identical schema,
+            // but the runtime splits them into two component types — enumerating only Door[]
+            // silently dropped every SlidingDoor, so container doors were never tagged and the
+            // follower walked into them and wedged. The bake list is the right source: it's the
+            // same uniform portal set the planner already routes against (operable_from_cells /
+            // freed_cells). See [[project_navigation_container_open_on_interact]].
+            //
+            // TWO tag rules, no magic radius constant (replaces the old hand-tuned DoorTagRadiusM):
+            //   (1) ON-PATH: a door is tagged on a segment that THREADS its doorway — segment within
+            //       the door's own opening radius (half the doorway width) + one cell of clearance.
+            //       This is a tight geometric "the route goes through here" test, so it does NOT
+            //       over-tag doors the route merely passes near (which the game's 7.5m
+            //       InteractionRadius would).
+            //   (2) DESTINATION: the barrier gating the TARGET (a container door whose opening sits
+            //       between the goal cell and the item) is force-tagged on the final segment when the
+            //       goal cell is within the GAME'S InteractionRadius of the door opening — the real
+            //       "can the player stand at the goal and reach to open it" test.
             for (int i = 0; i < waypoints.Count - 1; i++)
             {
                 List<string> tagged = new List<string>(0);
@@ -1541,36 +1912,50 @@ namespace DateEverythingAccess
                     Floor floor = FloorByLabel(a.Floor);
                     Vector2 wa = floor.CellToWorld(a.Ix, a.Iz);
                     Vector2 wb = floor.CellToWorld(b.Ix, b.Iz);
-                    float floorY = floor.FloorY;
-                    for (int d = 0; d < doors.Length; d++)
+                    foreach (KeyValuePair<string, Vector3> kv in floor.OpeningCenterByName)
                     {
-                        Door door = doors[d];
-                        if (door == null) continue;
-                        Vector3 dp = door.transform.position;
-                        if (Mathf.Abs(dp.y - floorY) > 3.0f) continue;
+                        Vector3 dp = kv.Value;
                         float dist = PointSegmentDistance(dp.x, dp.z, wa.x, wa.y, wb.x, wb.y);
-                        if (dist <= DoorTagRadiusM)
-                            tagged.Add(door.gameObject.name);
+                        float openR = floor.OpeningRadiusByName.TryGetValue(kv.Key, out float orr) ? orr : 0f;
+                        if (dist <= openR + floor.CellSize)
+                            tagged.Add(kv.Key);
                     }
                 }
                 segs.Add(tagged);
             }
 
-            // Force-tag the destination door on the final segment when the target is a Door.
-            // Match by GameObject name against the target name. If found and not already
-            // tagged on the final segment, append it.
-            if (segs.Count > 0 && !string.IsNullOrEmpty(targetName))
+            // Rule (2): destination barrier. Find the door whose opening is nearest the FINAL
+            // stand cell and within the target's InteractionRadius, and force-tag it on the last
+            // segment. Covers (a) the target IS a door, and (b) the target is an item gated by a
+            // container door — both reduce to "the goal cell is in interaction range of this door."
+            if (segs.Count > 0 && waypoints.Count >= 1)
             {
-                for (int d = 0; d < doors.Length; d++)
+                NodeKey goal = waypoints[waypoints.Count - 1];
+                Floor gf = FloorByLabel(goal.Floor);
+                if (gf != null && !IsVirtual(goal))
                 {
-                    Door door = doors[d];
-                    if (door == null) continue;
-                    string dn = door.gameObject.name;
-                    if (dn != targetName) continue;
-                    List<string> last = segs[segs.Count - 1];
-                    if (!last.Contains(dn))
-                        last.Add(dn);
-                    break;
+                    Vector2 gw = gf.CellToWorld(goal.Ix, goal.Iz);
+                    float radius = targetInteractionRadius > 0f ? targetInteractionRadius : DoorInteractRadiusFallbackM;
+                    string bestName = null; float bestDist = float.PositiveInfinity;
+                    foreach (KeyValuePair<string, Vector3> kv in gf.OpeningCenterByName)
+                    {
+                        float dx = kv.Value.x - gw.x, dz = kv.Value.z - gw.y;
+                        float dist = Mathf.Sqrt(dx * dx + dz * dz);
+                        // A door whose name matches the target always wins (target IS a door);
+                        // otherwise the nearest in-range door is the gating barrier.
+                        bool isTargetDoor = !string.IsNullOrEmpty(targetName) && kv.Key == targetName;
+                        if (dist <= radius && (isTargetDoor || dist < bestDist))
+                        {
+                            bestName = kv.Key; bestDist = isTargetDoor ? -1f : dist;
+                            if (isTargetDoor) break;
+                        }
+                    }
+                    if (bestName != null)
+                    {
+                        List<string> last = segs[segs.Count - 1];
+                        if (!last.Contains(bestName))
+                            last.Add(bestName);
+                    }
                 }
             }
             return segs;
@@ -1796,6 +2181,12 @@ namespace DateEverythingAccess
             // an on-path door. Indexed from the bake at load time.
             public readonly Dictionary<string, Vector3> OpeningCenterByName =
                 new Dictionary<string, Vector3>(StringComparer.Ordinal);
+            // Per-door OPENING RADIUS (world metres): max distance of any threshold cell from the
+            // opening centroid, i.e. half the doorway width. An on-path door is tagged when the
+            // route segment passes within this radius (+ one cell of clearance) — a geometric
+            // "the route threads THIS doorway" test, not a magic constant. Indexed at load.
+            public readonly Dictionary<string, float> OpeningRadiusByName =
+                new Dictionary<string, float>(StringComparer.Ordinal);
             // Per-state-wall freed-cells, parallel to DoorFreedByName. State-gated walls
             // (DresserWall and similar) contribute freed cells when their collider is
             // disabled at runtime.
