@@ -99,10 +99,21 @@ DOOR_OPERABLE_RADIUS_M = 3.0
 
 # Floor bands: (label, target_Y, Y_tolerance_for_walkable_inclusion)
 # Tolerance is ± around target_Y for which walkable TopY values count as "on this floor".
+#
+# crawlspace (Y≈-9.89): a real sub-storey reached by OPERATING THE LADDER in the OfficeCloset
+# (a teleport down, NOT a walk-in — confirmed by the user; objects there are not reachable from
+# the closet side). Its floor mesh SM_Floor_Crawlspace now exports natively in WalkableSurfaces
+# via the exporter's floor-aware MinimumWalkableTopY clip (-12.0); no recovery hack. Band tol is
+# tight (0.75) so it can't bleed into ground (band [-1.75,0.75]); the crawlspace floor at -9.89
+# gives band [-10.64,-9.14], cleanly disjoint. See project_navigation_fixture_roster_design.
 FLOORS = [
+    {"label": "crawlspace", "y": -9.89, "y_tol": 0.75},
     {"label": "ground", "y": -0.50, "y_tol": 1.25},
     {"label": "upper",  "y": 12.50, "y_tol": 1.25},
 ]
+# The ground floor plane; floors below this are sub-storeys gated by XZ footprint in
+# _fixture_floor (see SUBGROUND_FLOOR_FOOTPRINTS).
+FLOORS_GROUND_Y = -0.50
 
 # Passage doors (room-to-room) live under this scene subtree; they are walked
 # THROUGH and need freed/threshold cells. Everything else with a Door/SlidingDoor
@@ -152,6 +163,36 @@ _MODEL_PREFIX_RE = re.compile(r"^(?:SM|SK)_+", re.IGNORECASE)
 # nearby-but-distinct props). 0.05m = well below the smallest inter-object spacing.
 FIXTURE_DEDUP_QUANT_M = 0.05
 
+# EXTERIOR / TEST FILTER (set-construction rule, not navigation): the scene graph's
+# top-level subtrees ARE the game's authoritative interior/exterior boundary. Everything
+# under Exterior/ (Bush, Tree, Fence, UtilityPole, Drone, neighbour-house shells) is pure
+# visual decor — leaving the house triggers the ending cutscene, so they're never
+# reachable navigation targets, but a Y-band floor filter passes them (the ground bbox
+# spans the whole street). TESTING_TEMP/ and Main Camera are dev artifacts. This is a
+# DENYLIST, NOT a House-only allowlist: every dateable light lives under a top-level
+# P{V,F}_Lighting_* subtree (outside House/), so a House-only filter would delete them all.
+# Crawlspace items (TimeCapsule, CrawlspaceLadder, RatTrap, SkeletonKey) live UNDER House/
+# and are reachable — they survive this filter. See project_navigation_fixture_roster_design.
+FIXTURE_SUBTREE_DENYLIST = ("Exterior", "TESTING_TEMP", "Main Camera")
+
+# ROUTING-UNIT MERGE scaffolding tokens: authoring wrapper nodes the path walks UP past to
+# reach the first REAL unit parent. A target groups same-stem NUMBERED siblings under that
+# real parent. See rule 3 in project_navigation_fixture_roster_design.
+_SCAFFOLD_NODE_RE = re.compile(
+    r"(_TRS|_MASTER|_Grp|_GROUP|_MODEL_UPDATE\d*|_ORIGIN|_MODEL)$", re.IGNORECASE)
+# Stem = a cleaned name minus any trailing instance index / digits, so Knife1..Knife6 and
+# Book_MESSY_01..48 collapse to one stem ("Knife", "Book_MESSY") while distinct NAMES
+# (Monitor / Keyboard / Mouse) keep their own stems and stay distinct targets.
+_STEM_TRAILING_RE = re.compile(r"[\s_]*\d+$")
+# Two units' bounds belong to the SAME contiguous routing unit when their AABBs are within
+# this gap (or overlap). The test is "could the player walk between these members?" — so the
+# gap is ~one capsule diameter. At 1.0m a shelf of individually-bounded books (sub-metre
+# adjacent gaps) stays ONE target (Book_MESSY ×48 -> 1), while a multi-wall parent whose
+# members sit in different rooms splits (Shelves_Office: two walls ~16m apart -> 2). A
+# tighter 0.3m over-split the books (11 phantom shelf targets); wider than ~1m starts merging
+# genuinely separate units. See project_navigation_fixture_roster_design.
+FIXTURE_BOUNDS_MERGE_GAP_M = 1.0
+
 
 def _clean_object_name(raw):
     """Cleaned display name, mirror of plan_object_route.strip_model_authoring_tokens /
@@ -167,36 +208,204 @@ def _clean_object_name(raw):
     return cleaned if cleaned and cleaned.strip() else None
 
 
-def _fixture_floor(y):
-    """The storey a fixture at height `y` belongs to: the HIGHEST floor whose plane is at
-    or below the fixture, within one storey's height. A ceiling-mounted light hangs ~12m
-    above the ground floor — its Y lands in the UPPER floor's band, but it belongs to the
-    GROUND room it lights. So we attribute to the storey BELOW the fixture, not the band
-    that contains its Y. (This is the inverse of the container-door rule, which assigns to
-    the band containing the anchor; a ceiling fixture's owning floor is below it, a
-    cupboard's is the one it stands in.) Returns a floor label or None (off every storey)."""
+# XZ footprints of below-ground floors (label -> (minX, maxX, minZ, maxZ)), populated from the
+# recovered floor slabs before the roster is built. A sub-ground floor (the crawlspace) is gated
+# by its footprint so a degenerate rig-origin fixture (SkeletonKey_0524 at y=-2.14, x=-31 — far
+# outside the crawlspace) whose Y happens to fall in the inter-floor dead-zone is NOT wrongly
+# pulled down into it. Floors NOT in this dict (ground, upper) are Y-only as before.
+SUBGROUND_FLOOR_FOOTPRINTS = {}
+
+
+def _fixture_floor(y, x=None, z=None):
+    """The storey a fixture belongs to. Generally the HIGHEST floor whose plane is at or below
+    the fixture: a ceiling light hangs ~12m above the ground floor — its Y lands in the upper
+    band, but it belongs to the GROUND room it lights, so we attribute to the storey BELOW it.
+    (Inverse of the container-door rule, which uses the band containing the anchor.)
+
+    For a below-ground sub-storey listed in SUBGROUND_FLOOR_FOOTPRINTS (the crawlspace), the
+    fixture's XZ must ALSO fall within that floor's footprint — otherwise a degenerate
+    rig-origin fixture sitting in the inter-floor dead-zone (e.g. SkeletonKey_0524 at y=-2.14,
+    far from the crawlspace XZ) would be Y-only-claimed by it. The ceiling-light rule is
+    unaffected: a light is ABOVE its floor and within that room's XZ anyway. Returns a floor
+    label or None (off every storey)."""
     floors_by_y = sorted(FLOORS, key=lambda f: f["y"])
     owner = None
     for i, f in enumerate(floors_by_y):
         nxt = floors_by_y[i + 1]["y"] if i + 1 < len(floors_by_y) else float("inf")
-        # The fixture belongs to the storey whose span [floor_plane, next_floor_plane)
-        # contains it — the floor directly BELOW it. Lower bound is the floor PLANE (with a
-        # small tolerance ONLY on the bottom-most floor, for fixtures whose pivot sits just
-        # under it). Crucially the upper bound is the NEXT floor's plane with NO tolerance,
-        # so an upper floor never claims a fixture sitting below its plane: a ground ceiling
-        # light at y=12.24 (< upper's 12.5) is ground, never upper.
-        low = f["y"] - (f.get("y_tol", 1.25) if i == 0 else 0.0)
-        if low <= y < nxt:
-            owner = f["label"]
+        # span = [floor_plane - tol, next_floor_plane). Per-floor lower tol so a fixture just
+        # UNDER its own plane (a ground door at y=-0.62 under ground's -0.5) attributes to that
+        # floor, not the storey below. Upper bound stays the next plane (no tol) so a floor never
+        # claims a fixture at/above the next plane (keeps the ceiling-light "below" attribution).
+        low = f["y"] - f.get("y_tol", 1.25)
+        if not (low <= y < nxt):
+            continue
+        fp = SUBGROUND_FLOOR_FOOTPRINTS.get(f["label"])
+        if fp is not None:
+            if x is None or z is None:
+                continue
+            minx, maxx, minz, maxz = fp
+            # Small pad so a fixture right at the wall line still counts as inside.
+            if not (minx - 1.0 <= x <= maxx + 1.0 and minz - 1.0 <= z <= maxz + 1.0):
+                continue
+        owner = f["label"]
     return owner
 
 
+def _path_segments(path):
+    return [s for s in (path or "").split("/") if s and s != "===SCENE==="]
+
+
+def _subtree_root(path):
+    """The top-level scene subtree a node lives in (first segment after ===SCENE===).
+    This is the game's authoritative interior/exterior boundary (Exterior/ vs House/ vs
+    P*_Lighting_*)."""
+    segs = _path_segments(path)
+    return segs[0] if segs else ""
+
+
+def _best_location(it):
+    """The fixture's TRUE world location. Prefer the real Bounds3D center; fall back to
+    Position only when bounds are empty/missing. ~106 objects report a rig-origin Position
+    (0,0 or far outside their own mesh) but carry a correct collider bounds center; reading
+    Position for those creates a phantom (0,0) cluster that splits real units and maps a
+    bogus target at world origin. A few (e.g. Book_MESSY_45) have a valid Position but EMPTY
+    bounds — those correctly fall through to Position. Returns (x, y, z) or None."""
+    bnd = it.get("Bounds3D") or {}
+    size = bnd.get("Size") or {}
+    center = bnd.get("Center") or {}
+    has_real_bounds = (
+        center.get("x") is not None
+        and (abs(size.get("x", 0.0)) + abs(size.get("y", 0.0)) + abs(size.get("z", 0.0))) > 1e-6
+    )
+    if has_real_bounds:
+        return (center["x"], center["y"], center["z"])
+    pos = it.get("Position") or it.get("WorldPosition") or {}
+    if pos.get("x") is None or pos.get("y") is None or pos.get("z") is None:
+        return None
+    return (pos["x"], pos["y"], pos["z"])
+
+
+def _has_real_bounds(it):
+    bnd = it.get("Bounds3D") or {}
+    size = bnd.get("Size") or {}
+    return (abs(size.get("x", 0.0)) + abs(size.get("y", 0.0)) + abs(size.get("z", 0.0))) > 1e-6
+
+
+def _real_parent_unit(path):
+    """Walk UP the transform path past authoring scaffolding (_TRS / _MASTER / _Grp /
+    _MODEL_UPDATE* / _ORIGIN) and self-named wrappers to the first REAL unit node — the
+    parent that groups same-stem numbered siblings as one logical object (Drawers_Kitchen
+    over Knife1..6). Returns the parent path string (everything above the leaf, minus
+    scaffolding), used only as a grouping key."""
+    segs = _path_segments(path)
+    if len(segs) <= 1:
+        return path or ""
+    parent = segs[:-1]
+    # Strip trailing scaffolding wrapper nodes so cutlery under
+    # Drawers_Kitchen/_TRS/_MODEL_UPDATE group by the real Drawers_Kitchen unit.
+    while len(parent) > 1 and _SCAFFOLD_NODE_RE.search(parent[-1]):
+        parent = parent[:-1]
+    return "/".join(parent)
+
+
+def _name_stem(name):
+    """A cleaned name minus its trailing instance index, so numbered siblings share a stem
+    ('Knife1'..'Knife6' -> 'Knife', 'Book_MESSY_01' -> 'Book_MESSY') while distinct names
+    keep their own ('Monitor', 'Keyboard'). Discriminator (user): numbers ⇒ same object,
+    distinct names ⇒ distinct objects."""
+    stem = _STEM_TRAILING_RE.sub("", name).strip().strip("_").strip()
+    return stem or name
+
+
+def _split_group_into_units(members):
+    """HYBRID geometric split within a same-(parent, stem) group. Two regimes:
+      (a) any member has real Bounds3D -> split into contiguous units by BOUNDS-OVERLAP
+          (gap <= FIXTURE_BOUNDS_MERGE_GAP_M). Keeps a 2-wall parent (Shelves_Office, walls
+          20m apart) as two targets, merges a dense furniture row into one.
+      (b) ALL members point-only (empty bounds) -> keep the whole group as ONE unit. Trust
+          the hierarchy, no distance knob: the only point-only groups that span far are the
+          already-collapsed phantom lights, exterior decor (filtered), and ~2 benign interior
+          cases (ribbon row = shelf width; beauty supplies = counter midpoint, still on the
+          counter). Merging point-only never corrupts the bake the way a bounds merge would.
+    `members` is a list of dicts each with 'loc' (x,y,z) and 'bounds' (Min/Max dict or None).
+    Returns a list of unit-member-lists."""
+    if not any(m["bounds"] for m in members):
+        return [members]
+
+    # Union-find over members by bounds-AABB overlap (inflated by the merge gap). Members
+    # with no real bounds attach to the nearest bounded member's unit so they're not lost.
+    gap = FIXTURE_BOUNDS_MERGE_GAP_M
+    bounded = [m for m in members if m["bounds"]]
+    point_only = [m for m in members if not m["bounds"]]
+
+    parent = list(range(len(bounded)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(a, b):
+        parent[find(a)] = find(b)
+
+    def aabbs_touch(b1, b2):
+        for ax in ("x", "y", "z"):
+            lo1, hi1 = b1["Min"][ax], b1["Max"][ax]
+            lo2, hi2 = b2["Min"][ax], b2["Max"][ax]
+            if hi1 + gap < lo2 or hi2 + gap < lo1:
+                return False
+        return True
+
+    for i in range(len(bounded)):
+        for j in range(i + 1, len(bounded)):
+            if aabbs_touch(bounded[i]["bounds"], bounded[j]["bounds"]):
+                union(i, j)
+
+    units = {}
+    for i, m in enumerate(bounded):
+        units.setdefault(find(i), []).append(m)
+
+    unit_list = list(units.values())
+    # Attach each point-only member to the geometrically nearest unit (by unit centroid).
+    for m in point_only:
+        if not unit_list:
+            unit_list.append([m])
+            continue
+        mx, my, mz = m["loc"]
+        best = None
+        best_d = None
+        for u in unit_list:
+            cx = sum(p["loc"][0] for p in u) / len(u)
+            cy = sum(p["loc"][1] for p in u) / len(u)
+            cz = sum(p["loc"][2] for p in u) / len(u)
+            d = (cx - mx) ** 2 + (cy - my) ** 2 + (cz - mz) ** 2
+            if best_d is None or d < best_d:
+                best_d = d
+                best = u
+        best.append(m)
+    return unit_list
+
+
 def build_fixture_roster(interactables):
-    """The canonical static interactable target set: filtered, deduped, floor-assigned.
-    One entry per distinct physical interactable the planner should consider. Returns a
-    list of dicts {name, position:[x,y,z], floor, object_ids:[...], interaction_radius,
-    is_datable, ink}. Objects off every storey get floor=None (the planner tags them
-    off_floor without trying to route)."""
+    """The canonical static interactable target set: filtered, deduped, routing-unit-merged,
+    floor-assigned. One entry per distinct physical interactable the planner should consider.
+    Returns a list of dicts {name, position:[x,y,z], floor, object_ids:[...],
+    interaction_radius, is_datable, ink}. Objects off every storey get floor=None (the
+    planner tags them off_floor without trying to route).
+
+    Pipeline (set construction owned by the bake, NOT the planner):
+      1. FILTER          — active, on an interactable layer, human-readable name, NOT in the
+                           Exterior/TESTING_TEMP/Main Camera subtree denylist.
+      2. IDENTITY DEDUP  — collapse copies of the SAME (name, place) — the phantom lighting
+                           presets, each of which carries a full copy of every fixture.
+      3. ROUTING-UNIT    — group same-(real-parent, name-stem) NUMBERED siblings, then a
+         MERGE             hybrid geometric split (bounds-overlap for bounded units, keep
+                           point-only groups whole).
+      4. FLOOR           — assign to the storey BELOW the fixture (ceiling lights belong to
+                           the room they light, not the band their Y lands in).
+    Location for every stage uses _best_location (bounds center, else Position)."""
+    # ---- 1. FILTER + 2. IDENTITY DEDUP -----------------------------------------------
     by_fixture = {}
     q = FIXTURE_DEDUP_QUANT_M
     for it in interactables:
@@ -204,13 +413,15 @@ def build_fixture_roster(interactables):
             continue
         if it.get("Layer") not in OBJECT_NODE_LAYERS:
             continue
+        if _subtree_root(it.get("Path")) in FIXTURE_SUBTREE_DENYLIST:
+            continue
         name = _clean_object_name(it.get("GameObjectName") or it.get("Name"))
         if name is None:
             continue
-        pos = it.get("Position") or it.get("WorldPosition") or {}
-        x, y, z = pos.get("x"), pos.get("y"), pos.get("z")
-        if x is None or y is None or z is None:
+        loc = _best_location(it)
+        if loc is None:
             continue
+        x, y, z = loc
         # DEDUPE key: same cleaned name at the same place = one object (the game's
         # preset-SetActive collapse). Position-keyed, so distinct nearby objects stay
         # separate.
@@ -219,21 +430,78 @@ def build_fixture_roster(interactables):
         if slot is None:
             by_fixture[key] = {
                 "name": name,
-                "position": [round(x, 4), round(y, 4), round(z, 4)],
-                "floor": _fixture_floor(y),
+                "loc": (x, y, z),
                 "object_ids": [it.get("GameObjectId")],
                 "interaction_radius": it.get("InteractionRadius") or 0.0,
                 "is_datable": bool(it.get("IsDatable")),
                 "ink": it.get("InkFileName"),
+                "unique_id": it.get("UniqueId"),
+                "path": it.get("Path") or "",
+                "bounds": (it.get("Bounds3D") or {}) if _has_real_bounds(it) else None,
             }
         else:
             slot["object_ids"].append(it.get("GameObjectId"))
-    # De-dup ids within each fixture: the export sometimes repeats the SAME GameObjectId at
-    # the SAME position (e.g. Ceiling_Shadow_* listed 3×); they're one instance, not three.
+            # Keep the richest record: prefer a real-bounds member's bounds/location so a
+            # mis-located preset copy can't override the true placement.
+            if slot["bounds"] is None and _has_real_bounds(it):
+                slot["bounds"] = it.get("Bounds3D")
+                slot["loc"] = (x, y, z)
+
+    # De-dup ids within each deduped fixture (the export sometimes repeats one GameObjectId
+    # at the same position — e.g. Ceiling_Shadow_* listed 3×).
     for slot in by_fixture.values():
         seen = set()
         slot["object_ids"] = [i for i in slot["object_ids"] if not (i in seen or seen.add(i))]
-    return sorted(by_fixture.values(), key=lambda e: (e["floor"] or "~", e["name"], e["position"]))
+
+    # ---- 3. ROUTING-UNIT MERGE -------------------------------------------------------
+    # Group by (real-parent-unit, name-stem): numbered siblings under one real parent are
+    # one logical object; distinct names stay distinct.
+    groups = {}
+    for slot in by_fixture.values():
+        gkey = (_real_parent_unit(slot["path"]), _name_stem(slot["name"]))
+        groups.setdefault(gkey, []).append(slot)
+
+    roster = []
+    for (_, stem), members in groups.items():
+        for unit in _split_group_into_units(members):
+            ids = []
+            for m in unit:
+                ids.extend(m["object_ids"])
+            seen = set()
+            ids = [i for i in ids if not (i in seen or seen.add(i))]
+            # Unit location: centroid of member locations (bounded members dominate via
+            # their bounds-center loc). Display name = the shared stem when the unit merged
+            # >1 distinct member, else the single member's own cleaned name.
+            cx = sum(m["loc"][0] for m in unit) / len(unit)
+            cy = sum(m["loc"][1] for m in unit) / len(unit)
+            cz = sum(m["loc"][2] for m in unit) / len(unit)
+            name = unit[0]["name"] if len(unit) == 1 else stem
+            # Keep the most informative datable/ink/radius among members (a datable member
+            # defines the unit's identity for the picker; nav only needs one).
+            datable_member = next((m for m in unit if m["is_datable"]), unit[0])
+            # Stable id(s) for the roster->live bridge. `unique_id` is the unit's primary id
+            # (the datable member's, matching ink/identity); `unique_ids` is every member's id
+            # so a routing-unit-merged unit (48 books -> 1) matches a live object that is ANY
+            # of its members. Dedup, drop blanks.
+            unit_uids = []
+            useen = set()
+            for m in unit:
+                u = m.get("unique_id")
+                if u and u not in useen:
+                    useen.add(u)
+                    unit_uids.append(u)
+            roster.append({
+                "name": name,
+                "position": [round(cx, 4), round(cy, 4), round(cz, 4)],
+                "floor": _fixture_floor(cy, cx, cz),
+                "object_ids": ids,
+                "interaction_radius": max(m["interaction_radius"] for m in unit),
+                "is_datable": any(m["is_datable"] for m in unit),
+                "ink": datable_member["ink"],
+                "unique_id": datable_member.get("unique_id"),
+                "unique_ids": unit_uids,
+            })
+    return sorted(roster, key=lambda e: (e["floor"] or "~", e["name"], e["position"]))
 
 
 # Scene bounds clip — exclude far skybox-stage surfaces
@@ -1428,6 +1696,23 @@ def main():
     walk = json.load(open(WALK, encoding="utf-8"))
     blok = json.load(open(BLOCK, encoding="utf-8-sig"))
     walkables = walk["WalkableSurfaces"]
+    # Register each BELOW-GROUND floor's XZ footprint so _fixture_floor can gate sub-ground
+    # fixture assignment by location (keeps a degenerate rig-origin fixture far from the
+    # crawlspace from being Y-only-claimed by it). Derived from the native walkable surfaces
+    # in that floor's band — the crawlspace floor (SM_Floor_Crawlspace @ Y-9.89) now exports
+    # natively via the exporter's floor-aware MinimumWalkableTopY clip, so no recovery hack.
+    for f in FLOORS:
+        if f["y"] >= FLOORS_GROUND_Y:
+            continue
+        band = [w for w in walkables if abs(w["TopY"] - f["y"]) <= f.get("y_tol", 1.25)
+                and w.get("Footprint")]
+        if not band:
+            continue
+        SUBGROUND_FLOOR_FOOTPRINTS[f["label"]] = (
+            min(w["Footprint"]["MinX"] for w in band),
+            max(w["Footprint"]["MaxX"] for w in band),
+            min(w["Footprint"]["MinZ"] for w in band),
+            max(w["Footprint"]["MaxZ"] for w in band))
     blockers = blok["NavigationBlockers"]
     mesh_colliders = blok.get("MeshColliders", [])
     door_records = blok.get("Doors", [])

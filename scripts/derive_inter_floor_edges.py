@@ -313,19 +313,29 @@ def main():
         t = nav["Teleporters"][0]
         down = t["LocationDown"]
         up = t["LocationUp"]
+        # Snap each endpoint to the nearest navigable cell on its floor (down→crawlspace,
+        # up→ground), now that the crawlspace floor is baked. Previously the down endpoint was
+        # left raw + "deferred" because no crawlspace floor existed; with SM_Floor_Crawlspace
+        # recovered, the player teleports onto a real navigable cell, so snap it like the stairs.
+        crawl = find_floor(bake, "crawlspace")
+        ground = find_floor(bake, "ground")
+        dxyz = [round(down["Position"]["x"],3), round(down["Position"]["y"],3), round(down["Position"]["z"],3)]
+        uxyz = [round(up["Position"]["x"],3), round(up["Position"]["y"],3), round(up["Position"]["z"],3)]
+        down_note = "crawlspace floor not in walkable bake; endpoint deferred"
+        if crawl is not None:
+            snapped = _nearest_navigable_xz(crawl, dxyz[0], dxyz[2], max_radius_m=5.0)
+            if snapped is not None:
+                dxyz = [round(snapped[0],3), round(crawl["floor_y"],3), round(snapped[1],3)]
+                down_note = "snapped to nearest navigable crawlspace cell"
         teleporter_edges.append({
             "kind": "teleporter",
             "source_name": t["Name"],
             "down": {
-                "world_xyz": [round(down["Position"]["x"],3),
-                              round(down["Position"]["y"],3),
-                              round(down["Position"]["z"],3)],
-                "note": "crawlspace floor not in walkable bake; endpoint deferred",
+                "world_xyz": dxyz,
+                "note": down_note,
             },
             "up": {
-                "world_xyz": [round(up["Position"]["x"],3),
-                              round(up["Position"]["y"],3),
-                              round(up["Position"]["z"],3)],
+                "world_xyz": uxyz,
             },
             "cost_m": 0.0,
             "note": "executor triggers teleporter interaction; distance not walked",
