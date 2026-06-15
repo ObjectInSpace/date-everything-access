@@ -121,6 +121,48 @@ def ray_sphere(ro, rd, center, r):
     return t if t >= 0 else None
 
 
+def ray_triangle(ro, rd, a, b, c):
+    """Moller-Trumbore ray vs triangle. Returns t>=0 or None. Double-sided (occlusion
+    doesn't care about winding)."""
+    e1 = vsub(b, a)
+    e2 = vsub(c, a)
+    pvec = (rd[1] * e2[2] - rd[2] * e2[1],
+            rd[2] * e2[0] - rd[0] * e2[2],
+            rd[0] * e2[1] - rd[1] * e2[0])
+    det = vdot(e1, pvec)
+    if abs(det) < EPS:
+        return None  # ray parallel to triangle
+    inv = 1.0 / det
+    tvec = vsub(ro, a)
+    u = vdot(tvec, pvec) * inv
+    if u < 0.0 or u > 1.0:
+        return None
+    qvec = (tvec[1] * e1[2] - tvec[2] * e1[1],
+            tvec[2] * e1[0] - tvec[0] * e1[2],
+            tvec[0] * e1[1] - tvec[1] * e1[0])
+    v = vdot(rd, qvec) * inv
+    if v < 0.0 or u + v > 1.0:
+        return None
+    t = vdot(e2, qvec) * inv
+    return t if t >= 0.0 else None
+
+
+def ray_triangles(ro, rd, flat):
+    """Nearest hit among a flat [x,y,z, ...] triangle-soup (9 floats per tri). t>=0 or None."""
+    best = None
+    n = len(flat)
+    i = 0
+    while i + 8 < n:
+        a = (flat[i], flat[i + 1], flat[i + 2])
+        b = (flat[i + 3], flat[i + 4], flat[i + 5])
+        c = (flat[i + 6], flat[i + 7], flat[i + 8])
+        t = ray_triangle(ro, rd, a, b, c)
+        if t is not None and (best is None or t < best):
+            best = t
+        i += 9
+    return best
+
+
 def ray_capsule(ro, rd, p0, p1, r):
     """Approximate capsule = segment-swept sphere: two end spheres + cylinder body
     via closest-approach between ray and segment axis. Good enough for occlusion."""
@@ -155,7 +197,7 @@ def ray_capsule(ro, rd, p0, p1, r):
 
 class Collider:
     __slots__ = ("kind", "path", "layer", "center", "q", "half", "radius",
-                 "p0", "p1", "aabb_lo", "aabb_hi")
+                 "p0", "p1", "aabb_lo", "aabb_hi", "tris")
 
 
 def _v(d):
@@ -193,6 +235,7 @@ def build_collider(b):
     c.layer = b.get("Layer")
     c.aabb_lo = _v(bb["Min"])
     c.aabb_hi = _v(bb["Max"])
+    c.tris = None
     ctype = b.get("ColliderType")
     ls = b.get("LocalShape") or {}
     wpos = _v(b["WorldPosition"])
@@ -229,8 +272,19 @@ def build_collider(b):
         c.p0 = vadd(center, vmul(axis_world, half_h))
         c.p1 = vsub(center, vmul(axis_world, half_h))
     else:
-        # MeshCollider (or anything else): AABB occluder via Bounds3D.
-        c.kind = "aabb"
+        # MeshCollider (or anything else): AABB occluder via Bounds3D, UNLESS the export
+        # carried exact world triangles (LosGeometry) for it — those meshes whose AABB
+        # over-claims their true shape (chairs, plants, railings). With triangles we do an
+        # exact ray-vs-triangle test; the AABB still serves as the broad-phase pre-reject in
+        # first_hit. Flat walls/slabs have no LosGeometry and stay AABB (their box IS their
+        # shape). See docs/los-mesh-triangle-export-scope.md.
+        fp = b.get("Footprint") or {}
+        lg = fp.get("LosGeometry")
+        if lg and lg.get("Kind") == "Triangles" and lg.get("Verts"):
+            c.kind = "mesh_tris"
+            c.tris = lg["Verts"]
+        else:
+            c.kind = "aabb"
     return c
 
 
@@ -257,6 +311,10 @@ def ray_collider(ro, rd, c):
         return ray_sphere(ro, rd, c.center, c.radius)
     if c.kind == "capsule":
         return ray_capsule(ro, rd, c.p0, c.p1, c.radius)
+    if c.kind == "mesh_tris":
+        # Exact ray-vs-triangle. The AABB pre-reject in first_hit already cleared the
+        # broad phase, so this only runs for rays that actually enter the bounds.
+        return ray_triangles(ro, rd, c.tris)
     return ray_aabb(ro, rd, c.aabb_lo, c.aabb_hi)
 
 
@@ -286,12 +344,14 @@ def point_inside_collider(p, c):
         s = max(0.0, min(alen, vdot(vsub(p, c.p0), ax)))
         closest = vadd(c.p0, vmul(ax, s))
         return vlen(vsub(p, closest)) <= c.radius
-    # aabb / mesh: never treated as origin-inside in the SHARED raycaster. The bounds are
-    # a loose box; for the validator's uncapped probe rays a t~0 mesh hit IS the correct
-    # blocked verdict (the camera sits in a wall mesh's AABB and the wall really blocks),
-    # so skipping it leaks. The synthetic-eye goal filter handles the loose-AABB-at-origin
-    # case itself (see cell_has_los_to_target), where the short eye->surface cast makes a
-    # t~0 mesh hit untrustworthy. Keeping this False holds validate_los at 71/71.
+    # aabb / mesh / mesh_tris: never treated as origin-inside in the SHARED raycaster. The
+    # bounds are a loose box; for the validator's uncapped probe rays a t~0 mesh hit IS the
+    # correct blocked verdict (the camera sits in a wall mesh's AABB and the wall really
+    # blocks), so skipping it leaks. The synthetic-eye goal filter handles the
+    # loose-AABB-at-origin case itself (see cell_has_los_to_target), where the short
+    # eye->surface cast makes a t~0 mesh hit untrustworthy. Keeping this False holds
+    # validate_los at 71/71. (mesh_tris uses exact triangles in ray_collider, but for the
+    # origin-inside skip it behaves like a mesh — never skipped.)
     return False
 
 

@@ -21,6 +21,23 @@ param(
     [Parameter()]
     [double]$MinimumFootprintRadius = 0.15,
 
+    # Emit per-mesh 3D geometry (convex hull or world triangles) for the offline LOS
+    # raycaster, so it can ray-test mesh colliders EXACTLY instead of as their AABB
+    # (los_geometry.py over-blocks mesh occluders today). Only meshes whose true shape
+    # diverges enough from their AABB to matter get geometry (see
+    # MeshLosFootprintFillThreshold); flat walls/slabs whose AABB already IS their shape
+    # emit nothing, keeping the export small. Convex meshes emit a hull (small, exact);
+    # concave meshes emit world triangles. See docs/los-mesh-triangle-export-scope.md.
+    [Parameter()]
+    [bool]$EmitMeshLosGeometry = $true,
+
+    # A mesh gets LOS geometry only if its 2D footprint fills LESS than this fraction of
+    # its AABB cross-section — i.e. the box meaningfully over-claims (chairs, railings,
+    # archways). At/above this, the AABB is close enough to the true shape that exact
+    # geometry buys nothing. 0.5 selected the ~32 worst-offending meshes in this scene.
+    [Parameter()]
+    [double]$MeshLosFootprintFillThreshold = 0.5,
+
     # Mesh slice planes (world Y). Each plane intersects the mesh and contributes
     # to its 2D footprint. One plane per floor at floor_Y + 1.0m, which sits
     # squarely in the middle of the player capsule (r=0.4, h=2.5; center at
@@ -1005,7 +1022,9 @@ function Get-MeshColliderRecord {
         [Parameter(Mandatory = $true)][double]$MinTopY,
         [Parameter(Mandatory = $true)][double]$MaxBottomY,
         [Parameter(Mandatory = $false)][double]$ColumnCellSize = 0.2,
-        [Parameter(Mandatory = $false)][double[]]$CapsuleBandPairs = @()
+        [Parameter(Mandatory = $false)][double[]]$CapsuleBandPairs = @(),
+        [Parameter(Mandatory = $false)][bool]$EmitMeshLosGeometry = $true,
+        [Parameter(Mandatory = $false)][double]$MeshLosFootprintFillThreshold = 0.5
     )
 
     $worldVerts = New-Object System.Numerics.Vector3[] $MeshData.Vertices.Length
@@ -1140,6 +1159,37 @@ function Get-MeshColliderRecord {
     }
     if ($columns.Count -gt 0) {
         $footprint.Columns = $columns
+    }
+
+    # ---- LOS geometry (exact mesh ray-test for los_geometry.py) ----
+    # Only when the AABB over-claims the true shape enough to matter: footprint area fills
+    # < threshold of the AABB cross-section. Flat walls/slabs (footprint ~= AABB) emit
+    # nothing and stay AABB-tested. Convex meshes emit a compact 3D hull; concave meshes
+    # emit world triangles (flat float arrays, the smallest encoding). The raycaster keeps
+    # the AABB as a cheap pre-reject and as the fallback for meshes without this field.
+    if ($EmitMeshLosGeometry) {
+        $aabbCross = [double]($maxX - $minX) * [double]($maxZ - $minZ)
+        $diverges = ($aabbCross -gt 1e-6) -and ($area -lt $MeshLosFootprintFillThreshold * $aabbCross)
+        if ($diverges) {
+            # World triangles: flat [x,y,z, x,y,z, x,y,z, ...] per triangle, for an EXACT
+            # ray-vs-triangle (Moller-Trumbore) offline test. Emitted for both convex and
+            # concave divergent meshes — the triangle soup is exact for either, and the
+            # convex ones here are small, so a separate hull encoding isn't worth it.
+            $flat = New-Object System.Collections.Generic.List[double]
+            for ($t = 0; $t -lt $triCount; $t++) {
+                foreach ($vi in @($tris[$t * 3], $tris[$t * 3 + 1], $tris[$t * 3 + 2])) {
+                    $wv = $worldVerts[$vi]
+                    $flat.Add([Math]::Round([double]$wv.X, 4))
+                    $flat.Add([Math]::Round([double]$wv.Y, 4))
+                    $flat.Add([Math]::Round([double]$wv.Z, 4))
+                }
+            }
+            $footprint.LosGeometry = [ordered]@{
+                Kind = "Triangles"
+                TriangleCount = $triCount
+                Verts = $flat.ToArray()
+            }
+        }
     }
 
     $record = New-ColliderRecord -Component $componentForRecord `
@@ -1724,7 +1774,8 @@ if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($
             -WorldTransform $worldTransform -MeshData $meshData `
             -SlicePlanes $MeshSlicePlanes `
             -MinTopY $MinimumBlockingTopY -MaxBottomY $MaximumBlockingBottomY `
-            -ColumnCellSize $ColumnCellSize -CapsuleBandPairs $CapsuleBandPairs
+            -ColumnCellSize $ColumnCellSize -CapsuleBandPairs $CapsuleBandPairs `
+            -EmitMeshLosGeometry $EmitMeshLosGeometry -MeshLosFootprintFillThreshold $MeshLosFootprintFillThreshold
 
         if ($null -eq $record) {
             Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "EmptyFootprint"
