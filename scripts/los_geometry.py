@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -417,6 +418,46 @@ def _is_self_or_relative(col_path, target_path):
     return None
 
 
+# Authoring scaffolding nodes walked past to reach the real furniture unit (mirror of
+# bake_navigable_region._SCAFFOLD_NODE_RE / _real_parent_unit). A prop and its supporting
+# furniture (a D20 on a desk, salt on a counter) live in SIBLING subtrees under the unit
+# node (Desk_MASTER) — neither is the other's ancestor, so the strict prefix check above
+# misses them. We treat them as relatives when they share that unit ancestor.
+_UNIT_SCAFFOLD_RE = re.compile(
+    r"(_TRS|_MASTER|_Grp|_GROUP|_MODEL_UPDATE\d*|_ORIGIN|_MODEL)$", re.IGNORECASE)
+
+
+def _real_parent_unit(path):
+    """The furniture-unit ancestor path: walk UP past authoring scaffolding to the first
+    real unit node. A prop's supporting furniture shares this unit. Mirror of
+    bake_navigable_region._real_parent_unit, operating on full export paths."""
+    if not path:
+        return ""
+    segs = [s for s in path.split("/") if s and s != "===SCENE==="]
+    if len(segs) <= 1:
+        return path
+    parent = segs[:-1]
+    while len(parent) > 1 and _UNIT_SCAFFOLD_RE.search(parent[-1]):
+        parent = parent[:-1]
+    return "/".join(parent)
+
+
+def _shares_furniture_unit(col_path, target_path):
+    """True if the occluder and target belong to the SAME furniture unit (their real-parent
+    units coincide, or one's unit is an ancestor of the other's) — e.g. a desk's surface
+    occluding a prop resting on that desk. Scoped to the unit, NOT the room: Desk_MASTER,
+    not Office. Prevents an object's own supporting furniture from reporting false no_los,
+    while a chair across the room (different unit) still occludes."""
+    if not col_path or not target_path:
+        return False
+    cu = _real_parent_unit(col_path)
+    tu = _real_parent_unit(target_path)
+    if not cu or not tu:
+        return False
+    # Same unit, or one unit nested within the other (a sub-unit of the same furniture).
+    return cu == tu or cu.startswith(tu + "/") or tu.startswith(cu + "/")
+
+
 def resolve_target_collider(target_path, colliders_by_path=None, colliders=None):
     """Pick the target's own collider the way SimpleNavPlanner.SelectBestTargetCollider
     does: among the target's self/child/parent colliders, the one whose bounds are
@@ -546,6 +587,10 @@ def cell_has_los_to_target(eye_xz, floor_y, target_collider, radius_m, occluders
             best_t, best_c = t, c
     if best_c is None:
         return True  # nothing between eye and target surface — clear line
-    # Clear iff the first thing hit is the target collider or its hierarchy.
+    # Clear iff the first thing hit is the target collider, its strict hierarchy, OR a
+    # collider sharing the target's furniture UNIT (its own supporting desk/counter/shelf —
+    # a sibling subtree under the unit node, which the strict ancestor/descendant check
+    # misses). The latter stops a prop's own support from reporting false no_los.
     return _is_self_or_relative(best_c.path, target_collider.path) is not None \
-        or _is_self_or_relative(target_collider.path, best_c.path) is not None
+        or _is_self_or_relative(target_collider.path, best_c.path) is not None \
+        or _shares_furniture_unit(best_c.path, target_collider.path)

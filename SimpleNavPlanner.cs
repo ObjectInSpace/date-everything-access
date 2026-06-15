@@ -1917,9 +1917,49 @@ namespace DateEverythingAccess
 
         private static bool IsTargetCollider(Collider c, Collider targetCollider)
         {
+            if (c == null || targetCollider == null) return false;
             return c == targetCollider
-                || (c != null && c.transform.IsChildOf(targetCollider.transform))
-                || targetCollider.transform.IsChildOf(c.transform);
+                || c.transform.IsChildOf(targetCollider.transform)
+                || targetCollider.transform.IsChildOf(c.transform)
+                // An object's own supporting furniture (a desk surface under a prop, a counter
+                // under salt) lives in a SIBLING subtree under the shared furniture-UNIT node —
+                // neither is the other's ancestor, so IsChildOf misses it and the prop reads as
+                // occluded-by-its-own-support (false no_los). Treat an occluder that shares the
+                // target's furniture unit as the target. Scoped to the unit (Desk_MASTER), not the
+                // room. Mirror of los_geometry._shares_furniture_unit.
+                || SharesFurnitureUnit(c.transform, targetCollider.transform);
+        }
+
+        // Walk UP past authoring scaffolding (_TRS/_MASTER/_Grp/_MODEL_UPDATE*/_ORIGIN/_MODEL,
+        // and self-named wrappers) to the first real furniture-unit transform. Mirror of
+        // los_geometry._real_parent_unit / bake _real_parent_unit, operating on live transforms.
+        private static Transform RealParentUnit(Transform t)
+        {
+            if (t == null) return null;
+            Transform parent = t.parent;
+            if (parent == null) return t;
+            while (parent.parent != null && IsUnitScaffold(parent.name))
+                parent = parent.parent;
+            return parent;
+        }
+
+        private static bool IsUnitScaffold(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            return System.Text.RegularExpressions.Regex.IsMatch(
+                name, @"(_TRS|_MASTER|_Grp|_GROUP|_MODEL_UPDATE\d*|_ORIGIN|_MODEL)$",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        }
+
+        // True if two transforms belong to the SAME furniture unit (their real-parent units
+        // coincide, or one unit is within the other) — e.g. a desk surface and a prop resting on
+        // that desk. Scoped to the unit, not the room.
+        private static bool SharesFurnitureUnit(Transform a, Transform b)
+        {
+            Transform ua = RealParentUnit(a);
+            Transform ub = RealParentUnit(b);
+            if (ua == null || ub == null) return false;
+            return ua == ub || a.IsChildOf(ub) || b.IsChildOf(ua) || ua.IsChildOf(ub) || ub.IsChildOf(ua);
         }
 
         // True if a ray from `origin` along `dir` reaches the target collider first (no occluder) or
