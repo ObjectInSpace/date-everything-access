@@ -129,7 +129,7 @@ def plan_to_cell(planner, start_node, target_floor_label, target_ix, target_iz,
             "cell_size_m": planner.cell_size,
             "interaction_radius_used_m": target_stanza["InteractionRadius"],
             "corner_waypoint_deg": _mod.CORNER_WAYPOINT_DEG,
-            "door_tag_radius_m": _mod.DOOR_TAG_RADIUS_M,
+            "door_interact_radius_fallback_m": _mod.DOOR_INTERACT_RADIUS_FALLBACK_M,
         },
     }
 

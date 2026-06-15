@@ -262,6 +262,13 @@ class Planner:
                     self._locked_doors.add(name)
                 else:
                     self._unlocked_doors.add(name)
+                # Container doors carry an EXPLICIT opening center (their own anchor — no
+                # walk-through threshold). Mirrors C# IndexDoorFreedCells: a door is a door,
+                # so tag_doors's destination rule opens it on arrival. First record wins.
+                oc = door.get("opening_center")
+                if oc and len(oc) >= 3 and name not in floor.opening_center_by_name:
+                    floor.opening_center_by_name[name] = (oc[0], oc[2])
+                    floor.opening_radius_by_name[name] = door.get("opening_radius") or floor.cell_size
                 # Doorway-opening centroid (world XZ) from threshold cells — uniform over
                 # swing + sliding doors, mirrors C# Floor.OpeningCenterByName. First record
                 # for a name wins (matches the C# ContainsKey guard).
@@ -1032,6 +1039,29 @@ def goal_cells_around(floor, wx, wz, radius_m):
 _LOS_OCCLUDERS = None       # lazily-built collider set (the whole scene's occluders)
 _LOS_BY_PATH = None         # {collider path: Collider} for target resolution
 _LOS_TARGET_PATHS = None    # {GameObjectName: [export Path, ...]} for name→path lookup
+_LOS_CONTAINER_DOOR_PATHS = None  # set of collider paths for baked container doors
+
+
+def _build_container_door_paths():
+    """Collider paths of the bake's container_operable_only doors — the doors the LOS
+    rescue may see PAST. Maps each container door NAME from the bake to its collider
+    PATH(s) by leaf-name match against the occluder inventory (door names are unique
+    leaf names: SM_Kitchen_Cupboard_Door_5_MODEL_UPDATE etc.). Path-based so the rescue
+    never sees past a non-container collider. Mirror of C# _containerDoorNames, resolved
+    to paths for the offline raycaster. See [[project_navigation_container_doors_baked_2026_06_14]]."""
+    bake = load_bake()
+    names = set()
+    for f in bake.get("floors", []):
+        for d in (f.get("doors") or []):
+            if d.get("container_operable_only") and d.get("name"):
+                names.add(d["name"])
+    paths = set()
+    if names:
+        for path in _LOS_BY_PATH:
+            leaf = path.rsplit("/", 1)[-1]
+            if leaf in names:
+                paths.add(path)
+    return paths
 
 
 def _ensure_los_context():
@@ -1040,7 +1070,7 @@ def _ensure_los_context():
     use the parity-default (exclude only Unity's built-in IgnoreRaycast layer 2), which
     validate_los proved sufficient — the game's dateviatorIgnores is layer 2 plus a few
     effect layers that carry no interaction-blocking geometry."""
-    global _LOS_OCCLUDERS, _LOS_BY_PATH, _LOS_TARGET_PATHS
+    global _LOS_OCCLUDERS, _LOS_BY_PATH, _LOS_TARGET_PATHS, _LOS_CONTAINER_DOOR_PATHS
     if _LOS_OCCLUDERS is not None:
         return
     excl = {_los.IGNORE_RAYCAST_LAYER}
@@ -1051,6 +1081,7 @@ def _ensure_los_context():
     _LOS_TARGET_PATHS = {}
     for it in load_interactables():
         _LOS_TARGET_PATHS.setdefault(it.get("GameObjectName"), []).append(it.get("Path"))
+    _LOS_CONTAINER_DOOR_PATHS = _build_container_door_paths()
 
 
 def resolve_target_collider_for_path(target_path):
@@ -1067,15 +1098,21 @@ def filter_goals_by_los(floor, goals, target_collider, target_x, target_z, radiu
       (a) drop cells whose XZ distance to the target collider's nearest bounds point is
           below TARGET_COLLIDER_CLEARANCE_M (standing inside the prop), and
       (b) keep only cells with a clear synthetic-eye interaction line (cell_has_los).
-    Returns the filtered (ix, iz) list. If target_collider is None, returns goals
-    unchanged (no collider to test against — keep the full disc, like C#). If the
-    collider IS resolved but NO cell qualifies, returns [] so the caller can fail fast
-    with a no-LOS status, never routing to a provably un-interactable cell."""
+    Returns (goals, container_doors): the filtered (ix, iz) list and the set of container
+    door PATHS the kept cells' sightlines saw past (to be opened on arrival). If
+    target_collider is None, returns (goals, set()). If the collider IS resolved but NO
+    cell qualifies, returns ([], set()) so the caller fails fast with no_los.
+
+    A door is a door: the sightline SEES PAST operable container doors by default (mirror
+    of the C# LOS filter), the same way A* routes through a closed passage door — the
+    executor opens it on arrival. Cells whose line passed a container door record it so
+    tag_doors / the route can open it."""
     if target_collider is None:
-        return goals
+        return goals, set()
     _ensure_los_context()
     inner_sq = TARGET_COLLIDER_CLEARANCE_M * TARGET_COLLIDER_CLEARANCE_M
     out = []
+    opened = set()
     for (ix, iz) in goals:
         wx, wz = floor.cell_to_world(ix, iz)
         # (a) overlap drop: nearest bounds point to a 1m-high standpoint (matches C#'s
@@ -1086,11 +1123,15 @@ def filter_goals_by_los(floor, goals, target_collider, target_x, target_z, radiu
         dz = nearest[2] - cell_world[2]
         if dx * dx + dz * dz < inner_sq:
             continue
-        # (b) interaction LOS from the synthetic eye.
+        # (b) interaction LOS, seeing past operable container doors (recorded in `passed`).
+        passed = set()
         if _los.cell_has_los_to_target((wx, wz), floor.floor_y, target_collider,
-                                       radius_m, _LOS_OCCLUDERS):
+                                       radius_m, _LOS_OCCLUDERS,
+                                       container_door_paths=_LOS_CONTAINER_DOOR_PATHS,
+                                       passed_container_doors=passed):
             out.append((ix, iz))
-    return out
+            opened |= passed
+    return out, opened
 
 
 # ---------- object-node resolution (for the object-reachability sweep) ----------
@@ -1285,8 +1326,8 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
         # line. None collider ⇒ keep the disc. A resolved collider with NO LOS cell ⇒
         # the object is reachable but not interactable from anywhere → fail fast.
         if target_collider is not None:
-            los_goals = filter_goals_by_los(planner.floors[tfloor], goals,
-                                            target_collider, tx, tz, radius)
+            los_goals, container_doors_opened = filter_goals_by_los(
+                planner.floors[tfloor], goals, target_collider, tx, tz, radius)
             if not los_goals:
                 return {
                     "status": "no_los",

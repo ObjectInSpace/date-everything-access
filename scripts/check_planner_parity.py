@@ -166,7 +166,7 @@ def replan_with_python(capture, bake):
         if tpath is not None:
             target_collider = planner_mod.resolve_target_collider_for_path(tpath)
             if target_collider is not None:
-                los_goals = planner_mod.filter_goals_by_los(
+                los_goals, _container_doors = planner_mod.filter_goals_by_los(
                     planner.floors[target_floor_label], goals,
                     target_collider, target_pos[0], target_pos[2], radius
                 )

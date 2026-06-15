@@ -99,6 +99,12 @@ namespace DateEverythingAccess
         // collider-band branch (front-approach; its swing is still a footprint blocker for
         // pathing). See [[project-navigation-sweep-three-buckets-2026-06-12]].
         private static readonly HashSet<string> _bakedDoorNames = new HashSet<string>();
+        // Container doors baked with operability ONLY (cupboard/fridge/breaker): opened in
+        // place to reveal an item inside, never traversed. These ARE in the bake (so they
+        // carry operable_from_cells) but are NOT passage doors — the item LOS rescue sees
+        // through them and tags them to be opened, routing to their baked operable cells.
+        // Kept separate from _bakedDoorNames so the passage-vs-container distinction holds.
+        private static readonly HashSet<string> _containerDoorNames = new HashSet<string>();
         // Monotonic counter for capture filenames. Restarted at process start.
         private static int _captureSeq;
 
@@ -264,6 +270,10 @@ namespace DateEverythingAccess
             // operable_from_cells, not the collider-LOS goal filter.
             Collider targetCollider = targetDoor == null ? posCheckCollider : null;
 
+            // Container door(s) the LOS rescue found occluding this item; the executor opens these
+            // at the destination so the player can interact with what's inside. Null = no rescue.
+            List<string> containerDoorsToOpen = null;
+
             // Door target: the goal set is the bake's operable_from_cells — the
             // authoritative navigable cells the player can stand in to operate this door
             // (excludes the swing arc and the panel, computed from the real Door.cs rule).
@@ -316,7 +326,14 @@ namespace DateEverythingAccess
             // See [[project_navigation_planner_los_goal_cells_2026_06_13]].
             else if (targetCollider != null)
             {
+                // A door is a door: the interaction sightline SEES PAST any operable container
+                // door (closed, unlocked cupboard/cabinet/fridge) the same way A* routes THROUGH a
+                // closed passage door — the executor opens it on arrival. Each cell's LOS records
+                // which container doors its line passed through; the selected cells' doors are
+                // tagged on the route so they're opened before the interaction. See
+                // [[project_navigation_container_open_on_interact]].
                 List<NodeKey> losClear = new List<NodeKey>(goals.Count);
+                List<HashSet<string>> passedOf = new List<HashSet<string>>(goals.Count);
                 float innerSq = TargetColliderClearanceM * TargetColliderClearanceM;
                 float bestClearance = 0f;
                 List<float> clearanceOf = new List<float>(goals.Count);
@@ -331,10 +348,12 @@ namespace DateEverythingAccess
                     float d2 = dx * dx + dz * dz;
                     if (d2 < innerSq)
                         continue; // cell overlaps the collider — can't stand here
-                    float margin = CellLineOfSightClearanceM(goalFloor, g, targetCollider, radius);
+                    HashSet<string> passed = new HashSet<string>(StringComparer.Ordinal);
+                    float margin = CellLineOfSightClearanceM(goalFloor, g, targetCollider, radius, passed);
                     if (margin >= 0f)
                     {
                         losClear.Add(g);
+                        passedOf.Add(passed);
                         clearanceOf.Add(margin);
                         if (margin > bestClearance) bestClearance = margin;
                     }
@@ -347,19 +366,30 @@ namespace DateEverythingAccess
                     // grazed / furniture-skimming standpoints that pass the boolean test but fail the
                     // game's real ray, while keeping the leg-optimal pick among the robust cells.
                     // See [[project_navigation_noloss_full_classification_2026_06_14]].
+                    HashSet<string> containerDoorsSeen = new HashSet<string>(StringComparer.Ordinal);
                     if (bestClearance > 0f)
                     {
                         float keepAbove = bestClearance - LosProbeSideOffsetsM[0] - 1e-4f;
                         List<NodeKey> solid = new List<NodeKey>(losClear.Count);
                         for (int i = 0; i < losClear.Count; i++)
                             if (clearanceOf[i] >= keepAbove)
+                            {
                                 solid.Add(losClear[i]);
+                                foreach (string dn in passedOf[i]) containerDoorsSeen.Add(dn);
+                            }
                         goals = solid.Count > 0 ? solid : losClear;
+                        if (solid.Count == 0)
+                            for (int i = 0; i < passedOf.Count; i++)
+                                foreach (string dn in passedOf[i]) containerDoorsSeen.Add(dn);
                     }
                     else
                     {
                         goals = losClear;
+                        for (int i = 0; i < passedOf.Count; i++)
+                            foreach (string dn in passedOf[i]) containerDoorsSeen.Add(dn);
                     }
+                    if (containerDoorsSeen.Count > 0)
+                        containerDoorsToOpen = new List<string>(containerDoorsSeen);
                 }
                 else
                 {
@@ -402,6 +432,22 @@ namespace DateEverythingAccess
 
             List<NodeKey> waypoints = SmoothPath(path);
             List<List<string>> segmentDoorNames = TagDoors(waypoints, targetName, targetPos, radius);
+            // A container door the interaction sightline saw past is the LAST barrier before the
+            // item — tag it on the final approach segment so the executor opens it on arrival (the
+            // same open-on-reach the on-route passage doors get from TagDoors). De-dupes against
+            // TagDoors' own destination rule, which may tag the same door from its opening center.
+            if (containerDoorsToOpen != null && containerDoorsToOpen.Count > 0 && segmentDoorNames.Count > 0)
+            {
+                List<string> lastSeg = segmentDoorNames[segmentDoorNames.Count - 1];
+                if (lastSeg == null)
+                {
+                    lastSeg = new List<string>(containerDoorsToOpen.Count);
+                    segmentDoorNames[segmentDoorNames.Count - 1] = lastSeg;
+                }
+                for (int i = 0; i < containerDoorsToOpen.Count; i++)
+                    if (!lastSeg.Contains(containerDoorsToOpen[i]))
+                        lastSeg.Add(containerDoorsToOpen[i]);
+            }
             // segmentDoorNames is per cell-waypoint segment (length waypoints.Count-1). The
             // ramp-interior insertion below adds waypoints at the stair seam, splitting that
             // one seam segment into several; expandedSegmentDoors mirrors the insertion with
@@ -796,6 +842,7 @@ namespace DateEverythingAccess
             if (_bake?.floors == null) return;
             _lockedDoorNames.Clear();
             _bakedDoorNames.Clear();
+            _containerDoorNames.Clear();
             for (int fi = 0; fi < _bake.floors.Length; fi++)
             {
                 BakeFloor raw = _bake.floors[fi];
@@ -808,9 +855,14 @@ namespace DateEverythingAccess
                     {
                         DoorRecord d = raw.doors[di];
                         if (d == null || string.IsNullOrEmpty(d.name)) continue;
-                        // Every modelled door name — used to distinguish passage doors (in here)
-                        // from container doors (carry a Door component but were never baked).
-                        _bakedDoorNames.Add(d.name);
+                        // Passage doors go in _bakedDoorNames (walked through). Operability-only
+                        // CONTAINER doors go in _containerDoorNames instead, so the passage-vs-
+                        // container distinction the planner relies on still holds even though both
+                        // now appear in the bake. Both kinds still load operable_from_cells below.
+                        if (d.container_operable_only)
+                            _containerDoorNames.Add(d.name);
+                        else
+                            _bakedDoorNames.Add(d.name);
                         // Locked is authoritative regardless of record ordering.
                         if (d.locked) _lockedDoorNames.Add(d.name);
                         if (d.freed_cells != null)
@@ -842,6 +894,18 @@ namespace DateEverythingAccess
                                 if (pair == null || pair.Length < 2) continue;
                                 op.Add(Floor.PackCell(pair[0], pair[1]));
                             }
+                        }
+                        // Container doors carry an EXPLICIT opening center (their own anchor —
+                        // no walk-through threshold). Populating this makes TagDoors treat a
+                        // container door identically to a passage door: a door is a door, the
+                        // destination tag rule opens it on arrival. See
+                        // [[project_navigation_container_open_on_interact]].
+                        if (d.opening_center != null && d.opening_center.Length >= 3
+                            && !floor.OpeningCenterByName.ContainsKey(d.name))
+                        {
+                            floor.OpeningCenterByName[d.name] =
+                                new Vector3(d.opening_center[0], d.opening_center[1], d.opening_center[2]);
+                            floor.OpeningRadiusByName[d.name] = d.opening_radius > 0f ? d.opening_radius : floor.CellSize;
                         }
                         if (d.threshold_cells_list != null && d.threshold_cells_list.Length > 0
                             && !floor.OpeningCenterByName.ContainsKey(d.name))
@@ -1664,6 +1728,17 @@ namespace DateEverythingAccess
         // [[project_navigation_noloss_full_classification_2026_06_14]].
         private static float CellLineOfSightClearanceM(Floor floor, NodeKey g, Collider targetCollider, float radiusM)
         {
+            return CellLineOfSightClearanceM(floor, g, targetCollider, radiusM, null);
+        }
+
+        // As above, with the optional CONTAINER-DOOR rescue collector threaded through to every
+        // sightline cast: when `passedContainerDoors` is non-null, an operable container door
+        // between the standpoint and the item is seen-through and recorded (the player will open it
+        // on arrival). The embedded-origin reject still applies — a standpoint whose pulled-back
+        // camera origin starts inside the closed cupboard panel is genuinely unusable.
+        private static float CellLineOfSightClearanceM(Floor floor, NodeKey g, Collider targetCollider, float radiusM,
+            HashSet<string> passedContainerDoors)
+        {
             if (targetCollider == null)
                 return NoLineOfSight;
             try
@@ -1717,13 +1792,16 @@ namespace DateEverythingAccess
                     Collider c = embedded[e];
                     if (c == null) continue;
                     if (IsStructuralSlab(c)) continue; // standing on/under the floor/ceiling shell is normal
-                    if (!IsTargetCollider(c, targetCollider))
-                        return NoLineOfSight; // origin embedded in a wall/prop → game ray self-collides
+                    if (IsTargetCollider(c, targetCollider)) continue;
+                    // In container-rescue mode a closed cupboard panel the camera origin grazes is
+                    // not a hard reject — it opens on arrival. Otherwise origin-in-occluder is fatal.
+                    if (passedContainerDoors != null && OperableContainerDoorName(c) != null) continue;
+                    return NoLineOfSight; // origin embedded in a wall/prop → game ray self-collides
                 }
 
                 // The CENTER ray must reach the target first (mirrors the game's single cast). If it's
                 // occluded, the cell is not a standpoint at all.
-                if (!CenterRayReachesTarget(origin, dir, dist + CameraBackPullM + 0.05f, mask, targetCollider))
+                if (!CenterRayReachesTarget(origin, dir, dist + CameraBackPullM + 0.05f, mask, targetCollider, passedContainerDoors))
                     return NoLineOfSight;
 
                 // GRADED CLEARANCE: the center ray clears, but HOW MUCH room does the line have?
@@ -1743,8 +1821,8 @@ namespace DateEverythingAccess
                 for (int s = 0; s < LosProbeSideOffsetsM.Length; s++)
                 {
                     float off = LosProbeSideOffsetsM[s];
-                    bool leftOk = CenterRayReachesTarget(origin + side * off, dir, dist + CameraBackPullM + 0.05f, mask, targetCollider);
-                    bool rightOk = CenterRayReachesTarget(origin - side * off, dir, dist + CameraBackPullM + 0.05f, mask, targetCollider);
+                    bool leftOk = CenterRayReachesTarget(origin + side * off, dir, dist + CameraBackPullM + 0.05f, mask, targetCollider, passedContainerDoors);
+                    bool rightOk = CenterRayReachesTarget(origin - side * off, dir, dist + CameraBackPullM + 0.05f, mask, targetCollider, passedContainerDoors);
                     if (leftOk && rightOk)
                         clearance = off; // both sides clear at this width → at least this much margin
                     else
@@ -1786,6 +1864,21 @@ namespace DateEverythingAccess
         // taking the first hit that is NOT a structural slab (RaycastAll, nearest-first).
         private static bool CenterRayReachesTarget(Vector3 origin, Vector3 dir, float maxDist, int mask, Collider targetCollider)
         {
+            return CenterRayReachesTarget(origin, dir, maxDist, mask, targetCollider, null);
+        }
+
+        // As above, with an optional CONTAINER-DOOR rescue. When `passedContainerDoors` is non-null,
+        // an operable (unlocked, non-baked) container door between the eye and the target is treated
+        // as TRANSPARENT — the ray sees past it — and the door's name is recorded so the planner can
+        // tag it to be OPENED at the destination (the player opens the cupboard, then interacts with
+        // the item inside). This is the geometry-based item->container link that the scene-graph
+        // ancestor heuristic missed (0/136): the occluder IS the door. Passing null keeps the strict
+        // first-hit rule used for normal goal selection. See
+        // [[project_navigation_container_open_on_interact]] and
+        // [[project_navigation_sweep_2026_06_14_lynchpin]].
+        private static bool CenterRayReachesTarget(Vector3 origin, Vector3 dir, float maxDist, int mask,
+            Collider targetCollider, HashSet<string> passedContainerDoors)
+        {
             RaycastHit[] hits = Physics.RaycastAll(new Ray(origin, dir), maxDist, mask);
             if (hits == null || hits.Length == 0)
                 return true; // nothing between camera and target surface — clear line
@@ -1798,6 +1891,15 @@ namespace DateEverythingAccess
                 Collider c = hits[i].collider;
                 if (c == null) continue;
                 if (IsStructuralSlab(c)) continue; // floor/ceiling of the player's storey — look up/down past it
+                if (passedContainerDoors != null)
+                {
+                    string containerDoor = OperableContainerDoorName(c);
+                    if (containerDoor != null && !IsTargetCollider(c, targetCollider))
+                    {
+                        passedContainerDoors.Add(containerDoor); // see past it; open it on arrival
+                        continue;
+                    }
+                }
                 if (hits[i].distance < bestDist)
                 {
                     bestDist = hits[i].distance;
@@ -1806,8 +1908,36 @@ namespace DateEverythingAccess
                 }
             }
             if (!found)
-                return true; // only structural slabs in the way → clear by the look-up/down rule
+                return true; // only structural slabs (and any pass-through container doors) in the way
             return IsTargetCollider(firstReal.collider, targetCollider);
+        }
+
+        // If `c` belongs to an OPERABLE container door — a live Door/SlidingDoor that is NOT a baked
+        // passage door (passage doors are routed THROUGH, not opened-in-place) and is currently
+        // closed and unlocked — return its GameObject name; otherwise null. Used by the LOS
+        // container-rescue to identify a cupboard/cabinet/fridge door the ray must pass through.
+        private static string OperableContainerDoorName(Collider c)
+        {
+            if (c == null) return null;
+            Transform t = c.transform;
+            // The door's open/locked state lives on the Door/SlidingDoor component, which may be on
+            // the collider's object or a parent (panel colliders nest under the door root).
+            Door swing = c.GetComponentInParent<Door>();
+            if (swing != null && swing.gameObject != null)
+            {
+                string n = swing.gameObject.name;
+                if (!_bakedDoorNames.Contains(n) && !swing.open && !swing.locked)
+                    return n;
+                return null;
+            }
+            SlidingDoor slide = c.GetComponentInParent<SlidingDoor>();
+            if (slide != null && slide.gameObject != null)
+            {
+                string n = slide.gameObject.name;
+                if (!_bakedDoorNames.Contains(n) && !slide.open && !slide.locked)
+                    return n;
+            }
+            return null;
         }
 
         // A structural floor/ceiling slab — the horizontal building shell, named SM_Floor_* /
@@ -2373,6 +2503,17 @@ namespace DateEverythingAccess
             [DataMember] public int[][] threshold_cells_list;
             [DataMember] public bool locked;
             [DataMember] public bool default_open;
+            // True for a CONTAINER door (cupboard/fridge/breaker) baked with operability
+            // only — opened in place to reach an item inside, never walked through. It has
+            // operable_from_cells + an explicit opening_center (its own anchor) but no
+            // freed/threshold passage cells, so TagDoors's destination rule tags it like
+            // any other gating door. See [[project_navigation_container_open_on_interact]].
+            [DataMember] public bool container_operable_only;
+            // Explicit doorway-opening center [x,y,z] + radius (m), for container doors that
+            // have no threshold_cells_list to derive it from. Null for passage doors (C#
+            // derives theirs from threshold cells).
+            [DataMember] public float[] opening_center;
+            [DataMember] public float opening_radius;
         }
 
         [DataContract]

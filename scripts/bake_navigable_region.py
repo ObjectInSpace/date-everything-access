@@ -21,7 +21,7 @@ so future bake regenerations do not silently drop stair / teleporter edges.
 """
 from __future__ import annotations
 import importlib.util
-import json, math
+import json, math, re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -103,6 +103,138 @@ FLOORS = [
     {"label": "ground", "y": -0.50, "y_tol": 1.25},
     {"label": "upper",  "y": 12.50, "y_tol": 1.25},
 ]
+
+# Passage doors (room-to-room) live under this scene subtree; they are walked
+# THROUGH and need freed/threshold cells. Everything else with a Door/SlidingDoor
+# component is a CONTAINER door (cupboard/cabinet/fridge/breaker) — opened in
+# place to reveal the item inside, never traversed. A container door needs only
+# operable_from_cells (where to stand to open it), not freed/threshold passage
+# cells. Mirrors classify_container_items.py's PASSAGE_DOOR_MARKER. See
+# [[project_navigation_container_open_on_interact]] and
+# [[project_navigation_sweep_2026_06_14_lynchpin]].
+PASSAGE_DOOR_MARKER = "/MultiRoom/Doors/"
+
+
+def _is_container_door(door_rec):
+    """A door opened in place (cupboard/fridge/breaker), not a traversed passage
+    door. True unless the door's scene path is under the passage-door subtree."""
+    path = (door_rec.get("Path") or "").replace("===SCENE===/", "")
+    return PASSAGE_DOOR_MARKER.strip("/") not in path
+
+
+# ---------- interactable fixture roster ----------
+#
+# The bake emits the CANONICAL static interactable set so the planner never has to
+# filter or dedupe — it just navigates to roster entries. Set construction (what
+# exists as a distinct target, on which floor) is a static fact and belongs here;
+# the planner owns only navigation (reachability, routing, live door state). See the
+# 2026-06-14 fixture-roster work.
+#
+# THREE set-construction jobs the bake now owns (moved out of the planner):
+#   (1) FILTER  — active, on a real interactable layer, with a human-readable name.
+#   (2) DEDUPE  — collapse copies of the SAME object at the SAME place to one target.
+#                 The lighting presets (P{V,F}_Lighting_<preset>/...) each carry a
+#                 COMPLETE copy of every fixture; LightingScenarios.UpdateLighting
+#                 SetActive(false)s all but the current profile, so at runtime only ONE
+#                 copy is live. The static export can't see that SetActive, marking all
+#                 ~961 light copies IsActive=true. Collapsing by (cleaned-name, position)
+#                 reproduces the game's "one fixture" exactly: same object + same place =
+#                 one target; different places stay distinct (books on a shelf vs books
+#                 across the house). Position-keyed, NOT proximity-clustered, so genuinely
+#                 distinct objects that sit near each other are never merged.
+#   (3) FLOOR   — assign each fixture to the storey it belongs to (see below).
+OBJECT_NODE_LAYERS = (0, 31)
+_MODEL_INSTANCE_RE = re.compile(r"\s*\(\d+\)\s*$")
+_MODEL_UPDATE_RE = re.compile(r"_MODEL_UPDATE\d*", re.IGNORECASE)
+_MODEL_PREFIX_RE = re.compile(r"^(?:SM|SK)_+", re.IGNORECASE)
+# Fixtures at the SAME world position to this resolution are the same logical object
+# (preset copies sit at IDENTICAL coords; this only collapses true co-location, never
+# nearby-but-distinct props). 0.05m = well below the smallest inter-object spacing.
+FIXTURE_DEDUP_QUANT_M = 0.05
+
+
+def _clean_object_name(raw):
+    """Cleaned display name, mirror of plan_object_route.strip_model_authoring_tokens /
+    object_display_name. Returns None when nothing human-readable remains (the planner's
+    is_statically_pickable rejects those)."""
+    if not raw or not raw.strip():
+        return None
+    s = _MODEL_INSTANCE_RE.sub("", raw)
+    s = _MODEL_UPDATE_RE.sub("", s)
+    s = _MODEL_PREFIX_RE.sub("", s)
+    s = s.strip().strip("_").strip()
+    cleaned = raw if not s.strip() else s
+    return cleaned if cleaned and cleaned.strip() else None
+
+
+def _fixture_floor(y):
+    """The storey a fixture at height `y` belongs to: the HIGHEST floor whose plane is at
+    or below the fixture, within one storey's height. A ceiling-mounted light hangs ~12m
+    above the ground floor — its Y lands in the UPPER floor's band, but it belongs to the
+    GROUND room it lights. So we attribute to the storey BELOW the fixture, not the band
+    that contains its Y. (This is the inverse of the container-door rule, which assigns to
+    the band containing the anchor; a ceiling fixture's owning floor is below it, a
+    cupboard's is the one it stands in.) Returns a floor label or None (off every storey)."""
+    floors_by_y = sorted(FLOORS, key=lambda f: f["y"])
+    owner = None
+    for i, f in enumerate(floors_by_y):
+        nxt = floors_by_y[i + 1]["y"] if i + 1 < len(floors_by_y) else float("inf")
+        # The fixture belongs to the storey whose span [floor_plane, next_floor_plane)
+        # contains it — the floor directly BELOW it. Lower bound is the floor PLANE (with a
+        # small tolerance ONLY on the bottom-most floor, for fixtures whose pivot sits just
+        # under it). Crucially the upper bound is the NEXT floor's plane with NO tolerance,
+        # so an upper floor never claims a fixture sitting below its plane: a ground ceiling
+        # light at y=12.24 (< upper's 12.5) is ground, never upper.
+        low = f["y"] - (f.get("y_tol", 1.25) if i == 0 else 0.0)
+        if low <= y < nxt:
+            owner = f["label"]
+    return owner
+
+
+def build_fixture_roster(interactables):
+    """The canonical static interactable target set: filtered, deduped, floor-assigned.
+    One entry per distinct physical interactable the planner should consider. Returns a
+    list of dicts {name, position:[x,y,z], floor, object_ids:[...], interaction_radius,
+    is_datable, ink}. Objects off every storey get floor=None (the planner tags them
+    off_floor without trying to route)."""
+    by_fixture = {}
+    q = FIXTURE_DEDUP_QUANT_M
+    for it in interactables:
+        if not it.get("IsActive"):
+            continue
+        if it.get("Layer") not in OBJECT_NODE_LAYERS:
+            continue
+        name = _clean_object_name(it.get("GameObjectName") or it.get("Name"))
+        if name is None:
+            continue
+        pos = it.get("Position") or it.get("WorldPosition") or {}
+        x, y, z = pos.get("x"), pos.get("y"), pos.get("z")
+        if x is None or y is None or z is None:
+            continue
+        # DEDUPE key: same cleaned name at the same place = one object (the game's
+        # preset-SetActive collapse). Position-keyed, so distinct nearby objects stay
+        # separate.
+        key = (name, round(x / q), round(y / q), round(z / q))
+        slot = by_fixture.get(key)
+        if slot is None:
+            by_fixture[key] = {
+                "name": name,
+                "position": [round(x, 4), round(y, 4), round(z, 4)],
+                "floor": _fixture_floor(y),
+                "object_ids": [it.get("GameObjectId")],
+                "interaction_radius": it.get("InteractionRadius") or 0.0,
+                "is_datable": bool(it.get("IsDatable")),
+                "ink": it.get("InkFileName"),
+            }
+        else:
+            slot["object_ids"].append(it.get("GameObjectId"))
+    # De-dup ids within each fixture: the export sometimes repeats the SAME GameObjectId at
+    # the SAME position (e.g. Ceiling_Shadow_* listed 3×); they're one instance, not three.
+    for slot in by_fixture.values():
+        seen = set()
+        slot["object_ids"] = [i for i in slot["object_ids"] if not (i in seen or seen.add(i))]
+    return sorted(by_fixture.values(), key=lambda e: (e["floor"] or "~", e["name"], e["position"]))
+
 
 # Scene bounds clip — exclude far skybox-stage surfaces
 SCENE_MAX_ABS = 200.0
@@ -323,9 +455,77 @@ def _door_operable_cells(navigable_bm, panel_closed_dil, panel_open_dil,
     return out
 
 
+def _container_operable_record(door_rec, navigable_bm, minx, minz, nx, nz,
+                               floor_y, storey_ceiling_y):
+    """Build an OPERABILITY-ONLY door record for a container door whose panel mesh
+    contributes no in-band / no freed cells (upper wall cupboard above the capsule
+    band, or a render-only panel with no collider). The player opens it in place
+    from the floor, so it needs only operable_from_cells (where to stand), derived
+    from the door anchor XZ against this floor's navigable cells — no freed or
+    threshold passage cells.
+
+    Floor disambiguation is by anchor Y: the door belongs to the STOREY it sits in
+    ([floor_y - 1.0, storey_ceiling_y)), not every floor whose XZ happens to lie
+    beneath it. Without this a ground-floor kitchen cupboard (pivot ~7m up) would
+    also emit on the upper floor that overlaps its XZ. A cupboard pivot is well
+    above its own floor but below the next storey's floor, which this bracket
+    captures.
+
+    Returns None when the anchor is off this storey, or when no navigable cell is
+    within reach on this floor. Empty panel masks make _door_operable_cells fall
+    back to the whole in-reach navigable disc, exactly right for a high cupboard."""
+    door_pos = door_rec.get("WorldPosition") or {}
+    anchor_x = door_pos.get("x")
+    anchor_z = door_pos.get("z")
+    anchor_y = door_pos.get("y")
+    if anchor_x is None or anchor_z is None:
+        return None
+    # Anchor must sit in this storey's vertical span (allow 1m below the floor
+    # plane for low cabinet pivots; cap at the next storey's floor).
+    if anchor_y is not None and not (floor_y - 1.0 <= anchor_y < storey_ceiling_y):
+        return None
+    empty_mask = [[False] * nz for _ in range(nx)]
+    operable = _door_operable_cells(
+        navigable_bm, empty_mask, empty_mask, anchor_x, anchor_z, minx, minz, nx, nz)
+    if not operable:
+        return None
+    # Opening center = the door's OWN anchor XZ. A container has no walk-through
+    # threshold, so its "opening" — the point the destination tag rule and the
+    # executor aim at to open it — is just where the door is. With this, a container
+    # door is tagged by the SAME tag_doors destination rule as a passage door (goal
+    # cell within InteractionRadius of the opening), so it needs no special LOS
+    # rescue: a door is a door. opening_radius is the door's own footprint, kept
+    # small so the on-path rule never tags it (you never thread a container doorway).
+    # See [[project_navigation_container_open_on_interact]].
+    return {
+        "name": door_rec.get("Name"),
+        "kind": door_rec.get("Kind"),
+        "component_id": door_rec.get("ComponentId"),
+        "panel_count": len(door_rec.get("Panels", [])),
+        "closed_cells": 0,
+        "open_cells": 0,
+        "threshold_cells": 0,
+        "threshold_cells_list": [],
+        "freed_cells": [],
+        "freed_count": 0,
+        "panel_dilated_cells": [],
+        "operable_from_cells": operable,
+        "operable_from_count": len(operable),
+        "opening_center": [float(anchor_x), float(door_pos.get("y", floor_y)), float(anchor_z)],
+        "opening_radius": float(CELL),
+        "default_open": bool(door_rec.get("Open", False)),
+        "locked": bool(door_rec.get("Locked", False)),
+        "container_operable_only": True,
+    }
+
+
 def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, state_walls):
     fy = floor["y"]
     ytol = floor["y_tol"]
+    # Top of this storey's vertical span = the next floor's Y, or open-ended for the
+    # top floor. Used to assign container doors (whose pivot sits high above their
+    # own floor) to the storey they belong to rather than every overlapping floor.
+    storey_ceiling_y = floor.get("storey_ceiling_y", float("inf"))
     floor_walks = [
         w for w in walkables
         if in_scene(w["Footprint"]["CenterX"], w["Footprint"]["CenterZ"])
@@ -684,6 +884,7 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
     # is passable either way, so the consumer doesn't need to pick a side).
     doors_per_floor = []
     for door_rec in door_records:
+        is_container = _is_container_door(door_rec)
         panel_closed_raw = [[False] * nz for _ in range(nx)]
         panel_open_raw = [[False] * nz for _ in range(nx)]
         has_closed_in_band = False
@@ -701,6 +902,19 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
                 if om > 0:
                     has_open_in_band = True
         if not has_closed_in_band and not has_open_in_band:
+            # A CONTAINER door whose panel mesh sits above the capsule band (upper
+            # wall cupboard) or has no collider (render-only panel) rasterizes to
+            # zero in-band cells. It's still real and operable: the player stands
+            # on the floor below and opens it to reach the item inside. Emit it as
+            # an OPERABILITY-ONLY record on whatever floor has navigable cells
+            # under its anchor XZ, with no freed/threshold cells (it's not a
+            # passage). Passage doors with no in-band panel are still skipped —
+            # they'd be a broken export to fix at the source, not papered over.
+            if is_container:
+                op_only = _container_operable_record(
+                    door_rec, navigable_bm, minx, minz, nx, nz, fy, storey_ceiling_y)
+                if op_only is not None:
+                    doors_per_floor.append(op_only)
             continue
 
         panel_closed_dil = _dilate_disc(panel_closed_raw, nx, nz, DILATE_CELLS)
@@ -827,6 +1041,16 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             freed_set.add(c)
 
         if not freed_set:
+            # A container door (e.g. fridge door whose leaf is at counter height)
+            # can have an in-band panel but sweep no walkable threshold — there's
+            # nothing to "free" because you don't walk through it. Still emit its
+            # operability so the planner can route the player to open it. Passage
+            # doors with no freed cells are a real defect and still skipped.
+            if is_container:
+                op_only = _container_operable_record(
+                    door_rec, navigable_bm, minx, minz, nx, nz, fy, storey_ceiling_y)
+                if op_only is not None:
+                    doors_per_floor.append(op_only)
             continue
         freed = sorted([list(c) for c in freed_set])
         # Emit the door's own closed-pose dilation footprint so the post-bake
@@ -1152,7 +1376,16 @@ def _verify_bake_invariants(report, mesh_colliders):
                 continue
             name = door.get("name") or "?"
             panels = door.get("panel_count", 0)
-            if panels > 0:
+            if door.get("container_operable_only"):
+                # A container door (cupboard/fridge) is opened in place, not walked
+                # through, so 0 freed_cells is BY DESIGN — it carries operable_from_cells
+                # instead. Not a carve-mask defect. Still require it to be useful.
+                if door.get("operable_from_count", 0) == 0:
+                    errors.append(
+                        f"floor={label} container door={name!r}: emitted operability-only "
+                        f"but has 0 operable_from_cells — should not have been emitted."
+                    )
+            elif panels > 0:
                 errors.append(
                     f"floor={label} door={name!r}: 0 freed_cells despite "
                     f"panel_count={panels}. Carve masks may be over-aggressive — "
@@ -1239,9 +1472,13 @@ def main():
                 "radius": DOOR_COMPONENT_CARVE_RADIUS,
             })
 
+    fixture_roster = []
     if INTER.exists():
         inter = json.load(open(INTER, encoding="utf-8"))
         recs = inter.get("Interactables") or inter.get("Records") or []
+        # Canonical static target set: filtered + deduped + floor-assigned, so the planner
+        # consumes a clean roster instead of re-deriving it from the raw export.
+        fixture_roster = build_fixture_roster(recs)
         for it in recs:
             name = it.get("GameObjectName") or it.get("Name") or ""
             if not name.startswith("Doors_"): continue
@@ -1276,9 +1513,17 @@ def main():
             "dilation_cells": DILATE_CELLS,
             "door_component_carve_radius_m": DOOR_COMPONENT_CARVE_RADIUS,
         },
+        "fixtures": fixture_roster,
         "floors": [],
     }
+    # Each storey spans from its own floor Y up to the next floor's Y (the top
+    # floor is open-ended). Container doors are assigned to the storey their pivot
+    # falls in, so a kitchen cupboard mounted high doesn't also bake onto the upper
+    # floor that overlaps its XZ.
+    floors_sorted_y = sorted(f["y"] for f in FLOORS)
     for floor in FLOORS:
+        higher = [y for y in floors_sorted_y if y > floor["y"]]
+        floor["storey_ceiling_y"] = min(higher) if higher else float("inf")
         print(f"Baking floor: {floor['label']} (Y={floor['y']})...")
         result = bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, state_walls)
         report["floors"].append(result)

@@ -395,7 +395,31 @@ def resolve_target_collider(target_path, colliders_by_path=None, colliders=None)
 
 # ---------- per-cell synthetic-eye interaction LOS ----------
 
-def cell_has_los_to_target(eye_xz, floor_y, target_collider, radius_m, occluders):
+def _is_operable_container_door(c, container_door_paths):
+    """True if collider c belongs to an operable CONTAINER door (cupboard/fridge/breaker)
+    the LOS rescue may see PAST. Identified by exact transform PATH membership in
+    `container_door_paths` (the bake's container_operable_only door colliders), NOT by
+    loose AABB geometry — so we can never false-clear past a door the real mesh wouldn't.
+    Mirror of SimpleNavPlanner.OperableContainerDoorName (which uses the live Door/SlidingDoor
+    component instead). See [[project_navigation_container_doors_baked_2026_06_14]]."""
+    if not container_door_paths:
+        return False
+    p = getattr(c, "path", None)
+    if not p:
+        return False
+    if p in container_door_paths:
+        return True
+    # The door's collider may sit on a child of the named door transform (panel nested
+    # under the door root), so accept a descendant path too — mirror of C#
+    # GetComponentInParent<Door>() walking up from the hit collider.
+    for dp in container_door_paths:
+        if p == dp or p.startswith(dp + "/") or dp.startswith(p + "/"):
+            return True
+    return False
+
+
+def cell_has_los_to_target(eye_xz, floor_y, target_collider, radius_m, occluders,
+                           container_door_paths=None, passed_container_doors=None):
     """Mirror of SimpleNavPlanner.CellHasLineOfSightToTarget. True if a player standing
     on this cell has a SOLID interaction line to the target:
       (1) eye at (cell XZ, floor_y + 1.6m) aimed at the target's nearest bounds point;
@@ -404,7 +428,13 @@ def cell_has_los_to_target(eye_xz, floor_y, target_collider, radius_m, occluders
           i.e. nothing blocks the line to the surface.
     `occluders` is the full collider set (the target's own collider may be among them;
     a self/child/parent hit counts as clear). Conservative: returns False on degenerate
-    input, never inventing LOS."""
+    input, never inventing LOS.
+
+    CONTAINER-DOOR RESCUE (mirror of the C# rescue): when `passed_container_doors` is a
+    set, a collider that is an operable container door (path in `container_door_paths`) is
+    treated as TRANSPARENT — the ray sees past it — and its path is recorded so the caller
+    can tag it to be opened on arrival. With `passed_container_doors=None` the strict
+    first-hit rule applies (normal goal selection)."""
     if target_collider is None:
         return False
     eye = (eye_xz[0], floor_y + INTERACTION_EYE_HEIGHT_M, eye_xz[1])
@@ -444,6 +474,14 @@ def cell_has_los_to_target(eye_xz, floor_y, target_collider, radius_m, occluders
             continue
         if t <= EPS and c.kind == "aabb":
             continue  # loose mesh-AABB enveloping the eye — untrustworthy at Stage 1
+        if passed_container_doors is not None and _is_operable_container_door(c, container_door_paths):
+            # See past an operable container door; record it so the caller opens it on
+            # arrival. Skip only if it isn't the target itself (a container that IS the
+            # target must still be hit). Mirror of the C# rescue's pass-through.
+            if _is_self_or_relative(c.path, target_collider.path) is None \
+                    and _is_self_or_relative(target_collider.path, c.path) is None:
+                passed_container_doors.add(c.path)
+                continue
         if best_t is None or t < best_t:
             best_t, best_c = t, c
     if best_c is None:
