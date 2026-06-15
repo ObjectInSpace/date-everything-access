@@ -49,11 +49,22 @@ param(
     [Parameter()]
     [string]$OutputPath = ".\artifacts\navigation\thirdpersongreybox-walkable.json",
 
+    # Floor-aware lower clip. Reject surfaces whose TopY is below the LOWEST real interior
+    # floor (the crawlspace, SM_Floor_Crawlspace at Y-9.89) by a margin, NOT just below
+    # ground. The old -2.0 value clipped the crawlspace floor out (tallied BelowSceneFloor),
+    # forcing a downstream recovery hack in bake_navigable_region.py. -12.0 admits the
+    # crawlspace floor and its fall-prevention pan (Y-11.6) while still excluding the skybox
+    # stage `Cube` (Y-29..-70) — which is far below any real floor. The footprint-area gate
+    # and the bake's absolute-XZ scene clip remain the other guards.
     [Parameter()]
-    [double]$MinimumWalkableTopY = -2.0,
+    [double]$MinimumWalkableTopY = -12.0,
 
+    # Upper clip: admits the attic floor (Y12.86) and its contents; excludes the roof/skybox
+    # above. 16.0 matches the value the shipping bake was generated with (the attic floor and
+    # its ~200 surfaces sit at 12.8-15.99); a lower 15.0 silently dropped the highest attic
+    # shelf items.
     [Parameter()]
-    [double]$MaximumWalkableTopY = 15.0,
+    [double]$MaximumWalkableTopY = 16.0,
 
     [Parameter()]
     [double]$MinimumFootprintAreaSqM = 0.25,

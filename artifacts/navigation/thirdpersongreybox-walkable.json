@@ -1,9 +1,9 @@
 {
   "ScenePath": "D:\\root\\AssetRipper\\1.3.12-premium\\extracted\\Ripped\\ExportedProject\\Assets\\ThirdPersonGreybox.unity",
   "MeshAssetRoot": "D:\\root\\AssetRipper\\1.3.12-premium\\extracted\\Ripped\\ExportedProject\\Assets\\Mesh",
-  "GeneratedAt": "2026-05-20T01:48:09.4436262-04:00",
+  "GeneratedAt": "2026-06-15T11:17:20.3328793-04:00",
   "Filtering": {
-    "MinimumWalkableTopY": -2.0,
+    "MinimumWalkableTopY": -12.0,
     "MaximumWalkableTopY": 16.0,
     "MinimumFootprintAreaSqM": 0.25,
     "StairsNamePattern": "(?i)stair",
@@ -13,6 +13,7 @@
     "RigidbodyObjectsExcluded": true,
     "MeshCollidersUnsupported": false,
     "SkipMeshLayers": [
+      18,
       31
     ],
     "TerrainCollidersUnsupported": true
@@ -20,11 +21,11 @@
   "Counts": {
     "GameObjects": 22552,
     "PrimitiveColliders": 623,
-    "WalkableSurfaces": 908,
+    "WalkableSurfaces": 923,
     "MeshColliders": 2317,
     "MeshCollidersResolved": 1475,
     "MeshCollidersUnresolved": 842,
-    "MeshColliderRecords": 1382,
+    "MeshColliderRecords": 1381,
     "MeshGuidIndexEntries": 3731,
     "TerrainColliders": 1,
     "DoorGameObjects": 30,
@@ -34,19 +35,19 @@
   "SlopeKindHistogram": [
     {
       "SlopeKind": "flat",
-      "Count": 40
+      "Count": 41
     },
     {
       "SlopeKind": "ramp",
-      "Count": 120
+      "Count": 124
     },
     {
       "SlopeKind": "stairs",
-      "Count": 657
+      "Count": 663
     },
     {
       "SlopeKind": "step-up",
-      "Count": 91
+      "Count": 95
     }
   ],
   "MeshColliderLayerHistogram": [
@@ -134,7 +135,7 @@
     },
     {
       "Reason": "BelowSceneFloor",
-      "Count": 7
+      "Count": 1
     },
     {
       "Reason": "DisabledCollider",
@@ -175,10 +176,6 @@
       "Count": 421
     },
     {
-      "Reason": "BelowSceneFloor",
-      "Count": 12
-    },
-    {
       "Reason": "DisabledCollider",
       "Count": 2
     },
@@ -188,7 +185,7 @@
     },
     {
       "Reason": "FootprintTooSmall",
-      "Count": 193
+      "Count": 195
     },
     {
       "Reason": "InactiveGameObject",
@@ -208,6 +205,10 @@
     },
     {
       "Reason": "RigidbodyObject",
+      "Count": 1
+    },
+    {
+      "Reason": "SkippedLayer:18",
       "Count": 1
     },
     {
@@ -20687,22 +20688,6 @@
       "MaxZ": 22.197441
     },
     {
-      "ComponentId": 52303,
-      "GameObjectId": 21623,
-      "Name": "Stairs",
-      "Layer": 18,
-      "MeshName": "SM_Stairs",
-      "MeshGuid": "11a6cc0045bfe274c9f479507f4f4074",
-      "VertexCount": 1119,
-      "TriangleCount": 1328,
-      "BottomY": -1.119306,
-      "TopY": 15.61455,
-      "MinX": -8.103621,
-      "MaxX": 13.509991,
-      "MinZ": -5.825388,
-      "MaxZ": 0.254941
-    },
-    {
       "ComponentId": 52304,
       "GameObjectId": 13561,
       "Name": "Shelf_UpperHall_Closet",
@@ -32580,6 +32565,33 @@
       "ContainingZones": []
     },
     {
+      "GameObjectId": 1675,
+      "GameObjectName": "Crawlspace_Collider",
+      "Path": "===SCENE===/House/MultiRoom/Floors/SM_Floor_Crawlspace/Crawlspace_Collider",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Primitive",
+      "ComponentId": 53613,
+      "TransformId": 24073,
+      "MeshAssetGuid": "",
+      "SlopeKind": "step-up",
+      "BottomY": -11.693703,
+      "TopY": -11.567699,
+      "VerticalExtent": 0.126003,
+      "Footprint": {
+        "AreaSqM": 269.873541,
+        "Width": 13.878301,
+        "Depth": 19.445719,
+        "CenterX": 1.394746,
+        "CenterZ": 25.050944,
+        "MinX": -5.544405,
+        "MinZ": 15.328085,
+        "MaxX": 8.333897,
+        "MaxZ": 34.773804
+      },
+      "ContainingZones": []
+    },
+    {
       "GameObjectId": 10998,
       "GameObjectName": "DustBunny_Body_MODEL_UPDATE",
       "Path": "===SCENE===/House/LivingRoom/DustBunny_LivingRoom/BodyMesh_Grp/DustBunny_Body_MODEL_UPDATE",
@@ -33228,6 +33240,33 @@
       "ContainingZones": []
     },
     {
+      "GameObjectId": 11472,
+      "GameObjectName": "Collider_8",
+      "Path": "===SCENE===/House/Crawlspace/Beams_Crawlspace/Collider_8",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Primitive",
+      "ComponentId": 53790,
+      "TransformId": 24615,
+      "MeshAssetGuid": "",
+      "SlopeKind": "stairs",
+      "BottomY": -9.054441,
+      "TopY": -3.758763,
+      "VerticalExtent": 5.295678,
+      "Footprint": {
+        "AreaSqM": 7.524133,
+        "Width": 0.842936,
+        "Depth": 8.926107,
+        "CenterX": 6.665429,
+        "CenterZ": 27.481357,
+        "MinX": 6.243961,
+        "MinZ": 23.018303,
+        "MaxX": 7.086897,
+        "MaxZ": 31.94441
+      },
+      "ContainingZones": []
+    },
+    {
       "GameObjectId": 17403,
       "GameObjectName": "SM_Walls_Crawlspace",
       "Path": "===SCENE===/House/MultiRoom/Walls/SM_Walls_Crawlspace",
@@ -33737,6 +33776,33 @@
         "MinZ": 30.92889,
         "MaxX": -28.385874,
         "MaxZ": 31.471859
+      },
+      "ContainingZones": []
+    },
+    {
+      "GameObjectId": 10418,
+      "GameObjectName": "SM_SkeletonKey_Office_MODEL_UPDATE",
+      "Path": "===SCENE===/House/MovableObjects/Unsorted/Keith_Key/SkeletonKey/SM_SkeletonKey_OFFICE_TRS_MODEL_UPDATE/SM_SkeletonKey_Office_MODEL_UPDATE",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Primitive",
+      "ComponentId": 53877,
+      "TransformId": 31168,
+      "MeshAssetGuid": "",
+      "SlopeKind": "ramp",
+      "BottomY": -9.887386,
+      "TopY": -9.568172,
+      "VerticalExtent": 0.319215,
+      "Footprint": {
+        "AreaSqM": 0.709706,
+        "Width": 0.742224,
+        "Depth": 0.956188,
+        "CenterX": -0.308973,
+        "CenterZ": 19.024618,
+        "MinX": -0.680085,
+        "MinZ": 18.546524,
+        "MaxX": 0.062139,
+        "MaxZ": 19.502712
       },
       "ContainingZones": []
     },
@@ -35118,6 +35184,33 @@
       "ContainingZones": []
     },
     {
+      "GameObjectId": 2555,
+      "GameObjectName": "Stuffed_Rat_Mesh_Grp",
+      "Path": "===SCENE===/House/MovableObjects/Unsorted/RatTrap/mouseTrapCrawlspace/MouseTrap_Crawlspace_StuffedRat/Stuffed_Rat_Mesh_Grp",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Primitive",
+      "ComponentId": 54147,
+      "TransformId": 39372,
+      "MeshAssetGuid": "",
+      "SlopeKind": "ramp",
+      "BottomY": -9.743484,
+      "TopY": -9.487004,
+      "VerticalExtent": 0.25648,
+      "Footprint": {
+        "AreaSqM": 0.367402,
+        "Width": 0.732534,
+        "Depth": 0.501549,
+        "CenterX": 0.89242,
+        "CenterZ": 27.262381,
+        "MinX": 0.526152,
+        "MinZ": 27.011606,
+        "MaxX": 1.258687,
+        "MaxZ": 27.513155
+      },
+      "ContainingZones": []
+    },
+    {
       "GameObjectId": 8283,
       "GameObjectName": "AirVent_Interactable",
       "Path": "===SCENE===/House/MultiRoom/Walls/AirVents/AirVents_Office/SM_AirConVent/Vent Effect/AirVent_Interactable",
@@ -35195,6 +35288,33 @@
         "MinZ": 4.931156,
         "MaxX": -31.903894,
         "MaxZ": 5.979927
+      },
+      "ContainingZones": []
+    },
+    {
+      "GameObjectId": 6984,
+      "GameObjectName": "Collider_6",
+      "Path": "===SCENE===/House/Crawlspace/Beams_Crawlspace/Collider_6",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Primitive",
+      "ComponentId": 54179,
+      "TransformId": 39391,
+      "MeshAssetGuid": "",
+      "SlopeKind": "stairs",
+      "BottomY": -9.05444,
+      "TopY": -3.758763,
+      "VerticalExtent": 5.295678,
+      "Footprint": {
+        "AreaSqM": 7.524132,
+        "Width": 8.926105,
+        "Depth": 0.842936,
+        "CenterX": -0.365961,
+        "CenterZ": 18.955617,
+        "MinX": -4.829014,
+        "MinZ": 18.534149,
+        "MaxX": 4.097092,
+        "MaxZ": 19.377085
       },
       "ContainingZones": []
     },
@@ -35330,6 +35450,33 @@
         "MinZ": 20.142958,
         "MaxX": 11.250372,
         "MaxZ": 22.016062
+      },
+      "ContainingZones": []
+    },
+    {
+      "GameObjectId": 18132,
+      "GameObjectName": "Collider_7",
+      "Path": "===SCENE===/House/Crawlspace/Beams_Crawlspace/Collider_7",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Primitive",
+      "ComponentId": 54224,
+      "TransformId": 39026,
+      "MeshAssetGuid": "",
+      "SlopeKind": "stairs",
+      "BottomY": -8.704441,
+      "TopY": -3.408763,
+      "VerticalExtent": 5.295678,
+      "Footprint": {
+        "AreaSqM": 7.524127,
+        "Width": 0.842935,
+        "Depth": 8.926107,
+        "CenterX": -4.311702,
+        "CenterZ": 22.647006,
+        "MinX": -4.73317,
+        "MinZ": 18.183952,
+        "MaxX": -3.890235,
+        "MaxZ": 27.11006
       },
       "ContainingZones": []
     },
@@ -37220,6 +37367,33 @@
         "MinZ": 28.237045,
         "MaxX": -9.37536,
         "MaxZ": 42.887684
+      },
+      "ContainingZones": []
+    },
+    {
+      "GameObjectId": 2186,
+      "GameObjectName": "SM_Floor_Crawlspace",
+      "Path": "===SCENE===/House/MultiRoom/Floors/SM_Floor_Crawlspace",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Mesh",
+      "ComponentId": 51296,
+      "TransformId": 28086,
+      "MeshAssetGuid": "be4bd88ae7f7e714b99eddcd1732d57c",
+      "SlopeKind": "flat",
+      "BottomY": -9.893185,
+      "TopY": -9.893185,
+      "VerticalExtent": 0.0,
+      "Footprint": {
+        "AreaSqM": 176.04847,
+        "Width": 12.718509,
+        "Depth": 13.841911,
+        "CenterX": 1.394746,
+        "CenterZ": 25.050943,
+        "MinX": -4.964508,
+        "MinZ": 18.129988,
+        "MaxX": 7.754001,
+        "MaxZ": 31.971899
       },
       "ContainingZones": []
     },
@@ -40896,6 +41070,33 @@
       "ContainingZones": []
     },
     {
+      "GameObjectId": 11138,
+      "GameObjectName": "TimeCapsule_MODEL_UPDATE",
+      "Path": "===SCENE===/House/MovableObjects/Unsorted/TimeCapsule/TimeCapsule_Crawlspace/TimeCapsule_TRS/TimeCapsule_MODEL_UPDATE",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Mesh",
+      "ComponentId": 51673,
+      "TransformId": 32340,
+      "MeshAssetGuid": "62420a8aee0b67b4693392d0c4bde3b4",
+      "SlopeKind": "stairs",
+      "BottomY": -10.143719,
+      "TopY": -9.273766,
+      "VerticalExtent": 0.869953,
+      "Footprint": {
+        "AreaSqM": 2.402442,
+        "Width": 1.345015,
+        "Depth": 1.786182,
+        "CenterX": 3.422025,
+        "CenterZ": 21.806408,
+        "MinX": 2.749517,
+        "MinZ": 20.913317,
+        "MaxX": 4.094532,
+        "MaxZ": 22.699499
+      },
+      "ContainingZones": []
+    },
+    {
       "GameObjectId": 10376,
       "GameObjectName": "Log_6_fireplace_MODEL_UPDATE",
       "Path": "===SCENE===/House/MultiRoom/VFX/PF_FireplaceFire/logs_fireplace_livingroom_normal_wiggles_MODEL_UPDATE.ORIGIN/Log_6_fireplace_TRS/Log_6_fireplace_MODEL_UPDATE",
@@ -42867,6 +43068,33 @@
       "ContainingZones": []
     },
     {
+      "GameObjectId": 6196,
+      "GameObjectName": "SM_SmokeAlarm_1",
+      "Path": "===SCENE===/House/MovableObjects/Unsorted/SmokeAlarms/SmokeAlarms_Hidden/SmokeAlarm_Crawlspace_E/SmokeAlarm_TRS_MODEL_UPDATE_ORIGIN/SM_SmokeAlarm_1",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Mesh",
+      "ComponentId": 51901,
+      "TransformId": 31305,
+      "MeshAssetGuid": "bad825467033f2e4f882d7c5562672ca",
+      "SlopeKind": "stairs",
+      "BottomY": -9.953233,
+      "TopY": -9.170783,
+      "VerticalExtent": 0.78245,
+      "Footprint": {
+        "AreaSqM": 0.513319,
+        "Width": 0.825042,
+        "Depth": 0.622173,
+        "CenterX": 1.837075,
+        "CenterZ": 28.147043,
+        "MinX": 1.424554,
+        "MinZ": 27.835957,
+        "MaxX": 2.249597,
+        "MaxZ": 28.45813
+      },
+      "ContainingZones": []
+    },
+    {
       "GameObjectId": 10767,
       "GameObjectName": "SM_SportEquiptment_7_MODEL_UPDATE",
       "Path": "===SCENE===/House/Gym/dumbbells_gym_rise_successful_MODEL_UPDATE_ORIGIN/SM_SportEquiptment_7_MODEL_UPDATE",
@@ -43673,6 +43901,33 @@
         "MinZ": -29.61199,
         "MaxX": -0.140962,
         "MaxZ": -26.46801
+      },
+      "ContainingZones": []
+    },
+    {
+      "GameObjectId": 17010,
+      "GameObjectName": "SM_Rat_Dead_MODEL_UPDATE1",
+      "Path": "===SCENE===/House/MovableObjects/Unsorted/RatTrap/mouseTrapCrawlspace/MouseTrap_Crawlspace_DeadRat/SM_Rat_Dead_MODEL_UPDATE1",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Mesh",
+      "ComponentId": 51965,
+      "TransformId": 28612,
+      "MeshAssetGuid": "3939b891e5dc5b342b7ed1d817df4fec",
+      "SlopeKind": "ramp",
+      "BottomY": -9.883881,
+      "TopY": -9.423117,
+      "VerticalExtent": 0.460764,
+      "Footprint": {
+        "AreaSqM": 0.948713,
+        "Width": 1.053126,
+        "Depth": 0.900854,
+        "CenterX": 0.605703,
+        "CenterZ": 27.281487,
+        "MinX": 0.07914,
+        "MinZ": 26.83106,
+        "MaxX": 1.132266,
+        "MaxZ": 27.731915
       },
       "ContainingZones": []
     },
@@ -45158,6 +45413,33 @@
         "MinZ": 100.434052,
         "MaxX": 47.743797,
         "MaxZ": 101.862526
+      },
+      "ContainingZones": []
+    },
+    {
+      "GameObjectId": 20269,
+      "GameObjectName": "SM_SmokeAlarm_1",
+      "Path": "===SCENE===/House/MovableObjects/Unsorted/SmokeAlarms/SmokeAlarms_Hidden/SmokeAlarm_Crawlspace_S/SmokeAlarm_TRS_MODEL_UPDATE_ORIGIN/SM_SmokeAlarm_1",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Mesh",
+      "ComponentId": 52127,
+      "TransformId": 39315,
+      "MeshAssetGuid": "bad825467033f2e4f882d7c5562672ca",
+      "SlopeKind": "stairs",
+      "BottomY": -9.977112,
+      "TopY": -9.179988,
+      "VerticalExtent": 0.797124,
+      "Footprint": {
+        "AreaSqM": 0.495429,
+        "Width": 0.606088,
+        "Depth": 0.817421,
+        "CenterX": 1.456199,
+        "CenterZ": 28.662552,
+        "MinX": 1.153155,
+        "MinZ": 28.253841,
+        "MaxX": 1.759243,
+        "MaxZ": 29.071262
       },
       "ContainingZones": []
     },
@@ -46697,33 +46979,6 @@
         "MinZ": 19.106558,
         "MaxX": -7.089919,
         "MaxZ": 22.197441
-      },
-      "ContainingZones": []
-    },
-    {
-      "GameObjectId": 21623,
-      "GameObjectName": "Stairs",
-      "Path": "===SCENE===/House/Hallway/Stairs",
-      "Layer": 18,
-      "IsActive": true,
-      "ColliderKind": "Mesh",
-      "ComponentId": 52303,
-      "TransformId": 39989,
-      "MeshAssetGuid": "11a6cc0045bfe274c9f479507f4f4074",
-      "SlopeKind": "stairs",
-      "BottomY": -1.119306,
-      "TopY": 15.61455,
-      "VerticalExtent": 16.733856,
-      "Footprint": {
-        "AreaSqM": 131.417882,
-        "Width": 21.613612,
-        "Depth": 6.080329,
-        "CenterX": 2.703185,
-        "CenterZ": -2.785224,
-        "MinX": -8.103621,
-        "MinZ": -5.825388,
-        "MaxX": 13.509991,
-        "MaxZ": 0.254941
       },
       "ContainingZones": []
     },
@@ -49586,6 +49841,33 @@
         "MinZ": 22.559113,
         "MaxX": -0.595752,
         "MaxZ": 25.340885
+      },
+      "ContainingZones": []
+    },
+    {
+      "GameObjectId": 3470,
+      "GameObjectName": "SM_RatTrap_1_MODEL_UPDATE",
+      "Path": "===SCENE===/House/MovableObjects/Unsorted/RatTrap/mouseTrapCrawlspace/MouseTrap_Crawlspace_Empty/SM_RatTrap_1_MODEL_UPDATE",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Mesh",
+      "ComponentId": 52628,
+      "TransformId": 37915,
+      "MeshAssetGuid": "f72ccbb8f8f62ad47b10ef3d0f284b92",
+      "SlopeKind": "step-up",
+      "BottomY": -9.894977,
+      "TopY": -9.703823,
+      "VerticalExtent": 0.191154,
+      "Footprint": {
+        "AreaSqM": 0.395686,
+        "Width": 0.731537,
+        "Depth": 0.540897,
+        "CenterX": 1.066681,
+        "CenterZ": 27.273325,
+        "MinX": 0.700913,
+        "MinZ": 27.002876,
+        "MaxX": 1.43245,
+        "MaxZ": 27.543774
       },
       "ContainingZones": []
     },
@@ -53883,6 +54165,33 @@
       "ContainingZones": []
     },
     {
+      "GameObjectId": 18280,
+      "GameObjectName": "SM_RatTrap_1_MODEL_UPDATE",
+      "Path": "===SCENE===/House/MovableObjects/Unsorted/RatTrap/mouseTrapCrawlspace/MouseTrap_Crawlspace_DeadRat/RatTrap_Grp_MODEL_UPDATE_ORIGIN/SM_RatTrap_1_MODEL_UPDATE",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Mesh",
+      "ComponentId": 53184,
+      "TransformId": 26028,
+      "MeshAssetGuid": "c164464f04b4a224fb3a4392a45b2deb",
+      "SlopeKind": "step-up",
+      "BottomY": -9.894976,
+      "TopY": -9.703822,
+      "VerticalExtent": 0.191154,
+      "Footprint": {
+        "AreaSqM": 0.395685,
+        "Width": 0.731537,
+        "Depth": 0.540895,
+        "CenterX": 1.066681,
+        "CenterZ": 27.273328,
+        "MinX": 0.700913,
+        "MinZ": 27.00288,
+        "MaxX": 1.43245,
+        "MaxZ": 27.543776
+      },
+      "ContainingZones": []
+    },
+    {
       "GameObjectId": 12747,
       "GameObjectName": "ShowerMat",
       "Path": "===SCENE===/House/Bathroom1/Shower/ShowerMat",
@@ -55098,6 +55407,33 @@
       "ContainingZones": []
     },
     {
+      "GameObjectId": 18987,
+      "GameObjectName": "SM_SmokeAlarm_1",
+      "Path": "===SCENE===/House/MovableObjects/Unsorted/SmokeAlarms/SmokeAlarms_Hidden/SmokeAlarm_Crawlspace_N/SmokeAlarm_TRS_MODEL_UPDATE_ORIGIN/SM_SmokeAlarm_1",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Mesh",
+      "ComponentId": 53317,
+      "TransformId": 43182,
+      "MeshAssetGuid": "bad825467033f2e4f882d7c5562672ca",
+      "SlopeKind": "stairs",
+      "BottomY": -9.959132,
+      "TopY": -9.156466,
+      "VerticalExtent": 0.802667,
+      "Footprint": {
+        "AreaSqM": 0.553412,
+        "Width": 0.686839,
+        "Depth": 0.805737,
+        "CenterX": 2.568998,
+        "CenterZ": 28.487221,
+        "MinX": 2.225578,
+        "MinZ": 28.084352,
+        "MaxX": 2.912418,
+        "MaxZ": 28.890089
+      },
+      "ContainingZones": []
+    },
+    {
       "GameObjectId": 22094,
       "GameObjectName": "Log_4_fireplace_MODEL_UPDATE",
       "Path": "===SCENE===/House/MultiRoom/VFX/PF_FireplaceFire/logs_fireplace_livingroom_normal_wiggles_MODEL_UPDATE.ORIGIN/Log_4_fireplace_TRS/Log_4_fireplace_MODEL_UPDATE",
@@ -55611,6 +55947,33 @@
       "ContainingZones": []
     },
     {
+      "GameObjectId": 21661,
+      "GameObjectName": "SM_RatTrap1",
+      "Path": "===SCENE===/House/MovableObjects/Unsorted/RatTrap/mouseTrapCrawlspace/MouseTrap_Crawlspace_StuffedRat/RatTrap_Mesh_Grp/SM_RatTrap1",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Mesh",
+      "ComponentId": 53396,
+      "TransformId": 33982,
+      "MeshAssetGuid": "1274ce832dd142d45a91e9841476f063",
+      "SlopeKind": "step-up",
+      "BottomY": -9.894971,
+      "TopY": -9.703817,
+      "VerticalExtent": 0.191154,
+      "Footprint": {
+        "AreaSqM": 0.395686,
+        "Width": 0.731537,
+        "Depth": 0.540897,
+        "CenterX": 1.066707,
+        "CenterZ": 27.273449,
+        "MinX": 0.700938,
+        "MinZ": 27.003,
+        "MaxX": 1.432475,
+        "MaxZ": 27.543898
+      },
+      "ContainingZones": []
+    },
+    {
       "GameObjectId": 15124,
       "GameObjectName": "Book_MESSY_MODEL_UPDATE24",
       "Path": "===SCENE===/House/Office/Bookshelf/Bookshelf_Messy/Bookshelf_MESSY_Grp_MODEL_UPDATE/Bookshelf_MODEL_UPDATE/Book_MESSY_MODEL_UPDATE24",
@@ -56066,6 +56429,33 @@
         "MinZ": 17.724627,
         "MaxX": 22.605433,
         "MaxZ": 18.176516
+      },
+      "ContainingZones": []
+    },
+    {
+      "GameObjectId": 1492,
+      "GameObjectName": "SM_SmokeAlarm_1",
+      "Path": "===SCENE===/House/MovableObjects/Unsorted/SmokeAlarms/SmokeAlarms_Hidden/SmokeAlarm_Crawlspace_W/SmokeAlarm_TRS_MODEL_UPDATE_ORIGIN/SM_SmokeAlarm_1",
+      "Layer": 0,
+      "IsActive": true,
+      "ColliderKind": "Mesh",
+      "ComponentId": 53462,
+      "TransformId": 26100,
+      "MeshAssetGuid": "bad825467033f2e4f882d7c5562672ca",
+      "SlopeKind": "ramp",
+      "BottomY": -9.86532,
+      "TopY": -9.567951,
+      "VerticalExtent": 0.297369,
+      "Footprint": {
+        "AreaSqM": 0.657604,
+        "Width": 0.80932,
+        "Depth": 0.812538,
+        "CenterX": 2.123085,
+        "CenterZ": 28.542793,
+        "MinX": 1.718425,
+        "MinZ": 28.136524,
+        "MaxX": 2.527745,
+        "MaxZ": 28.949062
       },
       "ContainingZones": []
     },
