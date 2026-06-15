@@ -504,12 +504,26 @@ def build_fixture_roster(interactables):
     return sorted(roster, key=lambda e: (e["floor"] or "~", e["name"], e["position"]))
 
 
-# Scene bounds clip — exclude far skybox-stage surfaces
-SCENE_MAX_ABS = 200.0
+# Scene bounds clip — restrict the bake to the HOUSE + CRAWLSPACE region.
+#
+# The exterior is unreachable (leaving the house triggers the ending cutscene) and its
+# interactables are already filtered out of the roster (Exterior subtree denylist). So
+# exterior navigable cells are pure noise: the planner never routes to them, but they
+# bloated the ground grid to 1175x559 (235m x 112m, 656k cells) for a house that fits in
+# ~63m x 80m. The old symmetric +/-200m clip couldn't bound it tightly (the house isn't
+# centred at origin or square), so the grid carried ~3x excess empty cells + a ring of
+# stranded exterior-perimeter "navigable" strips. This rectangle is derived from the House
+# subtree's own geometry (walkable surfaces + blockers, all floors: X[-34.0,28.3]
+# Z[-35.4,44.9]) plus a margin for dilation; the crawlspace (X[-5.6,8.4] Z[17.5,32.7]) sits
+# well inside it. Harmless tightening — only removes cells the planner never used.
+SCENE_MIN_X = -36.0
+SCENE_MAX_X = 30.0
+SCENE_MIN_Z = -37.0
+SCENE_MAX_Z = 47.0
 
 
 def in_scene(x, z):
-    return abs(x) < SCENE_MAX_ABS and abs(z) < SCENE_MAX_ABS
+    return (SCENE_MIN_X <= x <= SCENE_MAX_X) and (SCENE_MIN_Z <= z <= SCENE_MAX_Z)
 
 
 def _column_blocks_floor(col_min_y, col_max_y, floor_y):
