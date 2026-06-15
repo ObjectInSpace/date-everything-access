@@ -362,11 +362,11 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
     (exterior decor, or anything walled off behind a still-closed gate) are emitted as
     no_path entries WITHOUT a drive — they ARE the report of "unreachable".
     """
-    items = _mod.load_interactables()
-    nodes, unreachable = _mod.object_sweep_nodes(planner, items)
+    roster = _mod.load_fixture_roster()
+    nodes, unreachable = _mod.object_sweep_nodes(planner, roster)
     print(f"object nodes: {len(nodes)} deduped stand-cells "
-          f"({sum(len(n['names']) for n in nodes)} objects); "
-          f"{len(unreachable)} objects off-floor/gate-blocked")
+          f"({sum(len(n['names']) for n in nodes)} fixtures from {len(roster)}-entry roster); "
+          f"{len(unreachable)} fixtures off-floor/gate-blocked")
 
     counts = {"ok": 0, "no_path": 0, "trivially_at_target": 0, "target_not_navigable": 0}
     t0 = time.time()
@@ -465,6 +465,11 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
             # the live InteractableObj by this id — object names are NOT unique (42 shared),
             # so the id+position disambiguate which instance a leg targets.
             "object_id": rep.get("GameObjectId", 0),
+            # Stable scene id (UniqueId) — the in-game sweep prefers an EXACT InteractableObj.Id
+            # match over the fuzzy name+position bridge. unique_ids carries every merged member's
+            # id so a routing-unit-merged target matches any of its live members.
+            "unique_id": rep.get("UniqueId"),
+            "unique_ids": rep.get("UniqueIds") or [],
             "object_xyz": [round(rep_pos.get("x", rwx), 4),
                            round(rep_pos.get("y", planner.floors[floor_label].floor_y), 4),
                            round(rep_pos.get("z", rwz), 4)],

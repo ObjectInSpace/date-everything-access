@@ -93,6 +93,17 @@ def load_bake():
     return json.loads(BAKE.read_text())
 
 
+def load_fixture_roster():
+    """The bake's canonical static target set (report["fixtures"]): already filtered
+    (active + named + non-exterior), identity-deduped (lighting presets), routing-unit
+    merged (48 books -> 1, cutlery -> 1, etc.), and best-available-located (bounds centre,
+    not rig-origin). Consumers read THIS instead of re-deriving the set from the raw export,
+    so set construction lives in the bake and the planner owns only navigation. Returns the
+    list (possibly empty if an older bake predates the roster). See
+    project_navigation_fixture_roster_design."""
+    return load_bake().get("fixtures") or []
+
+
 class Floor:
     """One floor's navigable bitmap plus its cell↔world transform."""
 
@@ -1237,34 +1248,58 @@ def resolve_object_node(planner, item):
     return (tfloor, rep, goals)
 
 
-def object_sweep_nodes(planner, items):
-    """Build the deduped object-node list for the sweep. Each node is a stand-cell the
-    player would occupy to interact with one or more objects. Objects that snap to the
-    SAME stand-cell collapse into a single node (kills the 48-books / SM_-duplicate
-    redundancy) — the merged node carries all member object names so the report can
-    attribute a covered cell back to every object it serves.
+def _roster_entry_as_item(entry):
+    """Adapt one baked fixture-roster entry to the {Position, InteractionRadius, ...} shape
+    resolve_object_node expects. The roster position is ALREADY the best-available-location
+    (bounds centre, not rig-origin), so the degenerate-collider correction in resolve_object_node
+    is a no-op for these — the bake did that work. Path is omitted deliberately: leaving it
+    absent skips the collider re-resolve, trusting the roster's location."""
+    x, y, z = entry["position"]
+    return {
+        "GameObjectName": entry["name"],
+        "Position": {"x": x, "y": y, "z": z},
+        "InteractionRadius": entry.get("interaction_radius") or 0.0,
+        "GameObjectId": (entry.get("object_ids") or [None])[0],
+        "Layer": 0,
+        "IsActive": True,
+        "IsDatable": entry.get("is_datable", False),
+        "InkFileName": entry.get("ink"),
+        # Stable scene id(s) for the in-game sweep's exact roster->live bridge.
+        "UniqueId": entry.get("unique_id"),
+        "UniqueIds": entry.get("unique_ids") or [],
+    }
 
-    Returns a list of dicts: {floor, cell:(ix,iz), goal_cells:[(ix,iz),...],
-    names:[...], object_ids:[...], representative:item}. `cell` is the representative
-    stand-cell (used for dedup + node id); `goal_cells` is the union of every member
-    object's candidate stand-cells, so the route planner targets the whole set and A*
-    finds whichever cell is reachable. Objects that resolve to no navigable cell
-    (off-floor or gate-blocked under the current door/state-wall params) are returned
-    separately as `unreachable` so the manifest can report them as no_path without a
-    drive."""
+
+def object_sweep_nodes(planner, roster):
+    """Build the object-node list for the sweep from the bake's canonical fixture ROSTER.
+    Each node is a stand-cell the player would occupy to interact with one or more roster
+    fixtures. The roster is ALREADY filtered/identity-deduped/routing-unit-merged by the bake
+    (one entry per logical interactable — the 48-books / SM_-duplicate redundancy is gone
+    upstream), so this no longer re-runs is_statically_pickable or its own name/position
+    derivation; it only resolves each fixture to stand-cells and collapses any that
+    COINCIDENTALLY share a stand-cell.
+
+    `roster` is load_fixture_roster() output. Returns a list of dicts:
+    {floor, cell:(ix,iz), goal_cells:[(ix,iz),...], names:[...], object_ids:[...],
+    representative:item}. `cell` is the representative stand-cell (dedup + node id);
+    `goal_cells` is the union of every member's candidate stand-cells, so A* targets the
+    whole set and finds whichever cell is reachable. Fixtures that resolve to no navigable
+    cell (off-floor or gate-blocked under the current door/state-wall params) are returned
+    separately as `unreachable` so the manifest reports them as no_path without a drive."""
     by_cell = {}
     unreachable = []
-    for item in items:
-        if not is_statically_pickable(item):
-            continue
+    for entry in roster:
+        item = _roster_entry_as_item(entry)
         node = resolve_object_node(planner, item)
-        name = object_display_name(item)
+        name = entry["name"]
+        object_ids = entry.get("object_ids") or [item.get("GameObjectId")]
         if node is None or isinstance(node, str):
             # node is a string sentinel ("off_floor" / "gate_blocked") describing WHY it
             # resolved nowhere; None is the legacy/no-position case. Carry the reason so
             # the manifest can separate expected-exterior from real gate-blocked objects.
             reason = node if isinstance(node, str) else "unresolved"
-            unreachable.append({"name": name, "object_id": item.get("GameObjectId"),
+            unreachable.append({"name": name, "object_id": object_ids[0],
+                                "object_ids": object_ids,
                                 "position": item.get("Position"), "reason": reason})
             continue
         floor_label, rep, goals = node
@@ -1274,7 +1309,7 @@ def object_sweep_nodes(planner, items):
                                         "object_ids": [], "representative": item})
         slot["goal_cells"].update(goals)
         slot["names"].append(name)
-        slot["object_ids"].append(item.get("GameObjectId"))
+        slot["object_ids"].extend(object_ids)
     # Freeze goal_cells to a sorted list for deterministic output.
     result = []
     for slot in by_cell.values():

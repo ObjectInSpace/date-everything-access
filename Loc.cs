@@ -231,6 +231,7 @@ namespace DateEverythingAccess
             // Trailing position counter spoken AFTER the entry details: {0}=index, {1}=total.
             Add("navigation_object_picker_position", "{0} von {1}", "{0} of {1}");
             Add("navigation_object_picker_empty", "Keine bekannten Objekte verfuegbar.", "No known objects available.");
+            Add("navigation_object_picker_no_data", "Navigationsdaten fehlen. Der Bake ist unvollstaendig.", "Navigation data missing. The bake is incomplete.");
             Add("navigation_object_picker_empty_filtered", "Keine Objekte entsprechen den Filtern.", "No objects match the filters.");
             Add("navigation_object_picker_closed", "Objektliste geschlossen.", "Object list closed.");
             // Section headers: {0}=count in section.

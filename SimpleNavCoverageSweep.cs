@@ -546,7 +546,7 @@ namespace DateEverythingAccess
             float ty = entry.object_xyz != null && entry.object_xyz.Length > 1 ? entry.object_xyz[1] : 0f;
             float tz = entry.object_xyz != null && entry.object_xyz.Length > 2 ? entry.object_xyz[2] : 0f;
 
-            InteractableObj dst = ResolveLiveObject(entry.name, tx, ty, tz);
+            InteractableObj dst = ResolveLiveObject(entry.unique_id, entry.unique_ids, entry.name, tx, ty, tz);
             Vector3 targetPos = dst != null && dst.transform != null ? dst.transform.position : new Vector3(tx, ty, tz);
             int goId = dst != null && dst.gameObject != null ? dst.gameObject.GetInstanceID() : 0;
             string goName = dst != null && dst.gameObject != null ? dst.gameObject.name : entry.name;
@@ -557,12 +557,44 @@ namespace DateEverythingAccess
             return SimpleNavPlanner.Plan(startWorld, targetPos, radius, goName, goId, isDatable, inkFile);
         }
 
-        // Find the live InteractableObj whose name matches and whose transform is nearest the
-        // expected position. Names aren't unique, so position disambiguates the instance.
-        private static InteractableObj ResolveLiveObject(string name, float x, float y, float z)
+        // Resolve the live InteractableObj for a manifest leg. PREFERRED: an exact match on the
+        // stable scene id (uniqueId / any uniqueIds member == InteractableObj.Id). FALLBACK:
+        // the legacy bridge — name match + nearest transform position (names aren't unique, so
+        // position disambiguates). The id path is exact and instance-correct; the fallback covers
+        // older manifests that predate the unique-id field.
+        private static InteractableObj ResolveLiveObject(string uniqueId, string[] uniqueIds, string name, float x, float y, float z)
         {
-            if (string.IsNullOrEmpty(name)) return null;
+            bool haveId = !string.IsNullOrWhiteSpace(uniqueId) || (uniqueIds != null && uniqueIds.Length > 0);
+            if (string.IsNullOrEmpty(name) && !haveId) return null;
+
             InteractableObj[] all = UnityEngine.Object.FindObjectsOfType<InteractableObj>();
+
+            // Exact stable-id bridge first.
+            if (haveId)
+            {
+                for (int i = 0; i < all.Length; i++)
+                {
+                    InteractableObj o = all[i];
+                    if (o == null || o.gameObject == null) continue;
+                    string id;
+                    try { id = o.Id; } catch { id = null; }
+                    if (string.IsNullOrWhiteSpace(id)) continue;
+                    if (!string.IsNullOrWhiteSpace(uniqueId) && string.Equals(id, uniqueId, StringComparison.OrdinalIgnoreCase))
+                        return o;
+                    if (uniqueIds != null)
+                    {
+                        for (int j = 0; j < uniqueIds.Length; j++)
+                        {
+                            if (!string.IsNullOrWhiteSpace(uniqueIds[j]) &&
+                                string.Equals(id, uniqueIds[j], StringComparison.OrdinalIgnoreCase))
+                                return o;
+                        }
+                    }
+                }
+            }
+
+            // Fallback: name match + nearest position.
+            if (string.IsNullOrEmpty(name)) return null;
             InteractableObj best = null;
             float bestD2 = float.PositiveInfinity;
             for (int i = 0; i < all.Length; i++)
@@ -2098,6 +2130,11 @@ namespace DateEverythingAccess
             // validates the C# planner's routes (not the offline ones). from_* describe
             // the SOURCE object the leg teleports to before planning.
             [DataMember] public long object_id;
+            // Stable scene id(s) (UniqueId == runtime InteractableObj.Id). Preferred exact bridge
+            // to the live object; object_id is a SERIALIZED id that does NOT match GetInstanceID,
+            // and names aren't unique, so the unique id resolves the right instance directly.
+            [DataMember] public string unique_id;
+            [DataMember] public string[] unique_ids;
             [DataMember] public float[] object_xyz;
             [DataMember] public float interaction_radius;
             [DataMember] public string from_floor;

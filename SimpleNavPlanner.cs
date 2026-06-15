@@ -663,6 +663,18 @@ namespace DateEverythingAccess
             return floorLabel != null;
         }
 
+        // The bake's canonical fixture roster — the master list of valid interactable targets
+        // (filtered/deduped/merged/located by the bake). The picker enumerates this instead of
+        // FindObjectsOfType so set construction has a single source of truth. Returns an empty
+        // array when the bake didn't load or predates the roster (the caller treats that as
+        // "no objects" — there is no live-enumeration fallback by design).
+        public static IReadOnlyList<Fixture> GetFixtureRoster()
+        {
+            if (!EnsureLoaded() || _bake == null || _bake.fixtures == null)
+                return System.Array.Empty<Fixture>();
+            return _bake.fixtures;
+        }
+
         // Pick a CLEAN stand-cell near a world point: the navigable cell within radiusM whose
         // clearance (cells-to-nearest-wall, the same metric A* uses) is highest, tie-broken by
         // closeness to the anchor. Used by the coverage sweep to teleport the player without
@@ -2465,6 +2477,41 @@ namespace DateEverythingAccess
             [DataMember] public BakeParams @params;
             [DataMember] public BakeFloor[] floors;
             [DataMember] public InterFloorEdges inter_floor_edges;
+            // The canonical static interactable target set: filtered (active + named +
+            // non-exterior), identity-deduped (lighting presets), routing-unit merged
+            // (48 books -> 1), best-available-located, floor-assigned. The picker reads THIS
+            // as its master object list; runtime state (met/encountered, distance, active)
+            // is applied as second-order filters on top. See the fixture-roster design.
+            [DataMember] public Fixture[] fixtures;
+        }
+
+        [DataContract]
+        public class Fixture
+        {
+            [DataMember] public string name;
+            // [x, y, z] best-available-location (bounds centre, not rig-origin).
+            [DataMember] public float[] position;
+            // "ground" / "upper" / null (off every storey, e.g. crawlspace decor).
+            [DataMember] public string floor;
+            // Serialized export GameObjectIds, NOT runtime GetInstanceID — the picker bridges
+            // to the live InteractableObj by name+position, not by these ids.
+            [DataMember] public int[] object_ids;
+            [DataMember] public float interaction_radius;
+            [DataMember] public bool is_datable;
+            [DataMember] public string ink;
+            // Stable designer id (== runtime InteractableObj.Id) for an EXACT roster->live
+            // bridge. unique_id = the unit's primary (datable member's) id; unique_ids =
+            // every merged member's id, so a routing-unit-merged unit (48 books -> 1) matches
+            // a live object that is ANY of its members. Null/empty on older bakes.
+            [DataMember] public string unique_id;
+            [DataMember] public string[] unique_ids;
+
+            public UnityEngine.Vector3 Position()
+            {
+                if (position == null || position.Length < 3)
+                    return UnityEngine.Vector3.zero;
+                return new UnityEngine.Vector3(position[0], position[1], position[2]);
+            }
         }
 
         [DataContract]

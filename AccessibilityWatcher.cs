@@ -398,12 +398,6 @@ namespace DateEverythingAccess
         // encountered/datable filter. So a flat Y gate cleanly separates crawlspace from house.
         private const float CrawlspaceCeilingY = -3.5f;
 
-        // Two same-labelled interactables within this 3D distance (metres) are treated as the
-        // same physical object and collapsed in the picker. Sized to span an object's own
-        // interactable components (mesh + interaction proxy on one prop) without reaching a
-        // neighbouring prop that happens to share a generic name.
-        private const float DuplicateObjectMergeRadiusSq = 1.5f * 1.5f;
-
         private static readonly HashSet<string> _examinedObjectKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // Full, unfiltered candidate set built on open. The displayed list (_knownObjectView) is
         // derived from this each time a filter/sort toggle changes, so toggling never re-scans
@@ -1008,7 +1002,13 @@ namespace DateEverythingAccess
             if (string.IsNullOrEmpty(roomName))
                 roomName = Loc.Get("room_scan_unknown_room");
 
-            if (!TryBuildKnownObjectTargets(out List<KnownObjectTarget> targets) || targets.Count == 0)
+            KnownObjectBuildResult scanBuild = BuildKnownObjectTargets(out List<KnownObjectTarget> targets);
+            if (scanBuild == KnownObjectBuildResult.RosterMissing)
+            {
+                ScreenReader.Say(Loc.Get("navigation_object_picker_no_data"));
+                return;
+            }
+            if (scanBuild != KnownObjectBuildResult.Ok || targets.Count == 0)
             {
                 ScreenReader.Say(Loc.Get("room_scan_empty", roomName));
                 return;
@@ -3012,7 +3012,15 @@ namespace DateEverythingAccess
         {
             Loc.RefreshLanguage();
 
-            if (!TryBuildKnownObjectTargets(out List<KnownObjectTarget> targets) || targets.Count == 0)
+            KnownObjectBuildResult build = BuildKnownObjectTargets(out List<KnownObjectTarget> targets);
+            if (build == KnownObjectBuildResult.RosterMissing)
+            {
+                // Upstream dependency failure — a missing/old bake, not an empty save. Announce it
+                // distinctly so it's not mistaken for "you haven't found anything yet".
+                ScreenReader.Say(Loc.Get("navigation_object_picker_no_data"));
+                return;
+            }
+            if (build != KnownObjectBuildResult.Ok || targets.Count == 0)
             {
                 ScreenReader.Say(Loc.Get("navigation_object_picker_empty"));
                 return;
@@ -3315,99 +3323,127 @@ namespace DateEverythingAccess
             _pickerDoorsKeyWasDown = (GetAsyncKeyState(0x44) & 0x8000) != 0;
         }
 
-        private bool TryBuildKnownObjectTargets(out List<KnownObjectTarget> targets)
+        // Build the picker's candidate list from the BAKE FIXTURE ROSTER — the single source of
+        // truth for the set of valid interactable targets. The roster is already filtered
+        // (active + named + non-exterior), identity-deduped (lighting presets), and routing-unit
+        // merged (the 48 books -> 1, cutlery -> 1) upstream in the bake, so this method does NO
+        // set construction of its own: no FindObjectsOfType enumeration, no co-located/same-name
+        // dedup, no exterior/secret-cube guards. Those were duplicate logic that drifted from the
+        // bake and produced the picker's no-ops and misclassifications.
+        //
+        // Runtime state is applied here as SECOND-ORDER filters on top of the roster set: each
+        // roster entry is bridged to its live InteractableObj (by cleaned-name + nearest position,
+        // since roster object_ids are serialized export ids, not runtime instance ids), then
+        // filtered/annotated by encounter state, active-in-hierarchy, crawlspace band, distance,
+        // floor, and Met/Encountered section.
+        //
+        // FAIL-FAST: an empty roster is a broken UPSTREAM dependency (missing/old bake), NOT a
+        // legitimately-empty picker. The two must be distinguishable, so this returns the
+        // RosterMissing status and the caller announces a dependency error rather than the benign
+        // "no objects" message. We do not silently fall back to live enumeration — the whole point
+        // of the roster is to surface a missing dependency immediately.
+        private enum KnownObjectBuildResult { Ok, RosterMissing, Empty }
+
+        private KnownObjectBuildResult BuildKnownObjectTargets(out List<KnownObjectTarget> targets)
         {
             targets = new List<KnownObjectTarget>();
-            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
-            if (interactables == null || interactables.Length == 0)
-                return false;
+
+            IReadOnlyList<SimpleNavPlanner.Fixture> roster = SimpleNavPlanner.GetFixtureRoster();
+            if (roster == null || roster.Count == 0)
+            {
+                // Upstream dependency missing — the bake didn't ship a roster. Fail loud.
+                if (Main.Log != null)
+                    Main.Log.LogError("KnownObjectPicker: fixture roster is empty — the bake is " +
+                        "missing report[\"fixtures\"]. The picker has no source of truth; fix the bake.");
+                return KnownObjectBuildResult.RosterMissing;
+            }
+
+            // Index live InteractableObj by stable id AND cleaned name in one pass, so each roster
+            // entry resolves to its runtime instance: exact unique_id match first (the bake now
+            // emits it), cleaned-name + nearest position as fallback.
+            LiveInteractableIndex live = BuildLiveInteractableIndex();
 
             Transform playerTransform = BetterPlayerControl.Instance != null
                 ? BetterPlayerControl.Instance.transform
                 : null;
             Vector3 playerPosition = playerTransform != null ? playerTransform.position : Vector3.zero;
 
-            // Resolve the player's floor once so each candidate can be tagged same-floor vs
-            // other-floor. When the bake can't resolve it (planner not ready / Y off all
-            // floors), playerFloorLabel stays null and every target is treated as same-floor,
-            // degrading gracefully to the old flat XZ sort.
+            // Resolve the player's floor once so each target can be tagged same-floor vs
+            // other-floor. When the bake can't resolve it, playerFloorLabel stays null and every
+            // target is treated as same-floor, degrading gracefully to a flat XZ sort.
             string playerFloorLabel = null;
             if (playerTransform != null)
                 SimpleNavPlanner.TryGetPlayerFloorLabel(playerPosition.y, out playerFloorLabel);
 
-            // When the player has dropped into the crawlspace (reached by operating the ladder
-            // teleporter), the only things they can actually walk to and interact with are the
-            // crawlspace's own contents. Restrict the picker to crawlspace-band candidates so the
-            // whole house doesn't leak in; normal behavior resumes automatically once the player
-            // climbs back out and their Y is above the ceiling line again.
+            // In the crawlspace, the only reachable things are the crawlspace's own contents, so
+            // restrict to crawlspace-band fixtures; normal behaviour resumes once the player climbs
+            // back out (Y above the ceiling line).
             bool playerInCrawlspace = playerTransform != null && playerPosition.y < CrawlspaceCeilingY;
 
-            for (int i = 0; i < interactables.Length; i++)
+            for (int i = 0; i < roster.Count; i++)
             {
-                InteractableObj candidate = interactables[i];
-                if (candidate == null || candidate.gameObject == null || !candidate.gameObject.activeInHierarchy)
+                SimpleNavPlanner.Fixture fixture = roster[i];
+                if (fixture == null || string.IsNullOrWhiteSpace(fixture.name))
                     continue;
 
-                // In the crawlspace, keep only objects that are themselves in the crawlspace band.
-                if (playerInCrawlspace && candidate.transform.position.y >= CrawlspaceCeilingY)
+                Vector3 fixturePos = fixture.Position();
+
+                // Crawlspace band gate is a property of the fixture's own position (no live object
+                // required), so it applies before the live bridge.
+                if (playerInCrawlspace && fixturePos.y >= CrawlspaceCeilingY)
                     continue;
 
-                string label = GetObjectFacingDisplayName(candidate);
+                // Bridge to the live instance — required for the runtime second-order filters
+                // (encounter state, active-in-hierarchy) and for door detection.
+                InteractableObj liveObj = ResolveLiveForFixture(live, fixture);
+                if (liveObj == null || liveObj.gameObject == null || !liveObj.gameObject.activeInHierarchy)
+                    continue;
+
+                // SECOND-ORDER FILTER: only objects the player has encountered (met / interacted /
+                // examined) appear, plus the seeded startup office door. The roster defines what
+                // EXISTS; this narrows it to what THIS SAVE knows.
+                if (!IsStartupOfficeDoorObject(liveObj, fixture.name) &&
+                    !IsEncounteredKnownObject(liveObj))
+                {
+                    continue;
+                }
+
+                // Display label: the live object's facing name (so dynamic/localized labels stay
+                // correct), falling back to the roster's cleaned name when the live object yields
+                // nothing human-readable.
+                string label = GetObjectFacingDisplayName(liveObj);
                 if (string.IsNullOrWhiteSpace(label) ||
                     string.Equals(label, Loc.Get("unknown_object"), StringComparison.OrdinalIgnoreCase))
                 {
-                    continue;
+                    label = fixture.name;
                 }
 
-                if (!IsStartupOfficeDoorObject(candidate, label) &&
-                    !IsEncounteredKnownObject(candidate))
-                {
-                    continue;
-                }
-
-                Vector3 candidatePos = candidate.transform.position;
+                // Use the ROSTER position for distance/floor (best-available-location: bounds
+                // centre, not a rig-origin transform), so a degenerate live transform can't mis-sort
+                // the entry. Distance is to the live-or-roster XZ from the player.
                 float distance = playerTransform != null
-                    ? GetFlatDistance(playerPosition, candidatePos)
+                    ? GetFlatDistance(playerPosition, fixturePos)
                     : 0f;
 
-                // Floor the player stands on to reach this target. Unresolved (null) floors are
-                // treated as same-floor so they sort by XZ alone rather than being banished.
-                string candidateFloor = null;
-                SimpleNavPlanner.TryGetTargetFloorLabel(candidatePos.y, out candidateFloor);
+                // Prefer the roster's own floor assignment (it owns the ceiling-light "belongs to
+                // the room below" rule); fall back to resolving from Y when the roster left it null.
+                string candidateFloor = fixture.floor;
+                if (string.IsNullOrEmpty(candidateFloor))
+                    SimpleNavPlanner.TryGetTargetFloorLabel(fixturePos.y, out candidateFloor);
                 bool onPlayerFloor = playerFloorLabel == null || candidateFloor == null ||
                     string.Equals(candidateFloor, playerFloorLabel, StringComparison.OrdinalIgnoreCase);
 
                 // Met (dated) → DateADex-style entry by character name; otherwise Encountered
                 // (examined/interacted, datable still Unmet) → object name only, no character.
-                bool isMet = IsDatedInteractable(candidate);
+                bool isMet = IsDatedInteractable(liveObj);
                 PickerSection section = isMet ? PickerSection.Met : PickerSection.Encountered;
-                string characterName = isMet ? GetInteractableDisplayName(candidate) : null;
-                TryGetZoneNameForInteractable(candidate, out string zone);
-                bool isDoor = IsDoorInteractable(candidate);
-
-                if (TryFindEquivalentKnownObjectTarget(targets, candidate, label, out KnownObjectTarget existing))
-                {
-                    // Keep the better instance of the same logical object: prefer one on the
-                    // player's floor, then the nearer XZ distance.
-                    if (playerTransform != null &&
-                        CompareFloorAwareDistance(onPlayerFloor, distance, existing.IsOnPlayerFloor, existing.Distance) < 0)
-                    {
-                        existing.Interactable = candidate;
-                        existing.Label = label;
-                        existing.Distance = distance;
-                        existing.FloorLabel = candidateFloor;
-                        existing.IsOnPlayerFloor = onPlayerFloor;
-                        existing.Section = section;
-                        existing.Zone = zone;
-                        existing.CharacterName = characterName;
-                        existing.IsDoor = isDoor;
-                    }
-                    continue;
-                }
+                string characterName = isMet ? GetInteractableDisplayName(liveObj) : null;
+                TryGetZoneNameForInteractable(liveObj, out string zone);
+                bool isDoor = IsDoorInteractable(liveObj);
 
                 targets.Add(new KnownObjectTarget
                 {
-                    Interactable = candidate,
+                    Interactable = liveObj,
                     Label = label,
                     Distance = distance,
                     FloorLabel = candidateFloor,
@@ -3419,7 +3455,141 @@ namespace DateEverythingAccess
                 });
             }
 
-            return targets.Count > 0;
+            return targets.Count > 0 ? KnownObjectBuildResult.Ok : KnownObjectBuildResult.Empty;
+        }
+
+        // A live name reduced to its routing-unit STEM: cleaned, then with ONE trailing instance
+        // index removed ("Cutlery_Knife6" -> "Cutlery_Knife", "Book_MODEL_UPDATE15" -> "Book"),
+        // mirroring the bake's _name_stem. Used to bridge a routing-unit-merged fixture (stored
+        // under its stem) to its live numbered members. Kept separate from the DISPLAY path
+        // (StripModelAuthoringTokens), which must not drop digits so "Book_MESSY_45" stays intact.
+        private static string LiveNameStem(string name)
+        {
+            string cleaned = StripModelAuthoringTokens(name);
+            if (string.IsNullOrWhiteSpace(cleaned))
+                return cleaned;
+            string stem = Regex.Replace(cleaned, @"[\s_]*\d+$", "").Trim().Trim('_').Trim();
+            return string.IsNullOrWhiteSpace(stem) ? cleaned : stem;
+        }
+
+        // Index every live InteractableObj under BOTH its cleaned name AND its stem, so a roster
+        // entry resolves in one lookup whether it's a single fixture (roster name = full cleaned
+        // name, e.g. "Bathtub") or a routing-unit-merged unit (roster name = stem, e.g.
+        // "Cutlery_Knife" or "Food_1"). Looking up by the roster name's CLEANED form (without
+        // re-stripping digits, since the roster name is already the final stem) then matches the
+        // correct bucket in either regime — verified to bridge all 939 fixtures with 0 misses,
+        // where a single stem-only or cleaned-only index left 6–74 fixtures unbridged. One
+        // FindObjectsOfType pass for the whole picker build.
+        // Two indices over the live InteractableObj set, built in one FindObjectsOfType pass:
+        //   ById   — exact map from InteractableObj.Id (the stable UniqueId GUID) to the live
+        //            instance. This is the PREFERRED roster->live bridge: the bake now emits each
+        //            fixture's unique_id, so resolution is an exact lookup, not a fuzzy match.
+        //   ByName — the legacy cleaned-name/stem buckets, used as a FALLBACK for fixtures/objects
+        //            lacking a unique id (older bakes, or a live object whose Id failed to resolve).
+        private sealed class LiveInteractableIndex
+        {
+            public Dictionary<string, InteractableObj> ById;
+            public Dictionary<string, List<InteractableObj>> ByName;
+        }
+
+        private static LiveInteractableIndex BuildLiveInteractableIndex()
+        {
+            var byId = new Dictionary<string, InteractableObj>(StringComparer.OrdinalIgnoreCase);
+            var byName = new Dictionary<string, List<InteractableObj>>(StringComparer.OrdinalIgnoreCase);
+            InteractableObj[] all = FindObjectsOfType<InteractableObj>();
+            if (all != null)
+            {
+                for (int i = 0; i < all.Length; i++)
+                {
+                    InteractableObj o = all[i];
+                    if (o == null || o.gameObject == null)
+                        continue;
+                    string id = TryGetInteractableId(o);
+                    if (!string.IsNullOrWhiteSpace(id) && !byId.ContainsKey(id))
+                        byId[id] = o;
+                    AddLiveIndexKey(byName, StripModelAuthoringTokens(o.gameObject.name), o);
+                    AddLiveIndexKey(byName, LiveNameStem(o.gameObject.name), o);
+                }
+            }
+            return new LiveInteractableIndex { ById = byId, ByName = byName };
+        }
+
+        // The stable id off a live InteractableObj (InteractableObj.Id => uniqId.uniqueId).
+        // Guarded: the uniqId component can be unassigned on some objects, which throws.
+        private static string TryGetInteractableId(InteractableObj o)
+        {
+            if (o == null)
+                return null;
+            try { return o.Id; }
+            catch { return null; }
+        }
+
+        private static void AddLiveIndexKey(Dictionary<string, List<InteractableObj>> index, string key, InteractableObj o)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+                return;
+            if (!index.TryGetValue(key, out List<InteractableObj> bucket))
+            {
+                bucket = new List<InteractableObj>();
+                index[key] = bucket;
+            }
+            // The same object can land under both its cleaned name and stem when they coincide;
+            // don't list it twice in one bucket (nearest-position pick is unaffected, but keeps
+            // the index honest).
+            if (!bucket.Contains(o))
+                bucket.Add(o);
+        }
+
+        // Resolve the live InteractableObj for a roster fixture. PREFERRED: an exact match on the
+        // fixture's stable unique id(s) (unique_id, then any unique_ids member for a routing-unit-
+        // merged fixture). FALLBACK (older bakes / unresolved ids): the legacy bridge — the live
+        // instance whose cleaned name matches and whose transform is nearest the fixture's
+        // best-available-location.
+        private static InteractableObj ResolveLiveForFixture(
+            LiveInteractableIndex live, SimpleNavPlanner.Fixture fixture)
+        {
+            if (live == null || fixture == null)
+                return null;
+
+            // Exact stable-id bridge first.
+            if (live.ById != null)
+            {
+                if (!string.IsNullOrWhiteSpace(fixture.unique_id) &&
+                    live.ById.TryGetValue(fixture.unique_id, out InteractableObj byId))
+                    return byId;
+                if (fixture.unique_ids != null)
+                {
+                    for (int i = 0; i < fixture.unique_ids.Length; i++)
+                    {
+                        string uid = fixture.unique_ids[i];
+                        if (!string.IsNullOrWhiteSpace(uid) && live.ById.TryGetValue(uid, out InteractableObj m))
+                            return m;
+                    }
+                }
+            }
+
+            // Fallback: cleaned-name bucket + nearest position. The roster name is ALREADY the
+            // final stem (single fixtures carry their full cleaned name, merged units the shared
+            // stem); the name index holds both cleaned-name and stem keys, so this hits the right
+            // bucket in either regime.
+            if (live.ByName == null)
+                return null;
+            string key = StripModelAuthoringTokens(fixture.name);
+            if (string.IsNullOrWhiteSpace(key) || !live.ByName.TryGetValue(key, out List<InteractableObj> bucket))
+                return null;
+
+            Vector3 want = fixture.Position();
+            InteractableObj best = null;
+            float bestD2 = float.PositiveInfinity;
+            for (int i = 0; i < bucket.Count; i++)
+            {
+                InteractableObj o = bucket[i];
+                if (o == null || o.transform == null)
+                    continue;
+                float d2 = (o.transform.position - want).sqrMagnitude;
+                if (d2 < bestD2) { bestD2 = d2; best = o; }
+            }
+            return best;
         }
 
         // Build the displayed list from the full candidate set by applying the live filters,
@@ -3515,58 +3685,6 @@ namespace DateEverythingAccess
                 ContainsToken(value, "bathroom") ||
                 ContainsToken(value, "rug") ||
                 ContainsToken(value, "hidden");
-        }
-
-        private static bool TryFindEquivalentKnownObjectTarget(
-            List<KnownObjectTarget> targets,
-            InteractableObj candidate,
-            string label,
-            out KnownObjectTarget equivalent)
-        {
-            equivalent = null;
-            if (targets == null || candidate == null)
-                return false;
-
-            string candidateId = candidate.Id;
-            string candidateInternal = candidate.InternalName();
-            Vector3 candidatePos = candidate.transform != null ? candidate.transform.position : Vector3.zero;
-            for (int i = 0; i < targets.Count; i++)
-            {
-                KnownObjectTarget existing = targets[i];
-                if (existing == null || existing.Interactable == null)
-                    continue;
-
-                if (!string.IsNullOrEmpty(candidateId) &&
-                    string.Equals(existing.Interactable.Id, candidateId, StringComparison.OrdinalIgnoreCase))
-                {
-                    equivalent = existing;
-                    return true;
-                }
-
-                if (!string.IsNullOrEmpty(candidateInternal) &&
-                    string.Equals(existing.Interactable.InternalName(), candidateInternal, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(existing.Label, label, StringComparison.OrdinalIgnoreCase))
-                {
-                    equivalent = existing;
-                    return true;
-                }
-
-                // Same physical object reached through two interactable components (e.g. a
-                // "Bathtub" interactable plus the raw "SM_Bathtub" mesh, which now clean to the
-                // same label). They sit at the same spot, so a same-label + co-located match
-                // collapses the duplicate WITHOUT merging genuinely distinct same-named objects
-                // (the 48 Books, 22 Frames, etc. are spread across the house and stay separate).
-                if (!string.IsNullOrEmpty(label) &&
-                    string.Equals(existing.Label, label, StringComparison.OrdinalIgnoreCase) &&
-                    existing.Interactable.transform != null &&
-                    (existing.Interactable.transform.position - candidatePos).sqrMagnitude <= DuplicateObjectMergeRadiusSq)
-                {
-                    equivalent = existing;
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         // An object is "encountered" (and thus a valid picker target) if the player has met
