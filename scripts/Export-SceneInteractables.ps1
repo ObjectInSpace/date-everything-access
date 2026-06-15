@@ -31,7 +31,15 @@ param(
     # animated dialog-rig (SkinnedMeshRigCollider), so these bounds reflect the
     # static physical object the player routes to/around, not the dating-scene
     # animation. Absent => Bounds fields are null (Position/Radius still emitted).
-    [string]$BlockersPath = ".\artifacts\navigation\thirdpersongreybox-blockers.json"
+    [string]$BlockersPath = ".\artifacts\navigation\thirdpersongreybox-blockers.json",
+
+    # Team17 UniqueId MonoBehaviour script guid. Each interactable GameObject carries a
+    # sibling UniqueId component holding a stable designer-assigned `uniqueId` GUID string
+    # (and `hashedID`). At runtime InteractableObj.Id => uniqId.uniqueId, so emitting this
+    # gives consumers (picker/sweep) an EXACT roster->live bridge key, replacing the fragile
+    # name+nearest-position match. NOTE: the InteractableObj.uniqId field reference is
+    # {fileID: 0} in YAML, so we read the separate UniqueId component, keyed by m_GameObject.
+    [string]$UniqueIdScriptGuid = "12777a490c61f440cac51efbf097dbe3"
 )
 
 Set-StrictMode -Version Latest
@@ -83,6 +91,8 @@ $gameObjects = [System.Collections.Generic.Dictionary[long, object]]::new()
 $transformsById = [System.Collections.Generic.Dictionary[long, object]]::new()
 $transformByGameObject = [System.Collections.Generic.Dictionary[long, object]]::new()
 $interactableComponents = New-Object System.Collections.Generic.List[object]
+# UniqueId component's stable `uniqueId` string, keyed by its m_GameObject id.
+$uniqueIdByGameObject = [System.Collections.Generic.Dictionary[long, string]]::new()
 
 $currentHeader = $null
 $currentLines = $null
@@ -124,6 +134,18 @@ function Process-Section([string]$header, [System.Collections.Generic.List[strin
         }
         114 {
             $scriptGuid = Get-Line $arr "^  m_Script: \{fileID: \d+, guid: ([0-9a-f]+), type: \d+\}\s*$"
+            # UniqueId component: record its stable uniqueId string keyed by GameObject, so
+            # interactable records can carry an exact runtime-resolvable id (InteractableObj.Id).
+            if ($scriptGuid -eq $script:UniqueIdScriptGuid) {
+                $uidGoText = Get-Line $arr "^  m_GameObject: \{fileID: (\d+)\}$"
+                if ($null -ne $uidGoText) {
+                    $uid = (Get-LineOrDefault $arr "^  uniqueId: (.*)$" "").Trim()
+                    if (-not [string]::IsNullOrWhiteSpace($uid)) {
+                        $script:uniqueIdByGameObject[[long]$uidGoText] = $uid
+                    }
+                }
+                return
+            }
             if ($scriptGuid -ne $script:InteractableObjScriptGuid) { return }
             $goIdText = Get-Line $arr "^  m_GameObject: \{fileID: (\d+)\}$"
             if ($null -eq $goIdText) { return }
@@ -299,6 +321,7 @@ $records = New-Object System.Collections.Generic.List[object]
 $missingTransform = 0
 $missingGameObject = 0
 $withBounds = 0
+$withUniqueId = 0
 
 foreach ($c in $interactableComponents) {
     if (-not $gameObjects.ContainsKey($c.GameObjectId)) { $missingGameObject++; continue }
@@ -312,6 +335,8 @@ foreach ($c in $interactableComponents) {
     $path = Get-GameObjectPath $go.Id
     $bounds = Get-DatableBounds -Path $path
     if ($null -ne $bounds) { $withBounds++ }
+    $uniqueId = if ($uniqueIdByGameObject.ContainsKey($go.Id)) { $uniqueIdByGameObject[$go.Id] } else { $null }
+    if (-not [string]::IsNullOrWhiteSpace($uniqueId)) { $withUniqueId++ }
     $records.Add([ordered]@{
         GameObjectId = $go.Id
         GameObjectName = $go.Name
@@ -320,6 +345,9 @@ foreach ($c in $interactableComponents) {
         IsActive = $go.IsActive
         ComponentId = $c.ComponentId
         TransformId = $t.Id
+        # Stable designer-assigned id (UniqueId.uniqueId); == runtime InteractableObj.Id.
+        # Null when the GameObject has no UniqueId component.
+        UniqueId = $uniqueId
         Position = [ordered]@{
             x = [Math]::Round([double]$w.Position.X, 6)
             y = [Math]::Round([double]$w.Position.Y, 6)
@@ -360,6 +388,7 @@ $result = [ordered]@{
         ActiveGameObjects = $activeCount
         InactiveGameObjects = $records.Count - $activeCount
         WithPhysicalBounds = $withBounds
+        WithUniqueId = $withUniqueId
         SkippedMissingGameObject = $missingGameObject
         SkippedMissingTransform = $missingTransform
     }
@@ -367,4 +396,4 @@ $result = [ordered]@{
 }
 
 $result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $OutputPath -Encoding UTF8
-Write-Host ("Wrote {0} interactables to {1} (datable: {2}, active: {3}, with physical bounds: {4})" -f $records.Count, $OutputPath, $datableCount, $activeCount, $withBounds)
+Write-Host ("Wrote {0} interactables to {1} (datable: {2}, active: {3}, with physical bounds: {4}, with unique id: {5})" -f $records.Count, $OutputPath, $datableCount, $activeCount, $withBounds, $withUniqueId)
