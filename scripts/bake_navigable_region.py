@@ -500,6 +500,11 @@ def build_fixture_roster(interactables):
                 "ink": datable_member["ink"],
                 "unique_id": datable_member.get("unique_id"),
                 "unique_ids": unit_uids,
+                # Scene path of the unit's identity-defining member, so the offline planner can
+                # resolve this fixture's own collider and run the SAME interaction-LOS goal filter
+                # the in-game planner does (resolve_target_collider_for_path). Without it the
+                # objects sweep skipped LOS entirely and under-tested reachability.
+                "path": datable_member.get("path"),
             })
     return sorted(roster, key=lambda e: (e["floor"] or "~", e["name"], e["position"]))
 

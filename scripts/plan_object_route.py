@@ -1295,6 +1295,20 @@ def resolve_object_node(planner, item):
             # / marooned in footprint rasterization. A real candidate navigation problem.
             return "gate_blocked"
         goals = [(n[0], n[1])]
+    else:
+        # Interaction-LOS goal filter — the SAME one plan() and the in-game planner apply
+        # (filter_goals_by_los): resolve the fixture's own collider by its scene Path and keep
+        # only stand-cells with a clear synthetic-eye sightline to it. A resolved collider with
+        # NO LOS cell anywhere ⇒ reachable-but-not-interactable ⇒ no_los (a real result the
+        # objects sweep previously couldn't see, because it skipped this filter). target_collider
+        # None ⇒ keep the full disc (matches plan() / C# when the live component-walk finds none).
+        target_collider = resolve_target_collider_for_path(item.get("Path"))
+        if target_collider is not None:
+            los_goals, _container_doors = filter_goals_by_los(
+                floor, goals, target_collider, tx, tz, radius)
+            if not los_goals:
+                return "no_los"
+            goals = los_goals
     # Representative = the navigable cell nearest the object centre (deterministic).
     rep = min(goals, key=lambda c: (floor.cell_to_world(*c)[0] - tx) ** 2 +
                                     (floor.cell_to_world(*c)[1] - tz) ** 2)
@@ -1304,9 +1318,11 @@ def resolve_object_node(planner, item):
 def _roster_entry_as_item(entry):
     """Adapt one baked fixture-roster entry to the {Position, InteractionRadius, ...} shape
     resolve_object_node expects. The roster position is ALREADY the best-available-location
-    (bounds centre, not rig-origin), so the degenerate-collider correction in resolve_object_node
-    is a no-op for these — the bake did that work. Path is omitted deliberately: leaving it
-    absent skips the collider re-resolve, trusting the roster's location."""
+    (bounds centre, not rig-origin). Path IS carried (the roster now emits it): it lets
+    resolve_object_node resolve the fixture's own collider and run the SAME interaction-LOS goal
+    filter the in-game planner and single-target plan() run — so the objects sweep tests
+    reachability+LOS, not just routing. (It used to omit Path to skip an unreliable offline
+    collider re-resolve; with UniqueId-joined exact bounds that shortcut is obsolete.)"""
     x, y, z = entry["position"]
     return {
         "GameObjectName": entry["name"],
@@ -1317,6 +1333,7 @@ def _roster_entry_as_item(entry):
         "IsActive": True,
         "IsDatable": entry.get("is_datable", False),
         "InkFileName": entry.get("ink"),
+        "Path": entry.get("path"),
         # Stable scene id(s) for the in-game sweep's exact roster->live bridge.
         "UniqueId": entry.get("unique_id"),
         "UniqueIds": entry.get("unique_ids") or [],
@@ -1347,9 +1364,9 @@ def object_sweep_nodes(planner, roster):
         name = entry["name"]
         object_ids = entry.get("object_ids") or [item.get("GameObjectId")]
         if node is None or isinstance(node, str):
-            # node is a string sentinel ("off_floor" / "gate_blocked") describing WHY it
-            # resolved nowhere; None is the legacy/no-position case. Carry the reason so
-            # the manifest can separate expected-exterior from real gate-blocked objects.
+            # node is a string sentinel ("off_floor" / "gate_blocked" / "no_los") describing WHY
+            # it resolved nowhere; None is the legacy/no-position case. Carry the reason so the
+            # manifest can separate expected-exterior from gate-blocked from not-interactable.
             reason = node if isinstance(node, str) else "unresolved"
             unreachable.append({"name": name, "object_id": object_ids[0],
                                 "object_ids": object_ids,
