@@ -407,10 +407,39 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
         floor_starts[label] = node
         return node
 
+    # NEAREST-NEIGHBOUR VISIT ORDER (mirrors the in-game sweep). The runtime drives from the
+    # player's CURRENT position and always picks the NEAREST unvisited object
+    # (SimpleNavCoverageSweep: "from the player's current position, find the nearest unvisited"),
+    # so its legs are always SHORT. The old offline chain visited nodes in arbitrary (floor-sorted)
+    # order, so `cur_start` could jump clear across the house to the next node — producing
+    # start->goal distances the in-game sweep NEVER sees and blowing the A* expansion cap (those
+    # far legs were 305 false no_path at cap=3000). Order each floor's nodes greedily by nearest-
+    # unvisited from the running position so the offline chain matches the runtime's short legs.
+    nodes_by_floor = {}
+    for nd in nodes:
+        nodes_by_floor.setdefault(nd["floor"], []).append(nd)
+
+    def _greedy_order(floor_label, floor_nodes):
+        """Greedy nearest-unvisited order from the floor's start, in cell space."""
+        remaining = list(floor_nodes)
+        ordered = []
+        cx, cz = _floor_start(floor_label)[1], _floor_start(floor_label)[2]
+        while remaining:
+            j = min(range(len(remaining)),
+                    key=lambda k: (remaining[k]["cell"][0] - cx) ** 2 + (remaining[k]["cell"][1] - cz) ** 2)
+            nd = remaining.pop(j)
+            ordered.append(nd)
+            cx, cz = nd["cell"]
+        return ordered
+
+    ordered_nodes = []
+    for floor_label in sorted(nodes_by_floor):
+        ordered_nodes.extend(_greedy_order(floor_label, nodes_by_floor[floor_label]))
+
     cur_floor = None
     cur_start = start_node
     cur_start_name = "<house-start>"
-    for nd in nodes:
+    for nd in ordered_nodes:
         floor_label = nd["floor"]
         # Floor boundary: reset the chain to this floor's own start so no leg ever
         # plans across the stairs.

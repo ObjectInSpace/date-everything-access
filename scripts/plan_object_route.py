@@ -540,6 +540,7 @@ class Planner:
         # goal-cell filter + rim check are NOT mirrored here (live physics only).
         reached_goals = []
         expansions = 0
+        hit_cap = False
         while open_heap:
             _, g, node = heapq.heappop(open_heap)
             if g > gscore.get(node, math.inf):
@@ -549,6 +550,7 @@ class Planner:
             closed.add(node)
             expansions += 1
             if expansions > GOAL_SEARCH_MAX_EXPANSIONS:
+                hit_cap = True
                 break
             if node in goal_set:
                 reached_goals.append(node)
@@ -565,6 +567,19 @@ class Planner:
                     heapq.heappush(open_heap, (ng + h, ng, nbr))
 
         if not reached_goals:
+            # The expansion cap is a PERF bound, NOT a reachability verdict. If we hit it
+            # without reaching any goal, the object may still be perfectly reachable — just
+            # FAR from this start (the heuristic-guided search ran out of budget before
+            # arriving). Returning no_path here is the bug that surfaced as ~127 false
+            # no_path in the offline sweep (all BFS-confirmed reachable). Escalate: a single
+            # uncapped reachability + shortest-path pass to the NEAREST reachable goal. This
+            # only runs on the rare capped leg (the common leg reaches a goal well under the
+            # cap), so the perf valve still protects the typical case. Mirror of the C#
+            # GoalSearchMaxExpansions escalation. See sweep no_path diagnosis 2026-06-15.
+            if hit_cap:
+                escalated = self._reach_nearest_goal(start_node, goal_set, goal_floor, goal_wx, goal_wz)
+                if escalated is not None:
+                    return escalated
             return None, math.inf, []
 
         def reconstruct(goal):
@@ -592,6 +607,44 @@ class Planner:
                 best = (key, path, edges, gcost)
         _, best_path, best_edges, best_g = best
         return best_path, best_g, best_edges
+
+    def _reach_nearest_goal(self, start_node, goal_set, goal_floor, goal_wx, goal_wz):
+        """Uncapped A* to the SINGLE nearest reachable goal. Used only as the escalation when
+        the capped goal-gathering search ran out of budget without reaching any goal (a far
+        object). Drops the fewest-legs/leg-optimal niceties — we just need a valid route, since
+        this leg only exists in the offline harness's cross-object chain (the in-game sweep plans
+        from the player's real position and never makes legs this long). Returns
+        (path, gcost, edges) or None if genuinely unreachable."""
+        open_heap = [(self.heuristic(start_node, goal_floor, goal_wx, goal_wz), 0.0, start_node)]
+        came_from = {start_node: (None, None)}
+        gscore = {start_node: 0.0}
+        closed = set()
+        while open_heap:
+            _, g, node = heapq.heappop(open_heap)
+            if g > gscore.get(node, math.inf):
+                continue
+            if node in closed:
+                continue
+            closed.add(node)
+            if node in goal_set:
+                path, edges = [], []
+                cur = node
+                while cur is not None:
+                    path.append(cur)
+                    prev, meta = came_from[cur]
+                    if prev is not None:
+                        edges.append(meta)
+                    cur = prev
+                path.reverse(); edges.reverse()
+                return path, gscore[node], edges
+            for nbr, cost, meta in self.neighbors(node):
+                ng = g + cost
+                if ng < gscore.get(nbr, math.inf):
+                    gscore[nbr] = ng
+                    came_from[nbr] = (node, meta)
+                    h = self.heuristic(nbr, goal_floor, goal_wx, goal_wz)
+                    heapq.heappush(open_heap, (ng + h, ng, nbr))
+        return None
 
 
 # ---------- polyline smoothing + door tagging ----------

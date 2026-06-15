@@ -1330,6 +1330,7 @@ namespace DateEverythingAccess
             // correctness limit. See [[project_navigation_planner_los_goal_cells_2026_06_13]].
             var reachedGoals = new List<NodeKey>();
             int expansions = 0;
+            bool hitCap = false;
 
             while (open.Count > 0)
             {
@@ -1339,7 +1340,10 @@ namespace DateEverythingAccess
                 if (!closed.Add(node))
                     continue;
                 if (++expansions > GoalSearchMaxExpansions)
+                {
+                    hitCap = true;
                     break;
+                }
 
                 if (goalSet.Contains(node))
                 {
@@ -1361,7 +1365,21 @@ namespace DateEverythingAccess
             }
 
             if (reachedGoals.Count == 0)
+            {
+                // The expansion cap is a PERF bound, NOT a reachability verdict. Hitting it
+                // without reaching a goal means the object may still be reachable, just FAR from
+                // this start (heuristic search ran out of budget). Escalate to an uncapped pass to
+                // the nearest reachable goal rather than reporting a false no_path. Only runs on
+                // the rare capped query. Mirror of the Python planner's _reach_nearest_goal.
+                if (hitCap && ReachNearestGoal(start, goalSet, goalFloorLabel, goalWx, goalWz,
+                                               out List<NodeKey> escPath, out float escCost))
+                {
+                    path = escPath;
+                    totalCost = escCost;
+                    return true;
+                }
                 return false;
+            }
 
             // Pick the reached goal with (fewest smoothed legs, then closest to the object, then
             // cheapest walk as a final stable tiebreak).
@@ -1411,6 +1429,47 @@ namespace DateEverythingAccess
             }
             rev.Reverse();
             return rev;
+        }
+
+        // Uncapped A* to the SINGLE nearest reachable goal. The escalation when the capped
+        // goal-gathering search exhausted its expansion budget without reaching any goal (a far
+        // object). Drops the fewest-legs/leg-optimal pick — we just need a valid route, since this
+        // only triggers on a far query the cap truncated. Returns false only if genuinely
+        // unreachable. Mirror of plan_object_route.py Planner._reach_nearest_goal.
+        private static bool ReachNearestGoal(NodeKey start, HashSet<NodeKey> goalSet, string goalFloorLabel,
+            float goalWx, float goalWz, out List<NodeKey> path, out float totalCost)
+        {
+            path = null;
+            totalCost = float.PositiveInfinity;
+            var open = new MinHeap();
+            var came = new Dictionary<NodeKey, NodeKey>();
+            var gScore = new Dictionary<NodeKey, float>();
+            var closed = new HashSet<NodeKey>();
+            gScore[start] = 0f;
+            open.Push(new HeapItem(Heuristic(start, goalFloorLabel, goalWx, goalWz), 0f, start));
+            while (open.Count > 0)
+            {
+                HeapItem cur = open.Pop();
+                NodeKey node = cur.Node;
+                if (gScore.TryGetValue(node, out float gseen) && cur.G > gseen + 1e-6f) continue;
+                if (!closed.Add(node)) continue;
+                if (goalSet.Contains(node))
+                {
+                    path = ReconstructPath(came, node);
+                    totalCost = gScore[node];
+                    return true;
+                }
+                foreach (var (nbr, cost) in Neighbors(node))
+                {
+                    float ng = cur.G + cost;
+                    if (gScore.TryGetValue(nbr, out float existing) && ng >= existing) continue;
+                    gScore[nbr] = ng;
+                    came[nbr] = node;
+                    float f = ng + Heuristic(nbr, goalFloorLabel, goalWx, goalWz);
+                    open.Push(new HeapItem(f, ng, nbr));
+                }
+            }
+            return false;
         }
 
         // Flat-XZ distance (m) from a goal cell to the target object position. Used by the goal
