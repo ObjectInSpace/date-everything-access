@@ -21,6 +21,16 @@ using UnityEngine.UI;
 
 namespace DateEverythingAccess
 {
+    // Run our FixedUpdate BEFORE BetterPlayerControl.FixedUpdate every physics tick. The game
+    // reads `move`/`look` at the START of its FixedUpdate (BetterPlayerControl.cs:912) and then
+    // OVERWRITES them from live axes at the END (L968-969, gated on TUTORIAL_STATE_0_ANIMATIONS,
+    // which is set in normal play). So our value survives for exactly ONE read and is then zeroed.
+    // Re-asserting in our own FixedUpdate only works if we run FIRST; with the default (undefined)
+    // order the game often runs first and reads the zeroed value → the follower freezes with a
+    // valid command cached and velocity=0 (the partial-sweep 2026-06-16 no-blocker stalls). A
+    // negative execution order guarantees we write before the game reads, every tick, closing the
+    // race regardless of frame rate. See [[project-navigation-follower-speed-deadzone]].
+    [DefaultExecutionOrder(-100)]
     internal sealed partial class AccessibilityWatcher : MonoBehaviour
     {
         private enum SpecsAnnouncementMode
@@ -109,10 +119,12 @@ namespace DateEverythingAccess
         private const float EstimatedSpeechLeadInSeconds = 0.75f;
         private const float AutoWalkArrivalDistance = 2f;
         private const float AutoWalkLookScaleDegrees = 45f;
-        // Move magnitude above which we consider the follower to be genuinely trying to
-        // translate (vs. turning in place, where the facing-scale keeps move≈0). Only then
-        // does the no-progress watchdog count toward a blocked timeout.
-        private const float AutoWalkMovingThreshold = 0.2f;
+        // Binary heading gate: the follower walks at full move inside this cos(turn) cone and
+        // turns in place (move=0) outside it. cos(70°)≈0.342. A CONTINUOUS cos(turn) scale is
+        // what we must NOT use — it lands move in (0,0.2) across the ~78-90° band, below BOTH
+        // the game's 0.2 translate dead-zone (player frozen) AND the watchdog's move test (so it
+        // scores the freeze as "turning" and never times out). The gate keeps move firmly on/off.
+        private const float AutoWalkFacingGateCosThreshold = 0.342f;
         // Max seconds the post-arrival turn-to-face phase runs before we accept arrival
         // regardless of whether the game's raycast selected the target. Generous enough to
         // complete a full turn-and-pitch toward an overhead/odd object, short enough that a
@@ -120,6 +132,10 @@ namespace DateEverythingAccess
         private const float AutoWalkFaceTimeoutSeconds = 3f;
         private const float AutoWalkProgressDistance = 0.35f;
         private const float AutoWalkBlockedTimeoutSeconds = 2f;
+        // Extra grace a turn-in-place gets on top of the blocked timeout before a no-progress
+        // turn is treated as stuck. A full 180° turn at AutoWalkLookScaleDegrees completes well
+        // inside this, so only an oscillating/geometrically-impossible turn ever reaches it.
+        private const float AutoWalkTurnGraceSeconds = 1.5f;
         // Pure-pursuit lookahead distance (metres). The route executor aims at a
         // point this far ahead along the planned polyline (projected from the
         // player), rather than at the next waypoint vertex. Small enough to track
@@ -1358,25 +1374,28 @@ namespace DateEverythingAccess
             // direction in player-local space (forward/strafe), `look` turns the body
             // toward it.
             //
-            // The `* Clamp01(facing)` is NOT a speed throttle — the game NORMALIZES move and
+            // The heading gate is NOT a speed throttle — the game NORMALIZES move and
             // multiplies by the player's own `speed`, so any move above the 0.2 dead-zone
-            // walks at full speed regardless of our magnitude. What the scale actually does
-            // is GATE move on/off by heading: as the turn passes ~78° it drops move under
-            // 0.2 and the player stops, so move and look are never both large at once. That
-            // matters because the game rebuilds world motion as forward*move.z + right*move.x
-            // using the CURRENT facing every physics tick — a big move while the body is
-            // still turning under a big look makes the motion direction thrash and cancel
-            // (spin-in-place). While turning, move≈0 (body pivots, no translation); once
-            // aligned, look→0 and move→full. (look IS analog — the game uses look.x linearly,
-            // unlike move — so the turn rate eases down proportionally as we align.)
+            // walks at full speed regardless of our magnitude. What the gate does is keep move
+            // and look from ever being large at once: outside the facing cone we command a pure
+            // turn (move=0), inside it a full-magnitude walk. That matters because the game
+            // rebuilds world motion as forward*move.z + right*move.x using the CURRENT facing
+            // every physics tick — a big move while the body is still turning under a big look
+            // makes the motion direction thrash and cancel (spin-in-place). The gate is BINARY,
+            // not a cos(turn) scale: a continuous scale puts move in (0,0.2) across ~78-90°,
+            // below the game's 0.2 dead-zone (frozen) yet untimed-out by the watchdog. (look IS
+            // analog — the game uses look.x linearly — so the turn rate eases as we align.)
             Vector3 walkDir = toWaypoint.normalized;
             Vector3 localDirection = playerTransform.InverseTransformDirection(walkDir);
             float turnDeg = Vector3.SignedAngle(playerTransform.forward, walkDir, Vector3.up);
             float facing = Vector3.Dot(playerTransform.forward, walkDir); // cos(turn)
 
-            Vector3 move = new Vector3(
-                Mathf.Clamp(localDirection.x, -1f, 1f), 0f,
-                Mathf.Clamp(localDirection.z, -1f, 1f)) * Mathf.Clamp01(facing);
+            bool headingAligned = facing >= AutoWalkFacingGateCosThreshold;
+            Vector3 move = headingAligned
+                ? new Vector3(
+                    Mathf.Clamp(localDirection.x, -1f, 1f), 0f,
+                    Mathf.Clamp(localDirection.z, -1f, 1f)).normalized
+                : Vector3.zero;
             Vector3 look = new Vector3(Mathf.Clamp(turnDeg / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
 
             // Hold position while the segment's door is mid-swing — walking into a moving
@@ -1398,12 +1417,17 @@ namespace DateEverythingAccess
             LogSimpleRouteFrameDiagnostic(route, playerTransform, playerPos, target, move, look, waitingForDoorSwing);
             SimpleNavBridge.RecordFrameProgress(playerPos);
 
-            // Watchdog: report blocked only when the player is actually TRYING to translate
-            // (commanding meaningful forward move) but isn't moving. While turning in place
-            // (move≈0 by the facing scale) or holding for a door swing, no translation is
-            // expected, so don't accumulate the no-progress clock — that's what let big
-            // turns get killed as false stalls.
-            bool tryingToTranslate = !waitingForDoorSwing && move.sqrMagnitude > AutoWalkMovingThreshold * AutoWalkMovingThreshold;
+            // Watchdog. Two ways a leg can sit still: (a) committed to a waypoint and walking
+            // but not advancing — a real obstacle/jamb; (b) turning in place and never aligning
+            // — oscillating at the cone edge or geometrically unable to face the waypoint. Both
+            // must eventually time out. The OLD gate keyed "trying" off move.magnitude, so a
+            // follower frozen with a small sub-dead-zone move (the continuous-scale bug) read as
+            // "turning" forever and never timed out. Now: we are TRYING whenever we hold this
+            // waypoint and aren't waiting on a door swing. Genuine turning is bounded — it gets
+            // its own grace (AutoWalkTurnGraceSeconds) before counting, but it is NOT exempt
+            // indefinitely, so a stuck turn still trips the timeout.
+            bool tryingToTranslate = !waitingForDoorSwing;
+            bool turningToAlign = !headingAligned;
             if (Vector3.Distance(playerPos, _lastAutoWalkPosition) >= AutoWalkProgressDistance)
             {
                 _lastAutoWalkPosition = playerPos;
@@ -1412,7 +1436,14 @@ namespace DateEverythingAccess
             }
             else if (!tryingToTranslate)
             {
-                _lastAutoWalkProgressTime = Time.unscaledTime;  // turning / door-waiting: not a stall
+                _lastAutoWalkProgressTime = Time.unscaledTime;  // door-waiting: not a stall
+            }
+            else if (turningToAlign &&
+                     Time.unscaledTime - _lastAutoWalkProgressTime < AutoWalkBlockedTimeoutSeconds + AutoWalkTurnGraceSeconds)
+            {
+                // Allow a bounded turn-in-place before it counts; an unaligned-but-progressing
+                // turn keeps resetting via the positional-progress branch above, so reaching
+                // this grace ceiling means the turn itself is stuck.
             }
             else if (Time.unscaledTime - _lastAutoWalkProgressTime >= AutoWalkBlockedTimeoutSeconds)
             {
