@@ -1279,6 +1279,18 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
                     if dilated[jx][jz]:
                         threshold_cells.append((jx, jz))
 
+        # Drop threshold cells the OPEN panel sweeps into. A swing door's leaf
+        # rotates ACROSS its own doorway, so 11-13 of these threshold cells land
+        # inside the open-panel footprint. The main freed-cell loop already
+        # excludes panel_open_dil, but threshold cells bypass that gate (they're
+        # exempt from door_open_dil to re-open the wall gap) — which re-admitted
+        # exactly the cells the swung-open leaf occupies, so the follower routed
+        # through them and WEDGED on the open panel (the dominant "state-door"
+        # stall once the freeze was fixed). Subtract the open-panel footprint:
+        # those cells are not passable when the door is open, whatever the wall
+        # gap does. See [[project-navigation-door-wedge-2026-06-16]].
+        threshold_cells = [c for c in threshold_cells if not panel_open_dil[c[0]][c[1]]]
+
         # Door-open dilation mask. A freed cell must be navigable in the world
         # where this door is open. The earlier "any non-door raw blocker
         # within DILATE_CELLS" check was too aggressive — it dropped the
