@@ -1692,6 +1692,133 @@ def _verify_bake_invariants(report, mesh_colliders):
                 f"this wall has no effect on routing."
             )
 
+    # 7. CROSS-FLOOR CONNECTIVITY via STAIRS/RAMPS. The walkable floors that the player
+    # WALKS between (ground↔upper) must be mutually reachable through stair_ramp edges.
+    # This is the invariant that would have caught the staircase being dropped: when
+    # /House/Hallway/Stairs (the lone Layer-18 collider) was skipped by the walkable
+    # exporter, stair_ramp came out EMPTY, upper and ground were graph-disconnected, and
+    # EVERY upstairs↔downstairs route returned no_path — yet the bake reported OK because
+    # nothing asserted connectivity. See
+    # [[project-navigation-stairs-missing-from-bake-2026-06-15]].
+    #
+    # SCOPE: only the floors joined by stair_ramp edges. TELEPORTER-only sub-storeys (the
+    # crawlspace) connect through a VIRTUAL down-node, not a navigable cell-to-cell bridge,
+    # so the planner reaches them by a different mechanism that this cell-flood can't model
+    # — their endpoint validity is covered by invariant 5. Don't flag them here.
+    real_floors = [f for f in report["floors"] if "error" not in f]
+    stair_edges = (edges_doc.get("stair_ramp") or []) if isinstance(edges_doc, dict) else []
+    floors_by_label = {f["label"]: f for f in real_floors}
+
+    # Floors that should be walk-connected: any pair that a stair_ramp edge names. If the
+    # bake has >1 floor but a real staircase exists in neither, that's the regression.
+    stair_floor_set = set()
+    for edge in stair_edges:
+        if isinstance(edge, dict):
+            for label in floors_by_label:
+                ep = edge.get(label)
+                if isinstance(ep, dict) and isinstance(ep.get("cell"), list) and len(ep["cell"]) >= 2:
+                    stair_floor_set.add(label)
+
+    # 7a. Loud structural guard: ground+upper both present but no stair edge joins them.
+    walk_floors = {lab for lab in floors_by_label if lab != "crawlspace"}
+    if len(walk_floors) > 1 and not (stair_floor_set & walk_floors):
+        errors.append(
+            f"multi-floor bake has walkable floors {sorted(walk_floors)} but ZERO "
+            f"stair_ramp edges connecting them. The staircase was almost certainly "
+            f"dropped upstream (e.g. the walkable exporter's SkipMeshLayers excluding "
+            f"the stair's layer). Check Export-SceneWalkableSurfaceData.ps1 + "
+            f"derive_inter_floor_edges."
+        )
+
+    # 7b. Flood check across the stair-joined floors: confirm they're actually mutually
+    # reachable from the main component (a stair edge that lands in a stranded pocket
+    # would pass 7a but still leave a floor unroutable).
+    if len(stair_floor_set) > 1:
+        def _nav(label, ix, iz):
+            f = floors_by_label.get(label)
+            if f is None:
+                return False
+            fr = f["frame"]
+            if not (0 <= ix < fr["nx"] and 0 <= iz < fr["nz"]):
+                return False
+            return f["bitmap_rows"][ix][iz] == 'N'
+
+        bridges = {}
+        for edge in stair_edges:
+            if not isinstance(edge, dict):
+                continue
+            ends = []
+            for label in floors_by_label:
+                ep = edge.get(label)
+                if isinstance(ep, dict) and isinstance(ep.get("cell"), list) and len(ep["cell"]) >= 2:
+                    ends.append((label, int(ep["cell"][0]), int(ep["cell"][1])))
+            for a in ends:
+                for b in ends:
+                    if a != b:
+                        bridges.setdefault(a, []).append(b)
+
+        from collections import deque
+
+        def _flood(seed):
+            seen = {seed}
+            q = deque([seed])
+            reached = {seed[0]}
+            while q:
+                label, ix, iz = q.popleft()
+                for dx in (-1, 0, 1):
+                    for dz in (-1, 0, 1):
+                        if dx == 0 and dz == 0:
+                            continue
+                        if (label, ix + dx, iz + dz) not in seen and _nav(label, ix + dx, iz + dz):
+                            seen.add((label, ix + dx, iz + dz))
+                            q.append((label, ix + dx, iz + dz))
+                for nb in bridges.get((label, ix, iz), ()):
+                    if nb not in seen and _nav(*nb):
+                        seen.add(nb)
+                        reached.add(nb[0])
+                        q.append(nb)
+            return reached
+
+        # Seed from the LARGEST component of a stair-joined floor — NOT the first 'N'
+        # cell, which can sit in a stranded pocket and under-report connectivity.
+        seed_label = max(stair_floor_set,
+                         key=lambda lab: sum(r.count('N') for r in floors_by_label[lab]["bitmap_rows"]))
+        sf = floors_by_label[seed_label]
+        sf_rows = sf["bitmap_rows"]
+        nx, nz = sf["frame"]["nx"], sf["frame"]["nz"]
+        # Largest within-floor component, found by a plain within-floor flood.
+        visited = set()
+        best_seed, best_size = None, -1
+        for ix in range(nx):
+            row = sf_rows[ix]
+            for iz in range(nz):
+                if row[iz] != 'N' or (ix, iz) in visited:
+                    continue
+                comp = {(ix, iz)}
+                dq = deque([(ix, iz)])
+                while dq:
+                    cx, cz = dq.popleft()
+                    for dx in (-1, 0, 1):
+                        for dz in (-1, 0, 1):
+                            if (dx or dz) and (cx + dx, cz + dz) not in comp and _nav(seed_label, cx + dx, cz + dz):
+                                comp.add((cx + dx, cz + dz))
+                                dq.append((cx + dx, cz + dz))
+                visited |= comp
+                if len(comp) > best_size:
+                    best_size, best_seed = len(comp), (seed_label, ix, iz)
+
+        if best_seed is not None:
+            reached_floors = _flood(best_seed)
+            unreached = stair_floor_set - reached_floors
+            if unreached:
+                errors.append(
+                    f"cross-floor connectivity: stair-joined floor(s) {sorted(unreached)} "
+                    f"are UNREACHABLE from the main {seed_label!r} component — the stair "
+                    f"edge lands in a stranded pocket. Routes to those floors will "
+                    f"return no_path. Check the stair landing cells in "
+                    f"derive_inter_floor_edges."
+                )
+
     return errors, warnings
 
 
