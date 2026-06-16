@@ -46,6 +46,15 @@ IGNORE_RAYCAST_LAYER = 2
 # Keep these in lockstep with the C# constants of the same name.
 INTERACTION_EYE_HEIGHT_M = 1.6
 INTERACTION_RIM_FRACTION = 0.9
+# View-quality (goal-pick tiebreak) constants — keep in lockstep with the C# constants of
+# the same name in SimpleNavPlanner. A target more than HIGH_MOUNT_EYE_RISE_M above the eye
+# is "high-mounted" and gets a diagonal-angle bonus that rewards a stand-back sightline over
+# standing directly underneath (near-vertical, camera-pose self-occlusion). The bonus grows
+# with the sightline's deviation from vertical, saturating at DIAGONAL_ANGLE_SATURATION_RAD
+# (~35°), scaled by DIAGONAL_QUALITY_WEIGHT_M.
+HIGH_MOUNT_EYE_RISE_M = 0.8
+DIAGONAL_ANGLE_SATURATION_RAD = 0.61
+DIAGONAL_QUALITY_WEIGHT_M = 0.30
 # Cast slightly past the aim point so a hit exactly on the target surface still
 # registers (C# uses dist + 0.05f).
 EYE_SURFACE_EPSILON = 0.05
@@ -594,3 +603,30 @@ def cell_has_los_to_target(eye_xz, floor_y, target_collider, radius_m, occluders
     return _is_self_or_relative(best_c.path, target_collider.path) is not None \
         or _is_self_or_relative(target_collider.path, best_c.path) is not None \
         or _shares_furniture_unit(best_c.path, target_collider.path)
+
+
+def goal_view_quality(eye_xz, floor_y, target_collider):
+    """View-quality score (higher = better) for parking the player on this cell to interact
+    with `target_collider`. Mirror of SimpleNavPlanner.GoalViewQuality. The offline planner
+    has no graded side-clearance margin (its LOS test is boolean), so the clearance term is 0
+    and the score is the height-aware DIAGONAL bonus only: for an ABOVE-EYE target it rewards a
+    sightline whose elevation is below vertical (a stand-back diagonal up-look) over standing
+    directly underneath. For a roughly eye-level target the bonus is 0, so ordinary objects keep
+    score 0 and the goal pick falls back to closest, exactly as before.
+
+    Note: the C# score adds max(0, side-clearance margin) which has no offline analogue, so the
+    two scores are not bit-identical — but for HIGH MOUNTS (where the C# prune is skipped and
+    every cell's margin is uniform) the diagonal term alone reproduces the same goal ORDERING,
+    which is what the route-parity check compares."""
+    if target_collider is None:
+        return 0.0
+    eye = (eye_xz[0], floor_y + INTERACTION_EYE_HEIGHT_M, eye_xz[1])
+    aim = closest_point_on_bounds(target_collider, eye)
+    rise = aim[1] - eye[1]
+    if rise <= HIGH_MOUNT_EYE_RISE_M:
+        return 0.0  # not high-mounted — no diagonal preference
+    horiz = math.hypot(aim[0] - eye[0], aim[2] - eye[2])
+    elevation = math.atan2(rise, max(horiz, 1e-3))   # 0=horizontal, π/2=straight up
+    from_vertical = (math.pi * 0.5) - elevation       # 0=vertical (bad), larger=more diagonal
+    diagonal = max(0.0, min(1.0, from_vertical / DIAGONAL_ANGLE_SATURATION_RAD))
+    return diagonal * DIAGONAL_QUALITY_WEIGHT_M

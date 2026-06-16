@@ -25,6 +25,11 @@ namespace DateEverythingAccess
         // destination rule uses the game's InteractionRadius. See TagDoors +
         // [[project-navigation-door-tag-radius]], [[project_navigation_container_open_on_interact]].)
         private const float DoorInteractRadiusFallbackM = 7.5f;
+        // Max on-path tag radius for a door whose opening anchor was derived from its freed-cells
+        // centroid (the fallback for inner closet doors with no threshold cells). Clamps a lopsided
+        // freed region to a doorway half-width so it doesn't over-tag. Kept in sync with the Python
+        // planner's FREED_CENTROID_MAX_OPENING_RADIUS_M.
+        private const float FreedCentroidMaxOpeningRadiusM = 1.0f;
         // (No planner-side interaction-radius constant: the planner uses the object's own
         // InteractionRadius verbatim — interaction is gated on radius + line of sight, not on any
         // bound we impose. See the radius handling in Plan() and BetterPlayerControl.cs:493-499.)
@@ -274,6 +279,10 @@ namespace DateEverythingAccess
             // at the destination so the player can interact with what's inside. Null = no rescue.
             List<string> containerDoorsToOpen = null;
 
+            // Per-goal view quality for the AStar tiebreak (set by the collider-LOS branch below;
+            // null for door targets, which use operability cells with no LOS quality signal).
+            Dictionary<NodeKey, float> goalQuality = null;
+
             // Door target: the goal set is the bake's operable_from_cells — the
             // authoritative navigable cells the player can stand in to operate this door
             // (excludes the swing arc and the panel, computed from the real Door.cs rule).
@@ -337,6 +346,14 @@ namespace DateEverythingAccess
                 float innerSq = TargetColliderClearanceM * TargetColliderClearanceM;
                 float bestClearance = 0f;
                 List<float> clearanceOf = new List<float>(goals.Count);
+                // Per-goal VIEW QUALITY (higher = more likely the game's interaction ray targets the
+                // object from here). Used as the tiebreak among equally-simple routes in AStar,
+                // replacing raw proximity. Combines side-clearance margin with a height-aware
+                // diagonal-angle bonus: for an above-eye target, standing directly under it gives a
+                // near-vertical sightline that grazes the ceiling/wall and self-occludes, while a
+                // stand-back cell gives a clean diagonal up-look. See
+                // [[project_navigation_los_camera_origin_mismatch_2026_06_14]].
+                goalQuality = new Dictionary<NodeKey, float>(goals.Count);
                 for (int i = 0; i < goals.Count; i++)
                 {
                     NodeKey g = goals[i];
@@ -356,6 +373,7 @@ namespace DateEverythingAccess
                         passedOf.Add(passed);
                         clearanceOf.Add(margin);
                         if (margin > bestClearance) bestClearance = margin;
+                        goalQuality[g] = GoalViewQuality(goalFloor, g, targetCollider, margin);
                     }
                 }
                 if (losClear.Count > 0)
@@ -366,8 +384,18 @@ namespace DateEverythingAccess
                     // grazed / furniture-skimming standpoints that pass the boolean test but fail the
                     // game's real ray, while keeping the leg-optimal pick among the robust cells.
                     // See [[project_navigation_noloss_full_classification_2026_06_14]].
+                    //
+                    // SKIP this prune for HIGH-MOUNTED targets. The side margin is measured on a
+                    // HORIZONTAL perpendicular, and for a near-vertical sightline the clearance probe
+                    // short-circuits to max — so the cell directly UNDER a ceiling fixture reports the
+                    // highest margin and the prune would discard the stand-back diagonal cells that
+                    // are actually the better view. For high mounts we keep the whole LOS-clear set
+                    // and let GoalViewQuality's diagonal-angle term rank them. See
+                    // [[project_navigation_los_camera_origin_mismatch_2026_06_14]].
+                    bool targetHighMounted =
+                        (targetCollider.bounds.center.y - (goalFloor.FloorY + InteractionEyeHeightM)) > HighMountEyeRiseM;
                     HashSet<string> containerDoorsSeen = new HashSet<string>(StringComparer.Ordinal);
-                    if (bestClearance > 0f)
+                    if (bestClearance > 0f && !targetHighMounted)
                     {
                         float keepAbove = bestClearance - LosProbeSideOffsetsM[0] - 1e-4f;
                         List<NodeKey> solid = new List<NodeKey>(losClear.Count);
@@ -404,7 +432,7 @@ namespace DateEverythingAccess
 
             List<NodeKey> path;
             float totalCost;
-            if (!AStar(startNode, goals, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost))
+            if (!AStar(startNode, goals, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost, goalQuality))
             {
                 // The closed-state plan to the LOS goal cells failed. Retry only with DOORS
                 // RELAXED (every door assumed openable, state-walls released) on the SAME goal
@@ -414,7 +442,7 @@ namespace DateEverythingAccess
                 // Bedroom-from-bedroom is the canonical relax case (all doors closed at scene load).
                 {
                     if (TryRelaxedPlan(startNode, goals, goalFloor.Label, targetPos,
-                                       out path, out totalCost))
+                                       out path, out totalCost, goalQuality))
                     {
                         if (Main.Log != null)
                             Main.Log.LogInfo("SimpleNavPlanner.Plan: retried with all-doors-open for target=" +
@@ -423,7 +451,28 @@ namespace DateEverythingAccess
                     }
                     else
                     {
-                        if (Main.Log != null) Main.Log.LogWarning("SimpleNavPlanner.Plan: no_path target=" + (targetName ?? "<null>") + "#" + targetGameObjectId);
+                        // DIAGNOSTIC (2026-06-15, batched sweep): no_path here means BOTH the
+                        // closed-state and doors-relaxed A* failed to reach any of the (LOS-valid)
+                        // goal cells. The same objects plan fine OFFLINE from the manifest start, so
+                        // the suspect is the in-game START cell. Distinguish a real planner gap from
+                        // a harness artifact (start dropped in a disconnected pocket): flood the
+                        // doors-relaxed navigable graph from startNode and report how many goal cells
+                        // fall in the start's reachable component vs the component's total size.
+                        //   goalsInComponent>0  → goals ARE reachable but A* failed → real bug.
+                        //   goalsInComponent==0 + small component → start pocketed (likely artifact).
+                        //   goalsInComponent==0 + large component → goals genuinely isolated.
+                        // See [[project-navigation-sweep-2026-06-16]].
+                        if (Main.Log != null)
+                        {
+                            int goalsInComp, compSize;
+                            DiagnoseNoPathReach(startNode, goals, out goalsInComp, out compSize);
+                            Main.Log.LogWarning("SimpleNavPlanner.Plan: no_path target=" +
+                                (targetName ?? "<null>") + "#" + targetGameObjectId +
+                                " start=" + startNode.Floor + "(" + startNode.Ix + "," + startNode.Iz + ")" +
+                                " goals=" + goals.Count +
+                                " goalsInStartComponent=" + goalsInComp +
+                                " startComponentCells=" + compSize);
+                        }
                         LastFailure = PlanFailure.NoPath;
                         return null;
                     }
@@ -951,6 +1000,38 @@ namespace DateEverythingAccess
                                 floor.OpeningRadiusByName[d.name] = maxR;
                             }
                         }
+                        // FREED-CELLS FALLBACK: a door that frees cells but has NO opening_center
+                        // and NO threshold cells (the nested INNER closet doors —
+                        // Doors_Gym_ClosetInner, Doors_Bedroom_Closet*_Inner — whose deep/narrow
+                        // closet interior yields no threshold cells) would otherwise be absent from
+                        // OpeningCenterByName and therefore UNTAGGABLE: TagDoors never tags it, the
+                        // executor never opens it, and the follower stalls at a closed door it
+                        // routed through. Derive the opening anchor from the freed-cells centroid so
+                        // the door becomes taggable. The radius is CLAMPED (freed regions are
+                        // asymmetric; their full spread would over-tag) to a doorway half-width.
+                        // See [[project-navigation-door-stalls-2026-06-15]].
+                        if (!floor.OpeningCenterByName.ContainsKey(d.name)
+                            && d.freed_cells != null && d.freed_cells.Length > 0)
+                        {
+                            double fsx = 0, fsz = 0; int fn = 0;
+                            for (int ci = 0; ci < d.freed_cells.Length; ci++)
+                            {
+                                int[] pair = d.freed_cells[ci];
+                                if (pair == null || pair.Length < 2) continue;
+                                Vector2 w = floor.CellToWorld(pair[0], pair[1]);
+                                fsx += w.x; fsz += w.y; fn++;
+                            }
+                            if (fn > 0)
+                            {
+                                float fcx = (float)(fsx / fn), fcz = (float)(fsz / fn);
+                                floor.OpeningCenterByName[d.name] =
+                                    new Vector3(fcx, floor.FloorY, fcz);
+                                // Tag radius clamped to a doorway half-width so a lopsided freed
+                                // region doesn't tag the door on segments that merely pass near it.
+                                floor.OpeningRadiusByName[d.name] =
+                                    Mathf.Clamp(floor.CellSize * 3f, floor.CellSize, FreedCentroidMaxOpeningRadiusM);
+                            }
+                        }
                     }
                 }
                 if (raw.state_walls != null)
@@ -1253,7 +1334,7 @@ namespace DateEverythingAccess
         // assuming the player will open the right doors along the way" — segment door-tags
         // (TagDoors) then handle the actual opening at runtime.
         private static bool TryRelaxedPlan(NodeKey start, List<NodeKey> goals, string goalFloorLabel, Vector3 targetPos,
-            out List<NodeKey> path, out float totalCost)
+            out List<NodeKey> path, out float totalCost, Dictionary<NodeKey, float> goalQuality)
         {
             path = null;
             totalCost = 0f;
@@ -1274,7 +1355,7 @@ namespace DateEverythingAccess
 
             try
             {
-                return AStar(start, goals, goalFloorLabel, targetPos.x, targetPos.z, out path, out totalCost);
+                return AStar(start, goals, goalFloorLabel, targetPos.x, targetPos.z, out path, out totalCost, goalQuality);
             }
             finally
             {
@@ -1289,8 +1370,60 @@ namespace DateEverythingAccess
             }
         }
 
+        // Diagnostic-only (no behaviour change): flood the doors-RELAXED navigable graph from
+        // `start` and report how many of `goals` lie in the start's reachable component, plus the
+        // component's cell count. Used at the no_path exit to split a real planner gap
+        // (goalsInComponent>0) from a pocketed-start harness artifact (goalsInComponent==0, small
+        // component). Mirrors TryRelaxedPlan's door/state-wall relaxation so it measures the same
+        // graph the failing retry searched. Bounded by a generous cap so a degenerate flood can't
+        // hang the sweep. See [[project-navigation-sweep-2026-06-16]].
+        private static void DiagnoseNoPathReach(NodeKey start, List<NodeKey> goals,
+            out int goalsInComponent, out int componentCells)
+        {
+            const int FloodCap = 200000;
+            HashSet<NodeKey> goalSet = new HashSet<NodeKey>(goals);
+            HashSet<NodeKey> seen = new HashSet<NodeKey> { start };
+            Queue<NodeKey> frontier = new Queue<NodeKey>();
+            frontier.Enqueue(start);
+
+            // Relax doors/state-walls for the flood (same as TryRelaxedPlan) so reachability
+            // matches the doors-open retry that just failed.
+            HashSet<long>[] saved = new HashSet<long>[_floors.Count];
+            for (int i = 0; i < _floors.Count; i++)
+            {
+                Floor f = _floors[i];
+                saved[i] = new HashSet<long>(f.ExtraNavigable);
+                foreach (var kvp in f.DoorFreedByName) f.ExtraNavigable.UnionWith(kvp.Value);
+                foreach (var kvp in f.StateWallFreedByName) f.ExtraNavigable.UnionWith(kvp.Value);
+                f.InvalidateClearance();
+            }
+            try
+            {
+                int hits = 0;
+                while (frontier.Count > 0 && seen.Count < FloodCap)
+                {
+                    NodeKey node = frontier.Dequeue();
+                    if (goalSet.Contains(node)) hits++;
+                    foreach (var (nbr, _) in Neighbors(node))
+                        if (seen.Add(nbr)) frontier.Enqueue(nbr);
+                }
+                goalsInComponent = hits;
+                componentCells = seen.Count;
+            }
+            finally
+            {
+                for (int i = 0; i < _floors.Count; i++)
+                {
+                    Floor f = _floors[i];
+                    f.ExtraNavigable.Clear();
+                    f.ExtraNavigable.UnionWith(saved[i]);
+                    f.InvalidateClearance();
+                }
+            }
+        }
+
         private static bool AStar(NodeKey start, List<NodeKey> goals, string goalFloorLabel, float goalWx, float goalWz,
-            out List<NodeKey> path, out float totalCost)
+            out List<NodeKey> path, out float totalCost, Dictionary<NodeKey, float> goalQuality = null)
         {
             path = null;
             totalCost = float.PositiveInfinity;
@@ -1381,25 +1514,36 @@ namespace DateEverythingAccess
                 return false;
             }
 
-            // Pick the reached goal with (fewest smoothed legs, then closest to the object, then
-            // cheapest walk as a final stable tiebreak).
+            // Pick the reached goal with FEWEST smoothed legs first (follower stability — the
+            // primary axis), then the BEST VIEW QUALITY (most unobstructed sightline, so the game's
+            // interaction ray is most likely to target the object), then closest to the object, then
+            // cheapest walk as a stable tiebreak. View quality REPLACES raw proximity as the tiebreak
+            // among equally-simple routes: for an above-eye target the closest cell is directly under
+            // it (near-vertical, self-occluding sightline), while a stand-back cell — slightly farther
+            // but equally simple to reach — gives the clean diagonal up-look. goalQuality is null for
+            // door targets (no LOS quality signal); then this falls back to closest, the old behaviour.
+            // See [[project_navigation_los_camera_origin_mismatch_2026_06_14]].
             List<NodeKey> bestPath = null;
             int bestLegs = int.MaxValue;
+            float bestQuality = float.NegativeInfinity;
             float bestDist = float.PositiveInfinity;
             float bestG = float.PositiveInfinity;
             foreach (NodeKey goal in reachedGoals)
             {
                 List<NodeKey> cellPath = ReconstructPath(came, goal);
                 int legs = SmoothPath(cellPath).Count - 1;
+                float quality = (goalQuality != null && goalQuality.TryGetValue(goal, out float q)) ? q : 0f;
                 float dist = GoalDistanceToObjectM(goal, goalFloorLabel, goalWx, goalWz);
                 float gCost = gScore[goal];
                 bool better =
                     legs < bestLegs ||
-                    (legs == bestLegs && dist < bestDist - 1e-4f) ||
-                    (legs == bestLegs && Mathf.Abs(dist - bestDist) <= 1e-4f && gCost < bestG);
+                    (legs == bestLegs && quality > bestQuality + 1e-4f) ||
+                    (legs == bestLegs && Mathf.Abs(quality - bestQuality) <= 1e-4f && dist < bestDist - 1e-4f) ||
+                    (legs == bestLegs && Mathf.Abs(quality - bestQuality) <= 1e-4f && Mathf.Abs(dist - bestDist) <= 1e-4f && gCost < bestG);
                 if (better)
                 {
                     bestLegs = legs;
+                    bestQuality = quality;
                     bestDist = dist;
                     bestG = gCost;
                     bestPath = cellPath;
@@ -1787,6 +1931,51 @@ namespace DateEverythingAccess
         // cell is a valid standpoint; the magnitude is the SIDE clearance margin (see below) used to
         // prefer solidly-clear standpoints over ones whose line skims an occluder edge.
         private const float NoLineOfSight = -1f;
+
+        // Above this much target-above-eye height (m) we treat the object as "high-mounted" and start
+        // rewarding a diagonal (stand-back) sightline over standing directly underneath. ~0.8m above
+        // the 1.6m eye = ~2.4m, comfortably above head-height shelving but below ceiling fixtures.
+        private const float HighMountEyeRiseM = 0.8f;
+        // The diagonal-angle bonus saturates at this sightline elevation (radians ≈ 35°). Past a
+        // clean diagonal there's no further benefit to standing even farther back. Keeps the bonus
+        // bounded so it tiebreaks WITHIN a leg count, never overpowering the legs-first ordering.
+        private const float DiagonalAngleSaturationRad = 0.61f;
+        // Weight of the diagonal bonus relative to clearance margin. Clearance margins are ~0..0.45m;
+        // scaling the (0..1) diagonal term by this keeps the two terms comparable so a clean diagonal
+        // can outrank a marginally-higher side clearance, but a totally-occluded-but-diagonal cell
+        // (margin 0) still loses to an open one at the same angle.
+        private const float DiagonalQualityWeightM = 0.30f;
+
+        // View quality score (higher = better) for parking the player on cell `g` to interact with
+        // `targetCollider`. Primary term: the side-clearance `margin` (open space around the
+        // sightline). Added term: for an ABOVE-EYE target, a height-aware bonus that grows with the
+        // sightline's elevation angle — i.e. rewards a DIAGONAL up-look (stand back) over a near-
+        // vertical one (stand under), which the third-person camera-pose ray grazes/ self-occludes.
+        // For a roughly eye-level target the bonus is ~0, so ordinary objects keep clearance-only
+        // quality and the pick still falls back to proximity as before. See
+        // [[project_navigation_los_camera_origin_mismatch_2026_06_14]].
+        private static float GoalViewQuality(Floor floor, NodeKey g, Collider targetCollider, float margin)
+        {
+            float quality = Mathf.Max(0f, margin);
+            if (targetCollider == null)
+                return quality;
+
+            Vector2 xz = floor.CellToWorld(g.Ix, g.Iz);
+            Vector3 eye = new Vector3(xz.x, floor.FloorY + InteractionEyeHeightM, xz.y);
+            Vector3 aim = targetCollider.ClosestPointOnBounds(eye);
+            float rise = aim.y - eye.y;                 // how far the target sits above eye level
+            if (rise <= HighMountEyeRiseM)
+                return quality;                         // not high-mounted — clearance only
+
+            float horiz = new Vector2(aim.x - eye.x, aim.z - eye.z).magnitude;
+            // Elevation angle of the sightline. Standing directly under → horiz≈0 → angle≈90° (bad);
+            // standing back → larger horiz → shallower diagonal. We reward the DIAGONAL, i.e. angles
+            // BELOW vertical, saturating once the look-up is comfortably diagonal.
+            float elevation = Mathf.Atan2(rise, Mathf.Max(horiz, 1e-3f)); // 0=horizontal, π/2=straight up
+            float fromVertical = (Mathf.PI * 0.5f) - elevation;           // 0=vertical(bad), larger=more diagonal(good)
+            float diagonal = Mathf.Clamp01(fromVertical / DiagonalAngleSaturationRad);
+            return quality + diagonal * DiagonalQualityWeightM;
+        }
 
         // Returns the interaction-LOS CLEARANCE MARGIN (m) for standing on cell `g`, or NoLineOfSight
         // if the cell can't interact at all. The boolean clear/blocked test (CellHasLineOfSightToTarget)

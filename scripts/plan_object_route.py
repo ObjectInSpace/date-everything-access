@@ -62,6 +62,10 @@ CORNER_WAYPOINT_DEG = 30.0       # smoothing: keep vertices with turn > this
 # constant is GONE: on-path tagging uses each door's geometric opening radius (+1 cell), and the
 # destination rule uses the game's InteractionRadius. See tag_doors.
 DOOR_INTERACT_RADIUS_FALLBACK_M = 7.5
+# Max on-path tag radius for a door whose opening anchor was derived from its freed-cells centroid
+# (the fallback for inner closet doors with no threshold cells). Clamps a lopsided freed region to a
+# doorway half-width so it doesn't over-tag. Mirror of C# FreedCentroidMaxOpeningRadiusM.
+FREED_CENTROID_MAX_OPENING_RADIUS_M = 1.0
 # (No interaction-radius constant: the planner uses each object's own InteractionRadius verbatim —
 # parity with C# SimpleNavPlanner. Interaction is gated on radius + LOS, not on any bound we impose.)
 # Player-capsule + safety margin from the target's collider face: goal cells whose XZ distance to
@@ -315,6 +319,28 @@ class Planner:
                     floor.doors_freed_by_name[name] |= cells
                 else:
                     floor.doors_freed_by_name[name] = cells
+                # FREED-CELLS FALLBACK (mirror of SimpleNavPlanner): a door that frees
+                # cells but has NO opening_center and NO threshold cells (the nested INNER
+                # closet doors, whose deep/narrow interior yields no threshold cells) is
+                # absent from opening_center_by_name and therefore UNTAGGABLE — tag_doors
+                # never tags it, the executor never opens it, the follower stalls at a
+                # closed door it routed through. Derive the opening anchor from the freed-
+                # cells centroid, radius CLAMPED to a doorway half-width (an asymmetric
+                # freed region's full spread would over-tag). See
+                # [[project-navigation-door-stalls-2026-06-15]].
+                if name not in floor.opening_center_by_name:
+                    fsx = fsz = 0.0
+                    fn = 0
+                    for (cix, ciz) in floor.doors_freed_by_name[name]:
+                        wx, wz = floor.cell_to_world(cix, ciz)
+                        fsx += wx
+                        fsz += wz
+                        fn += 1
+                    if fn > 0:
+                        floor.opening_center_by_name[name] = (fsx / fn, fsz / fn)
+                        floor.opening_radius_by_name[name] = min(
+                            FREED_CENTROID_MAX_OPENING_RADIUS_M,
+                            max(floor.cell_size, floor.cell_size * 3.0))
             for wall in f_raw.get("state_walls", []):
                 name = wall.get("name")
                 if not name:
@@ -524,7 +550,7 @@ class Planner:
             out.append((nbr, cost, meta))
         return out
 
-    def astar(self, start_node, goal_nodes, goal_floor, goal_wx, goal_wz):
+    def astar(self, start_node, goal_nodes, goal_floor, goal_wx, goal_wz, goal_quality=None):
         goal_set = set(goal_nodes)
         if start_node in goal_set:
             return [start_node], 0.0, []
@@ -533,11 +559,14 @@ class Planner:
         gscore = {start_node: 0.0}
         closed = set()
         # Goal selection objective (parity with C# SimpleNavPlanner.AStar): FEWEST LEGS, then
-        # CLOSEST to the object, then cheapest walk. We consider ALL reachable goal cells (a far
-        # cell can be the SIMPLEST to reach, and legs is primary), bounded only by a generous
-        # expansion CAP as a perf safety valve — not a correctness limit. A* records the shortest
-        # cell-path to each reached goal, then we smooth + count legs per candidate. The C# LOS
-        # goal-cell filter + rim check are NOT mirrored here (live physics only).
+        # BEST VIEW QUALITY (most unobstructed sightline — biases high-mounts to a stand-back
+        # diagonal), then CLOSEST to the object, then cheapest walk. View quality replaces raw
+        # proximity as the tiebreak among equally-simple routes; `goal_quality` is the dict the
+        # LOS filter built (None ⇒ all-zero ⇒ falls back to closest, the old behaviour). We
+        # consider ALL reachable goal cells (a far cell can be the SIMPLEST to reach, and legs is
+        # primary), bounded only by a generous expansion CAP as a perf safety valve — not a
+        # correctness limit. A* records the shortest cell-path to each reached goal, then we
+        # smooth + count legs per candidate.
         reached_goals = []
         expansions = 0
         hit_cap = False
@@ -594,7 +623,7 @@ class Planner:
             path.reverse(); edges.reverse()
             return path, edges
 
-        best = None  # (legs, dist, gcost, path, edges)
+        best = None  # (key, path, edges, gcost)
         for goal in reached_goals:
             path, edges = reconstruct(goal)
             legs = len(smooth_path(path, self)) - 1
@@ -602,7 +631,9 @@ class Planner:
             wx, wz = f.cell_to_world(goal[1], goal[2])
             dist = math.hypot(wx - goal_wx, wz - goal_wz)
             gcost = gscore[goal]
-            key = (legs, dist, gcost)
+            quality = goal_quality.get(goal, 0.0) if goal_quality else 0.0
+            # Higher quality is better, so negate it for the ascending tuple comparison.
+            key = (legs, -quality, dist, gcost)
             if best is None or key < best[0]:
                 best = (key, path, edges, gcost)
         _, best_path, best_edges, best_g = best
@@ -1063,8 +1094,44 @@ def load_interactables():
     return json.loads(INTERACTABLES.read_text(encoding="utf-8-sig"))["Interactables"]
 
 
+def find_roster_fixture(roster, target):
+    """Resolve a plan() target against the bake's canonical fixture ROSTER — the single
+    source of truth (filtered, identity-deduped, routing-unit merged, best-located). `target`
+    matches a fixture by GameObjectId (in its merged object_ids), exact name, exact path, or
+    a name/path substring. Returns the roster entry or None.
+
+    This is preferred over find_interactable (the raw asset export) so the single-target plan
+    resolves the SAME logical object the sweep and the in-game planner do. The raw export
+    substring-matches across lighting-preset phantoms + same-named instances (e.g.
+    'light_recessed_1' hits 220 records across 11 distinct XZ), so re-deriving identity there
+    re-introduces exactly the ambiguity the roster exists to remove. See load_fixture_roster."""
+    # GameObjectId (any of a merged fixture's ids).
+    try:
+        tid = int(target)
+        for fx in roster:
+            if tid in (fx.get("object_ids") or []):
+                return fx
+    except (TypeError, ValueError):
+        pass
+    t = str(target).lower()
+    # Exact name/path first, then substring — deterministic shortest-path tiebreak.
+    exact = [fx for fx in roster
+             if t == (fx.get("name") or "").lower() or t == (fx.get("path") or "").lower()]
+    if exact:
+        return exact[0]
+    matches = [fx for fx in roster
+               if t in (fx.get("name") or "").lower() or t in (fx.get("path") or "").lower()]
+    if not matches:
+        return None
+    matches.sort(key=lambda fx: (len(fx.get("path") or ""), (fx.get("object_ids") or [0])[0]))
+    return matches[0]
+
+
 def find_interactable(items, target):
-    """target is either a GameObjectId (int-ish string) or a substring match on path."""
+    """target is either a GameObjectId (int-ish string) or a substring match on path.
+    RAW-EXPORT resolver — prefer find_roster_fixture (the canonical bake roster). This is a
+    last-resort fallback for objects absent from the roster, and substring-matches across
+    phantom/preset duplicates; the caller should warn when it falls back here."""
     try:
         tid = int(target)
         for it in items:
@@ -1162,21 +1229,24 @@ def filter_goals_by_los(floor, goals, target_collider, target_x, target_z, radiu
       (a) drop cells whose XZ distance to the target collider's nearest bounds point is
           below TARGET_COLLIDER_CLEARANCE_M (standing inside the prop), and
       (b) keep only cells with a clear synthetic-eye interaction line (cell_has_los).
-    Returns (goals, container_doors): the filtered (ix, iz) list and the set of container
-    door PATHS the kept cells' sightlines saw past (to be opened on arrival). If
-    target_collider is None, returns (goals, set()). If the collider IS resolved but NO
-    cell qualifies, returns ([], set()) so the caller fails fast with no_los.
+    Returns (goals, container_doors, quality): the filtered (ix, iz) list, the set of container
+    door PATHS the kept cells' sightlines saw past (to be opened on arrival), and a dict
+    {(floor_label, ix, iz): view_quality} used as the goal-pick tiebreak (mirror of the C#
+    goalQuality map; higher = more unobstructed view, biases high-mounts to a stand-back diagonal).
+    If target_collider is None, returns (goals, set(), {}). If the collider IS resolved but NO
+    cell qualifies, returns ([], set(), {}) so the caller fails fast with no_los.
 
     A door is a door: the sightline SEES PAST operable container doors by default (mirror
     of the C# LOS filter), the same way A* routes through a closed passage door — the
     executor opens it on arrival. Cells whose line passed a container door record it so
     tag_doors / the route can open it."""
     if target_collider is None:
-        return goals, set()
+        return goals, set(), {}
     _ensure_los_context()
     inner_sq = TARGET_COLLIDER_CLEARANCE_M * TARGET_COLLIDER_CLEARANCE_M
     out = []
     opened = set()
+    quality = {}
     for (ix, iz) in goals:
         wx, wz = floor.cell_to_world(ix, iz)
         # (a) overlap drop: nearest bounds point to a 1m-high standpoint (matches C#'s
@@ -1195,7 +1265,9 @@ def filter_goals_by_los(floor, goals, target_collider, target_x, target_z, radiu
                                        passed_container_doors=passed):
             out.append((ix, iz))
             opened |= passed
-    return out, opened
+            quality[(floor.label, ix, iz)] = _los.goal_view_quality(
+                (wx, wz), floor.floor_y, target_collider)
+    return out, opened, quality
 
 
 # ---------- object-node resolution (for the object-reachability sweep) ----------
@@ -1304,7 +1376,7 @@ def resolve_object_node(planner, item):
         # None ⇒ keep the full disc (matches plan() / C# when the live component-walk finds none).
         target_collider = resolve_target_collider_for_path(item.get("Path"))
         if target_collider is not None:
-            los_goals, _container_doors = filter_goals_by_los(
+            los_goals, _container_doors, _quality = filter_goals_by_los(
                 floor, goals, target_collider, tx, tz, radius)
             if not los_goals:
                 return "no_los"
@@ -1393,10 +1465,22 @@ def object_sweep_nodes(planner, roster):
 def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_override=None):
     bake = load_bake()
     planner = Planner(bake)
-    items = load_interactables()
-    target = find_interactable(items, target_spec)
-    if target is None:
-        raise SystemExit(f"no interactable matches {target_spec!r}")
+    # Resolve the target through the bake's canonical fixture ROSTER (single source of truth),
+    # the same set the sweep and the in-game planner use. Only fall back to the raw asset export
+    # if the roster has no match (and say so loudly) — re-deriving identity from the raw export
+    # re-introduces the preset/instance ambiguity the roster removes. See load_fixture_roster.
+    roster = load_fixture_roster()
+    fixture = find_roster_fixture(roster, target_spec) if roster else None
+    if fixture is not None:
+        target = _roster_entry_as_item(fixture)
+    else:
+        target = find_interactable(load_interactables(), target_spec)
+        if target is None:
+            raise SystemExit(f"no interactable matches {target_spec!r}")
+        sys.stderr.write(
+            f"WARNING: {target_spec!r} not in the fixture roster; resolved from the RAW asset "
+            f"export (may be ambiguous across preset/instance duplicates). Path="
+            f"{target.get('Path')!r}\n")
 
     tx = target["Position"]["x"]; ty = target["Position"]["y"]; tz = target["Position"]["z"]
 
@@ -1419,6 +1503,7 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
         raise SystemExit(f"target Y={ty} not on a baked floor")
     radius = interaction_radius_override or target.get("InteractionRadius") or 0.0
     goals = goal_cells_around(planner.floors[tfloor], tx, tz, radius)
+    goal_quality = None  # set by the LOS filter below; None ⇒ astar falls back to closest
     if not goals:
         # Fall back to the nearest navigable cell.
         n = planner.floors[tfloor].nearest_navigable(tx, tz, max_radius_m=NEAREST_NAVIGABLE_SEARCH_M)
@@ -1431,7 +1516,7 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
         # line. None collider ⇒ keep the disc. A resolved collider with NO LOS cell ⇒
         # the object is reachable but not interactable from anywhere → fail fast.
         if target_collider is not None:
-            los_goals, container_doors_opened = filter_goals_by_los(
+            los_goals, container_doors_opened, goal_quality = filter_goals_by_los(
                 planner.floors[tfloor], goals, target_collider, tx, tz, radius)
             if not los_goals:
                 return {
@@ -1456,7 +1541,7 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
             raise SystemExit(f"no navigable cell near start {start_xz} on {start_floor}")
         start_node = (start_floor, n[0], n[1])
 
-    path, total_cost, edges = planner.astar(start_node, goal_nodes, tfloor, tx, tz)
+    path, total_cost, edges = planner.astar(start_node, goal_nodes, tfloor, tx, tz, goal_quality)
     if path is None:
         return {
             "status": "no_path",

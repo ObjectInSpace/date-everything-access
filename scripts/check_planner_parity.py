@@ -149,6 +149,7 @@ def replan_with_python(capture, bake):
     goals = planner_mod.goal_cells_around(
         planner.floors[target_floor_label], target_pos[0], target_pos[2], radius
     )
+    goal_quality = None  # set by the LOS filter below; None ⇒ astar falls back to closest
     if not goals:
         nf = planner.floors[target_floor_label].nearest_navigable(
             target_pos[0], target_pos[2], max_radius_m=planner_mod.NEAREST_NAVIGABLE_SEARCH_M
@@ -166,7 +167,7 @@ def replan_with_python(capture, bake):
         if tpath is not None:
             target_collider = planner_mod.resolve_target_collider_for_path(tpath)
             if target_collider is not None:
-                los_goals, _container_doors = planner_mod.filter_goals_by_los(
+                los_goals, _container_doors, goal_quality = planner_mod.filter_goals_by_los(
                     planner.floors[target_floor_label], goals,
                     target_collider, target_pos[0], target_pos[2], radius
                 )
@@ -176,7 +177,8 @@ def replan_with_python(capture, bake):
     goal_nodes = [(target_floor_label, ix, iz) for ix, iz in goals]
 
     path, total_cost, _ = planner.astar(
-        start_node, goal_nodes, target_floor_label, target_pos[0], target_pos[2]
+        start_node, goal_nodes, target_floor_label, target_pos[0], target_pos[2],
+        goal_quality
     )
     if path is None:
         return None, "python: no_path"
