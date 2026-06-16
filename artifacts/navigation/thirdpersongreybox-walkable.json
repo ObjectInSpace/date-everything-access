@@ -1,7 +1,7 @@
 {
   "ScenePath": "D:\\root\\AssetRipper\\1.3.12-premium\\extracted\\Ripped\\ExportedProject\\Assets\\ThirdPersonGreybox.unity",
   "MeshAssetRoot": "D:\\root\\AssetRipper\\1.3.12-premium\\extracted\\Ripped\\ExportedProject\\Assets\\Mesh",
-  "GeneratedAt": "2026-06-15T11:17:20.3328793-04:00",
+  "GeneratedAt": "2026-06-15T22:50:40.5964389-04:00",
   "Filtering": {
     "MinimumWalkableTopY": -12.0,
     "MaximumWalkableTopY": 16.0,
@@ -13,7 +13,6 @@
     "RigidbodyObjectsExcluded": true,
     "MeshCollidersUnsupported": false,
     "SkipMeshLayers": [
-      18,
       31
     ],
     "TerrainCollidersUnsupported": true
@@ -21,11 +20,11 @@
   "Counts": {
     "GameObjects": 22552,
     "PrimitiveColliders": 623,
-    "WalkableSurfaces": 923,
+    "WalkableSurfaces": 924,
     "MeshColliders": 2317,
     "MeshCollidersResolved": 1475,
     "MeshCollidersUnresolved": 842,
-    "MeshColliderRecords": 1381,
+    "MeshColliderRecords": 1382,
     "MeshGuidIndexEntries": 3731,
     "TerrainColliders": 1,
     "DoorGameObjects": 30,
@@ -43,7 +42,7 @@
     },
     {
       "SlopeKind": "stairs",
-      "Count": 663
+      "Count": 664
     },
     {
       "SlopeKind": "step-up",
@@ -205,10 +204,6 @@
     },
     {
       "Reason": "RigidbodyObject",
-      "Count": 1
-    },
-    {
-      "Reason": "SkippedLayer:18",
       "Count": 1
     },
     {
@@ -20686,6 +20681,22 @@
       "MaxX": -7.089919,
       "MinZ": 19.106558,
       "MaxZ": 22.197441
+    },
+    {
+      "ComponentId": 52303,
+      "GameObjectId": 21623,
+      "Name": "Stairs",
+      "Layer": 18,
+      "MeshName": "SM_Stairs",
+      "MeshGuid": "11a6cc0045bfe274c9f479507f4f4074",
+      "VertexCount": 1119,
+      "TriangleCount": 1328,
+      "BottomY": -1.119306,
+      "TopY": 15.61455,
+      "MinX": -8.103621,
+      "MaxX": 13.509991,
+      "MinZ": -5.825388,
+      "MaxZ": 0.254941
     },
     {
       "ComponentId": 52304,
@@ -46979,6 +46990,33 @@
         "MinZ": 19.106558,
         "MaxX": -7.089919,
         "MaxZ": 22.197441
+      },
+      "ContainingZones": []
+    },
+    {
+      "GameObjectId": 21623,
+      "GameObjectName": "Stairs",
+      "Path": "===SCENE===/House/Hallway/Stairs",
+      "Layer": 18,
+      "IsActive": true,
+      "ColliderKind": "Mesh",
+      "ComponentId": 52303,
+      "TransformId": 39989,
+      "MeshAssetGuid": "11a6cc0045bfe274c9f479507f4f4074",
+      "SlopeKind": "stairs",
+      "BottomY": -1.119306,
+      "TopY": 15.61455,
+      "VerticalExtent": 16.733856,
+      "Footprint": {
+        "AreaSqM": 131.417882,
+        "Width": 21.613612,
+        "Depth": 6.080329,
+        "CenterX": 2.703185,
+        "CenterZ": -2.785224,
+        "MinX": -8.103621,
+        "MinZ": -5.825388,
+        "MaxX": 13.509991,
+        "MaxZ": 0.254941
       },
       "ContainingZones": []
     },

@@ -79,7 +79,15 @@ param(
     [string]$FloorNamePattern = '(?i)floor',
 
     [Parameter()]
-    [int[]]$SkipMeshLayers = @(18, 31)
+    # Layer 31 is the interactable-prop layer (~720 mesh colliders — shelves, boxes, etc.
+    # that aren't standable surfaces), so it stays skipped. Layer 18 was ALSO skipped, but in
+    # this scene layer 18 holds exactly ONE collider: ===SCENE===/House/Hallway/Stairs — the
+    # main staircase mesh. Skipping it dropped the only walkable surface spanning ground↔upper,
+    # so derive_inter_floor_edges found no stair candidate and the two floors were graph-
+    # disconnected (every upstairs↔downstairs route returned no_path). Include layer 18 so the
+    # staircase exports as a walkable stairs surface. See
+    # [[project-navigation-stairs-missing-from-bake-2026-06-15]].
+    [int[]]$SkipMeshLayers = @(31)
 )
 
 Set-StrictMode -Version Latest
