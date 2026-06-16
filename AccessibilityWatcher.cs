@@ -132,6 +132,10 @@ namespace DateEverythingAccess
         private const float AutoWalkFaceTimeoutSeconds = 3f;
         private const float AutoWalkProgressDistance = 0.35f;
         private const float AutoWalkBlockedTimeoutSeconds = 2f;
+        // Within this distance of the FINAL waypoint, the follower drops the binary heading gate and
+        // drives straight at the cell so it CONVERGES (settles) instead of orbiting. Larger than
+        // SimpleNavBridge.FinalArrivalRadius (0.3m) so the settle engages with room to close in.
+        private const float CloseRangeSettleM = 0.7f;
         // Extra grace a turn-in-place gets on top of the blocked timeout before a no-progress
         // turn is treated as stuck. A full 180° turn at AutoWalkLookScaleDegrees completes well
         // inside this, so only an oscillating/geometrically-impossible turn ever reaches it.
@@ -1437,7 +1441,21 @@ namespace DateEverythingAccess
             float turnDeg = Vector3.SignedAngle(playerTransform.forward, walkDir, Vector3.up);
             float facing = Vector3.Dot(playerTransform.forward, walkDir); // cos(turn)
 
-            bool headingAligned = facing >= AutoWalkFacingGateCosThreshold;
+            // CLOSE-RANGE SETTLE. The binary heading gate (turn-in-place when off-heading) is right
+            // for TRAVERSING toward a far point, but it can't SETTLE onto a near one: within a few
+            // tenths of a metre, a small position change swings the direction-to-cell wildly, so the
+            // gate flips to "turn" and the follower orbits the cell instead of landing on it. That
+            // orbit is the only reason final arrival couldn't be tight. Within CloseRangeSettleM of
+            // the FINAL waypoint, drop the gate and drive STRAIGHT at it (full move, no turn-first):
+            // at sub-0.5m a small move can't spin-in-place destructively (worst case a brief diagonal
+            // as the body catches up), and it CONVERGES. So the follower genuinely lands on the goal
+            // cell; if it still can't, the no-progress watchdog reports a real failure rather than
+            // the loose radius hiding it. See [[project-navigation-verify-los-gap-2026-06-16]].
+            Vector3 toFinal = SimpleNavBridge.FinalWaypoint - playerPos;
+            toFinal.y = 0f;
+            bool closeRangeSettle = SimpleNavBridge.FinalWaypoint != Vector3.zero &&
+                                    toFinal.sqrMagnitude <= CloseRangeSettleM * CloseRangeSettleM;
+            bool headingAligned = closeRangeSettle || facing >= AutoWalkFacingGateCosThreshold;
             Vector3 move = headingAligned
                 ? new Vector3(
                     Mathf.Clamp(localDirection.x, -1f, 1f), 0f,

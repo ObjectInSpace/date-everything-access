@@ -33,7 +33,22 @@ namespace DateEverythingAccess
         private static SimpleNavRoute _activeRoute;
         private static int _activeRouteSegment;
         // Player must come within this XZ distance of the active waypoint before we advance.
+        // INTERMEDIATE waypoints stay loose (1.35m) — the follower only needs to get NEAR a corner
+        // to round it; requiring it to nail each vertex would make it fuss/stall mid-route.
         private const float WaypointArrivalRadius = 1.35f;
+        // FINAL arrival is tighter: the planner chose the goal cell for its clear line to the
+        // SPECIFIC target, and stopping ~1.35m short loses that sightline off-axis (the dominant
+        // arrived_unconfirmed failure). So the follower drives ONTO the goal cell, then the
+        // turn-to-face phase takes over — i.e. "walk to the cell, then turn for the raycast". The
+        // goal cells are open (measured: 83/100 unconfirmed cells at max clearance), so landing on
+        // them doesn't reintroduce the tight-cell stalls the loose radius guarded against. Tight
+        // (~1.5 cells): the follower's close-range settle (AccessibilityWatcher) drops the heading
+        // gate near the final waypoint so it CONVERGES onto the cell instead of orbiting, which is
+        // what lets arrival be this tight without a loose-radius compromise. If it genuinely can't
+        // land here, the no-progress watchdog reports a real failure — we do NOT widen the radius to
+        // hide an oscillation (that would mask a controller/data defect). See
+        // [[feedback-navigation-failure-definition]], [[project-navigation-verify-los-gap-2026-06-16]].
+        private const float FinalArrivalRadius = 0.3f;
         private const float DoorWaypointArrivalRadius = 2.2f;
         private const float DoorOpeningArrivalRadius = 0.9f;
         private const float WorldTargetArrivalRadius = 0.45f;
@@ -48,6 +63,12 @@ namespace DateEverythingAccess
         /// <see cref="TryAdvanceWaypoint"/> call.
         /// </summary>
         public static Vector3 LastResolvedTarget => _activeTarget;
+
+        /// <summary>The planner's final waypoint (the goal stand-cell chosen for its clear line to
+        /// the target), or Vector3.zero if no route is active. The close-range settle uses it so the
+        /// follower converges ONTO the goal cell rather than orbiting it.</summary>
+        public static Vector3 FinalWaypoint =>
+            _waypoints != null && _waypoints.Count > 0 ? _waypoints[_waypoints.Count - 1] : Vector3.zero;
 
         // Cross-track error (m) above which the player is "off the corridor" and pure
         // pursuit must steer it BACK onto the line rather than further along it. Pure
@@ -272,7 +293,7 @@ namespace DateEverythingAccess
             Vector3 finalWaypoint = _waypoints[_waypoints.Count - 1];
             float wdx = finalWaypoint.x - playerPos.x;
             float wdz = finalWaypoint.z - playerPos.z;
-            return (wdx * wdx + wdz * wdz) <= WaypointArrivalRadius * WaypointArrivalRadius;
+            return (wdx * wdx + wdz * wdz) <= FinalArrivalRadius * FinalArrivalRadius;
         }
 
         // Resolve _activeDoor from the route's segment door tags. Multiple doors per segment
