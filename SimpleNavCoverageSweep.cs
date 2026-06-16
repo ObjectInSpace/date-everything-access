@@ -1167,6 +1167,59 @@ namespace DateEverythingAccess
                 else failed++;
             }
             ReportOutcome(passed, skipped, noPath, noLos, offFloor, gated, failed, unconfirmed);
+            ReportCrossFloorSplit(finalOutcome);
+        }
+
+        // Cross-floor vs same-floor breakdown. A whole storey silently disconnecting (the
+        // missing-staircase bug) shows up here as ~100% cross-floor failure while same-floor
+        // stays healthy — a signal that's INVISIBLE in the flat outcome totals, where cross-floor
+        // failures are diluted across the much larger same-floor population. Split each object's
+        // FINAL outcome by whether its leg crossed floors (manifest from_floor != floor), so a
+        // future floor-disconnect (or a stair/door-tag regression that only bites cross-floor) is
+        // obvious from the summary. See [[project-navigation-stairs-missing-from-bake-2026-06-15]].
+        private static void ReportCrossFloorSplit(Dictionary<int, string> finalOutcome)
+        {
+            if (Main.Log == null || _manifest?.entries == null) return;
+            int xPass = 0, xFail = 0, xOther = 0, sPass = 0, sFail = 0, sOther = 0;
+            foreach (var kvp in finalOutcome)
+            {
+                int idx = kvp.Key;
+                if (idx < 0 || idx >= _manifest.entries.Length) continue;
+                var e = _manifest.entries[idx];
+                // Cross-floor only when both floors are known and differ. A null/empty from_floor
+                // (e.g. the first leg from the player's start, or a legacy manifest) is counted as
+                // same-floor so it never inflates the cross-floor failure rate spuriously.
+                bool crossFloor = !string.IsNullOrEmpty(e.from_floor)
+                    && !string.IsNullOrEmpty(e.floor)
+                    && !string.Equals(e.from_floor, e.floor, StringComparison.OrdinalIgnoreCase);
+                string o = kvp.Value ?? "";
+                bool pass = IsArrivalOutcome(o) || o == "arrived_unconfirmed";
+                // Real walk failures (no_path/no_los/stalled/looped/budget/door_failed/exception).
+                // Transient gates and skipped don't count as failures.
+                bool fail = !pass && !IsTransientGateOutcome(o)
+                    && o != "skipped_already_covered" && o != "off_floor";
+                if (crossFloor)
+                {
+                    if (pass) xPass++; else if (fail) xFail++; else xOther++;
+                }
+                else
+                {
+                    if (pass) sPass++; else if (fail) sFail++; else sOther++;
+                }
+            }
+            int xTot = xPass + xFail + xOther, sTot = sPass + sFail + sOther;
+            float xFailPct = xTot > 0 ? 100f * xFail / xTot : 0f;
+            float sFailPct = sTot > 0 ? 100f * sFail / sTot : 0f;
+            Main.Log.LogInfo(
+                "SimpleNavCoverageSweep cross-floor: cross n=" + xTot + " pass=" + xPass +
+                " fail=" + xFail + " (" + xFailPct.ToString("0.0", CultureInfo.InvariantCulture) +
+                "%) other=" + xOther + " | same-floor n=" + sTot + " pass=" + sPass +
+                " fail=" + sFail + " (" + sFailPct.ToString("0.0", CultureInfo.InvariantCulture) +
+                "%) other=" + sOther +
+                (xTot > 0 && xFailPct >= 80f
+                    ? "  *** cross-floor failure >=80% — suspect a disconnected storey "
+                      + "(check inter_floor_edges / stairs) ***"
+                    : ""));
         }
 
         // Collapse two outcomes for the SAME object to the one that best describes its final
