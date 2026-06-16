@@ -1085,6 +1085,16 @@ namespace DateEverythingAccess
                 }
                 // Probe is one-shot; clear so the next route doesn't see a stale value.
                 RuntimeBlockerProbe.Last = null;
+                // Reliable stall triage: classify the navmesh state at where the player ACTUALLY
+                // got stuck (endPos), independent of the unreliable nearest-collider blocker label.
+                // Resolve the floor from the player's real Y, NOT entry.floor: entry.floor is the
+                // TARGET's floor, but a cross-floor leg can stall before the player gets there (still
+                // downstairs, or mid-stair at an in-between Y) — classifying that stuck position
+                // against the wrong floor's grid gives garbage. The player's Y picks the right grid.
+                string stuckFloor = entry.floor;
+                SimpleNavPlanner.TryGetPlayerFloorLabel(endPos.y, out string resolvedFloor);
+                if (!string.IsNullOrEmpty(resolvedFloor)) stuckFloor = resolvedFloor;
+                result.stall_class = SimpleNavPlanner.ClassifyStallCell(stuckFloor, endPos.x, endPos.z);
             }
             _results.Add(result);
             if (Main.Log != null)
@@ -1168,6 +1178,7 @@ namespace DateEverythingAccess
             }
             ReportOutcome(passed, skipped, noPath, noLos, offFloor, gated, failed, unconfirmed);
             ReportCrossFloorSplit(finalOutcome);
+            ReportStallClassSplit();
         }
 
         // Cross-floor vs same-floor breakdown. A whole storey silently disconnecting (the
@@ -1242,6 +1253,35 @@ namespace DateEverythingAccess
             if (o == "skipped_already_covered") return 1;
             if (IsTransientGateOutcome(o)) return 2;
             return 3;  // no_path / stalled / looped / budget / door_failed:* / exception:* / off_floor
+        }
+
+        // Breakdown of STALLED legs by the navmesh state at the player's stuck cell. The flat
+        // "stalled" total and the blocker-mode label both hide WHY the leg stalled; this splits it
+        // into the actionable classes (off-mesh dead-pocket vs open-space mislabel vs real edge
+        // graze) so the dominant cause is visible without a hand-decompose. Tallies the per-row
+        // stall_class across stalled rows (deduped by leg). See
+        // [[project-navigation-footprint-stalls-decomposed-2026-06-16]].
+        private static void ReportStallClassSplit()
+        {
+            if (Main.Log == null || _results == null) return;
+            var seen = new HashSet<int>();
+            var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            int total = 0;
+            foreach (RouteResult r in _results)
+            {
+                if (r.outcome != "stalled") continue;
+                if (!seen.Add(r.manifest_index)) continue;   // one class per leg (first stall row)
+                string c = string.IsNullOrEmpty(r.stall_class) ? "unclassified" : r.stall_class;
+                counts.TryGetValue(c, out int n);
+                counts[c] = n + 1;
+                total++;
+            }
+            if (total == 0) return;
+            var sb = new System.Text.StringBuilder();
+            sb.Append("SimpleNavCoverageSweep stall-class: total=").Append(total);
+            foreach (var kv in counts)
+                sb.Append(' ').Append(kv.Key).Append('=').Append(kv.Value);
+            Main.Log.LogInfo(sb.ToString());
         }
 
         private static void ReportOutcome(int passed, int skipped, int noPath, int noLos, int offFloor, int gated, int failed, int unconfirmed)
@@ -2003,6 +2043,10 @@ namespace DateEverythingAccess
                         sw.Write(",\"outcome\":\""); sw.Write(JsonEscape(r.outcome ?? ""));
                         sw.Write("\",\"cost_m\":"); sw.Write(r.cost_m.ToString("0.000", ci));
                         sw.Write(",\"elapsed_s\":"); sw.Write(r.elapsed_s.ToString("0.000", ci));
+                        if (!string.IsNullOrEmpty(r.stall_class))
+                        {
+                            sw.Write(",\"stall_class\":\""); sw.Write(JsonEscape(r.stall_class)); sw.Write("\"");
+                        }
                         if (!string.IsNullOrEmpty(r.blocker_path))
                         {
                             sw.Write(",\"blocker\":{\"path\":\""); sw.Write(JsonEscape(r.blocker_path));
@@ -2230,6 +2274,12 @@ namespace DateEverythingAccess
             public int blocker_layer;
             public float blocker_distance;
             public string blocker_mode;
+            // Navmesh state at the player's ACTUAL stuck position (SimpleNavPlanner.ClassifyStallCell):
+            // dead_pocket / off_mesh_open / open_space / edge_graze / on_mesh / unknown. The reliable
+            // signal for triaging a stall, since blocker_mode/path is just the nearest collider (a
+            // big-AABB mesh or floor edge mislabels the cause). See
+            // [[project-navigation-footprint-stalls-decomposed-2026-06-16]].
+            public string stall_class;
         }
 
         // One per walk-mode impassable verdict. Fields are filled to be self-contained — the

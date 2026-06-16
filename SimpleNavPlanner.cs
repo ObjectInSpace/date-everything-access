@@ -724,6 +724,44 @@ namespace DateEverythingAccess
             return _bake.fixtures;
         }
 
+        // Classify the navmesh state at a WORLD position, for the coverage sweep's stall triage.
+        // The "footprint" blocker mode lumps three unrelated stalls together (the blocker label is
+        // just the nearest collider — unreliable for big-AABB meshes and floor edges). This reads
+        // the player's ACTUAL stuck cell's navmesh state instead. Returns one of:
+        //   "dead_pocket" — the cell is NOT navigable and has <=2 navigable neighbours: the
+        //                   follower left the navmesh into a near-sealed cell (off-path, not a graze).
+        //   "open_space"  — clearance is at the cap (wide open): stalled in open space, NOT grazing
+        //                   anything (a mislabeled/residual stall).
+        //   "edge_graze"  — navigable but clearance<=1 (hugging a wall/jamb): the real graze class.
+        //   "on_mesh"     — navigable with comfortable clearance (a stall with no navmesh cause here).
+        //   "unknown"     — floor unresolved.
+        // See [[project-navigation-footprint-stalls-decomposed-2026-06-16]].
+        public static string ClassifyStallCell(string floorLabel, float wx, float wz)
+        {
+            if (!EnsureLoaded()) return "unknown";
+            Floor f = FloorByLabel(floorLabel);
+            if (f == null) return "unknown";
+            f.WorldToCell(wx, wz, out int ix, out int iz);
+            if (!f.InBounds(ix, iz)) return "unknown";
+
+            bool selfNav = f.Navigable(ix, iz);
+            int navNeighbours = 0;
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dz = -1; dz <= 1; dz++)
+                {
+                    if (dx == 0 && dz == 0) continue;
+                    if (f.Navigable(ix + dx, iz + dz)) navNeighbours++;
+                }
+
+            if (!selfNav)
+                return navNeighbours <= 2 ? "dead_pocket" : "off_mesh_open";
+
+            int clearance = f.Clearance(ix, iz);
+            if (clearance >= ClearanceTargetCells) return "open_space";
+            if (clearance <= 1) return "edge_graze";
+            return "on_mesh";
+        }
+
         // Pick a CLEAN stand-cell near a world point: the navigable cell within radiusM whose
         // clearance (cells-to-nearest-wall, the same metric A* uses) is highest, tie-broken by
         // closeness to the anchor. Used by the coverage sweep to teleport the player without
