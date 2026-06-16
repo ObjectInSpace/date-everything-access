@@ -244,6 +244,17 @@ namespace DateEverythingAccess
             Add("navigation_object_picker_floor_other", "andere Etage", "other floor");
             // Distance: {0}=metres.
             Add("navigation_object_picker_distance_m", "{0} Meter", "{0} metres");
+            // Drill-in: a group's member count, spoken so the player knows to press Enter to open it.
+            Add("navigation_object_picker_group_count", "{0} Objekte", "{0} objects");
+            // Room name when a target has no resolved zone.
+            Add("navigation_object_picker_room_unknown", "unbekannter Raum", "unknown room");
+            // Breadcrumb headers spoken when descending a level.
+            //   level_rooms: {0}=datable/character — "inside <char>, choose a room".
+            //   level_objects: {0}=datable, {1}=room — objects of a met datable in one room.
+            //   level_room: {0}=room — unmet objects in one room.
+            Add("navigation_object_picker_level_rooms", "{0}, Raum waehlen", "{0}, choose a room");
+            Add("navigation_object_picker_level_objects", "{0}, {1}", "{0}, {1}");
+            Add("navigation_object_picker_level_room", "{0}", "{0}");
             // Sort-mode announcements.
             Add("navigation_object_picker_sort_distance", "naechstes zuerst", "nearest first");
             Add("navigation_object_picker_sort_alpha", "alphabetisch", "alphabetical");
