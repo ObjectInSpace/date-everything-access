@@ -410,17 +410,19 @@ namespace DateEverythingAccess
         // unmet objects) -> Room (rooms of the chosen datable) -> Object (that datable's objects in
         // that room). Grouping NEVER expands past _knownObjectTargets, which is already per-object
         // encounter-filtered, so a datable only ever shows objects the player personally found.
-        // What a drill-in group represents, so descent knows how to build the next level.
-        //   Datable  — a met datable (Top): drill -> rooms of that datable.
-        //   DatableRoom — a room within a met datable (Room level): drill -> that datable's objects in it.
-        //   UnmetRoom — a room of loose unmet objects (Top): drill -> those objects directly.
-        private enum PickerGroupKind { None, Datable, DatableRoom, UnmetRoom }
+        // ROOM-FIRST model: L1 Rooms -> L2 (in a room: met datables + unmet objects) -> L3 (a met
+        // datable's found objects IN that room). What a drill-in group represents:
+        //   Room    — a room (L1): drill -> its met datables + unmet objects.
+        //   Datable — a met datable within the chosen room (L2): drill -> its found objects in it.
+        // (Unmet objects at L2 are leaves, routed directly. A cross-room datable appears under each
+        //  room it has found objects in.)
+        private enum PickerGroupKind { None, Room, Datable }
 
         private sealed class PickerNode
         {
-            public bool IsGroup;            // true = drill-in (datable or room); false = routable object
+            public bool IsGroup;            // true = drill-in (room or datable); false = routable object
             public PickerGroupKind GroupKind;
-            public string Label;            // spoken label (character / room / object name)
+            public string Label;            // spoken label (room / character / object name)
             public int ChildCount;          // members under a group (spoken as a count)
             public float Distance;          // nearest member distance (for sort + announce)
             public bool IsOnPlayerFloor;    // nearest member's floor flag (for sort)
@@ -432,18 +434,14 @@ namespace DateEverythingAccess
             public List<KnownObjectTarget> Members;
         }
 
-        // The drill level the picker is currently showing.
-        private enum PickerLevel { Top, Room, Object }
-        private PickerLevel _pickerLevel = PickerLevel.Top;
-        // Breadcrumb of the descent: the datable group entered (Top->Room) and the room group
-        // entered (Room->Object). Used to rebuild the child list on each level and to label the
-        // descent. Null when at a shallower level.
-        private string _pickerDatableKey;       // chosen datable's DatableKey (null at Top)
+        // The drill level the picker is currently showing: Rooms -> InRoom -> Objects.
+        private enum PickerLevel { Rooms, InRoom, Objects }
+        private PickerLevel _pickerLevel = PickerLevel.Rooms;
+        // Breadcrumb of the descent: the room entered (Rooms->InRoom) and the datable entered
+        // (InRoom->Objects). Null above the level that sets them.
+        private string _pickerRoomZone;         // chosen room's zone (null at Rooms level)
+        private string _pickerDatableKey;       // chosen datable's DatableKey (null above Objects)
         private string _pickerDatableLabel;     // chosen datable's spoken label
-        private string _pickerRoomZone;         // chosen room's zone (null above Object level)
-        // True when the Object level was reached via an UNMET room group (Top->Object), so the
-        // object builder filters by zone-among-unmet and Escape returns straight to Top.
-        private bool _pickerUnmetRoom;
 
         // Which DateADex-style section a target belongs to. Met = the player has dated its
         // datable (shown by character name, like the DateADex met-list); Encountered = examined
@@ -3157,15 +3155,14 @@ namespace DateEverythingAccess
                 ScreenReader.Say(Loc.Get("navigation_object_picker_closed"));
         }
 
-        // Return the picker to the top drill level and clear the breadcrumb. Called on open and
-        // close so a fresh open always starts at the collapsed datable/room list.
+        // Return the picker to the top (Rooms) drill level and clear the breadcrumb. Called on open
+        // and close so a fresh open always starts at the room list.
         private void ResetPickerDrillLevel()
         {
-            _pickerLevel = PickerLevel.Top;
+            _pickerLevel = PickerLevel.Rooms;
             _pickerDatableKey = null;
             _pickerDatableLabel = null;
             _pickerRoomZone = null;
-            _pickerUnmetRoom = false;
         }
 
         private void UpdateKnownObjectPicker()
@@ -3418,24 +3415,19 @@ namespace DateEverythingAccess
             string firstZone = group.Members != null && group.Members.Count > 0 ? group.Members[0].Zone : null;
             switch (group.GroupKind)
             {
+                case PickerGroupKind.Room:
+                    // L1 -> L2: enter the room; its datables + unmet objects are next.
+                    _pickerRoomZone = firstZone;
+                    _pickerDatableKey = null;
+                    _pickerDatableLabel = null;
+                    _pickerLevel = PickerLevel.InRoom;
+                    break;
                 case PickerGroupKind.Datable:
+                    // L2 -> L3: enter the datable (within the already-chosen room); its found
+                    // objects in this room are next. _pickerRoomZone stays as the chosen room.
                     _pickerDatableKey = group.Members != null && group.Members.Count > 0 ? group.Members[0].DatableKey : null;
                     _pickerDatableLabel = group.Label;
-                    _pickerRoomZone = null;
-                    _pickerUnmetRoom = false;
-                    _pickerLevel = PickerLevel.Room;
-                    break;
-                case PickerGroupKind.DatableRoom:
-                    _pickerRoomZone = firstZone;
-                    _pickerUnmetRoom = false;
-                    _pickerLevel = PickerLevel.Object;
-                    break;
-                case PickerGroupKind.UnmetRoom:
-                    _pickerDatableKey = null;
-                    _pickerDatableLabel = group.Label;   // the room name, for the breadcrumb
-                    _pickerRoomZone = firstZone;
-                    _pickerUnmetRoom = true;
-                    _pickerLevel = PickerLevel.Object;
+                    _pickerLevel = PickerLevel.Objects;
                     break;
                 default:
                     return;
@@ -3459,7 +3451,7 @@ namespace DateEverythingAccess
 
             if (_knownObjectView.Count == 0)
             {
-                // Shouldn't happen (a group always has members), but fail safe back to Top.
+                // Shouldn't happen (a group always has members), but fail safe back up a level.
                 AscendOrClosePicker();
                 return;
             }
@@ -3486,31 +3478,22 @@ namespace DateEverythingAccess
             BeginNavigationAndStartTrackerTone(targetZone, targetLabel);
         }
 
-        // Escape behaviour: ascend one drill level if we're below Top, else close the picker.
-        // Returns true if it ascended (the picker stays open), false if it closed.
+        // Escape behaviour: ascend one drill level (Objects -> InRoom -> Rooms), else close at the
+        // Rooms level. Returns true if it ascended (picker stays open), false if it closed.
         private bool AscendOrClosePicker()
         {
-            if (_pickerLevel == PickerLevel.Object)
+            if (_pickerLevel == PickerLevel.Objects)
             {
-                if (_pickerUnmetRoom)
-                {
-                    // Unmet rooms live AT the top level, so backing out returns straight there.
-                    _pickerLevel = PickerLevel.Top;
-                    _pickerUnmetRoom = false;
-                    _pickerDatableLabel = null;
-                    _pickerRoomZone = null;
-                }
-                else
-                {
-                    _pickerLevel = PickerLevel.Room;
-                    _pickerRoomZone = null;
-                }
-            }
-            else if (_pickerLevel == PickerLevel.Room)
-            {
-                _pickerLevel = PickerLevel.Top;
+                // L3 -> L2: back to the room's datables + unmet objects; keep the chosen room.
+                _pickerLevel = PickerLevel.InRoom;
                 _pickerDatableKey = null;
                 _pickerDatableLabel = null;
+            }
+            else if (_pickerLevel == PickerLevel.InRoom)
+            {
+                // L2 -> L1: back to the room list.
+                _pickerLevel = PickerLevel.Rooms;
+                _pickerRoomZone = null;
             }
             else
             {
@@ -3535,15 +3518,15 @@ namespace DateEverythingAccess
             string roomName = string.IsNullOrWhiteSpace(_pickerRoomZone)
                 ? Loc.Get("navigation_object_picker_room_unknown") : _pickerRoomZone;
             string crumb;
-            if (_pickerLevel == PickerLevel.Room)
-                crumb = Loc.Get("navigation_object_picker_level_rooms", _pickerDatableLabel ?? string.Empty);
-            else if (_pickerLevel == PickerLevel.Object && _pickerUnmetRoom)
-                // Unmet room: the breadcrumb is just the room (no datable revealed).
-                crumb = Loc.Get("navigation_object_picker_level_room", roomName);
-            else if (_pickerLevel == PickerLevel.Object)
+            if (_pickerLevel == PickerLevel.InRoom)
+                // L2: "in <room>, choose a datable or object".
+                crumb = Loc.Get("navigation_object_picker_level_inroom", roomName);
+            else if (_pickerLevel == PickerLevel.Objects)
+                // L3: the chosen datable's objects in the chosen room.
                 crumb = Loc.Get("navigation_object_picker_level_objects",
                     _pickerDatableLabel ?? string.Empty, roomName);
             else
+                // L1: the room list.
                 crumb = Loc.Get("navigation_object_picker_title");
 
             ScreenReader.Say(crumb + ". " + ComposeKnownObjectItemText(_knownObjectSelectionIndex, includeSectionHeader: true));
@@ -3883,36 +3866,68 @@ namespace DateEverythingAccess
             List<PickerNode> view;
             switch (_pickerLevel)
             {
-                case PickerLevel.Room:
-                    view = BuildRoomLevelNodes(filtered);
+                case PickerLevel.InRoom:
+                    view = BuildInRoomNodes(filtered);
                     break;
-                case PickerLevel.Object:
-                    view = BuildObjectLevelNodes(filtered);
+                case PickerLevel.Objects:
+                    view = BuildObjectNodes(filtered);
                     break;
                 default:
-                    view = BuildTopLevelNodes(filtered);
+                    view = BuildRoomNodes(filtered);
                     break;
             }
             view.Sort(CompareKnownObjectForView);
             return view;
         }
 
-        // TOP: met objects collapse into one group per datable (DatableKey, drill -> room ->
-        // object); unmet (Encountered) objects collapse into one group per ROOM (drill -> object),
-        // so the top level is a short list of datables + rooms rather than a flat pile of objects.
-        // A group with a single discovered child still appears here for a consistent list, but
-        // Enter auto-routes straight through it.
-        private List<PickerNode> BuildTopLevelNodes(List<KnownObjectTarget> filtered)
+        // L1 ROOMS: one group per room (Zone) that contains ANY discovered object — met or unmet.
+        // A null/blank zone collapses into a single "unknown room" group.
+        private List<PickerNode> BuildRoomNodes(List<KnownObjectTarget> filtered)
         {
             List<PickerNode> view = new List<PickerNode>();
-            Dictionary<string, PickerNode> datableGroups = new Dictionary<string, PickerNode>(StringComparer.OrdinalIgnoreCase);
-            Dictionary<string, PickerNode> unmetRoomGroups = new Dictionary<string, PickerNode>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, PickerNode> rooms = new Dictionary<string, PickerNode>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < filtered.Count; i++)
             {
                 KnownObjectTarget t = filtered[i];
+                string zoneKey = string.IsNullOrWhiteSpace(t.Zone) ? "\0noroom" : t.Zone;
+                if (!rooms.TryGetValue(zoneKey, out PickerNode group))
+                {
+                    group = new PickerNode
+                    {
+                        IsGroup = true,
+                        GroupKind = PickerGroupKind.Room,
+                        Label = string.IsNullOrWhiteSpace(t.Zone) ? Loc.Get("navigation_object_picker_room_unknown") : t.Zone,
+                        // A room can hold both Met and Encountered; tag it Met if it holds any met
+                        // object so the section ordering keeps rooms-with-datables first.
+                        Section = PickerSection.Encountered,
+                        Distance = float.MaxValue,
+                        Members = new List<KnownObjectTarget>(),
+                    };
+                    rooms[zoneKey] = group;
+                    view.Add(group);
+                }
+                if (t.Section == PickerSection.Met) group.Section = PickerSection.Met;
+                AccumulateGroupMember(group, t);
+            }
+            return view;
+        }
+
+        // L2 IN-ROOM: within the chosen room, one group per met DATABLE present + each unmet object
+        // as a routable leaf. A datable spanning multiple rooms appears under each room with only
+        // its objects there. A single-object datable in this room auto-collapses to that object
+        // (handled in DescendIntoGroup), so it reads as a leaf to the player.
+        private List<PickerNode> BuildInRoomNodes(List<KnownObjectTarget> filtered)
+        {
+            List<PickerNode> view = new List<PickerNode>();
+            Dictionary<string, PickerNode> datables = new Dictionary<string, PickerNode>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < filtered.Count; i++)
+            {
+                KnownObjectTarget t = filtered[i];
+                if (!SameChosenRoom(t))
+                    continue;
                 if (t.Section == PickerSection.Met && !string.IsNullOrEmpty(t.DatableKey))
                 {
-                    if (!datableGroups.TryGetValue(t.DatableKey, out PickerNode group))
+                    if (!datables.TryGetValue(t.DatableKey, out PickerNode group))
                     {
                         group = new PickerNode
                         {
@@ -3923,79 +3938,27 @@ namespace DateEverythingAccess
                             Distance = float.MaxValue,
                             Members = new List<KnownObjectTarget>(),
                         };
-                        datableGroups[t.DatableKey] = group;
+                        datables[t.DatableKey] = group;
                         view.Add(group);
                     }
                     AccumulateGroupMember(group, t);
                 }
                 else
                 {
-                    // Unmet (encountered) object -> group by room, mirroring the met datable's room
-                    // level so the top list stays short and uniform.
-                    string zoneKey = string.IsNullOrWhiteSpace(t.Zone) ? "\0noroom" : t.Zone;
-                    if (!unmetRoomGroups.TryGetValue(zoneKey, out PickerNode group))
-                    {
-                        group = new PickerNode
-                        {
-                            IsGroup = true,
-                            GroupKind = PickerGroupKind.UnmetRoom,
-                            Label = string.IsNullOrWhiteSpace(t.Zone) ? Loc.Get("navigation_object_picker_room_unknown") : t.Zone,
-                            Section = PickerSection.Encountered,
-                            Distance = float.MaxValue,
-                            Members = new List<KnownObjectTarget>(),
-                        };
-                        unmetRoomGroups[zoneKey] = group;
-                        view.Add(group);
-                    }
-                    AccumulateGroupMember(group, t);
+                    view.Add(LeafNode(t));   // unmet object: route directly
                 }
             }
             return view;
         }
 
-        // ROOM (met datable only): the chosen datable's discovered objects grouped by room (Zone).
-        // One DatableRoom group per distinct room; a null/blank zone => single "unknown room" group.
-        private List<PickerNode> BuildRoomLevelNodes(List<KnownObjectTarget> filtered)
-        {
-            List<PickerNode> view = new List<PickerNode>();
-            Dictionary<string, PickerNode> roomGroups = new Dictionary<string, PickerNode>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < filtered.Count; i++)
-            {
-                KnownObjectTarget t = filtered[i];
-                if (!IsInChosenDatable(t))
-                    continue;
-                string zoneKey = string.IsNullOrWhiteSpace(t.Zone) ? "\0noroom" : t.Zone;
-                if (!roomGroups.TryGetValue(zoneKey, out PickerNode group))
-                {
-                    group = new PickerNode
-                    {
-                        IsGroup = true,
-                        GroupKind = PickerGroupKind.DatableRoom,
-                        Label = string.IsNullOrWhiteSpace(t.Zone) ? Loc.Get("navigation_object_picker_room_unknown") : t.Zone,
-                        Section = PickerSection.Met,
-                        Distance = float.MaxValue,
-                        Members = new List<KnownObjectTarget>(),
-                    };
-                    roomGroups[zoneKey] = group;
-                    view.Add(group);
-                }
-                AccumulateGroupMember(group, t);
-            }
-            return view;
-        }
-
-        // OBJECT: routable leaves of the chosen room. For a met datable that's its objects in the
-        // chosen room; for an UnmetRoom group that's the unmet objects in the chosen room.
-        private List<PickerNode> BuildObjectLevelNodes(List<KnownObjectTarget> filtered)
+        // L3 OBJECTS: the chosen datable's found objects IN the chosen room, as routable leaves.
+        private List<PickerNode> BuildObjectNodes(List<KnownObjectTarget> filtered)
         {
             List<PickerNode> view = new List<PickerNode>();
             for (int i = 0; i < filtered.Count; i++)
             {
                 KnownObjectTarget t = filtered[i];
-                bool match = _pickerUnmetRoom
-                    ? (t.Section == PickerSection.Encountered && SameChosenRoom(t))
-                    : (IsInChosenDatable(t) && SameChosenRoom(t));
-                if (match)
+                if (IsInChosenDatable(t) && SameChosenRoom(t))
                     view.Add(LeafNode(t));
             }
             return view;

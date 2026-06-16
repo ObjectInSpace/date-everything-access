@@ -248,13 +248,11 @@ namespace DateEverythingAccess
             Add("navigation_object_picker_group_count", "{0} Objekte", "{0} objects");
             // Room name when a target has no resolved zone.
             Add("navigation_object_picker_room_unknown", "unbekannter Raum", "unknown room");
-            // Breadcrumb headers spoken when descending a level.
-            //   level_rooms: {0}=datable/character — "inside <char>, choose a room".
-            //   level_objects: {0}=datable, {1}=room — objects of a met datable in one room.
-            //   level_room: {0}=room — unmet objects in one room.
-            Add("navigation_object_picker_level_rooms", "{0}, Raum waehlen", "{0}, choose a room");
+            // Breadcrumb headers spoken when descending a level (ROOM-FIRST: rooms -> in-room -> objects).
+            //   level_inroom: {0}=room — inside a room, choosing a datable or unmet object.
+            //   level_objects: {0}=datable, {1}=room — a met datable's found objects in that room.
+            Add("navigation_object_picker_level_inroom", "{0}", "{0}");
             Add("navigation_object_picker_level_objects", "{0}, {1}", "{0}, {1}");
-            Add("navigation_object_picker_level_room", "{0}", "{0}");
             // Sort-mode announcements.
             Add("navigation_object_picker_sort_distance", "naechstes zuerst", "nearest first");
             Add("navigation_object_picker_sort_alpha", "alphabetisch", "alphabetical");
