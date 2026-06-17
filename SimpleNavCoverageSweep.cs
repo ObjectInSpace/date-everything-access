@@ -58,6 +58,23 @@ namespace DateEverythingAccess
         // Door-failed detector: if any tagged door on the current segment is still closed
         // after this much time (excluding swing-in-progress periods), mark door_failed.
         private const float DoorOpenTimeoutSeconds = 4f;
+        // A leg counts as a GENUINE WALK only if the player actually moved this far (XZ) from the
+        // route's first waypoint. The walk chain picks the nearest object next, so many legs start
+        // ON or beside the goal cell — those finish in a fraction of a second WITHOUT testing any
+        // walk path. They still run the camera-aim LOS raycast, so their LOS verdict is real, but
+        // crediting them as walk-successes inflates the pass rate (77% of "verified" were such
+        // no-ops in run 195613).
+        //
+        // Below this, the walk is UNTESTED — but for an object whose LOS-interact PASSED, that is
+        // NOT a gap. An LOS pass proves the goal CELL is a valid interaction standpoint for the
+        // object. The specific source->cell walk that happened is unrepeatable (the player's real
+        // start varies and can't be guessed), so it's not bankable — but it doesn't need to be:
+        // the only runtime requirement is that the planner can route the player TO that cell, which
+        // is the planner's standing job for ANY cell, independent of this object. So a validated
+        // interaction cell exists => if the planner plans to that cell for that object, it is valid.
+        // The walk path is the variable; proving it is not this object's burden.
+        // See the walk/LOS axis split in ReportWalkLosAxes.
+        private const float GenuineWalkMeters = 3f;
 
         private enum Phase
         {
@@ -1070,6 +1087,7 @@ namespace DateEverythingAccess
                 outcome = outcome,
                 cost_m = entry.cost_m,
                 elapsed_s = Time.unscaledTime - _routeStartUnscaledTime,
+                displacement_m = displacement,
                 name = entry.name,
             };
             if (!IsArrivalOutcome(outcome))
@@ -1179,6 +1197,7 @@ namespace DateEverythingAccess
             ReportOutcome(passed, skipped, noPath, noLos, offFloor, gated, failed, unconfirmed);
             ReportCrossFloorSplit(finalOutcome);
             ReportStallClassSplit();
+            ReportPlacementSuccess();
         }
 
         // Cross-floor vs same-floor breakdown. A whole storey silently disconnecting (the
@@ -1282,6 +1301,125 @@ namespace DateEverythingAccess
             foreach (var kv in counts)
                 sb.Append(' ').Append(kv.Key).Append('=').Append(kv.Value);
             Main.Log.LogInfo(sb.ToString());
+        }
+
+        // The honest scorecard. WHAT THIS SWEEP TESTS: can the PLANNER get the player close enough
+        // to each object to interact with it — i.e. place the player on a cell from which the
+        // camera-aim raycast hits the target — covering as many objects as possible systematically
+        // WITHOUT teleporting (teleporting would invalidate the start position, throwing every
+        // route's viability into question). It does NOT test "is object X reachable from point Y":
+        // the player's real start is unpredictable and the planner picks each final destination
+        // from wherever the player happens to be. So the only verdict per object is whether the
+        // planner ever landed a valid interaction standpoint.
+        //
+        // DISTANCE MOVED IS IRRELEVANT. A no-walk LOS pass is a FULL pass, not "untested": the
+        // planner had previously walked the player to that cell (for a nearby object), the player
+        // stood there, and the raycast hit — the whole loop executed; that this leg added 0 metres
+        // is meaningless because walk distance was never under test. Conversely, a leg that doesn't
+        // move, turns, and STILL can't hit the target is a real failure — the planner chose the
+        // wrong cell for this object and should have placed the player where the ray clears. That
+        // surfaces below as no_los / unconfirmed (a planner-PLACEMENT defect), exactly what we want
+        // to catch. There is therefore no "walk axis" worth reporting; displacement is not used.
+        //
+        // The flat outcome totals mislead two ways, both corrected here: (1) the manifest carries
+        // DUPLICATE object names (~2x inflation — preset/lighting copies), so per-row counts double
+        // every object — we dedupe by NAME; (2) ~51% of objects flip outcome across attempts in one
+        // run, so an object PASSES if ANY attempt confirmed it (one valid standpoint is success).
+        //
+        //   Per distinct object:
+        //     pass        : the planner landed a valid interaction standpoint at least once
+        //                   (arrived/_verified/_gated). THE success metric.
+        //     no_los      : reached a cell but the aim raycast was occluded on every cell the
+        //                   planner tried — planner PLACEMENT defect (wrong standpoint for this
+        //                   object) or a genuine occlusion the planner can't route around.
+        //     unconfirmed : reached a cell, probe never selected the object, never a hard no_los —
+        //                   also a placement/standpoint problem, just not a clean no_los verdict.
+        //     unreached   : the planner never landed the player on ANY cell (no_path / every leg
+        //                   stalled) — a routing/walkability failure, the only bucket where getting
+        //                   there at all is the blocker.
+        //
+        // DISTANCE MOVED is kept as DIAGNOSTIC context on FAILURES (not part of the verdict): for a
+        // no_los/unconfirmed object, displacement~0 means the planner placed the player AT the
+        // object with a bad angle (pure standpoint defect — pick a clearer cell), while a large
+        // displacement means it routed somewhere but the final cell still didn't clear; for an
+        // unreached object, small displacement = froze early vs large = walked then stalled. So the
+        // failure line below splits each failure bucket by whether its best attempt moved.
+        //
+        // Also tallies per-object outcome AGREEMENT so follower nondeterminism stays visible.
+        private static void ReportPlacementSuccess()
+        {
+            if (Main.Log == null || _results == null || _results.Count == 0) return;
+
+            // Group every attempt by OBJECT NAME (collapses the manifest's duplicate entries, which
+            // manifest_index does NOT — distinct indices can share a name). Unnamed (cell-mode) rows
+            // fall back to a per-index key so they each stay their own object.
+            var byObject = new Dictionary<string, List<RouteResult>>(StringComparer.Ordinal);
+            foreach (RouteResult r in _results)
+            {
+                string key = !string.IsNullOrEmpty(r.name) ? r.name : ("#idx" + r.manifest_index);
+                if (!byObject.TryGetValue(key, out var list)) { list = new List<RouteResult>(); byObject[key] = list; }
+                list.Add(r);
+            }
+
+            int pass = 0, noLos = 0, unconfirmed = 0, unreached = 0;
+            int nondetermined = 0, multiAttempt = 0;
+            // Diagnostic: per failure bucket, how many objects had at least one attempt that MOVED
+            // (>= GenuineWalkMeters) vs none. "moved" failures routed somewhere but the final cell
+            // failed; "still" failures never left the start — for no_los/unconfirmed that's a pure
+            // standpoint defect, for unreached an early freeze.
+            int noLosMoved = 0, unconfMoved = 0, unreachedMoved = 0;
+
+            foreach (var kv in byObject)
+            {
+                List<RouteResult> attempts = kv.Value;
+                bool anyPass = false, anyHardNoLos = false, anyReachedCell = false, anyMoved = false;
+                var distinctOutcomes = new HashSet<string>(StringComparer.Ordinal);
+
+                foreach (RouteResult a in attempts)
+                {
+                    string o = a.outcome ?? "";
+                    distinctOutcomes.Add(o);
+                    if (IsArrivalOutcome(o)) anyPass = true;
+                    if (o == "no_los") anyHardNoLos = true;
+                    if (IsArrivalOutcome(o) || o == "arrived_unconfirmed") anyReachedCell = true;
+                    if (a.displacement_m >= GenuineWalkMeters) anyMoved = true;
+                }
+
+                // One valid standpoint is success. Otherwise rank the failure: a cell was reached
+                // but LOS failed (placement defect) > never reached a cell at all (routing failure).
+                if (anyPass) pass++;
+                else if (anyHardNoLos) { noLos++; if (anyMoved) noLosMoved++; }
+                else if (anyReachedCell) { unconfirmed++; if (anyMoved) unconfMoved++; }
+                else { unreached++; if (anyMoved) unreachedMoved++; }
+
+                if (attempts.Count > 1)
+                {
+                    multiAttempt++;
+                    if (distinctOutcomes.Count > 1) nondetermined++;
+                }
+            }
+
+            int objects = byObject.Count;
+            var ci = CultureInfo.InvariantCulture;
+            float passPct = objects > 0 ? 100f * pass / objects : 0f;
+            // HEADLINE: per-object planner-placement success — did the planner ever land a cell from
+            // which the object is interactable. The only metric that ultimately matters.
+            Main.Log.LogInfo(
+                "SimpleNavCoverageSweep INTERACT-SUCCESS=" + pass + "/" + objects +
+                " (" + passPct.ToString("0.0", ci) + "%) objects deduped by name from " + _results.Count + " rows" +
+                " | nondeterministic=" + nondetermined + "/" + multiAttempt + " multi-attempt" +
+                (multiAttempt > 0
+                    ? " (" + (100f * nondetermined / multiAttempt).ToString("0.0", ci) + "% flip)"
+                    : ""));
+            // Failures with a distance-moved diagnostic: still=never moved (standpoint defect / early
+            // freeze), moved=routed but the final cell still failed.
+            Main.Log.LogInfo(
+                "SimpleNavCoverageSweep failures: no_los=" + noLos + " (occluded; still=" + (noLos - noLosMoved) +
+                " wrong standpoint, moved=" + noLosMoved + ")" +
+                " unconfirmed=" + unconfirmed + " (couldn't select; still=" + (unconfirmed - unconfMoved) +
+                " moved=" + unconfMoved + ")" +
+                " unreached=" + unreached + " (no cell landed; still=" + (unreached - unreachedMoved) +
+                " early-freeze, moved=" + unreachedMoved + " walked-then-stalled)");
         }
 
         private static void ReportOutcome(int passed, int skipped, int noPath, int noLos, int offFloor, int gated, int failed, int unconfirmed)
@@ -2042,6 +2180,7 @@ namespace DateEverythingAccess
                         }
                         sw.Write(",\"outcome\":\""); sw.Write(JsonEscape(r.outcome ?? ""));
                         sw.Write("\",\"cost_m\":"); sw.Write(r.cost_m.ToString("0.000", ci));
+                        sw.Write(",\"displacement_m\":"); sw.Write(r.displacement_m.ToString("0.000", ci));
                         sw.Write(",\"elapsed_s\":"); sw.Write(r.elapsed_s.ToString("0.000", ci));
                         if (!string.IsNullOrEmpty(r.stall_class))
                         {
@@ -2264,6 +2403,13 @@ namespace DateEverythingAccess
             public string outcome;
             public float cost_m;
             public float elapsed_s;
+            // XZ distance the player ACTUALLY moved from the route's first waypoint to where it
+            // stopped (computed at FinishLeg). cost_m is the PLANNED route length; this is travel.
+            // The two together split a stall: displacement_m≈0 = froze at the start (the watchdog
+            // is right to fire, a real follower defect); displacement_m≈cost_m = walked the route
+            // then stalled on final approach (the watchdog is too aggressive). Without this the
+            // stall classes are indistinguishable from the JSON alone.
+            public float displacement_m;
             // Object-mode: the object name this entry targets, copied from the manifest
             // entry so sweep_results.json names the object, not just a cell. Null otherwise.
             public string name;

@@ -1736,12 +1736,20 @@ if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($
         $component | Add-Member -NotePropertyName RigidbodyIsKinematic -NotePropertyValue $rigidbodyIsKinematic -Force
 
         if (-not $component.Enabled) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "DisabledCollider"; continue }
-        if ($component.IsTrigger) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "TriggerCollider"; continue }
+        # NOTE: IsTrigger and LayerNotPlayerCollidable are NOT early-skipped anymore. The export is
+        # the rock-solid MEASUREMENT; nav-vs-interaction filtering belongs to the CONSUMERS. A
+        # trigger collider and a Layer-31 (3DUI) collider don't block NAVIGATION, but the game's
+        # interaction/glasses raycast (~dateviatorIgnores = mask -1029, excludes only layers 2,10)
+        # DOES hit them — the ceiling LIGHT fixtures live on Layer 31 and are dated by looking up.
+        # So we still build the record and emit it into MeshColliders (the interaction-LOS set),
+        # and only the nav-gate below keeps it OUT of NavigationBlockers. Mirrors the primitive
+        # path (record added to PrimitiveColliders before the player-collidable gate). The record
+        # already carries Layer + IsTrigger so each consumer filters as it needs. See
+        # [[feedback_no_collider_is_missing_data_not_pass]].
         if (-not $gameObject.IsActive) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "InactiveGameObject"; continue }
         if ($component.IsDoorConnector) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "DoorConnector"; continue }
         if ($component.IsTeleporterConnector) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "TeleporterConnector"; continue }
         if ($component.HasRigidbody) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason "RigidbodyObject"; continue }
-        if (-not (Test-LayerCollidesWithPlayer -Layer $gameObject.Layer)) { Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason ("LayerNotPlayerCollidable:{0}" -f $gameObject.Layer); continue }
         # Drop the animated dialog/character rig body: a MeshCollider sharing a
         # GameObject with a SkinnedMeshRenderer is the skinned mesh sliced across
         # its bind/animated-pose union, which sprawls (Monitor 18x17m, cars
@@ -1795,13 +1803,18 @@ if ($meshColliderComponents.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($
         # primitive bounds pass and the datable-dimension join read it).
         # See [[project-navigation-iswalllikefatvictim-followup]],
         # [[project-navigation-collision-only-blockers-2026-05-29]].
+        # Nav-only gates (the record is already in MeshColliders for interaction LOS; these only
+        # keep it OUT of NavigationBlockers). Triggers and non-player-collidable layers (e.g.
+        # Layer 31 lights) don't block walking, so they're excluded HERE, not at emission.
         $reason = $null
-        if ($record.TopY -lt $MinimumBlockingTopY) { $reason = "BelowBlockingHeight" }
+        if ($component.IsTrigger) { $reason = "TriggerCollider" }
+        elseif (-not (Test-LayerCollidesWithPlayer -Layer $gameObject.Layer)) { $reason = ("LayerNotPlayerCollidable:{0}" -f $gameObject.Layer) }
+        elseif ($record.TopY -lt $MinimumBlockingTopY) { $reason = "BelowBlockingHeight" }
         elseif ($record.BottomY -gt $MaximumBlockingBottomY) { $reason = "AbovePlayerBand" }
         elseif ($null -eq $record.Bounds2D) { $reason = "MissingFootprintBounds" }
 
         if ($null -ne $reason) {
-            $record.Footprint.RejectionReason = $reason
+            if ($null -ne $record.Footprint) { $record.Footprint.RejectionReason = $reason }
             Add-ReasonCount -Counter $meshColliderIgnoredReasons -Reason $reason
             continue
         }

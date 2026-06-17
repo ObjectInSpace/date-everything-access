@@ -350,6 +350,65 @@ def main():
     print(f"counts: {counts}  elapsed: {manifest['elapsed_s']}s")
 
 
+def _offline_verdict(entry):
+    """Collapse a manifest entry's raw status to the AUTHORITATIVE per-object ternary the
+    in-game sweep checks against:
+
+        pass      - a reachable cell with interaction line-of-sight exists (planner can place
+                    the player to interact). status ok / trivially_at_target.
+        no_los      - a navigable cell exists but NONE has interaction LOS (placement/occlusion
+                      defect). Carried as unreachable_reason='no_los' even though status is no_path.
+        no_collider - the object's collider didn't resolve offline, so LOS could NOT be tested. We
+                      do NOT guess pass — this is a MISSING-DATA failure to fix in the exporter
+                      (collider dropped, e.g. Layer-2 filtered) or a non-interactable to drop. The
+                      in-game run can upgrade it if the live component-walk resolves a collider.
+        unreached   - no navigable+reachable cell at all (routing): no_path / target_not_navigable
+                      / gate_blocked / unresolved. (off_floor exterior decor is excluded upstream
+                      and never reaches here.)
+
+    This is the planner's CLAIM. The in-game run's only job is to confirm 'pass' objects really
+    interact when driven to, and to enumerate disagreements (with the failure taxonomy as the
+    source-isolating diagnostic). See [[project_navigation_sweep_2026_06_16_timeout]]."""
+    reason = entry.get("unreachable_reason")
+    if reason == "no_los":
+        return "no_los"
+    if reason == "no_collider":
+        return "no_collider"
+    status = entry.get("status")
+    if status in ("ok", "trivially_at_target"):
+        return "pass"
+    return "unreached"
+
+
+def _stamp_offline_verdict(manifest):
+    """Write the ternary onto every entry as `offline_verdict` so the in-game sweep reads one
+    clean field instead of re-deriving status+reason. Done before disperse so order is irrelevant."""
+    for e in manifest.get("entries", []):
+        e["offline_verdict"] = _offline_verdict(e)
+
+
+def _report_offline_scorecard(manifest):
+    """Print the deduped scorecard — the authoritative coverage answer. Entries are already
+    one-per-logical-object (roster dedup upstream), so this is per-object, not per-row.
+
+    PASS counts ONLY verified passes (collider resolved + LOS clear). no_collider is reported
+    separately as a missing-DATA failure, never folded into PASS — offline does not guess a
+    verdict for an object whose geometry it can't resolve."""
+    tally = {"pass": 0, "no_los": 0, "no_collider": 0, "unreached": 0}
+    for e in manifest.get("entries", []):
+        v = e.get("offline_verdict", "unreached")
+        tally[v] = tally.get(v, 0) + 1
+    total = sum(tally.values())
+    if total == 0:
+        return
+    pct = 100.0 * tally["pass"] / total
+    print(f"offline scorecard (authoritative, per object): "
+          f"PASS={tally['pass']}/{total} ({pct:.1f}%)  "
+          f"no_los={tally['no_los']} (placement/occlusion)  "
+          f"no_collider={tally['no_collider']} (MISSING DATA — fix exporter)  "
+          f"unreached={tally['unreached']} (routing)")
+
+
 def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
     """Object-reachability sweep (mode=objects). Targets are the deduped object
     stand-cells from plan_object_route.object_sweep_nodes — the picker's STATIC object
@@ -565,6 +624,7 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
         counts["no_path"] = counts.get("no_path", 0) + 1
     manifest["excluded_exterior"] = excluded_exterior
 
+    _stamp_offline_verdict(manifest)
     _disperse_entries(manifest, start_world)
     manifest["mode"] = "objects"
     manifest["counts"] = counts
@@ -574,6 +634,7 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
     manifest_path = out_dir / "sweep_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(f"wrote {manifest_path}")
+    _report_offline_scorecard(manifest)
     print(f"counts: {counts}  elapsed: {manifest['elapsed_s']}s")
 
 

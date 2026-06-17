@@ -1168,7 +1168,8 @@ def goal_cells_around(floor, wx, wz, radius_m):
 # ---------- interaction line-of-sight goal filter (mirror of SimpleNavPlanner) ----------
 
 _LOS_OCCLUDERS = None       # lazily-built collider set (the whole scene's occluders)
-_LOS_BY_PATH = None         # {collider path: Collider} for target resolution
+_LOS_BY_PATH = None         # {collider path: Collider} OCCLUDERS only (trigger-free)
+_LOS_TARGET_BY_PATH = None  # {collider path: Collider} target resolution (triggers INCLUDED)
 _LOS_TARGET_PATHS = None    # {GameObjectName: [export Path, ...]} for name→path lookup
 _LOS_CONTAINER_DOOR_PATHS = None  # set of collider paths for baked container doors
 
@@ -1202,6 +1203,7 @@ def _ensure_los_context():
     validate_los proved sufficient — the game's dateviatorIgnores is layer 2 plus a few
     effect layers that carry no interaction-blocking geometry."""
     global _LOS_OCCLUDERS, _LOS_BY_PATH, _LOS_TARGET_PATHS, _LOS_CONTAINER_DOOR_PATHS
+    global _LOS_TARGET_BY_PATH
     if _LOS_OCCLUDERS is not None:
         return
     excl = {_los.IGNORE_RAYCAST_LAYER}
@@ -1209,18 +1211,72 @@ def _ensure_los_context():
     _LOS_BY_PATH = {}
     for c in _LOS_OCCLUDERS:
         _LOS_BY_PATH.setdefault(c.path, c)
+    # Target-resolution index: same layer mask, but triggers INCLUDED — the game's interaction
+    # ray hits trigger colliders (queriesHitTriggers=true), so an interactable's own trigger
+    # collider (room thresholds, Attic Orb) IS its hittable surface. Occluders above stay
+    # trigger-free (a trigger doesn't block another target's sightline). Superset of _LOS_BY_PATH.
+    _LOS_TARGET_BY_PATH = {}
+    raw = json.loads(_los.BLOCKERS.read_text(encoding="utf-8-sig"))
+    for sec in ("PrimitiveColliders", "MeshColliders"):
+        for b in raw.get(sec, []):
+            if b.get("Layer") in excl:
+                continue
+            c = _los.build_collider(b, allow_trigger=True)
+            if c is not None:
+                _LOS_TARGET_BY_PATH.setdefault(c.path, c)
     _LOS_TARGET_PATHS = {}
     for it in load_interactables():
         _LOS_TARGET_PATHS.setdefault(it.get("GameObjectName"), []).append(it.get("Path"))
     _LOS_CONTAINER_DOOR_PATHS = _build_container_door_paths()
 
 
-def resolve_target_collider_for_path(target_path):
+def resolve_target_collider_for_path(target_path, target_pos=None):
     """The target's own collider (or None) by full export path — mirror of
     SimpleNavPlanner.ResolveTargetCollider + SelectBestTargetCollider. None ⇒ keep the
-    full disc (matches C# when its live component-walk also finds nothing)."""
+    full disc (matches C# when its live component-walk also finds nothing).
+
+    CONTAINMENT FALLBACK (offline only): some interactables' export Path points at a RENDER
+    mesh that carries no collider, while the real collider sits on a SIBLING node (same furniture
+    unit, e.g. SM_CoffeeMachine_MODEL_UPDATE -> sibling SM_CoffeeMachine_Side_Bag) OR on a
+    co-located instance in a different subtree (Rat_Dead's transform sits inside the
+    Stuffed_Rat_Mesh_Grp collider, which is NOT a unit-mate). When the strict self/child/parent
+    resolve finds nothing AND a target_pos is given, accept ANY target collider whose EXACT
+    oriented volume STRICTLY contains the object position (point_inside_collider — never AABB,
+    which over-claims; see [[feedback_no_collider_is_missing_data_not_pass]]).
+
+    Strict containment IS the safety gate — it makes the shared-furniture-unit requirement
+    redundant and over-restrictive (it excluded Rat_Dead while adding nothing, since containment
+    already proves co-location). Verified safe: every distant mis-relate is rejected (a hanger 55m
+    from a collider-bearing sibling, a Teddy 38m away, a pumpkin near but not inside a ball all
+    resolve to None); only genuine overlaps resolve (Rat_Dead -> Stuffed_Rat). Smallest-volume
+    enclosing shape wins (tightest = most specific). The C# planner reaches these via its live
+    GetComponentsInParent walk, so this only restores offline parity; it does NOT invent LOS the
+    game wouldn't see."""
     _ensure_los_context()
-    return _los.resolve_target_collider(target_path, colliders_by_path=_LOS_BY_PATH)
+    # Resolve against the TARGET index (triggers included) — the game's ray hits an object's
+    # own trigger collider, so it's a valid hittable surface for the interactable itself.
+    own = _los.resolve_target_collider(target_path, colliders_by_path=_LOS_TARGET_BY_PATH)
+    if own is not None or target_pos is None:
+        return own
+    px, py, pz = target_pos
+    if px is None or py is None or pz is None:
+        return None
+    best = None  # (volume, collider) — prefer the tightest enclosing shape
+    for col_path, c in _LOS_TARGET_BY_PATH.items():
+        if not _los.point_inside_collider((px, py, pz), c):
+            continue
+        if c.kind == "sphere":
+            vol = c.radius ** 3
+        elif c.kind == "obb":
+            vol = c.half[0] * c.half[1] * c.half[2]
+        elif c.kind == "capsule":
+            import math as _m
+            vol = c.radius ** 2 * (_m.dist(c.p0, c.p1) + c.radius)
+        else:
+            continue  # mesh/aabb have no exact containment — never accepted here
+        if best is None or vol < best[0]:
+            best = (vol, c)
+    return best[1] if best else None
 
 
 def filter_goals_by_los(floor, goals, target_collider, target_x, target_z, radius_m):
@@ -1342,10 +1398,10 @@ def resolve_object_node(planner, item):
         # Y falls outside every baked floor band: clearly exterior/off-floor decor.
         return "off_floor"
     floor = planner.floors[tfloor]
+    radius = item.get("InteractionRadius") or 0.0
     # Use the object's own InteractionRadius verbatim (no clamp, no default) — parity with C#
     # Plan(): the game gates on radius + LOS, not on any bound we impose. Every real interactable
     # carries a radius; a degenerate 0 yields no goal cells and is handled by the empty-goals path.
-    radius = item.get("InteractionRadius") or 0.0
     goals = goal_cells_around(floor, tx, tz, radius)
     if not goals:
         n = floor.nearest_navigable(tx, tz, max_radius_m=NEAREST_NAVIGABLE_SEARCH_M)
@@ -1371,16 +1427,26 @@ def resolve_object_node(planner, item):
         # Interaction-LOS goal filter — the SAME one plan() and the in-game planner apply
         # (filter_goals_by_los): resolve the fixture's own collider by its scene Path and keep
         # only stand-cells with a clear synthetic-eye sightline to it. A resolved collider with
-        # NO LOS cell anywhere ⇒ reachable-but-not-interactable ⇒ no_los (a real result the
-        # objects sweep previously couldn't see, because it skipped this filter). target_collider
-        # None ⇒ keep the full disc (matches plan() / C# when the live component-walk finds none).
-        target_collider = resolve_target_collider_for_path(item.get("Path"))
-        if target_collider is not None:
-            los_goals, _container_doors, _quality = filter_goals_by_los(
-                floor, goals, target_collider, tx, tz, radius)
-            if not los_goals:
-                return "no_los"
-            goals = los_goals
+        # NO LOS cell anywhere ⇒ reachable-but-not-interactable ⇒ no_los.
+        #
+        # NO COLLIDER (None) ⇒ we do NOT know where this object's interactable surface is, so we
+        # CANNOT test LOS. The old behaviour kept the full disc and let the cell pass UNVERIFIED —
+        # a GUESS. ~32% of "pass" verdicts were such guesses (194/610), and the in-game raycast
+        # later contradicts an unknown subset (the box7/box10/TrapDoor/Floors_UpperHall no_los).
+        # Don't guess: emit no_collider, a distinct "missing data" failure to be fixed in the
+        # EXPORTER (Export-SceneBlockerData dropped it, e.g. Layer-2 filtered) — NOT papered over
+        # downstream. The in-game reality-check can still UPGRADE a no_collider object to verified
+        # when the live component-walk resolves a collider the offline export lacks; offline simply
+        # refuses to assert pass/fail on geometry it doesn't have. See
+        # [[project_navigation_sweep_2026_06_16_timeout]] + [[feedback_fix_data_source_first]].
+        target_collider = resolve_target_collider_for_path(item.get("Path"), target_pos=(tx, ty, tz))
+        if target_collider is None:
+            return "no_collider"
+        los_goals, _container_doors, _quality = filter_goals_by_los(
+            floor, goals, target_collider, tx, tz, radius)
+        if not los_goals:
+            return "no_los"
+        goals = los_goals
     # Representative = the navigable cell nearest the object centre (deterministic).
     rep = min(goals, key=lambda c: (floor.cell_to_world(*c)[0] - tx) ** 2 +
                                     (floor.cell_to_world(*c)[1] - tz) ** 2)

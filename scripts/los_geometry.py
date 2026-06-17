@@ -229,11 +229,19 @@ def closest_point_on_bounds(c, p):
     )
 
 
-def build_collider(b):
+def build_collider(b, allow_trigger=False):
     """Build one Collider from a blocker-export record, or None if it can't occlude
     (trigger / disabled / inactive / no bounds). Shared by load_colliders and target
-    resolution so a target's own collider is modeled identically to an occluder."""
-    if b.get("IsTrigger"):
+    resolution.
+
+    allow_trigger: triggers are excluded as OCCLUDERS (they don't block sightlines), but the
+    game's interaction raycast DOES hit trigger colliders (queriesHitTriggers=true — proven by
+    a captured LOS_PROBE ray hitting the Rug_Closet trigger). So an interactable whose OWN
+    collider is a trigger (the room thresholds, the Attic Orb) is genuinely hittable/datable.
+    Target-collider resolution passes allow_trigger=True so those resolve, while occluder
+    loading keeps the default (triggers don't occlude). See
+    [[feedback_no_collider_is_missing_data_not_pass]]."""
+    if b.get("IsTrigger") and not allow_trigger:
         return None
     if not b.get("Enabled", True) or not b.get("IsActive", True):
         return None
@@ -596,13 +604,57 @@ def cell_has_los_to_target(eye_xz, floor_y, target_collider, radius_m, occluders
             best_t, best_c = t, c
     if best_c is None:
         return True  # nothing between eye and target surface — clear line
-    # Clear iff the first thing hit is the target collider, its strict hierarchy, OR a
-    # collider sharing the target's furniture UNIT (its own supporting desk/counter/shelf —
-    # a sibling subtree under the unit node, which the strict ancestor/descendant check
-    # misses). The latter stops a prop's own support from reporting false no_los.
+    # Clear iff the first thing hit is the target collider, its strict hierarchy, a collider
+    # sharing the target's furniture UNIT (its own supporting desk/counter/shelf — a sibling
+    # subtree under the unit node), OR a CO-LOCATED PRESET DUPLICATE of the target. The last
+    # case fixes wall-mounted lights/switches: every fixture exists once per lighting preset
+    # (PV_/PF_Lighting_*), so the occluder set holds ~10-20 copies of SM_LightSwitch_Kitchen at
+    # the IDENTICAL world position under different preset prefixes. The resolved target is ONE
+    # preset's copy; the ray hits a SIBLING preset's copy first (distance 0 from the target), and
+    # the path-prefix relation check fails on the differing preset prefix — so the switch occluded
+    # ITSELF and reported no_los from point-blank range. A hit with the same leaf name whose
+    # collider center coincides with the target's IS the target. See
+    # [[feedback_no_collider_is_missing_data_not_pass]] (light/preset thread).
     return _is_self_or_relative(best_c.path, target_collider.path) is not None \
         or _is_self_or_relative(target_collider.path, best_c.path) is not None \
-        or _shares_furniture_unit(best_c.path, target_collider.path)
+        or _shares_furniture_unit(best_c.path, target_collider.path) \
+        or _is_colocated_duplicate(best_c, target_collider)
+
+
+# Same-position preset duplicate tolerance: the export captures every lighting-preset copy of a
+# fixture at the IDENTICAL transform, so co-located copies are 0.000m apart. A tight epsilon keeps
+# this from ever matching a genuinely different same-name object elsewhere in the house.
+_COLOCATED_EPS_M = 0.05
+
+
+def _is_colocated_duplicate(hit_c, target_c):
+    """True if hit_c is a preset duplicate of target_c: same collider leaf name AND their centers
+    coincide (within _COLOCATED_EPS_M). Lighting presets (PV_/PF_Lighting_*) each carry a full copy
+    of every fixture at the same world position; the planner resolves one copy as the target but the
+    ray may hit a sibling copy first. Treating a co-located same-name hit as the target prevents a
+    fixture from occluding itself via its own preset duplicates."""
+    if hit_c is None or target_c is None:
+        return False
+    if hit_c.path.rsplit("/", 1)[-1] != target_c.path.rsplit("/", 1)[-1]:
+        return False
+    hc = _collider_center(hit_c)
+    tc = _collider_center(target_c)
+    if hc is None or tc is None:
+        return False
+    return vlen(vsub(hc, tc)) <= _COLOCATED_EPS_M
+
+
+def _collider_center(c):
+    """A collider's world center: the oriented `center` for box/sphere/capsule, else the AABB
+    center (mesh/aabb colliders have center=None but always carry aabb_lo/hi)."""
+    ctr = getattr(c, "center", None)
+    if ctr is not None:
+        return ctr
+    lo = getattr(c, "aabb_lo", None)
+    hi = getattr(c, "aabb_hi", None)
+    if lo is None or hi is None:
+        return None
+    return ((lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5, (lo[2] + hi[2]) * 0.5)
 
 
 def goal_view_quality(eye_xz, floor_y, target_collider):
