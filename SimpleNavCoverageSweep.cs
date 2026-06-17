@@ -22,11 +22,13 @@ namespace DateEverythingAccess
     //    object, then from there to the next nearest, exactly as a player would. Arrived = pass.
     //    A leg that can't reach its object is recorded once WITH ITS REASON (the upstream datum);
     //    the object stays in the pool to be retried from a different angle later. There is NO
-    //    per-leg source teleport and NO same-leg retry/un-wedge (both existed only to paper over
-    //    teleport landings and dominated the 2026-06-12 log as thrash). Teleport survives in ONE
-    //    role: after RelocateAfterConsecutiveFailures failures in a row — the signal that one
-    //    blocker has boxed the player into a room — relocate to a fresh region so the chain can
-    //    continue and the rest of the house still gets tested.
+    //    teleport anywhere in objects mode (per-leg source teleport, same-leg retry/un-wedge, and
+    //    the recovery relocate were all removed — the first two papered over teleport landings and
+    //    dominated the 2026-06-12 log as thrash; the relocate masked broken paths and reached
+    //    genuinely inaccessible outside objects). If one blocker boxes the player into a room, the
+    //    objects it can't reach just record failures and drain via the per-object give-up cap. That
+    //    pile of failures is the point: a path broken enough to trap the player is what most needs
+    //    fixing, so the sweep surfaces it rather than driving around it.
     //
     // Both stamp the player's cell + 4-neighbour ring into a per-floor verified-reachable bitmap.
     //
@@ -185,14 +187,13 @@ namespace DateEverythingAccess
         // un-wedge, no recovery re-plan (all of which existed only to paper over teleport
         // landings, and which DOMINATED the 2026-06-12 failure log as thrash).
         //
-        // Teleport survives in ONE role: recovery. If the player can't reach the next object,
-        // a single blocker (e.g. a doorway) could box them in a room and fail every subsequent
-        // leg. So after RelocateAfterConsecutiveFailures failures in a row, we relocate the
-        // player to clean floor near the nearest unvisited object in a DIFFERENT region and
-        // resume the chain — testing arrival from a fresh angle. The failures are still recorded;
-        // the teleport only keeps the sweep moving.
-        private static int _consecutiveFailures;
-        private const int RelocateAfterConsecutiveFailures = 3;
+        // NO teleport at all (removed 2026-06-17). The sweep walks the whole run from wherever the
+        // player starts. If one blocker boxes the player into a room, every object it can't reach
+        // simply records a failure and drains from the pool via the per-object give-up cap — that
+        // pile of failures IS the signal: a path out so broken the player can get stuck is exactly
+        // what most needs fixing, and a recovery teleport (which also reached genuinely
+        // inaccessible outside objects) only masked it. Termination no longer depends on relocation;
+        // it rests entirely on MaxObjectFailures draining the pool.
         // Objects already arrived-at (pass) — by manifest index — so the nearest-unvisited picker
         // skips them. A FAILED object is NOT added here: it stays in the pool to be retried from
         // every region until reached (its failure reason is recorded each time for triage).
@@ -206,14 +207,6 @@ namespace DateEverythingAccess
         // with its failures already recorded. This is what GUARANTEES the sweep terminates.
         private static readonly Dictionary<int, int> _objectFailCount = new Dictionary<int, int>();
         private const int MaxObjectFailures = 3;
-        // Relocate destinations already shown to strand the sweep (every leg out re-stalled). These
-        // are isolated/gated pockets — e.g. the quest-gated attic the recovery teleport dropped the
-        // player into on 2026-06-13, which has no graph edge back out — so we refuse to relocate
-        // INTO them again and skip objects whose stand-cell sits in one. Keyed by manifest index.
-        private static readonly HashSet<int> _strandedRegionObjects = new HashSet<int>();
-        // Manifest index of the object we last relocated TO, so if the very next legs all re-stall
-        // we can mark that destination as a stranded region rather than re-seeding it.
-        private static int _lastRelocateTargetIdx = -1;
 
         // Per-floor verified-reachable bitmap. cells[ix * nz + iz] = true once any traversal
         // has put the player's cell-ring on that cell. Allocated lazily per floor.
@@ -295,10 +288,6 @@ namespace DateEverythingAccess
             _objectVisited.Clear();
             _recentlyFailed.Clear();
             _objectFailCount.Clear();
-            _strandedRegionObjects.Clear();
-            _lastRelocateTargetIdx = -1;
-            _lastArrivedIdx = -1;
-            _consecutiveFailures = 0;
             if (_manifest.floor_frames != null)
             {
                 foreach (var kv in _manifest.floor_frames)
@@ -400,10 +389,6 @@ namespace DateEverythingAccess
             _objectVisited.Clear();
             _recentlyFailed.Clear();
             _objectFailCount.Clear();
-            _strandedRegionObjects.Clear();
-            _lastRelocateTargetIdx = -1;
-            _lastArrivedIdx = -1;
-            _consecutiveFailures = 0;
             _walkState.Clear();
             _walkReachable.Clear();
             _impassRecords = null;
@@ -847,9 +832,9 @@ namespace DateEverythingAccess
             return outcome == "arrived" || outcome == "arrived_verified" || outcome == "arrived_gated";
         }
 
-        // End the current leg: record its outcome once, then chain to the next nearest object —
-        // or, if we've failed too many legs in a row, relocate to a fresh region first so one
-        // blocker can't box the player in and fail every remaining object.
+        // End the current leg: record its outcome once, then chain to the next nearest object from
+        // wherever the player now stands. There is no recovery relocation — if a blocker boxes the
+        // player in, the trapped objects record failures and drain via the per-object give-up cap.
         private static void FinishLeg(string outcome)
         {
             // Tear down the autowalk regardless of what we do next.
@@ -859,213 +844,35 @@ namespace DateEverythingAccess
 
             if (IsArrivalOutcome(outcome))
             {
-                // Reached: mark visited so the picker won't re-select it. Making progress ends the
-                // failure streak — reset the counter and clear the recently-failed skip set so
-                // those objects become eligible again from this new position.
+                // Reached: mark visited so the picker won't re-select it. Making progress clears the
+                // recently-failed skip set so those objects become eligible again from this new
+                // position.
                 _objectVisited.Add(_currentManifestIndex);
-                _consecutiveFailures = 0;
                 _recentlyFailed.Clear();
-                // An arrival proves the last relocate landed us somewhere connected — clear it so a
-                // later, unrelated failure streak can't wrongly banish this (good) region.
-                _lastRelocateTargetIdx = -1;
-                // This object is now a proven-connected anchor for the relocate reachability gate.
-                _lastArrivedIdx = _currentManifestIndex;
             }
             else
             {
-                // Failed: the object stays in the pool to be retried from another region — UNLESS
-                // it has now failed MaxObjectFailures times, in which case we give up on it (mark
+                // Failed: the object stays in the pool to be retried from another angle — UNLESS it
+                // has now failed MaxObjectFailures times, in which case we give up on it (mark
                 // visited so it leaves the pool; its failures are recorded). The per-object cap
                 // counts EVERY failure including transient gates, so an object we can never even
                 // start a route to still eventually leaves the pool — this is what guarantees the
-                // sweep terminates.
+                // sweep terminates. _recentlyFailed makes the picker sample DIFFERENT nearby objects
+                // after a failure rather than re-failing the same one in place.
                 _recentlyFailed.Add(_currentManifestIndex);
                 int fails = _objectFailCount.TryGetValue(_currentManifestIndex, out int f) ? f + 1 : 1;
                 _objectFailCount[_currentManifestIndex] = fails;
                 if (fails >= MaxObjectFailures) _objectVisited.Add(_currentManifestIndex);
-
-                // The relocation budget, though, only counts genuine NAV failures: relocating to a
-                // fresh region can route around a blocker, but it can't fix a game menu/dialogue
-                // being up, so a transient gate shouldn't trigger (or count toward) a relocate.
-                if (!IsTransientGateOutcome(outcome)) _consecutiveFailures++;
             }
 
             _currentRoute = null;
             // Periodically flush so a crash doesn't lose hours of progress.
             if ((_results.Count % 50) == 0) FlushResults();
 
-            if (_consecutiveFailures >= RelocateAfterConsecutiveFailures)
-            {
-                // If we relocated here and then immediately failed our whole budget again WITHOUT a
-                // single arrival, the relocate destination is an isolated/gated pocket (e.g. the
-                // attic) — banish it so the next relocate doesn't re-seed the same trap.
-                if (_lastRelocateTargetIdx >= 0)
-                {
-                    _strandedRegionObjects.Add(_lastRelocateTargetIdx);
-                    if (Main.Log != null)
-                        Main.Log.LogInfo("SimpleNavCoverageSweep relocate target idx=" + _lastRelocateTargetIdx +
-                            " stranded (failed full budget with no arrival) — banishing region");
-                    _lastRelocateTargetIdx = -1;
-                }
-                RelocateToFreshRegion();
-                return;
-            }
-
+            // Always chain on from where the player stands — no relocation. A long failure streak
+            // just means a region is boxed in; those objects keep recording failures until the
+            // per-object give-up cap drains them from the pool (which is what terminates the sweep).
             _phase = Phase.BetweenRoutes;
-        }
-
-        // Recovery teleport: the player has failed RelocateAfterConsecutiveFailures legs in a row
-        // — likely boxed into a room by one blocker. Relocate to the NEAREST unvisited object in a
-        // DIFFERENT region (≥RelocateMinDistanceM away) whose stand-cell is at least
-        // RelocateMinClearanceCells off any wall, so the chain resumes from a fresh angle. The
-        // failures are already recorded; this only keeps the sweep moving.
-        //
-        // The min-clearance requirement is the whole anti-bad-teleport guard: it's what stops us
-        // dropping the player wedged against a wall (which would make every downstream leg fail for
-        // a teleport reason, not a real bug). We do NOT also chase the most-OPEN spot — the player
-        // walks away from the landing cell immediately, so corridor-vs-room washes out; nearest is
-        // simpler and avoids teleporting across the whole house. Reset the counter so the new
-        // region gets a full budget before bailing again.
-        private const float RelocateMinDistanceM = 8.0f;  // "different region" = at least this far
-        private const int RelocateMinClearanceCells = 2;  // ≥0.4m off any wall — the anti-wedge floor
-        // How many nearest candidates to consider before giving up. The reachability gate below can
-        // reject the nearest one (isolated pocket); we walk outward to the next rather than commit
-        // to a trap. Bounded so a relocate stays cheap (one Plan call per rejected candidate).
-        private const int RelocateMaxCandidates = 12;
-
-        // The most-recently ARRIVED object — provably reachable from the region the sweep has been
-        // traversing, so it's the anchor a relocate candidate must be able to route to. -1 until the
-        // first arrival (early relocates fall back to the unguarded nearest pick).
-        private static int _lastArrivedIdx = -1;
-
-        private static void RelocateToFreshRegion()
-        {
-            _consecutiveFailures = 0;
-            _recentlyFailed.Clear();  // fresh region = fresh streak; failed objects eligible again
-
-            if (BetterPlayerControl.Instance == null) { _phase = Phase.BetweenRoutes; return; }
-            Vector3 stuck = BetterPlayerControl.Instance.transform.position;
-
-            // Collect the nearest unvisited candidates (far enough to be past the blocker, with a
-            // wall-clear stand-cell, not in a region we've already proven strands the sweep). We
-            // then pick the nearest that is REACHABLE from a known-connected anchor — this is the
-            // guard that stops the recovery teleport dropping the player into an isolated/gated
-            // pocket like the quest-gated attic (the 2026-06-13 strand: openness/clearance both
-            // passed there, but it has no graph edge back out).
-            float minD2 = RelocateMinDistanceM * RelocateMinDistanceM;
-            var candidates = new List<KeyValuePair<float, KeyValuePair<int, Vector3>>>();
-            for (int i = 0; i < _manifest.entries.Length; i++)
-            {
-                if (_objectVisited.Contains(i)) continue;
-                if (_strandedRegionObjects.Contains(i)) continue;  // known dead pocket — never re-seed
-                var e = _manifest.entries[i];
-                if (e == null || !string.Equals(e.status, "ok", StringComparison.Ordinal)) continue;
-                if (e.object_xyz == null || e.object_xyz.Length < 3) continue;
-                float dx = e.object_xyz[0] - stuck.x;
-                float dy = e.object_xyz[1] - stuck.y;
-                float dz = e.object_xyz[2] - stuck.z;
-                float d2 = dx * dx + dy * dy + dz * dz;
-                if (d2 < minD2) continue;
-                float radius = e.interaction_radius > 0.5f ? e.interaction_radius : 1.0f;
-                if (!SimpleNavPlanner.TryGetCleanStandCell(
-                        e.object_xyz[0], e.object_xyz[1], e.object_xyz[2], radius,
-                        out Vector3 cell, RelocateMinClearanceCells))
-                    continue;
-                candidates.Add(new KeyValuePair<float, KeyValuePair<int, Vector3>>(
-                    d2, new KeyValuePair<int, Vector3>(i, cell)));
-            }
-            candidates.Sort((a, b) => a.Key.CompareTo(b.Key));
-
-            int bestIdx = -1;
-            Vector3 bestCell = Vector3.zero;
-            int considered = 0;
-            foreach (var c in candidates)
-            {
-                if (considered++ >= RelocateMaxCandidates) break;
-                int idx = c.Value.Key;
-                Vector3 cell = c.Value.Value;
-                if (!RelocateCellIsConnected(cell, idx))
-                    continue;
-                bestIdx = idx; bestCell = cell;
-                break;
-            }
-
-            // If the reachability gate rejected everything (or we have no anchor yet and the list is
-            // empty), fall back to the unguarded nearest candidate so the sweep still makes progress
-            // rather than parking — a fresh angle from anywhere beats sitting in the same trap.
-            if (bestIdx < 0 && candidates.Count > 0)
-            {
-                bestIdx = candidates[0].Value.Key;
-                bestCell = candidates[0].Value.Value;
-            }
-
-            if (bestIdx < 0)
-            {
-                // Nothing to relocate to (every remaining object is near where we're stuck, or none
-                // has a wall-clear cell, or all are banished). Let the picker run from here; if it
-                // also can't make progress the sweep keeps recording failures until the pool drains
-                // via the per-object give-up cap.
-                _phase = Phase.BetweenRoutes;
-                return;
-            }
-
-            // The bake's cell Y is the NOMINAL floor (floor_y), but the real walkable
-            // collider can sit well above it — the upper floor's slabs are at ~12.84 vs
-            // a nominal 12.5 (per the per-cell-span bake). The game grounds the player
-            // with a downward ray reaching only 0.25m below the transform origin, so a
-            // placement 0.32m under the real floor reads as NOT grounded → the controller
-            // applies y=-50 and the player can't walk (the upper-floor sweep "stalls"
-            // with moved≈0.1m). Snap the placement onto the real collider surface so the
-            // player lands grounded. See [[project-navigation-follower-speed-deadzone]].
-            Vector3 placeCell = SnapToFloor(bestCell);
-
-            Transform pt = BetterPlayerControl.Instance.transform;
-            pt.position = placeCell;
-            Rigidbody rb = BetterPlayerControl.Instance.GetComponent<Rigidbody>();
-            if (rb != null) { rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
-            _lastRelocateTargetIdx = bestIdx;  // if the next legs all re-stall, this region gets banished
-            if (Main.Log != null)
-                Main.Log.LogInfo("SimpleNavCoverageSweep relocate -> fresh region near idx=" + bestIdx +
-                    " cell=" + placeCell.ToString("F2") + " (was stuck at " + stuck.ToString("F2") + ")");
-            _phase = Phase.BetweenRoutes;
-        }
-
-        // Snap a bake cell (XZ correct, Y = nominal floor_y) onto the real walkable
-        // collider surface so the placed player reads as grounded. Cast down from well
-        // above; if nothing's hit (shouldn't happen on a navigable cell) keep the cell
-        // Y. A small lift keeps the capsule from spawning inside the floor collider.
-        private static Vector3 SnapToFloor(Vector3 cell)
-        {
-            const float castUp = 3.0f;     // start above any plausible nominal-vs-real gap
-            const float castLen = 6.0f;    // reach down past the nominal floor
-            const float standLift = 0.05f; // settle just above the surface, not inside it
-            Vector3 origin = cell + Vector3.up * castUp;
-            int mask = ~0;  // everything; we want the actual floor collider the game grounds on
-            if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, castLen, mask,
-                    QueryTriggerInteraction.Ignore))
-                return new Vector3(cell.x, hit.point.y + standLift, cell.z);
-            return cell;
-        }
-
-        // True if the planner can route from a relocate candidate cell to the last-arrived object —
-        // i.e. the candidate is in the same connected component the sweep has been traversing, not an
-        // isolated/gated pocket. With no anchor yet (no arrival), we can't test connectivity, so we
-        // accept (the early-run fallback). The anchor object is itself reachable (we arrived at it),
-        // so a NULL route means the candidate is severed from it.
-        private static bool RelocateCellIsConnected(Vector3 cell, int candidateIdx)
-        {
-            if (_lastArrivedIdx < 0) return true;
-            if (_lastArrivedIdx >= _manifest.entries.Length) return true;
-            var anchor = _manifest.entries[_lastArrivedIdx];
-            if (anchor == null || anchor.object_xyz == null || anchor.object_xyz.Length < 3) return true;
-            float radius = anchor.interaction_radius > 0.5f ? anchor.interaction_radius : 1.0f;
-            Vector3 target = new Vector3(anchor.object_xyz[0], anchor.object_xyz[1], anchor.object_xyz[2]);
-            try
-            {
-                var route = SimpleNavPlanner.Plan(cell, target, radius, anchor.name ?? "anchor", 0);
-                return route != null && route.Waypoints != null && route.Waypoints.Count > 0;
-            }
-            catch { return true; }  // planner hiccup shouldn't strand the recovery — accept and move on
         }
 
         private static void RecordLegResult(string outcome)

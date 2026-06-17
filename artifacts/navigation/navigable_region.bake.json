@@ -1124,26 +1124,6 @@
       "path": "===SCENE===/House/Office/Desk_office_lifting_MODEL_UPDATE_ORIGIN/Desk_MASTER/Desk_TRS/SM_Desk/BottomDrawer_MASTER/BottomDrawer_TRS/Drawers_Office_Bottom/BottomDrawer_TRS/BottomDrawer/drawer_office_Bottom_wiggles_MODEL_UPDATE_ORIGIN/BottomDrawer_pencil3_MASTER/BottomDrawer_pencil3_TRS/BottomDrawer_pencil3"
     },
     {
-      "name": "Bow",
-      "position": [
-        21.5081,
-        1.0256,
-        0.0838
-      ],
-      "floor": "ground",
-      "object_ids": [
-        20384
-      ],
-      "interaction_radius": 7.5,
-      "is_datable": false,
-      "ink": "",
-      "unique_id": "a0686d20-edd2-49f8-bbe0-c2ec84c51ae3",
-      "unique_ids": [
-        "a0686d20-edd2-49f8-bbe0-c2ec84c51ae3"
-      ],
-      "path": "===SCENE===/House/Hallway/DateViatorsBox (Old)/Bow"
-    },
-    {
       "name": "Bowl",
       "position": [
         -13.5919,
@@ -1186,26 +1166,6 @@
         "69612647-d1d2-4ffe-b851-d4fefe9206cf"
       ],
       "path": "===SCENE===/House/LaundryRoom/Closet/Boxes_Laundry/Boxes_Laundry_3/Box_1_Shelf_1_lanudry_closet_MASTER/Box_1_TRS/Box_1"
-    },
-    {
-      "name": "Box",
-      "position": [
-        21.51,
-        0.1743,
-        0.0766
-      ],
-      "floor": "ground",
-      "object_ids": [
-        17163
-      ],
-      "interaction_radius": 7.5,
-      "is_datable": false,
-      "ink": "",
-      "unique_id": "b05d3d41-9f18-4839-9e95-d83c0fd0cc79",
-      "unique_ids": [
-        "b05d3d41-9f18-4839-9e95-d83c0fd0cc79"
-      ],
-      "path": "===SCENE===/House/Hallway/DateViatorsBox (Old)/Box"
     },
     {
       "name": "BoxOfPapers_OfficeCloset",
@@ -1622,9 +1582,9 @@
     {
       "name": "Cabinet_Bathroom1_Sink",
       "position": [
-        -4.0918,
+        -4.413,
         1.0033,
-        8.4462
+        10.0983
       ],
       "floor": "ground",
       "object_ids": [
@@ -3931,9 +3891,9 @@
     {
       "name": "Doors_Bathroom1",
       "position": [
-        2.11,
+        2.187,
         -0.6174,
-        6.4218
+        5.8183
       ],
       "floor": "ground",
       "object_ids": [
@@ -3951,9 +3911,9 @@
     {
       "name": "Doors_Laundry",
       "position": [
-        -15.599,
+        -15.613,
         -0.6174,
-        28.6373
+        28.0483
       ],
       "floor": "ground",
       "object_ids": [
@@ -3971,9 +3931,9 @@
     {
       "name": "Doors_Laundry_Closet",
       "position": [
-        -11.424,
+        -11.213,
         -0.6174,
-        37.237
+        37.6983
       ],
       "floor": "ground",
       "object_ids": [
@@ -6021,26 +5981,6 @@
         "6ee95d65-d943-406c-8f46-202ce3a2f044"
       ],
       "path": "===SCENE===/House/LaundryRoom/Shelf_Laundry/LaundryShelf_MODEL_UPDATE"
-    },
-    {
-      "name": "Lid",
-      "position": [
-        21.5082,
-        0.748,
-        0.0792
-      ],
-      "floor": "ground",
-      "object_ids": [
-        12855
-      ],
-      "interaction_radius": 7.5,
-      "is_datable": false,
-      "ink": "",
-      "unique_id": "9d965e4a-79e8-4d0e-840a-6b5943dabb26",
-      "unique_ids": [
-        "9d965e4a-79e8-4d0e-840a-6b5943dabb26"
-      ],
-      "path": "===SCENE===/House/Hallway/DateViatorsBox (Old)/Lid"
     },
     {
       "name": "LightBulb_2",
@@ -13370,9 +13310,9 @@
     {
       "name": "Doors_Bedroom",
       "position": [
-        -10.724,
+        -10.6839,
         12.8248,
-        -6.462
+        -5.835
       ],
       "floor": "upper",
       "object_ids": [
@@ -13390,9 +13330,9 @@
     {
       "name": "Doors_Bedroom_Bathroom",
       "position": [
-        -23.663,
+        -23.7922,
         12.8248,
-        -6.324
+        -6.9517
       ],
       "floor": "upper",
       "object_ids": [
@@ -13430,9 +13370,9 @@
     {
       "name": "Doors_Bedroom_ClosetLeft_Outer",
       "position": [
-        -4.5263,
+        -4.3172,
         12.8248,
-        -8.5969
+        -8.6884
       ],
       "floor": "upper",
       "object_ids": [
@@ -13470,9 +13410,9 @@
     {
       "name": "Doors_Bedroom_ClosetRight_Outer",
       "position": [
-        -4.5263,
+        -4.3172,
         12.8248,
-        -20.6038
+        -20.6884
       ],
       "floor": "upper",
       "object_ids": [
@@ -13490,9 +13430,9 @@
     {
       "name": "Doors_Gym_Bathroom",
       "position": [
-        -23.153,
+        -23.0172,
         12.8248,
-        8.003
+        7.4183
       ],
       "floor": "upper",
       "object_ids": [
@@ -13530,9 +13470,9 @@
     {
       "name": "Doors_Gym_ClosetOuter",
       "position": [
-        -4.5263,
+        -4.3172,
         12.8248,
-        23.9323
+        23.9116
       ],
       "floor": "upper",
       "object_ids": [
@@ -13550,9 +13490,9 @@
     {
       "name": "Doors_Gym_Hall",
       "position": [
-        -6.166,
+        -6.1506,
         12.8248,
-        8.0422
+        7.4761
       ],
       "floor": "upper",
       "object_ids": [
@@ -13570,9 +13510,9 @@
     {
       "name": "Doors_UpperHall_Electric",
       "position": [
-        1.341,
+        1.3828,
         12.8248,
-        7.725
+        8.2783
       ],
       "floor": "upper",
       "object_ids": [

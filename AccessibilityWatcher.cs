@@ -468,6 +468,12 @@ namespace DateEverythingAccess
         // derived from this each time a filter/sort toggle changes, so toggling never re-scans
         // the scene.
         private List<KnownObjectTarget> _knownObjectTargets;
+        // World bounds of each hierarchy room container (House/<Room> and the per-room lighting
+        // groups), built once per picker open. Used as the SPATIAL FALLBACK to assign a room to
+        // the handful of objects whose hierarchy puts them in a catch-all container (MultiRoom
+        // art/plants/doors/vents, MovableObjects) with no room of their own. NOT camera zones —
+        // these bounds are derived from the data hierarchy's own room nodes.
+        private Dictionary<string, Bounds> _roomBoundsIndex;
         private List<PickerNode> _knownObjectView;
         private int _knownObjectSelectionIndex = -1;
         private bool _isKnownObjectPickerOpen;
@@ -3471,7 +3477,9 @@ namespace DateEverythingAccess
                 return;
             }
 
-            TryGetZoneNameForInteractable(interactable, out string targetZone);
+            // Use the room resolved at build time (data hierarchy, not camera zones) so the
+            // navigation announcement names the same room the picker grouped this object under.
+            string targetZone = target.Zone;
             string targetLabel = target.Label;
 
             SetTrackedInteractable(interactable, targetZone, targetLabel);
@@ -3585,6 +3593,10 @@ namespace DateEverythingAccess
             // emits it), cleaned-name + nearest position as fallback.
             LiveInteractableIndex live = BuildLiveInteractableIndex();
 
+            // Room world-bounds from the data hierarchy's own room containers — the spatial
+            // fallback for objects whose hierarchy can't name a room (built once per open).
+            _roomBoundsIndex = BuildRoomBoundsIndex();
+
             Transform playerTransform = BetterPlayerControl.Instance != null
                 ? BetterPlayerControl.Instance.transform
                 : null;
@@ -3660,7 +3672,11 @@ namespace DateEverythingAccess
                 bool isMet = IsDatedInteractable(liveObj);
                 PickerSection section = isMet ? PickerSection.Met : PickerSection.Encountered;
                 string characterName = isMet ? GetInteractableDisplayName(liveObj) : null;
-                TryGetZoneNameForInteractable(liveObj, out string zone);
+                // Room from the DATA HIERARCHY (House/<Room> or the per-room lighting container),
+                // NOT camera zones. Falls back to the room whose hierarchy-derived bounds contain
+                // the object only when the hierarchy puts it in a catch-all container.
+                if (!TryGetHierarchyRoomForInteractable(liveObj, out string zone))
+                    zone = ResolveRoomByBounds(fixturePos);
                 bool isDoor = IsDoorInteractable(liveObj);
 
                 // Datable grouping key for the collapsed top level — only for MET objects (the
@@ -3688,6 +3704,171 @@ namespace DateEverythingAccess
             }
 
             return targets.Count > 0 ? KnownObjectBuildResult.Ok : KnownObjectBuildResult.Empty;
+        }
+
+        // The set of room-container names the data hierarchy uses, mapped to the spoken room name.
+        // The room lives in the transform path either as the segment directly under "House"
+        // (House/Kitchen/...) or, for lighting, encoded in a per-room container name
+        // ("Lights_Kitchen", "LightSwitches"). Catch-all containers that are NOT rooms
+        // (MultiRoom, MovableObjects, Exterior, lighting-preset roots) are deliberately absent —
+        // an object under one of those gets the spatial-bounds fallback instead. Keys are
+        // BuildComparisonKey-normalized (lowercase, alphanumeric) so "LivingRoom"/"Living Room"
+        // both hit.
+        private static readonly Dictionary<string, string> _hierarchyRoomNames =
+            BuildHierarchyRoomNameTable();
+
+        private static Dictionary<string, string> BuildHierarchyRoomNameTable()
+        {
+            // Canonical spoken names for each room container under House/. Friendly-cased here so
+            // the picker speaks "Living room" not "LivingRoom".
+            string[] rooms =
+            {
+                "Kitchen", "Office", "Bedroom", "Gym", "Attic",
+                "Bathroom1", "Bathroom2", "LivingRoom", "PianoRoom", "DiningRoom",
+                "UpstairsHall", "Hallway", "LaundryRoom",
+            };
+            var table = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string r in rooms)
+            {
+                string spoken = FriendlyRoomName(r);
+                table[BuildComparisonKey(r)] = spoken;            // "House/Bedroom"
+                table[BuildComparisonKey("Lights_" + r)] = spoken; // "Lights_Bedroom" (lighting group)
+            }
+            // Light switches live under a single non-room container; they belong to "light switches".
+            table[BuildComparisonKey("LightSwitches")] = FriendlyRoomName("LightSwitches");
+            return table;
+        }
+
+        // "LivingRoom" -> "Living room", "Bathroom1" -> "Bathroom 1", "LightSwitches" -> "Light
+        // switches". Splits CamelCase and trailing digits into spaced words, lowercasing all but
+        // the first word, so the room reads naturally.
+        private static string FriendlyRoomName(string container)
+        {
+            if (string.IsNullOrEmpty(container))
+                return container;
+            string spaced = Regex.Replace(container, @"(?<=[a-z])(?=[A-Z])|(?<=[A-Za-z])(?=\d)", " ");
+            string[] words = spaced.Split(new[] { ' ', '_' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < words.Length; i++)
+                words[i] = i == 0
+                    ? char.ToUpperInvariant(words[i][0]) + words[i].Substring(1).ToLowerInvariant()
+                    : words[i].ToLowerInvariant();
+            return string.Join(" ", words);
+        }
+
+        // Resolve an interactable's room from the DATA HIERARCHY (its transform parents), not
+        // camera zones. Walks parents looking for a known room container: the segment under
+        // "House" (House/Kitchen/...) or a per-room lighting container ("Lights_Kitchen",
+        // "LightSwitches"). Returns false when the hierarchy only yields catch-all containers
+        // (MultiRoom, MovableObjects, Exterior) — the caller then uses the spatial fallback.
+        private static bool TryGetHierarchyRoomForInteractable(InteractableObj interactable, out string roomName)
+        {
+            roomName = null;
+            if (interactable == null || interactable.transform == null)
+                return false;
+
+            // First pass: a parent whose own name is a known room container (covers the lighting
+            // groups, which name the room directly: "Lights_Kitchen", "LightSwitches").
+            Transform current = interactable.transform;
+            int depth = 0;
+            Transform houseChild = null;
+            Transform house = null;
+            while (current != null && depth < 16)
+            {
+                if (_hierarchyRoomNames.TryGetValue(BuildComparisonKey(current.name), out string named))
+                {
+                    roomName = named;
+                    return true;
+                }
+                // Track the child of "House" along this path — that's the House/<Room> segment.
+                if (string.Equals(current.name, "House", StringComparison.OrdinalIgnoreCase))
+                    house = current;
+                else if (house == null)
+                    houseChild = current;
+                current = current.parent;
+                depth++;
+            }
+
+            // Second pass: the segment directly under House (House/<Room>/...). houseChild is the
+            // ancestor we last saw before reaching House.
+            if (house != null && houseChild != null &&
+                _hierarchyRoomNames.TryGetValue(BuildComparisonKey(houseChild.name), out string underHouse))
+            {
+                roomName = underHouse;
+                return true;
+            }
+
+            return false;
+        }
+
+        // Build a room -> world-bounds map from the live hierarchy's room containers, for the
+        // spatial fallback. For each known room container GameObject found in the scene, union the
+        // bounds of its renderers. One pass over all transforms; only the room containers (matched
+        // by name) contribute. Empty/rendererless containers are skipped.
+        private Dictionary<string, Bounds> BuildRoomBoundsIndex()
+        {
+            var index = new Dictionary<string, Bounds>(StringComparer.OrdinalIgnoreCase);
+            Transform[] all = FindObjectsOfType<Transform>();
+            if (all == null)
+                return index;
+            for (int i = 0; i < all.Length; i++)
+            {
+                Transform t = all[i];
+                if (t == null)
+                    continue;
+                if (!_hierarchyRoomNames.TryGetValue(BuildComparisonKey(t.name), out string room))
+                    continue;
+                Renderer[] rends = t.GetComponentsInChildren<Renderer>(includeInactive: true);
+                if (rends == null || rends.Length == 0)
+                    continue;
+                bool has = false;
+                Bounds b = default;
+                for (int r = 0; r < rends.Length; r++)
+                {
+                    if (rends[r] == null)
+                        continue;
+                    if (!has) { b = rends[r].bounds; has = true; }
+                    else b.Encapsulate(rends[r].bounds);
+                }
+                if (!has)
+                    continue;
+                // The same room name can come from several containers (House/Kitchen plus
+                // Lights_Kitchen); union them so the room's volume covers all its sub-containers.
+                if (index.TryGetValue(room, out Bounds existing))
+                {
+                    existing.Encapsulate(b);
+                    index[room] = existing;
+                }
+                else
+                {
+                    index[room] = b;
+                }
+            }
+            return index;
+        }
+
+        // Spatial fallback: the room whose hierarchy-derived bounds contain the position, else the
+        // room whose bounds are nearest. Used only for objects the hierarchy can't place (catch-all
+        // containers). Returns null when no room bounds exist.
+        private string ResolveRoomByBounds(Vector3 position)
+        {
+            if (_roomBoundsIndex == null || _roomBoundsIndex.Count == 0)
+                return null;
+            string containing = null;
+            string nearest = null;
+            float nearestSqr = float.PositiveInfinity;
+            foreach (KeyValuePair<string, Bounds> kv in _roomBoundsIndex)
+            {
+                if (kv.Value.Contains(position))
+                {
+                    // A containing room wins outright; if several contain it (overlapping floors),
+                    // keep the first — they're the same logical area to the player.
+                    containing = kv.Key;
+                    break;
+                }
+                float d = kv.Value.SqrDistance(position);
+                if (d < nearestSqr) { nearestSqr = d; nearest = kv.Key; }
+            }
+            return containing ?? nearest;
         }
 
         // A live name reduced to its routing-unit STEM: cleaned, then with ONE trailing instance
@@ -3920,6 +4101,9 @@ namespace DateEverythingAccess
         {
             List<PickerNode> view = new List<PickerNode>();
             Dictionary<string, PickerNode> datables = new Dictionary<string, PickerNode>(StringComparer.OrdinalIgnoreCase);
+            // Unmet objects route directly, but same-named ones collapse (deduped below) so a
+            // multi-piece unmet object doesn't list once per piece.
+            List<KnownObjectTarget> unmet = new List<KnownObjectTarget>();
             for (int i = 0; i < filtered.Count; i++)
             {
                 KnownObjectTarget t = filtered[i];
@@ -3945,21 +4129,69 @@ namespace DateEverythingAccess
                 }
                 else
                 {
-                    view.Add(LeafNode(t));   // unmet object: route directly
+                    unmet.Add(t);
                 }
             }
+            view.AddRange(DedupeLeavesByName(unmet));
+            // The group count the player hears must match what drilling in reveals (deduped by
+            // name), or "Sofa, 5 objects" leads to a single-object menu. Recount on distinct labels.
+            foreach (PickerNode group in datables.Values)
+                group.ChildCount = DistinctLabelCount(group.Members);
             return view;
         }
 
-        // L3 OBJECTS: the chosen datable's found objects IN the chosen room, as routable leaves.
+        // Number of distinct spoken labels among a group's members (the count after same-name
+        // dedupe), so a group announces the entry count the player will actually see on drill-in.
+        private static int DistinctLabelCount(List<KnownObjectTarget> members)
+        {
+            if (members == null || members.Count == 0)
+                return 0;
+            HashSet<string> names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < members.Count; i++)
+            {
+                KnownObjectTarget t = members[i];
+                names.Add(string.IsNullOrWhiteSpace(t.Label) ? "\0" : t.Label.Trim());
+            }
+            return names.Count;
+        }
+
+        // L3 OBJECTS: the chosen datable's found objects IN the chosen room, as routable leaves,
+        // deduped so multiple same-named interactables (e.g. a sofa's couch + cushions + pillows,
+        // all "Sofa") read as ONE entry routing to the nearest instance.
         private List<PickerNode> BuildObjectNodes(List<KnownObjectTarget> filtered)
         {
-            List<PickerNode> view = new List<PickerNode>();
+            List<KnownObjectTarget> matched = new List<KnownObjectTarget>();
             for (int i = 0; i < filtered.Count; i++)
             {
                 KnownObjectTarget t = filtered[i];
                 if (IsInChosenDatable(t) && SameChosenRoom(t))
-                    view.Add(LeafNode(t));
+                    matched.Add(t);
+            }
+            return DedupeLeavesByName(matched);
+        }
+
+        // Collapse same-named targets to one leaf each, keeping the nearest instance, preserving
+        // first-seen order. The dedupe key is the spoken label (case-insensitive) — that's exactly
+        // what the player hears, so two leaves the player can't tell apart by ear become one.
+        private static List<PickerNode> DedupeLeavesByName(List<KnownObjectTarget> targets)
+        {
+            List<PickerNode> view = new List<PickerNode>();
+            Dictionary<string, int> indexByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < targets.Count; i++)
+            {
+                KnownObjectTarget t = targets[i];
+                string key = string.IsNullOrWhiteSpace(t.Label) ? "\0" : t.Label.Trim();
+                if (indexByName.TryGetValue(key, out int existing))
+                {
+                    // Keep the nearest same-named instance (mirror the floor-aware preference).
+                    KnownObjectTarget kept = view[existing].Target;
+                    bool better = t.IsOnPlayerFloor && !kept.IsOnPlayerFloor;
+                    if (better || (t.IsOnPlayerFloor == kept.IsOnPlayerFloor && t.Distance < kept.Distance))
+                        view[existing] = LeafNode(t);
+                    continue;
+                }
+                indexByName[key] = view.Count;
+                view.Add(LeafNode(t));
             }
             return view;
         }

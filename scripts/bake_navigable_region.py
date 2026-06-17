@@ -175,6 +175,15 @@ FIXTURE_DEDUP_QUANT_M = 0.05
 # and are reachable — they survive this filter. See project_navigation_fixture_roster_design.
 FIXTURE_SUBTREE_DENYLIST = ("Exterior", "TESTING_TEMP", "Main Camera")
 
+# DEPRECATED-PROP PATH DENYLIST (substring match anywhere in the path). The "(Old)" suffix
+# is the game's own marker for a superseded authoring copy left in the scene. The
+# DateViatorsBox (Old) holds Bow/Box/Lid — active but UNDATABLE (no ink), a leftover of the
+# intro DateViators device, so they add a nameless, examine-less entry to the picker with no
+# datable identity. Filtered here (set-construction rule) rather than the planner. The live
+# "(Old)"-free DateViatorsBox is unaffected. Substring (not subtree-root) because these sit
+# deep under House/Hallway, not at a top-level subtree.
+FIXTURE_PATH_DENYLIST_SUBSTRINGS = ("DateViatorsBox (Old)",)
+
 # ROUTING-UNIT MERGE scaffolding tokens: authoring wrapper nodes the path walks UP past to
 # reach the first REAL unit parent. A target groups same-stem NUMBERED siblings under that
 # real parent. See rule 3 in project_navigation_fixture_roster_design.
@@ -415,6 +424,9 @@ def build_fixture_roster(interactables):
             continue
         if _subtree_root(it.get("Path")) in FIXTURE_SUBTREE_DENYLIST:
             continue
+        path = it.get("Path") or ""
+        if any(sub in path for sub in FIXTURE_PATH_DENYLIST_SUBSTRINGS):
+            continue
         name = _clean_object_name(it.get("GameObjectName") or it.get("Name"))
         if name is None:
             continue
@@ -507,6 +519,70 @@ def build_fixture_roster(interactables):
                 "path": datable_member.get("path"),
             })
     return sorted(roster, key=lambda e: (e["floor"] or "~", e["name"], e["position"]))
+
+
+def _door_doorway_xz(door_rec, frame):
+    """World (x, z) of a baked PASSAGE door's DOORWAY — the centroid of its threshold
+    cells (the opening the player crosses). Returns None when the door has no threshold
+    (container/closet doors: a cupboard or sliding-closet panel has no walk-through
+    opening — its fixture position is fine as-is and must NOT be relocated into the
+    cabinet/closet interior).
+
+    A passage door's interactable FIXTURE carries the door PIVOT, offset ~1-2.5m from
+    the doorway centreline (the hinge/jamb), often over a non-navigable cell — so the
+    objects sweep mis-classifies it off_floor (no navigable cell within reach of the
+    pivot). The door's real, reachable location is its doorway, which the bake already
+    computes as threshold_cells. This recovers that doorway centroid so the fixture
+    position lands on walkable floor."""
+    cells = door_rec.get("threshold_cells_list")
+    if not cells:
+        return None
+    cx = sum(c[0] for c in cells) / len(cells)
+    cz = sum(c[1] for c in cells) / len(cells)
+    ox = frame.get("origin_x")
+    oz = frame.get("origin_z")
+    cs = frame.get("cell_size")
+    if ox is None or oz is None or not cs:
+        return None
+    # Cell centre -> world (mirror of FloorFrame.cell_to_world: origin + (ix+0.5)*cell).
+    return (ox + (cx + 0.5) * cs, oz + (cz + 0.5) * cs)
+
+
+def repair_door_fixture_positions(roster, floors):
+    """Move each door FIXTURE's XZ onto its doorway centroid (computed by the bake),
+    so doors stop false-dropping as off_floor in the objects sweep. The pivot-based
+    position only matters for picking a navigable stand-cell; Y is left untouched
+    (floor assignment already resolved correctly). Matches a roster fixture to a baked
+    door record by name. Returns the number of fixtures repaired."""
+    # name -> (door_record, frame) for every baked door across floors.
+    door_by_name = {}
+    for fl in floors:
+        if "error" in fl:
+            continue
+        frame = fl.get("frame") or {}
+        for dr in (fl.get("doors") or []):
+            nm = dr.get("name")
+            if nm and nm not in door_by_name:
+                door_by_name[nm] = (dr, frame)
+
+    repaired = 0
+    for fx in roster:
+        rec_frame = door_by_name.get(fx.get("name"))
+        if rec_frame is None:
+            continue
+        doorway = _door_doorway_xz(rec_frame[0], rec_frame[1])
+        if doorway is None:
+            continue
+        pos = fx.get("position")
+        if not pos or len(pos) < 3:
+            continue
+        # Only correct when the pivot actually moved (avoid churn on doors whose
+        # fixture already sits on the doorway).
+        if abs(pos[0] - doorway[0]) < 1e-3 and abs(pos[2] - doorway[1]) < 1e-3:
+            continue
+        fx["position"] = [round(doorway[0], 4), round(pos[1], 4), round(doorway[1], 4)]
+        repaired += 1
+    return repaired
 
 
 # Scene bounds clip — restrict the bake to the HOUSE + CRAWLSPACE region.
@@ -1985,6 +2061,14 @@ def main():
         png_path = OUT_PNG_DIR / f"navigable_region.{floor['label']}.ppm"
         write_png(result, png_path)
         print(f"  debug image: {png_path}")
+
+    # Door fixtures carry the door PIVOT, offset from the doorway and often over a
+    # non-navigable cell, so the objects sweep mis-classifies them off_floor. Snap each
+    # door fixture's XZ onto its baked doorway centroid (all door records now exist in
+    # report["floors"]). Runs before the JSON write so the roster ships repaired.
+    door_fixups = repair_door_fixture_positions(report["fixtures"], report["floors"])
+    if door_fixups:
+        print(f"Repaired {door_fixups} door fixture position(s) onto their doorway centroid")
 
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUT_JSON.write_text(json.dumps(report, indent=2), encoding="utf-8")
