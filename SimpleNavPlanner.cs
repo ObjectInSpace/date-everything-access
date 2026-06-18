@@ -25,11 +25,6 @@ namespace DateEverythingAccess
         // destination rule uses the game's InteractionRadius. See TagDoors +
         // [[project-navigation-door-tag-radius]], [[project_navigation_container_open_on_interact]].)
         private const float DoorInteractRadiusFallbackM = 7.5f;
-        // Max on-path tag radius for a door whose opening anchor was derived from its freed-cells
-        // centroid (the fallback for inner closet doors with no threshold cells). Clamps a lopsided
-        // freed region to a doorway half-width so it doesn't over-tag. Kept in sync with the Python
-        // planner's FREED_CENTROID_MAX_OPENING_RADIUS_M.
-        private const float FreedCentroidMaxOpeningRadiusM = 1.0f;
         // (No planner-side interaction-radius constant: the planner uses the object's own
         // InteractionRadius verbatim — interaction is gated on radius + line of sight, not on any
         // bound we impose. See the radius handling in Plan() and BetterPlayerControl.cs:493-499.)
@@ -992,6 +987,21 @@ namespace DateEverythingAccess
                                 cells.Add(Floor.PackCell(pair[0], pair[1]));
                             }
                         }
+                        if (d.open_blocked_cells != null)
+                        {
+                            HashSet<long> bcells;
+                            if (!floor.DoorBlockedByName.TryGetValue(d.name, out bcells))
+                            {
+                                bcells = new HashSet<long>();
+                                floor.DoorBlockedByName[d.name] = bcells;
+                            }
+                            for (int ci = 0; ci < d.open_blocked_cells.Length; ci++)
+                            {
+                                int[] pair = d.open_blocked_cells[ci];
+                                if (pair == null || pair.Length < 2) continue;
+                                bcells.Add(Floor.PackCell(pair[0], pair[1]));
+                            }
+                        }
                         if (d.operable_from_cells != null)
                         {
                             HashSet<long> op;
@@ -1012,93 +1022,34 @@ namespace DateEverythingAccess
                         // container door identically to a passage door: a door is a door, the
                         // destination tag rule opens it on arrival. See
                         // [[project_navigation_container_open_on_interact]].
-                        if (d.opening_center != null && d.opening_center.Length >= 3
-                            && !floor.OpeningCenterByName.ContainsKey(d.name))
+                        // Per-door indexing for the new uniform door model:
+                        //   DoorByFreedCell  — reverse map (cell -> owning door) for cell-ownership
+                        //                      TAGGING: a route crosses door D iff it steps on one
+                        //                      of D's freed/threshold cells (uniquely owned, so
+                        //                      unambiguous). Replaces the deleted proximity tests.
+                        //   DoorCrossingByName — world centroid of the door's freed+threshold cells,
+                        //                      the point the DoorOpening waypoint aims THROUGH so the
+                        //                      follower threads the gap rather than corner-cutting.
+                        // Both derive from the same crossing cells, uniform over passage/container/
+                        // threshold-less doors — no opening_center/radius/cells special cases.
+                        // See [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+                        double csx = 0, csz = 0; int cn = 0;
+                        void IndexCrossing(int[][] cells)
                         {
-                            floor.OpeningCenterByName[d.name] =
-                                new Vector3(d.opening_center[0], d.opening_center[1], d.opening_center[2]);
-                            floor.OpeningRadiusByName[d.name] = d.opening_radius > 0f ? d.opening_radius : floor.CellSize;
-                        }
-                        if (d.threshold_cells_list != null && d.threshold_cells_list.Length > 0
-                            && !floor.OpeningCenterByName.ContainsKey(d.name))
-                        {
-                            // World-space centroid of the doorway-opening cells.
-                            double sx = 0, sz = 0; int n = 0;
-                            for (int ci = 0; ci < d.threshold_cells_list.Length; ci++)
+                            if (cells == null) return;
+                            foreach (int[] pair in cells)
                             {
-                                int[] pair = d.threshold_cells_list[ci];
                                 if (pair == null || pair.Length < 2) continue;
+                                floor.DoorByFreedCell[Floor.PackCell(pair[0], pair[1])] = d.name;
                                 Vector2 w = floor.CellToWorld(pair[0], pair[1]);
-                                sx += w.x; sz += w.y; n++;
-                            }
-                            if (n > 0)
-                            {
-                                float cx = (float)(sx / n), cz = (float)(sz / n);
-                                floor.OpeningCenterByName[d.name] =
-                                    new Vector3(cx, floor.FloorY, cz);
-                                // Opening radius = max threshold-cell distance from the centroid
-                                // (half the doorway width). Second pass over the same cells.
-                                float maxR = 0f;
-                                for (int ci = 0; ci < d.threshold_cells_list.Length; ci++)
-                                {
-                                    int[] pair = d.threshold_cells_list[ci];
-                                    if (pair == null || pair.Length < 2) continue;
-                                    Vector2 w = floor.CellToWorld(pair[0], pair[1]);
-                                    float dx = w.x - cx, dz = w.y - cz;
-                                    float r = Mathf.Sqrt(dx * dx + dz * dz);
-                                    if (r > maxR) maxR = r;
-                                }
-                                floor.OpeningRadiusByName[d.name] = maxR;
+                                csx += w.x; csz += w.y; cn++;
                             }
                         }
-                        // Doorway OPENING cells in world space — the threshold grown into the
-                        // navigable doorway gap (baked as opening_cells_list). TagDoors tests
-                        // proximity to the nearest of these so wide/edge-crossed doors tag.
-                        if (d.opening_cells_list != null && d.opening_cells_list.Length > 0
-                            && !floor.OpeningCellsByName.ContainsKey(d.name))
-                        {
-                            var pts = new List<Vector2>(d.opening_cells_list.Length);
-                            for (int ci = 0; ci < d.opening_cells_list.Length; ci++)
-                            {
-                                int[] pair = d.opening_cells_list[ci];
-                                if (pair == null || pair.Length < 2) continue;
-                                pts.Add(floor.CellToWorld(pair[0], pair[1]));
-                            }
-                            if (pts.Count > 0)
-                                floor.OpeningCellsByName[d.name] = pts.ToArray();
-                        }
-                        // FREED-CELLS FALLBACK: a door that frees cells but has NO opening_center
-                        // and NO threshold cells (the nested INNER closet doors —
-                        // Doors_Gym_ClosetInner, Doors_Bedroom_Closet*_Inner — whose deep/narrow
-                        // closet interior yields no threshold cells) would otherwise be absent from
-                        // OpeningCenterByName and therefore UNTAGGABLE: TagDoors never tags it, the
-                        // executor never opens it, and the follower stalls at a closed door it
-                        // routed through. Derive the opening anchor from the freed-cells centroid so
-                        // the door becomes taggable. The radius is CLAMPED (freed regions are
-                        // asymmetric; their full spread would over-tag) to a doorway half-width.
-                        // See [[project-navigation-door-stalls-2026-06-15]].
-                        if (!floor.OpeningCenterByName.ContainsKey(d.name)
-                            && d.freed_cells != null && d.freed_cells.Length > 0)
-                        {
-                            double fsx = 0, fsz = 0; int fn = 0;
-                            for (int ci = 0; ci < d.freed_cells.Length; ci++)
-                            {
-                                int[] pair = d.freed_cells[ci];
-                                if (pair == null || pair.Length < 2) continue;
-                                Vector2 w = floor.CellToWorld(pair[0], pair[1]);
-                                fsx += w.x; fsz += w.y; fn++;
-                            }
-                            if (fn > 0)
-                            {
-                                float fcx = (float)(fsx / fn), fcz = (float)(fsz / fn);
-                                floor.OpeningCenterByName[d.name] =
-                                    new Vector3(fcx, floor.FloorY, fcz);
-                                // Tag radius clamped to a doorway half-width so a lopsided freed
-                                // region doesn't tag the door on segments that merely pass near it.
-                                floor.OpeningRadiusByName[d.name] =
-                                    Mathf.Clamp(floor.CellSize * 3f, floor.CellSize, FreedCentroidMaxOpeningRadiusM);
-                            }
-                        }
+                        IndexCrossing(d.threshold_cells_list);
+                        IndexCrossing(d.freed_cells);
+                        if (cn > 0 && !floor.DoorCrossingByName.ContainsKey(d.name))
+                            floor.DoorCrossingByName[d.name] =
+                                new Vector3((float)(csx / cn), floor.FloorY, (float)(csz / cn));
                     }
                 }
                 if (raw.state_walls != null)
@@ -1132,7 +1083,10 @@ namespace DateEverythingAccess
         private static void ApplyLiveDoorState()
         {
             for (int i = 0; i < _floors.Count; i++)
+            {
                 _floors[i].ExtraNavigable.Clear();
+                _floors[i].ExtraBlocked.Clear();
+            }
             _lastOpenDoorNames.Clear();
             _lastOpenStateWallNames.Clear();
 
@@ -1214,6 +1168,14 @@ namespace DateEverythingAccess
                     int before = f.ExtraNavigable.Count;
                     f.ExtraNavigable.UnionWith(kvp.Value);
                     openableFreed += f.ExtraNavigable.Count - before;
+                }
+                // Mirror: every unlocked door is planned-through as OPEN, so its leaf is in the
+                // open position — remove that leaf footprint from navigable. Same openable model
+                // as the freed union above, opposite sign.
+                foreach (var kvp in f.DoorBlockedByName)
+                {
+                    if (_lockedDoorNames.Contains(kvp.Key)) continue;
+                    f.ExtraBlocked.UnionWith(kvp.Value);
                 }
             }
             totalFreed += openableFreed;
@@ -2380,26 +2342,15 @@ namespace DateEverythingAccess
         {
             List<List<string>> segs = new List<List<string>>(Mathf.Max(0, waypoints.Count - 1));
 
-            // Tag from the BAKE's uniform door list (per-floor OpeningCenterByName: the world
-            // doorway-opening centroid of each door's threshold cells), NOT live
-            // FindObjectsOfType<Door>(). The bake carries BOTH swinging Doors AND translating
-            // SlidingDoors (closet/cabinet/cupboard "container" doors) with identical schema,
-            // but the runtime splits them into two component types — enumerating only Door[]
-            // silently dropped every SlidingDoor, so container doors were never tagged and the
-            // follower walked into them and wedged. The bake list is the right source: it's the
-            // same uniform portal set the planner already routes against (operable_from_cells /
-            // freed_cells). See [[project_navigation_container_open_on_interact]].
-            //
-            // TWO tag rules, no magic radius constant (replaces the old hand-tuned DoorTagRadiusM):
-            //   (1) ON-PATH: a door is tagged on a segment that THREADS its doorway — segment within
-            //       the door's own opening radius (half the doorway width) + one cell of clearance.
-            //       This is a tight geometric "the route goes through here" test, so it does NOT
-            //       over-tag doors the route merely passes near (which the game's 7.5m
-            //       InteractionRadius would).
-            //   (2) DESTINATION: the barrier gating the TARGET (a container door whose opening sits
-            //       between the goal cell and the item) is force-tagged on the final segment when the
-            //       goal cell is within the GAME'S InteractionRadius of the door opening — the real
-            //       "can the player stand at the goal and reach to open it" test.
+            // CELL-OWNERSHIP tagging (replaces the old proximity heuristics — opening
+            // centroid/radius circles and the grown opening-cell halo, all deleted). Every
+            // freed/threshold cell belongs to exactly ONE door (verified: 0 cross-door overlap),
+            // so a door is on a segment iff the segment STEPS ON one of that door's freed or
+            // threshold cells. The route is planned in the doors-OPEN state (freed cells unioned
+            // in, leaf cells removed), so "the route crosses this cell" is the same uniform portal
+            // set the planner routes against — no magic radius, no guessing where the crossing is.
+            // Covers swinging Doors and translating SlidingDoors identically. See
+            // [[project-navigation-doorway-capsule-clearance-2026-06-18]].
             for (int i = 0; i < waypoints.Count - 1; i++)
             {
                 List<string> tagged = new List<string>(0);
@@ -2407,75 +2358,29 @@ namespace DateEverythingAccess
                 if (a.Floor == b.Floor && !IsVirtual(a))
                 {
                     Floor floor = FloorByLabel(a.Floor);
-                    Vector2 wa = floor.CellToWorld(a.Ix, a.Iz);
-                    Vector2 wb = floor.CellToWorld(b.Ix, b.Iz);
-                    foreach (KeyValuePair<string, Vector3> kv in floor.OpeningCenterByName)
+                    // Walk the segment cell-by-cell; tag the owning door of any freed/threshold
+                    // cell it crosses.
+                    foreach (long cellKey in floor.SegmentCells(a.Ix, a.Iz, b.Ix, b.Iz))
                     {
-                        // Prefer the OPENING CELLS test: the route threads this doorway if the
-                        // segment passes within one cell of ANY navigable doorway-opening cell.
-                        // This tags wide doors whose crossing is at the navigable doorway edge,
-                        // which the threshold-centroid circle below missed (it sat ~1-1.5m off
-                        // the true crossing). Falls back to the centroid+radius circle for doors
-                        // with no opening cells (container/explicit-center doors).
-                        if (floor.OpeningCellsByName.TryGetValue(kv.Key, out Vector2[] cells))
-                        {
-                            float minCellDist = float.PositiveInfinity;
-                            for (int ci = 0; ci < cells.Length; ci++)
-                            {
-                                float cd = PointSegmentDistance(cells[ci].x, cells[ci].y, wa.x, wa.y, wb.x, wb.y);
-                                if (cd < minCellDist) minCellDist = cd;
-                            }
-                            // ~3 cells (0.6m): the route may pass a cell-or-two off the nearest
-                            // opening cell when it crosses at the doorway edge. Tight enough that
-                            // it only tags doors the route actually threads, not ones it passes by.
-                            if (minCellDist <= floor.CellSize * 3f)
-                                tagged.Add(kv.Key);
-                            continue;
-                        }
-
-                        Vector3 dp = kv.Value;
-                        float dist = PointSegmentDistance(dp.x, dp.z, wa.x, wa.y, wb.x, wb.y);
-                        float openR = floor.OpeningRadiusByName.TryGetValue(kv.Key, out float orr) ? orr : 0f;
-                        if (dist <= openR + floor.CellSize)
-                            tagged.Add(kv.Key);
+                        if (floor.DoorByFreedCell.TryGetValue(cellKey, out string doorName)
+                            && !tagged.Contains(doorName))
+                            tagged.Add(doorName);
                     }
                 }
                 segs.Add(tagged);
             }
 
-            // Rule (2): destination barrier. Find the door whose opening is nearest the FINAL
-            // stand cell and within the target's InteractionRadius, and force-tag it on the last
-            // segment. Covers (a) the target IS a door, and (b) the target is an item gated by a
-            // container door — both reduce to "the goal cell is in interaction range of this door."
-            if (segs.Count > 0 && waypoints.Count >= 1)
+            // Rule (2): the TARGET itself is a door (e.g. BreakerBox, a cupboard). Opening a door
+            // needs no special stand-cell: it's interacted with like any object — in range, with a
+            // clear ray to its collider — and the planner already routed to a goal cell near it.
+            // So we simply tag a target-named door on the final segment; the executor opens it on
+            // arrival. (Items gated BY a door are handled by rule (1): the route's approach crosses
+            // that door's freed cells.) See [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+            if (segs.Count > 0 && !string.IsNullOrEmpty(targetName) && _bakedDoorNames.Contains(targetName))
             {
-                NodeKey goal = waypoints[waypoints.Count - 1];
-                Floor gf = FloorByLabel(goal.Floor);
-                if (gf != null && !IsVirtual(goal))
-                {
-                    Vector2 gw = gf.CellToWorld(goal.Ix, goal.Iz);
-                    float radius = targetInteractionRadius > 0f ? targetInteractionRadius : DoorInteractRadiusFallbackM;
-                    string bestName = null; float bestDist = float.PositiveInfinity;
-                    foreach (KeyValuePair<string, Vector3> kv in gf.OpeningCenterByName)
-                    {
-                        float dx = kv.Value.x - gw.x, dz = kv.Value.z - gw.y;
-                        float dist = Mathf.Sqrt(dx * dx + dz * dz);
-                        // A door whose name matches the target always wins (target IS a door);
-                        // otherwise the nearest in-range door is the gating barrier.
-                        bool isTargetDoor = !string.IsNullOrEmpty(targetName) && kv.Key == targetName;
-                        if (dist <= radius && (isTargetDoor || dist < bestDist))
-                        {
-                            bestName = kv.Key; bestDist = isTargetDoor ? -1f : dist;
-                            if (isTargetDoor) break;
-                        }
-                    }
-                    if (bestName != null)
-                    {
-                        List<string> last = segs[segs.Count - 1];
-                        if (!last.Contains(bestName))
-                            last.Add(bestName);
-                    }
-                }
+                List<string> last = segs[segs.Count - 1];
+                if (!last.Contains(targetName))
+                    last.Add(targetName);
             }
             return segs;
         }
@@ -2543,12 +2448,9 @@ namespace DateEverythingAccess
             bool found = false;
             for (int i = 0; i < doors.Count; i++)
             {
-                if (!floor.OpeningCenterByName.TryGetValue(doors[i], out Vector3 c)) continue;
+                if (!floor.DoorCrossingByName.TryGetValue(doors[i], out Vector3 c)) continue;
                 float t = ProjectParamXZ(a, b, c);
                 if (t <= 0.05f || t >= 0.95f) continue;          // must be genuinely between a and b
-                Vector3 proj = Vector3.Lerp(a, b, t);
-                float dx = proj.x - c.x, dz = proj.z - c.z;
-                if (dx * dx + dz * dz > 1.0f) continue;          // opening must be near the route line (<=1m)
                 if (t > bestT) { bestT = t; opening = new Vector3(c.x, a.y, c.z); found = true; }
             }
             return found;
@@ -2699,34 +2601,35 @@ namespace DateEverythingAccess
             // Cells freed by currently-open doors (set per-Plan() from live Door.open state).
             // Packed as (long)ix << 32 | (uint)iz so we can use a single HashSet.
             public readonly HashSet<long> ExtraNavigable = new HashSet<long>();
+            // Cells BLOCKED by currently-open doors (the swung-leaf footprint). Mirror of
+            // ExtraNavigable, opposite sign: set per-Plan() from the same live Door.open state.
+            public readonly HashSet<long> ExtraBlocked = new HashSet<long>();
             // Per-door freed-cells indexed from the bake's doors[*].freed_cells. Multiple
             // door records may share a GameObject name (different cupboards with identical
             // names) — the indexer unions their cells.
             public readonly Dictionary<string, HashSet<long>> DoorFreedByName =
                 new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
+            // Per-door open-leaf footprint (doors[*].open_blocked_cells), the mirror of
+            // DoorFreedByName. When the door is open, these cells are removed from navigable.
+            public readonly Dictionary<string, HashSet<long>> DoorBlockedByName =
+                new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
+            // Reverse map: freed/threshold cell -> owning door name. Cells are uniquely owned, so
+            // a route segment that steps on a cell here crosses exactly that door. Drives the
+            // cell-ownership door tagging that replaced the proximity heuristics.
+            public readonly Dictionary<long, string> DoorByFreedCell =
+                new Dictionary<long, string>();
             // Per-door operability cells (where the player can stand to open the door),
             // indexed from the bake's doors[*].operable_from_cells. Used as the door-target
             // goal set. Multiple door records may share a name → union.
             public readonly Dictionary<string, HashSet<long>> OperableFromByName =
                 new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
-            // Per-door doorway-opening center in WORLD space (centroid of threshold_cells),
-            // used to insert a "thread through the opening" waypoint on routes that cross
-            // an on-path door. Indexed from the bake at load time.
-            public readonly Dictionary<string, Vector3> OpeningCenterByName =
+            // Per-door doorway-crossing center in WORLD space (centroid of the door's freed +
+            // threshold cells), used to insert a "thread through the opening" waypoint on a route
+            // that crosses an on-path door so the follower aims through the gap. Uniform over
+            // passage/container/threshold-less doors. Replaces the deleted opening center/radius/
+            // cells proximity machinery. See [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+            public readonly Dictionary<string, Vector3> DoorCrossingByName =
                 new Dictionary<string, Vector3>(StringComparer.Ordinal);
-            // Per-door OPENING RADIUS (world metres): max distance of any threshold cell from the
-            // opening centroid, i.e. half the doorway width. An on-path door is tagged when the
-            // route segment passes within this radius (+ one cell of clearance) — a geometric
-            // "the route threads THIS doorway" test, not a magic constant. Indexed at load.
-            public readonly Dictionary<string, float> OpeningRadiusByName =
-                new Dictionary<string, float>(StringComparer.Ordinal);
-            // Per-door doorway OPENING cells in WORLD space (threshold grown into the navigable
-            // doorway gap). TagDoors tests route-segment proximity to the NEAREST of these,
-            // which tags wide doors whose crossing is at the navigable doorway edge — the
-            // threshold-centroid circle missed them. See
-            // [[project-navigation-bedroom-door-sealed-2026-06-17]].
-            public readonly Dictionary<string, Vector2[]> OpeningCellsByName =
-                new Dictionary<string, Vector2[]>(StringComparer.Ordinal);
             // Per-state-wall freed-cells, parallel to DoorFreedByName. State-gated walls
             // (DresserWall and similar) contribute freed cells when their collider is
             // disabled at runtime.
@@ -2823,10 +2726,36 @@ namespace DateEverythingAccess
             public bool Navigable(int ix, int iz)
             {
                 if (!InBounds(ix, iz)) return false;
-                if (ExtraNavigable.Count > 0 && ExtraNavigable.Contains(PackCell(ix, iz)))
+                long key = PackCell(ix, iz);
+                // Open doors REMOVE their swung-leaf footprint from the navigable set (mirror of
+                // ExtraNavigable, opposite sign). Checked first so a leaf cell is blocked even if
+                // it would otherwise be static-navigable — that's the whole point: the floor the
+                // leaf swings into is walkable closed, blocked open. See
+                // [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+                if (ExtraBlocked.Count > 0 && ExtraBlocked.Contains(key))
+                    return false;
+                if (ExtraNavigable.Count > 0 && ExtraNavigable.Contains(key))
                     return true;
                 string row = Rows[ix];
                 return row != null && iz < row.Length && row[iz] == NavigableChar;
+            }
+
+            // Integer cells a straight segment from (ax,az) to (bx,bz) passes through (Bresenham),
+            // as packed cell keys. Used by cell-ownership door tagging to see which doors' freed
+            // cells a route segment crosses.
+            public IEnumerable<long> SegmentCells(int ax, int az, int bx, int bz)
+            {
+                int dx = System.Math.Abs(bx - ax), dz = System.Math.Abs(bz - az);
+                int sx = ax < bx ? 1 : -1, sz = az < bz ? 1 : -1;
+                int err = dx - dz, x = ax, z = az;
+                while (true)
+                {
+                    yield return PackCell(x, z);
+                    if (x == bx && z == bz) break;
+                    int e2 = 2 * err;
+                    if (e2 > -dz) { err -= dz; x += sx; }
+                    if (e2 < dx) { err += dx; z += sz; }
+                }
             }
 
             public Vector2 CellToWorld(int ix, int iz)
@@ -2946,25 +2875,19 @@ namespace DateEverythingAccess
             // threads the opening instead of pure-pursuing a cell past the door jamb.
             // See [[project-navigation-office-doorway-wedge-2026-05-30]].
             [DataMember] public int[][] threshold_cells_list;
-            // Doorway OPENING cells: threshold cells grown into the adjacent navigable
-            // doorway gap. TagDoors tests route-segment proximity to ANY of these cells
-            // (not a threshold-centroid circle), so wide doors whose crossing is at the
-            // navigable EDGE of the doorway still get tagged. See
-            // [[project-navigation-bedroom-door-sealed-2026-06-17]].
-            [DataMember] public int[][] opening_cells_list;
+            // Open-leaf footprint: navigable-when-closed cells the swung leaf fills when open.
+            // The mirror of freed_cells — when the door is open these are removed from the
+            // navigable set so no route runs through the leaf. See
+            // [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+            [DataMember] public int[][] open_blocked_cells;
             [DataMember] public bool locked;
             [DataMember] public bool default_open;
             // True for a CONTAINER door (cupboard/fridge/breaker) baked with operability
             // only — opened in place to reach an item inside, never walked through. It has
-            // operable_from_cells + an explicit opening_center (its own anchor) but no
-            // freed/threshold passage cells, so TagDoors's destination rule tags it like
-            // any other gating door. See [[project_navigation_container_open_on_interact]].
+            // operable_from_cells but no freed/threshold passage cells, so it's tagged only by
+            // TagDoors's destination rule (target IS this door), like any object you open in
+            // range. See [[project_navigation_container_open_on_interact]].
             [DataMember] public bool container_operable_only;
-            // Explicit doorway-opening center [x,y,z] + radius (m), for container doors that
-            // have no threshold_cells_list to derive it from. Null for passage doors (C#
-            // derives theirs from threshold cells).
-            [DataMember] public float[] opening_center;
-            [DataMember] public float opening_radius;
         }
 
         [DataContract]

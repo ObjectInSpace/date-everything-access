@@ -62,10 +62,6 @@ CORNER_WAYPOINT_DEG = 30.0       # smoothing: keep vertices with turn > this
 # constant is GONE: on-path tagging uses each door's geometric opening radius (+1 cell), and the
 # destination rule uses the game's InteractionRadius. See tag_doors.
 DOOR_INTERACT_RADIUS_FALLBACK_M = 7.5
-# Max on-path tag radius for a door whose opening anchor was derived from its freed-cells centroid
-# (the fallback for inner closet doors with no threshold cells). Clamps a lopsided freed region to a
-# doorway half-width so it doesn't over-tag. Mirror of C# FreedCentroidMaxOpeningRadiusM.
-FREED_CENTROID_MAX_OPENING_RADIUS_M = 1.0
 # (No interaction-radius constant: the planner uses each object's own InteractionRadius verbatim —
 # parity with C# SimpleNavPlanner. Interaction is gated on radius + LOS, not on any bound we impose.)
 # Player-capsule + safety margin from the target's collider face: goal cells whose XZ distance to
@@ -133,20 +129,16 @@ class Floor:
         # Raw per-door freed-cell map keyed by door name: {name: set((ix,iz))}.
         # Planner builds this lazily for re-applying different doors-open sets.
         self.doors_freed_by_name = {}
-        # Per-door world doorway-opening centroid keyed by name: {name: (wx, wz)}.
-        # Centroid of the door's threshold cells — where a route crosses the opening.
-        # Uniform over swing Doors AND sliding container doors (mirror of C#
-        # Floor.OpeningCenterByName). Source for tag_doors. See
-        # [[project_navigation_container_open_on_interact]].
-        self.opening_center_by_name = {}
-        # Per-door opening RADIUS (world m): max threshold-cell distance from the centroid
-        # (half the doorway width). On-path tagging uses this + one cell — a geometric
-        # "route threads this doorway" test. Mirror of C# Floor.OpeningRadiusByName.
-        self.opening_radius_by_name = {}
-        # Per-door doorway OPENING cells in world XZ (threshold grown into the navigable
-        # doorway gap). tag_doors tests route-segment proximity to the nearest of these so
-        # wide/edge-crossed doors tag. Mirror of C# Floor.OpeningCellsByName.
-        self.opening_cells_by_name = {}
+        # Per-door open-leaf footprint {name: set((ix,iz))} — open-state navigable REMOVALS,
+        # the mirror of doors_freed_by_name. Mirror of C# Floor.DoorBlockedByName.
+        self.doors_blocked_by_name = {}
+        # Reverse map cell -> owning door name, for cell-ownership tagging (a route crosses
+        # door D iff it steps on one of D's freed/threshold cells; cells uniquely owned).
+        # Mirror of C# Floor.DoorByFreedCell.
+        self.door_by_freed_cell = {}
+        # Per-door world crossing centroid {name: (wx, wz)} — centroid of freed+threshold cells,
+        # the point the DoorOpening waypoint aims through. Mirror of C# Floor.DoorCrossingByName.
+        self.door_crossing_by_name = {}
         # Same shape, for state-gated walls (DresserWall and similar).
         self.state_walls_freed_by_name = {}
         # Lazily-built clearance map: per cell, distance (in cells, capped at
@@ -268,6 +260,9 @@ class Planner:
         # door. From the bake's per-door `locked` (exporter's Door.Locked).
         self._unlocked_doors = set()
         self._locked_doors = set()
+        # Container doors (operable-only, no walk-through) — for the destination tag rule, since
+        # they have no crossing cells in door_crossing_by_name. Mirror of C# container handling.
+        self._container_door_names = set()
         # Index per-door freed-cells from the bake into each floor.
         for f_raw in bake["floors"]:
             floor = self.floors[f_raw["label"]]
@@ -281,80 +276,39 @@ class Planner:
                     self._locked_doors.add(name)
                 else:
                     self._unlocked_doors.add(name)
-                # Container doors carry an EXPLICIT opening center (their own anchor — no
-                # walk-through threshold). Mirrors C# IndexDoorFreedCells: a door is a door,
-                # so tag_doors's destination rule opens it on arrival. First record wins.
-                oc = door.get("opening_center")
-                if oc and len(oc) >= 3 and name not in floor.opening_center_by_name:
-                    floor.opening_center_by_name[name] = (oc[0], oc[2])
-                    floor.opening_radius_by_name[name] = door.get("opening_radius") or floor.cell_size
-                # Doorway-opening centroid (world XZ) from threshold cells — uniform over
-                # swing + sliding doors, mirrors C# Floor.OpeningCenterByName. First record
-                # for a name wins (matches the C# ContainsKey guard).
-                thr = door.get("threshold_cells_list")
-                if thr and name not in floor.opening_center_by_name:
-                    sx = sz = 0.0
-                    n = 0
-                    for pair in thr:
-                        if not pair or len(pair) < 2:
-                            continue
-                        wx, wz = floor.cell_to_world(pair[0], pair[1])
-                        sx += wx
-                        sz += wz
-                        n += 1
-                    if n > 0:
-                        cx, cz = sx / n, sz / n
-                        floor.opening_center_by_name[name] = (cx, cz)
-                        max_r = 0.0
-                        for pair in thr:
-                            if not pair or len(pair) < 2:
-                                continue
-                            wx, wz = floor.cell_to_world(pair[0], pair[1])
-                            r = math.hypot(wx - cx, wz - cz)
-                            if r > max_r:
-                                max_r = r
-                        floor.opening_radius_by_name[name] = max_r
-                # Doorway opening cells (world XZ) — threshold grown into the navigable gap.
-                ocl = door.get("opening_cells_list")
-                if ocl and name not in floor.opening_cells_by_name:
-                    pts = []
-                    for pair in ocl:
-                        if not pair or len(pair) < 2:
-                            continue
-                        pts.append(floor.cell_to_world(pair[0], pair[1]))
-                    if pts:
-                        floor.opening_cells_by_name[name] = pts
-                cells = {tuple(c) for c in door.get("freed_cells", [])}
-                if not cells:
-                    continue
-                # Multiple door records may share a name (different cupboards
-                # with identical GameObjectName) — union their freed cells.
-                if name in floor.doors_freed_by_name:
-                    floor.doors_freed_by_name[name] |= cells
-                else:
-                    floor.doors_freed_by_name[name] = cells
-                # FREED-CELLS FALLBACK (mirror of SimpleNavPlanner): a door that frees
-                # cells but has NO opening_center and NO threshold cells (the nested INNER
-                # closet doors, whose deep/narrow interior yields no threshold cells) is
-                # absent from opening_center_by_name and therefore UNTAGGABLE — tag_doors
-                # never tags it, the executor never opens it, the follower stalls at a
-                # closed door it routed through. Derive the opening anchor from the freed-
-                # cells centroid, radius CLAMPED to a doorway half-width (an asymmetric
-                # freed region's full spread would over-tag). See
-                # [[project-navigation-door-stalls-2026-06-15]].
-                if name not in floor.opening_center_by_name:
-                    fsx = fsz = 0.0
-                    fn = 0
-                    for (cix, ciz) in floor.doors_freed_by_name[name]:
-                        wx, wz = floor.cell_to_world(cix, ciz)
-                        fsx += wx
-                        fsz += wz
-                        fn += 1
-                    if fn > 0:
-                        floor.opening_center_by_name[name] = (fsx / fn, fsz / fn)
-                        floor.opening_radius_by_name[name] = min(
-                            FREED_CENTROID_MAX_OPENING_RADIUS_M,
-                            max(floor.cell_size, floor.cell_size * 3.0))
+                if door.get("container_operable_only"):
+                    self._container_door_names.add(name)
+                # Per-door indexing (mirror of C# IndexDoorFreedCells). The crossing cells are
+                # freed + threshold; from them derive:
+                #   door_by_freed_cell    — reverse map (cell -> door) for cell-ownership tagging
+                #   door_crossing_by_name — centroid, the DoorOpening waypoint aim point
+                #   doors_freed_by_name   — open-state navigable additions
+                #   doors_blocked_by_name — open-leaf footprint (open-state navigable removals)
+                # Uniform over passage/container/threshold-less doors — no opening center/radius/
+                # cells special cases. See [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+                freed = {tuple(c) for c in door.get("freed_cells", [])}
+                thr = {tuple(c) for c in door.get("threshold_cells_list", [])}
+                crossing = freed | thr
+                if crossing:
+                    for cell in crossing:
+                        floor.door_by_freed_cell[cell] = name
+                    if name not in floor.door_crossing_by_name:
+                        sx = sum(c[0] for c in crossing)
+                        sz = sum(c[1] for c in crossing)
+                        n = len(crossing)
+                        floor.door_crossing_by_name[name] = floor.cell_to_world(sx / n, sz / n)
+                blocked = {tuple(c) for c in door.get("open_blocked_cells", [])}
+                if blocked:
+                    if name in floor.doors_blocked_by_name:
+                        floor.doors_blocked_by_name[name] |= blocked
+                    else:
+                        floor.doors_blocked_by_name[name] = blocked
+                if freed:
+                    # Multiple door records may share a name — union their freed cells.
+                    if name in floor.doors_freed_by_name:
+                        floor.doors_freed_by_name[name] |= freed
+                    else:
+                        floor.doors_freed_by_name[name] = freed
             for wall in f_raw.get("state_walls", []):
                 name = wall.get("name")
                 if not name:
@@ -455,6 +409,13 @@ class Planner:
                 if self._open_state_walls is None or name in self._open_state_walls:
                     extra |= cells
             floor.extra_navigable = extra
+            # Open doors REMOVE their swung-leaf footprint (mirror of extra_navigable, opposite
+            # sign): navigable() checks extra_blocked first, so the leaf arc is blocked when open.
+            blocked = set()
+            for name, cells in floor.doors_blocked_by_name.items():
+                if self._open_doors is None or name in self._open_doors:
+                    blocked |= cells
+            floor.extra_blocked = blocked
             floor._clearance = None  # navigability changed → clearance map stale
 
     def door_names(self):
@@ -986,68 +947,61 @@ def door_positions():
     return table
 
 
+def _segment_cells(ax, az, bx, bz):
+    """Integer cells a straight segment passes through (Bresenham). Mirror of C#
+    Floor.SegmentCells."""
+    dx, dz = abs(bx - ax), abs(bz - az)
+    sx = 1 if ax < bx else -1
+    sz = 1 if az < bz else -1
+    err = dx - dz
+    x, z = ax, az
+    while True:
+        yield (x, z)
+        if x == bx and z == bz:
+            break
+        e2 = 2 * err
+        if e2 > -dz:
+            err -= dz
+            x += sx
+        if e2 < dx:
+            err += dx
+            z += sz
+
+
 def tag_doors(waypoints, planner, target_name=None, target_radius=0.0):
-    """Tag doors on route segments with TWO rules (mirror of C# SimpleNavPlanner.TagDoors,
-    no magic radius constant). Source is the bake's per-floor opening_center_by_name —
-    uniform over swing Doors AND sliding container doors.
-
-      (1) ON-PATH: a door is tagged on a segment that THREADS its doorway — segment within the
-          door's own opening_radius (half the doorway width) + one cell of clearance. Tight
-          geometric "route goes through here" test; does not over-tag doors merely passed near.
-      (2) DESTINATION: the door gating the TARGET — nearest door opening within the target's
-          InteractionRadius of the final goal cell — is force-tagged on the last segment. This
-          is the game's real "can the player stand at the goal and reach to open it" test, and
-          covers both a door TARGET and an item gated by a container door.
-
-    See [[project_navigation_container_open_on_interact]], [[project-navigation-door-tag-radius]]."""
+    """CELL-OWNERSHIP door tagging (mirror of C# SimpleNavPlanner.TagDoors). Two rules:
+      (1) ON-PATH: a door is tagged on a segment that STEPS ON one of its freed/threshold
+          cells (cells are uniquely owned — 0 cross-door overlap — so this is exact). No
+          proximity radius. The route is planned in the doors-open state, so "crosses this
+          cell" is the same uniform portal set the planner routes against.
+      (2) DESTINATION: the target IS a door (opened in range like any object) — tag it on the
+          final segment. Container items gated by a door resolve via rule (1) (the approach
+          crosses that door's freed cells).
+    See [[project-navigation-doorway-capsule-clearance-2026-06-18]]."""
     segments = []
     for i in range(len(waypoints) - 1):
         a, b = waypoints[i], waypoints[i + 1]
-        wa, wb = planner.world_of(a), planner.world_of(b)
         seg = {"from": _node_to_dict(a, planner), "to": _node_to_dict(b, planner), "doors": []}
-        if wa is not None and wb is not None and a[0] == b[0]:
+        if a[0] == b[0] and not str(a[0]).startswith("@"):
             floor = planner.floors[a[0]]
-            for name, xz in floor.opening_center_by_name.items():
-                # Prefer the OPENING CELLS test (mirror of C# TagDoors): the route threads
-                # this doorway if the segment passes within ~3 cells of ANY navigable opening
-                # cell. Tags wide doors whose crossing is at the navigable doorway edge, which
-                # the threshold-centroid circle missed. Falls back to the centroid+radius
-                # circle for doors with no opening cells (container/explicit-center).
-                opening_cells = floor.opening_cells_by_name.get(name)
-                if opening_cells:
-                    min_cell_dist = min(
-                        _point_segment_distance(c, wa, wb) for c in opening_cells
-                    )
-                    if min_cell_dist <= planner.cell_size * 3.0:
-                        seg["doors"].append({"name": name, "distance_m": round(min_cell_dist, 3)})
-                    continue
-                dist = _point_segment_distance(xz, wa, wb)
-                open_r = floor.opening_radius_by_name.get(name, 0.0)
-                if dist <= open_r + planner.cell_size:
-                    seg["doors"].append({"name": name, "distance_m": round(dist, 3)})
+            seen = set()
+            for cell in _segment_cells(a[1], a[2], b[1], b[2]):
+                name = floor.door_by_freed_cell.get(cell)
+                if name and name not in seen:
+                    seen.add(name)
+                    seg["doors"].append({"name": name, "distance_m": 0.0})
         segments.append(seg)
 
-    # Rule (2): destination barrier on the final segment.
-    if segments and waypoints:
+    # Rule (2): the target itself is a door — tag it on the final segment (opened in range).
+    if segments and target_name:
         goal = waypoints[-1]
-        gw = planner.world_of(goal)              # None for virtual (@) nodes
-        gf = planner.floors.get(goal[0])         # None for virtual (@) floors
-        if gw is not None and gf is not None:
-            radius = target_radius if target_radius and target_radius > 0 else DOOR_INTERACT_RADIUS_FALLBACK_M
-            best_name, best_dist = None, math.inf
-            for name, xz in gf.opening_center_by_name.items():
-                dist = math.hypot(xz[0] - gw[0], xz[1] - gw[1])
-                is_target_door = bool(target_name) and name == target_name
-                if dist <= radius and (is_target_door or dist < best_dist):
-                    best_name = name
-                    best_dist = -1.0 if is_target_door else dist
-                    if is_target_door:
-                        break
-            if best_name is not None:
-                last = segments[-1]["doors"]
-                if not any(d["name"] == best_name for d in last):
-                    last.append({"name": best_name,
-                                 "distance_m": round(max(0.0, best_dist), 3)})
+        gf = planner.floors.get(goal[0])
+        is_door = (gf is not None and (target_name in gf.door_crossing_by_name
+                                       or target_name in planner._container_door_names))
+        if is_door:
+            last = segments[-1]["doors"]
+            if not any(d["name"] == target_name for d in last):
+                last.append({"name": target_name, "distance_m": 0.0})
     return segments
 
 

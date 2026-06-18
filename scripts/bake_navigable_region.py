@@ -852,14 +852,10 @@ def _container_operable_record(door_rec, navigable_bm, minx, minz, nx, nz,
         navigable_bm, empty_mask, empty_mask, anchor_x, anchor_z, minx, minz, nx, nz)
     if not operable:
         return None
-    # Opening center = the door's OWN anchor XZ. A container has no walk-through
-    # threshold, so its "opening" — the point the destination tag rule and the
-    # executor aim at to open it — is just where the door is. With this, a container
-    # door is tagged by the SAME tag_doors destination rule as a passage door (goal
-    # cell within InteractionRadius of the opening), so it needs no special LOS
-    # rescue: a door is a door. opening_radius is the door's own footprint, kept
-    # small so the on-path rule never tags it (you never thread a container doorway).
-    # See [[project_navigation_container_open_on_interact]].
+    # A container has no walk-through threshold or freed cells — you open it in place to reach
+    # an item inside, never walk through it. It carries only operable_from_cells; the consumer
+    # tags it by the destination rule (the target IS this door) and opens it in range, like any
+    # object. See [[project_navigation_container_open_on_interact]].
     return {
         "name": door_rec.get("Name"),
         "kind": door_rec.get("Kind"),
@@ -871,11 +867,11 @@ def _container_operable_record(door_rec, navigable_bm, minx, minz, nx, nz,
         "threshold_cells_list": [],
         "freed_cells": [],
         "freed_count": 0,
+        "open_blocked_cells": [],
+        "open_blocked_count": 0,
         "panel_dilated_cells": [],
         "operable_from_cells": operable,
         "operable_from_count": len(operable),
-        "opening_center": [float(anchor_x), float(door_pos.get("y", floor_y)), float(anchor_z)],
-        "opening_radius": float(CELL),
         "default_open": bool(door_rec.get("Open", False)),
         "locked": bool(door_rec.get("Locked", False)),
         "container_operable_only": True,
@@ -1177,7 +1173,12 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         for dx, dz in carve_offsets:
             jx = ix + dx; jz = iz + dz
             if jx < 0 or jx >= nx or jz < 0 or jz >= nz: continue
-            if dilated[jx][jz]:
+            # Only clear DILATION (the capsule-clearance halo around walls), never a RAW blocker
+            # cell. A carve that un-blocks a wall cell makes solid wall navigable — the follower
+            # then walks full-speed into it (confirmed in-game: bedroom jam, player driving +Z
+            # into SM_Walls_Bedroom 0.45m ahead, velocity 0). See
+            # [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+            if dilated[jx][jz] and not blocked_bm[jx][jz]:
                 dilated[jx][jz] = False
                 door_carves += 1
 
@@ -1227,7 +1228,9 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
 
         for jx in range(max(0, bx0), min(nx, bx1 + 1)):
             for jz in range(max(0, bz0), min(nz, bz1 + 1)):
-                if dilated[jx][jz] and not post_halo[jx][jz]:
+                # As in the door-position carve: clear only the dilation halo, never a raw blocker
+                # cell (un-blocking a wall makes solid wall navigable).
+                if dilated[jx][jz] and not post_halo[jx][jz] and not blocked_bm[jx][jz]:
                     dilated[jx][jz] = False
                     door_carves += 1
 
@@ -1338,13 +1341,18 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
                                 continue
                             if (tx, tz) in reach:
                                 continue
-                            # Walkable cells inside the disc that are EITHER
-                            # navigable post-bake OR in the panel's closed
-                            # dilation are reachable. Walls (dilated cells
-                            # NOT in the panel) block the BFS.
+                            # Spread through walkable floor, stopping only at a RAW blocker (an
+                            # actual wall-mesh cell), NOT at mere dilation. The doorway THROAT is
+                            # walkable floor the surrounding wall jambs DILATE shut; a dilation-stop
+                            # gate collapsed the threshold to a 1-wide diagonal the 0.4m capsule
+                            # can't follow (follower jams at the wall corner). Blocking on raw
+                            # blockers lets the BFS fill the throat's full width while a real wall
+                            # still stops it; the disc bound + raw-wall stop prevent leaking into a
+                            # neighbour room (the Doors_Office→SM_Walls_Hall1 leak the old gate
+                            # guarded). See [[project-navigation-doorway-capsule-clearance-2026-06-18]].
                             if not walkable_bm[tx][tz]:
                                 continue
-                            if dilated[tx][tz] and not panel_closed_dil[tx][tz]:
+                            if blocked_bm[tx][tz] and not panel_closed_raw[tx][tz]:
                                 continue
                             reach.add((tx, tz))
                             queue.append((tx, tz))
@@ -1443,38 +1451,17 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         # dilation band — that's the wall opening dilation seals over. The
         # adjacency-to-panel_closed_dil constraint above keeps them legitimate.
         threshold_cells_list = sorted([list(c) for c in threshold_cells])
-        # Doorway OPENING cells = the threshold cells grown by a couple of rings into
-        # adjacent NAVIGABLE space. Why this exists: the tag test (TagDoors) asks "does
-        # the route thread this doorway?". Threshold cells alone are only the part of the
-        # doorway that DILATION seals (the dilation-blocked strip the door frees) — for a
-        # WIDE door the player actually crosses at the doorway's already-navigable EDGE,
-        # which is never recorded as a threshold cell. So the threshold-centroid the
-        # consumer derived as the "opening" sat ~1-1.5m off the true crossing, and nearly
-        # every passage door went UNTAGGED (Doors_Bedroom: route crossed 1.42m from the
-        # centroid vs a 0.74m tag radius → never tagged → door never opened → follower
-        # thrashed at the door/closet cluster). Growing the threshold by 2 navigable rings
-        # captures the navigable doorway gap the route uses, while staying doorway-LOCAL
-        # (it does not flood into the room — growth is bounded to 2 cells and the consumer
-        # tests per-cell proximity, not a centroid circle). Threshold-less doors (nested
-        # closet inner doors) get no opening cells here and keep the freed-cells fallback.
-        opening_cells_set = set(threshold_cells)
-        if threshold_cells:
-            _frontier = set(threshold_cells)
-            for _ring in range(2):
-                _next = set()
-                for (_ox, _oz) in _frontier:
-                    for _dx in (-1, 0, 1):
-                        for _dz in (-1, 0, 1):
-                            if _dx == 0 and _dz == 0:
-                                continue
-                            _tx, _tz = _ox + _dx, _oz + _dz
-                            if (0 <= _tx < nx and 0 <= _tz < nz
-                                    and (_tx, _tz) not in opening_cells_set
-                                    and navigable_bm[_tx][_tz]):
-                                opening_cells_set.add((_tx, _tz))
-                                _next.add((_tx, _tz))
-                _frontier = _next
-        opening_cells_list = sorted([list(c) for c in opening_cells_set])
+        # OPEN-BLOCKED cells = the door's open-leaf footprint: navigable floor (door CLOSED) the
+        # leaf sweeps into when OPEN. Mirror of freed_cells (closed:blocked->open:navigable);
+        # this is closed:navigable->open:blocked. The consumer removes these from navigable when
+        # the door is open so no route runs through the swung leaf (the swing-leaf wedge). Raw
+        # leaf footprint; the planner's clearance handles the body margin. See
+        # [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+        open_blocked = sorted(
+            [ix, iz]
+            for ix in range(nx) for iz in range(nz)
+            if panel_open_raw[ix][iz] and navigable_bm[ix][iz]
+        )
         # Operability standpoint: navigable cells where the player can stand to
         # open/close this door, derived offline from the Door.cs rule (within
         # reach, not touching the closed panel, not in the open-pose sweep). The
@@ -1494,12 +1481,12 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             "open_cells": sum(sum(row) for row in panel_open_dil),
             "threshold_cells": len(threshold_cells),
             "threshold_cells_list": threshold_cells_list,
-            # Doorway opening cells (threshold grown into the navigable doorway gap). The
-            # consumer's door-tag test uses these — proximity of the route to ANY opening
-            # cell — instead of a threshold-centroid circle, so wide/edge-crossed doors tag.
-            "opening_cells_list": opening_cells_list,
             "freed_cells": freed,
             "freed_count": len(freed),
+            # Open-leaf footprint: navigable-when-closed cells the leaf fills when open. Mirror
+            # of freed_cells; the consumer removes these from navigable when the door is open.
+            "open_blocked_cells": open_blocked,
+            "open_blocked_count": len(open_blocked),
             "panel_dilated_cells": own_dil_cells,
             "operable_from_cells": operable_from_cells,
             "operable_from_count": len(operable_from_cells),
