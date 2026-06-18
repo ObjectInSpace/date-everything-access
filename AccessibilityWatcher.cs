@@ -1090,13 +1090,26 @@ namespace DateEverythingAccess
                 forward = Vector3.forward;
             forward.Normalize();
 
-            // Bucket nearby same-floor targets by facing-relative direction.
+            // Player's room from the SAME hierarchy/bounds model the targets' Zone uses (built by the
+            // BuildKnownObjectTargets call above), so the same-room comparison is apples-to-apples —
+            // GetCurrentRoomName() uses camera zones, a different system that wouldn't string-match.
+            string playerRoom = ResolveRoomByBounds(playerPosition);
+
+            // Bucket nearby same-floor targets by facing-relative direction. Gate out objects the
+            // player can't perceive from here: keep a target only if it's in the SAME ROOM or the
+            // player has a clear LINE OF SIGHT to it (so F6 no longer reads objects through walls,
+            // while still mentioning what's visible through a doorway into the next room).
             var grouped = new Dictionary<FacingRelativeDirection, List<KnownObjectTarget>>();
             foreach (KnownObjectTarget target in targets)
             {
                 if (target.Interactable == null || !target.IsOnPlayerFloor)
                     continue;
                 if (target.Distance > RoomScanRadiusM)
+                    continue;
+
+                bool sameRoom = !string.IsNullOrEmpty(playerRoom)
+                    && string.Equals(playerRoom, target.Zone, StringComparison.OrdinalIgnoreCase);
+                if (!sameRoom && !HasRoomScanLineOfSight(playerPosition, target.Interactable))
                     continue;
 
                 FacingRelativeDirection direction = GetFacingRelativeDirection(
@@ -1159,6 +1172,50 @@ namespace DateEverythingAccess
             }
 
             ScreenReader.Say(report.ToString());
+        }
+
+        // True if the player has a clear line of sight to the object — no wall between them. Used by
+        // the F6 room scan to drop objects in adjacent rooms that the old flat-distance filter read
+        // straight through walls. Casts from the player's eye toward the object's closest collider
+        // point; LOS is clear if the ray reaches that point (within a small slack) before hitting
+        // anything. Uses the game's own ~dateviatorIgnores mask so non-occluding layers (the same
+        // ones interaction raycasts skip) don't count as walls.
+        private static bool HasRoomScanLineOfSight(Vector3 playerPosition, InteractableObj target)
+        {
+            if (target == null || target.transform == null)
+                return false;
+
+            BetterPlayerControl bpc = BetterPlayerControl.Instance;
+            int mask = bpc != null ? ~(int)bpc.dateviatorIgnores : Physics.DefaultRaycastLayers;
+
+            // Eye-height origin so the ray travels over low furniture rather than into its base.
+            Vector3 origin = playerPosition + Vector3.up * 1.5f;
+
+            // Aim at the object's closest collider point (falls back to its transform), at eye height
+            // so a tall wall between the rooms blocks even when the object's pivot is on the floor.
+            Collider col = target.GetComponent<Collider>();
+            if (col == null)
+                col = target.GetComponentInChildren<Collider>();
+            Vector3 aimPoint = col != null ? col.ClosestPointOnBounds(origin) : target.transform.position;
+            aimPoint.y = origin.y;
+
+            Vector3 toAim = aimPoint - origin;
+            float dist = toAim.magnitude;
+            if (dist < 0.05f)
+                return true;
+            Vector3 dir = toAim / dist;
+
+            if (!Physics.Raycast(origin, dir, out RaycastHit hit, dist, mask, QueryTriggerInteraction.Ignore))
+                return true; // nothing in the way → clear
+
+            // Hit something: clear only if we essentially reached the object (the hit IS the target /
+            // its hierarchy, or the blocker sits at/just past the aim point — i.e. it's the object,
+            // not a wall in front of it).
+            if (hit.distance >= dist - 0.35f)
+                return true;
+            InteractableObj hitObj = hit.transform.GetComponent<InteractableObj>()
+                ?? hit.transform.GetComponentInParent<InteractableObj>();
+            return hitObj == target;
         }
 
         // Bucket a target into one of the 8 facing-relative compass directions (plus Here for
