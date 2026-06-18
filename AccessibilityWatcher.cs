@@ -208,8 +208,6 @@ namespace DateEverythingAccess
         private static FieldInfo _tutorialFrontDoorField;
         private static FieldInfo _tutorialComputerField;
         private static FieldInfo _tutorialTriggerZonesField;
-        private static FieldInfo _roomersCurrentEntryField;
-        private static FieldInfo _roomersEntriesField;
         private static FieldInfo _engagementTitleField;
         private static FieldInfo _engagementStateField;
         private static FieldInfo _specStatTooltipsField;
@@ -2034,37 +2032,30 @@ namespace DateEverythingAccess
 
             bool haveKind = TryResolveTutorialObjectiveKind(out TutorialObjectiveKind objectiveKind);
 
-            // The game has no field naming the object a generic "awaken any object" objective
-            // points at, so for those (and when no objective resolves at all) we steer to the
-            // last Rumor the player looked at — a concrete, player-chosen intent — before falling
-            // back to a nearest-object guess. Specific objectives (computer, gift box, Maggie,
-            // Skylar, ...) still resolve to their own exact target below.
-            if (!haveKind || objectiveKind == TutorialObjectiveKind.None || IsGenericDatableObjective(objectiveKind))
+            // Rumor/DateADex lookups are RETIRED here: a Rumor names a datable (character), not an
+            // object ID, and a clue may point at a specific location — so matching it to the
+            // closest/best-named candidate can steer the player to the wrong object. Without a kind
+            // at all we give up (player can use the Ctrl+Shift+F6 picker); generic "awaken any
+            // datable" objectives fall through to the floor-aware nearest-datable search below;
+            // specific objectives (computer, gift box, Maggie, Skylar, ...) resolve exactly.
+            if (!haveKind || objectiveKind == TutorialObjectiveKind.None)
             {
-                if (TryResolveCurrentRoomersEntryInteractable(out interactable, out targetZone, out targetLabel))
-                {
-                    DebugLogger.Log(
-                        LogCategory.State,
-                        "AccessibilityWatcher",
-                        "Objective resolve success: source=Roomers" +
-                        " objectiveKind=" + objectiveKind +
-                        " signpostText=" + (objectiveText ?? "<null>") +
-                        " label=" + (targetLabel ?? "<null>") +
-                        " zone=" + (targetZone ?? "<null>") +
-                        " interactable=" + DescribeInteractable(interactable));
-                    return !string.IsNullOrEmpty(targetLabel);
-                }
-
-                // No rumor viewed yet (and no specific objective): fall through to the generic
-                // nearest-datable search if we at least have a generic kind; otherwise give up.
-                if (!haveKind || objectiveKind == TutorialObjectiveKind.None)
-                {
-                    DebugLogger.Log(LogCategory.State, "AccessibilityWatcher", "Objective resolve failed: no tutorial objective kind and no viewed rumor. signpostText=" + (objectiveText ?? "<null>"));
-                    return false;
-                }
+                DebugLogger.Log(LogCategory.State, "AccessibilityWatcher", "Objective resolve failed: no tutorial objective kind. signpostText=" + (objectiveText ?? "<null>"));
+                return false;
             }
 
-            if (objectiveKind == TutorialObjectiveKind.FrontDoor)
+            // "Find more datables" (the post-tutorial majority): steer to the nearest ROOM that
+            // still holds an undiscovered datable, announced as the room only. Routes to a real
+            // member of that room but never names the object — preserving the discovery loop.
+            // AnyUnrealizedDatable (endgame) keeps the nearest-datable behaviour below: by then the
+            // player has met everything, so there's no object to spoil.
+            if (objectiveKind == TutorialObjectiveKind.AnyUnmetDatable &&
+                TryResolveNearestUnexploredRoomTarget(out InteractableObj roomMember, out string roomLabel))
+            {
+                interactable = roomMember;
+                hallwayFallbackLabel = roomLabel;
+            }
+            else if (objectiveKind == TutorialObjectiveKind.FrontDoor)
             {
                 if (TryResolveTutorialGiftBoxInteractable(out InteractableObj giftBoxInteractable) &&
                     TryResolveNavigableInteractable(giftBoxInteractable, out InteractableObj resolvedGiftBox, out targetZone))
@@ -2403,15 +2394,6 @@ namespace DateEverythingAccess
             return false;
         }
 
-        // "Generic" objectives name a class of object (any unmet / any unrealized datable) rather
-        // than one specific target, so the game gives us nothing concrete to steer to. These defer
-        // to the last-viewed Rumor before any nearest-object fallback.
-        private static bool IsGenericDatableObjective(TutorialObjectiveKind objectiveKind)
-        {
-            return objectiveKind == TutorialObjectiveKind.AnyUnmetDatable ||
-                objectiveKind == TutorialObjectiveKind.AnyUnrealizedDatable;
-        }
-
         private static bool TryFindTutorialObjectiveInteractable(TutorialObjectiveKind objectiveKind, out InteractableObj interactable)
         {
             interactable = null;
@@ -2448,163 +2430,6 @@ namespace DateEverythingAccess
             }
 
             return interactable != null;
-        }
-
-        private static bool TryResolveCurrentRoomersEntryInteractable(out InteractableObj interactable, out string targetZone, out string targetLabel)
-        {
-            interactable = null;
-            targetZone = null;
-            targetLabel = null;
-
-            if (!TryGetCurrentRoomersEntry(out Save.RoomersStruct entry) ||
-                !TryFindRoomersEntryInteractable(entry, out InteractableObj candidate))
-            {
-                return false;
-            }
-
-            if (!TryResolveNavigableInteractable(candidate, out InteractableObj resolvedInteractable, out targetZone))
-                return false;
-
-            interactable = resolvedInteractable;
-            targetLabel = BuildRoomersEntryNavigationLabel(entry, interactable);
-            return !string.IsNullOrEmpty(targetLabel);
-        }
-
-        private static bool TryGetCurrentRoomersEntry(out Save.RoomersStruct entry)
-        {
-            entry = null;
-
-            if (Roomers.Instance == null ||
-                Roomers.Instance.RoomersWindow == null ||
-                !Roomers.Instance.RoomersWindow.activeInHierarchy)
-            {
-                return false;
-            }
-
-            GameObject selectedObject = GetCurrentSelectedObject();
-            RoomersEntryButton selectedEntryButton = selectedObject != null
-                ? selectedObject.GetComponentInParent<RoomersEntryButton>()
-                : null;
-            if (selectedEntryButton != null && selectedEntryButton.roomersEntry != null)
-            {
-                entry = selectedEntryButton.roomersEntry;
-                return true;
-            }
-
-            EnsureReflectionCache();
-            if (_roomersCurrentEntryField == null || _roomersEntriesField == null)
-                return false;
-
-            int currentEntry = (int)_roomersCurrentEntryField.GetValue(Roomers.Instance);
-            List<GameObject> entries = _roomersEntriesField.GetValue(Roomers.Instance) as List<GameObject>;
-            if (entries == null || currentEntry < 0 || currentEntry >= entries.Count || entries[currentEntry] == null)
-                return false;
-
-            RoomersEntryButton currentEntryButton = entries[currentEntry].GetComponent<RoomersEntryButton>();
-            entry = currentEntryButton != null ? currentEntryButton.roomersEntry : null;
-            return entry != null;
-        }
-
-        private static bool TryFindRoomersEntryInteractable(Save.RoomersStruct entry, out InteractableObj interactable)
-        {
-            interactable = null;
-            if (entry == null)
-                return false;
-
-            string entryInternalKey = BuildComparisonKey(entry.character);
-            string entryNameKey = BuildComparisonKey(GetRoomersCharacterDisplayName(entry.character));
-            string entryObjectKey = BuildComparisonKey(GetRoomersCharacterObjectName(entry.character));
-            if (string.IsNullOrEmpty(entryInternalKey) &&
-                string.IsNullOrEmpty(entryNameKey) &&
-                string.IsNullOrEmpty(entryObjectKey))
-            {
-                return false;
-            }
-
-            Vector3 playerPosition = BetterPlayerControl.Instance != null
-                ? BetterPlayerControl.Instance.transform.position
-                : Vector3.zero;
-            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
-            float bestScore = float.MinValue;
-            for (int i = 0; i < interactables.Length; i++)
-            {
-                InteractableObj candidate = interactables[i];
-                if (candidate == null || candidate.gameObject == null || !candidate.gameObject.activeInHierarchy)
-                    continue;
-
-                float score = ScoreRoomersEntryInteractable(entryInternalKey, entryNameKey, entryObjectKey, candidate);
-                if (score <= 0f)
-                    continue;
-
-                score -= GetFlatDistance(playerPosition, GetInteractablePlanningPosition(candidate));
-                if (score <= bestScore)
-                    continue;
-
-                bestScore = score;
-                interactable = candidate;
-            }
-
-            return interactable != null;
-        }
-
-        private static float ScoreRoomersEntryInteractable(string entryInternalKey, string entryNameKey, string entryObjectKey, InteractableObj interactable)
-        {
-            string candidateInternalKey = BuildComparisonKey(interactable.InternalName());
-            string candidateInkKey = BuildComparisonKey(interactable.inkFileName);
-            string candidateLabelKey = BuildComparisonKey(GetObjectFacingDisplayName(interactable));
-            string candidateObjectKey = BuildComparisonKey(interactable.name);
-            float score = 0f;
-
-            score += ScoreRoomersKeyMatch(entryInternalKey, candidateInternalKey, 5000f);
-            score += ScoreRoomersKeyMatch(entryInternalKey, candidateInkKey, 4000f);
-            score += ScoreRoomersKeyMatch(entryNameKey, candidateLabelKey, 1500f);
-            score += ScoreRoomersKeyMatch(entryNameKey, candidateObjectKey, 800f);
-            score += ScoreRoomersKeyMatch(entryObjectKey, candidateLabelKey, 1200f);
-            score += ScoreRoomersKeyMatch(entryObjectKey, candidateObjectKey, 700f);
-            if (!string.IsNullOrEmpty(interactable.inkFileName))
-                score += 100f;
-
-            return score;
-        }
-
-        private static float ScoreRoomersKeyMatch(string entryKey, string candidateKey, float exactScore)
-        {
-            if (string.IsNullOrEmpty(entryKey) || string.IsNullOrEmpty(candidateKey))
-                return 0f;
-
-            if (string.Equals(candidateKey, entryKey, StringComparison.OrdinalIgnoreCase))
-                return exactScore;
-
-            if (candidateKey.StartsWith(entryKey, StringComparison.OrdinalIgnoreCase) ||
-                entryKey.StartsWith(candidateKey, StringComparison.OrdinalIgnoreCase))
-            {
-                return exactScore * 0.75f;
-            }
-
-            if (candidateKey.IndexOf(entryKey, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                entryKey.IndexOf(candidateKey, StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return exactScore * 0.5f;
-            }
-
-            return 0f;
-        }
-
-        private static string BuildRoomersEntryNavigationLabel(Save.RoomersStruct entry, InteractableObj interactable)
-        {
-            string entryName = NormalizeIdentifierName(entry != null ? GetRoomersCharacterDisplayName(entry.character) : null);
-            string entryObject = NormalizeIdentifierName(entry != null ? GetRoomersCharacterObjectName(entry.character) : null);
-            if (!string.IsNullOrEmpty(entryName) && !string.IsNullOrEmpty(entryObject))
-                return entryName + ", " + entryObject;
-
-            if (!string.IsNullOrEmpty(entryName))
-                return entryName;
-
-            string label = GetObjectFacingDisplayName(interactable);
-            if (!string.IsNullOrEmpty(label))
-                return label;
-
-            return NormalizeIdentifierName(entry != null ? entry.character : null);
         }
 
         private static string GetRoomersCharacterDisplayName(string internalName)
@@ -2807,6 +2632,88 @@ namespace DateEverythingAccess
             }
 
             return interactable != null;
+        }
+
+        // "Find more datables" default (post-tutorial AnyUnmetDatable). Rather than name the single
+        // nearest unmet datable — which spoils which object IS a datable, the whole discovery loop —
+        // steer to the NEAREST ROOM that still holds an undiscovered datable. The route terminates
+        // at a real reachable cell (the nearest unmet-datable interactable in that room), but the
+        // player only hears the room ("Kitchen"), so it nudges direction without revealing the
+        // object or that it's dateable. roomLabel is the spoken room; routeTarget is what to plan to.
+        private bool TryResolveNearestUnexploredRoomTarget(out InteractableObj routeTarget, out string roomLabel)
+        {
+            routeTarget = null;
+            roomLabel = null;
+
+            Save save = Singleton<Save>.Instance;
+            if (save == null || BetterPlayerControl.Instance == null)
+                return false;
+
+            // The room-bounds spatial fallback is normally built when the picker opens; Ctrl+F6 can
+            // fire without ever opening it, so build it on demand if absent.
+            if (_roomBoundsIndex == null)
+                _roomBoundsIndex = BuildRoomBoundsIndex();
+
+            Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
+            SimpleNavPlanner.TryGetPlayerFloorLabel(playerPosition.y, out string playerFloorLabel);
+
+            // Group every undiscovered datable by its room, tracking the nearest member per room.
+            // We pick the nearest ROOM (by its nearest member, floor-aware), then route to that
+            // member — so the announcement is the room but the route still lands somewhere real.
+            InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
+            string bestRoom = null;
+            InteractableObj bestRoomMember = null;
+            bool bestRoomOnPlayerFloor = false;
+            float bestRoomDistance = float.MaxValue;
+            for (int i = 0; i < interactables.Length; i++)
+            {
+                InteractableObj candidate = interactables[i];
+                if (candidate == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                string internalName = candidate.InternalName();
+                if (string.IsNullOrWhiteSpace(internalName))
+                    continue;
+
+                // Game knowledge: an unmet datable (a named date target the player hasn't dated),
+                // including ones the player has never noticed — that's the point of "find more".
+                if (!save.TryGetNameByInternalName(internalName, out string displayName) ||
+                    string.IsNullOrWhiteSpace(displayName))
+                {
+                    continue;
+                }
+                if (save.GetDateStatus(internalName) != RelationshipStatus.Unmet)
+                    continue;
+
+                Vector3 candidatePos = candidate.transform.position;
+                // Room name from the data hierarchy, falling back to the spatial bounds — same room
+                // model the picker shows the player, so what they hear matches the room list.
+                if (!TryGetHierarchyRoomForInteractable(candidate, out string room))
+                    room = ResolveRoomByBounds(candidatePos);
+                if (string.IsNullOrWhiteSpace(room))
+                    continue;
+
+                float distance = GetFlatDistance(playerPosition, candidatePos);
+                SimpleNavPlanner.TryGetTargetFloorLabel(candidatePos.y, out string candidateFloor);
+                bool onPlayerFloor = playerFloorLabel == null || candidateFloor == null ||
+                    string.Equals(candidateFloor, playerFloorLabel, StringComparison.OrdinalIgnoreCase);
+
+                if (bestRoomMember == null ||
+                    CompareFloorAwareDistance(onPlayerFloor, distance, bestRoomOnPlayerFloor, bestRoomDistance) < 0)
+                {
+                    bestRoom = room;
+                    bestRoomMember = candidate;
+                    bestRoomOnPlayerFloor = onPlayerFloor;
+                    bestRoomDistance = distance;
+                }
+            }
+
+            if (bestRoomMember == null)
+                return false;
+
+            routeTarget = bestRoomMember;
+            roomLabel = bestRoom;
+            return true;
         }
 
         private static bool TryResolveTutorialGiftBoxInteractable(out InteractableObj interactable)
@@ -8788,8 +8695,6 @@ namespace DateEverythingAccess
             _tutorialFrontDoorField = typeof(TutorialController).GetField("frontDoor", flags);
             _tutorialComputerField = typeof(TutorialController).GetField("computer", flags);
             _tutorialTriggerZonesField = typeof(TutorialController).GetField("triggerZones", flags);
-            _roomersCurrentEntryField = typeof(Roomers).GetField("currentEntry", flags);
-            _roomersEntriesField = typeof(Roomers).GetField("RoomersEntries", flags);
             _specStatTooltipsField = typeof(SpecStatMain).GetField("statTooltips", flags);
             _specStatMainKeyButtonField = typeof(SpecStatMain).GetField("keyButton", flags);
             _specStatMainAutoSelectFallbackField = typeof(SpecStatMain).GetField("autoSelectFallback", flags);
