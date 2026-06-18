@@ -1443,6 +1443,38 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         # dilation band — that's the wall opening dilation seals over. The
         # adjacency-to-panel_closed_dil constraint above keeps them legitimate.
         threshold_cells_list = sorted([list(c) for c in threshold_cells])
+        # Doorway OPENING cells = the threshold cells grown by a couple of rings into
+        # adjacent NAVIGABLE space. Why this exists: the tag test (TagDoors) asks "does
+        # the route thread this doorway?". Threshold cells alone are only the part of the
+        # doorway that DILATION seals (the dilation-blocked strip the door frees) — for a
+        # WIDE door the player actually crosses at the doorway's already-navigable EDGE,
+        # which is never recorded as a threshold cell. So the threshold-centroid the
+        # consumer derived as the "opening" sat ~1-1.5m off the true crossing, and nearly
+        # every passage door went UNTAGGED (Doors_Bedroom: route crossed 1.42m from the
+        # centroid vs a 0.74m tag radius → never tagged → door never opened → follower
+        # thrashed at the door/closet cluster). Growing the threshold by 2 navigable rings
+        # captures the navigable doorway gap the route uses, while staying doorway-LOCAL
+        # (it does not flood into the room — growth is bounded to 2 cells and the consumer
+        # tests per-cell proximity, not a centroid circle). Threshold-less doors (nested
+        # closet inner doors) get no opening cells here and keep the freed-cells fallback.
+        opening_cells_set = set(threshold_cells)
+        if threshold_cells:
+            _frontier = set(threshold_cells)
+            for _ring in range(2):
+                _next = set()
+                for (_ox, _oz) in _frontier:
+                    for _dx in (-1, 0, 1):
+                        for _dz in (-1, 0, 1):
+                            if _dx == 0 and _dz == 0:
+                                continue
+                            _tx, _tz = _ox + _dx, _oz + _dz
+                            if (0 <= _tx < nx and 0 <= _tz < nz
+                                    and (_tx, _tz) not in opening_cells_set
+                                    and navigable_bm[_tx][_tz]):
+                                opening_cells_set.add((_tx, _tz))
+                                _next.add((_tx, _tz))
+                _frontier = _next
+        opening_cells_list = sorted([list(c) for c in opening_cells_set])
         # Operability standpoint: navigable cells where the player can stand to
         # open/close this door, derived offline from the Door.cs rule (within
         # reach, not touching the closed panel, not in the open-pose sweep). The
@@ -1462,6 +1494,10 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             "open_cells": sum(sum(row) for row in panel_open_dil),
             "threshold_cells": len(threshold_cells),
             "threshold_cells_list": threshold_cells_list,
+            # Doorway opening cells (threshold grown into the navigable doorway gap). The
+            # consumer's door-tag test uses these — proximity of the route to ANY opening
+            # cell — instead of a threshold-centroid circle, so wide/edge-crossed doors tag.
+            "opening_cells_list": opening_cells_list,
             "freed_cells": freed,
             "freed_count": len(freed),
             "panel_dilated_cells": own_dil_cells,

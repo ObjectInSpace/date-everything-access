@@ -143,6 +143,10 @@ class Floor:
         # (half the doorway width). On-path tagging uses this + one cell — a geometric
         # "route threads this doorway" test. Mirror of C# Floor.OpeningRadiusByName.
         self.opening_radius_by_name = {}
+        # Per-door doorway OPENING cells in world XZ (threshold grown into the navigable
+        # doorway gap). tag_doors tests route-segment proximity to the nearest of these so
+        # wide/edge-crossed doors tag. Mirror of C# Floor.OpeningCellsByName.
+        self.opening_cells_by_name = {}
         # Same shape, for state-gated walls (DresserWall and similar).
         self.state_walls_freed_by_name = {}
         # Lazily-built clearance map: per cell, distance (in cells, capped at
@@ -310,6 +314,16 @@ class Planner:
                             if r > max_r:
                                 max_r = r
                         floor.opening_radius_by_name[name] = max_r
+                # Doorway opening cells (world XZ) — threshold grown into the navigable gap.
+                ocl = door.get("opening_cells_list")
+                if ocl and name not in floor.opening_cells_by_name:
+                    pts = []
+                    for pair in ocl:
+                        if not pair or len(pair) < 2:
+                            continue
+                        pts.append(floor.cell_to_world(pair[0], pair[1]))
+                    if pts:
+                        floor.opening_cells_by_name[name] = pts
                 cells = {tuple(c) for c in door.get("freed_cells", [])}
                 if not cells:
                     continue
@@ -994,6 +1008,19 @@ def tag_doors(waypoints, planner, target_name=None, target_radius=0.0):
         if wa is not None and wb is not None and a[0] == b[0]:
             floor = planner.floors[a[0]]
             for name, xz in floor.opening_center_by_name.items():
+                # Prefer the OPENING CELLS test (mirror of C# TagDoors): the route threads
+                # this doorway if the segment passes within ~3 cells of ANY navigable opening
+                # cell. Tags wide doors whose crossing is at the navigable doorway edge, which
+                # the threshold-centroid circle missed. Falls back to the centroid+radius
+                # circle for doors with no opening cells (container/explicit-center).
+                opening_cells = floor.opening_cells_by_name.get(name)
+                if opening_cells:
+                    min_cell_dist = min(
+                        _point_segment_distance(c, wa, wb) for c in opening_cells
+                    )
+                    if min_cell_dist <= planner.cell_size * 3.0:
+                        seg["doors"].append({"name": name, "distance_m": round(min_cell_dist, 3)})
+                    continue
                 dist = _point_segment_distance(xz, wa, wb)
                 open_r = floor.opening_radius_by_name.get(name, 0.0)
                 if dist <= open_r + planner.cell_size:

@@ -517,6 +517,11 @@ namespace DateEverythingAccess
             // ramp-interior points BEFORE landing waypoint i, the K extra segments they add
             // all belong to the seam (no door), so we append K empty entries at that point.
             List<Vector3> rawRouteWaypoints = new List<Vector3>(waypoints.Count);
+            // Parallel to rawRouteWaypoints: a per-raw-waypoint kind override (null = let
+            // AddRouteWaypoints decide Navigation/Target). Used to tag staircase LANDINGS — the
+            // cells where a cross-floor route changes floor — as Stairs landmarks. Threaded through
+            // like expandedSegmentDoors rather than position-matched after the fact.
+            List<SimpleNavWaypointKind?> rawWaypointKinds = new List<SimpleNavWaypointKind?>(waypoints.Count);
             for (int i = 0; i < waypoints.Count; i++)
             {
                 NodeKey w = waypoints[i];
@@ -526,21 +531,29 @@ namespace DateEverythingAccess
                 // landing pair has a baked ramp polyline — insert its interior points so the
                 // follower walks the diagonal run (real XZ progression + true Y) instead of a
                 // single stacked landing-to-landing jump it can't steer along.
+                bool isStairLanding = false;
                 if (i > 0 && _stairRampInteriors != null)
                 {
                     NodeKey prev = waypoints[i - 1];
                     if (prev.Floor != w.Floor &&
                         _stairRampInteriors.TryGetValue((prev, w), out Vector3[] interior))
                     {
+                        // The DEPARTURE landing is the waypoint we just emitted (prev, last in the
+                        // list); the ARRIVAL landing is this one (w). Tag both ends of the crossing.
+                        if (rawWaypointKinds.Count > 0)
+                            rawWaypointKinds[rawWaypointKinds.Count - 1] = SimpleNavWaypointKind.Stairs;
+                        isStairLanding = true;
                         for (int k = 0; k < interior.Length; k++)
                         {
                             rawRouteWaypoints.Add(interior[k]);
+                            rawWaypointKinds.Add(null);                    // interior ramp point, not a landmark
                             expandedSegmentDoors.Add(new List<string>(0)); // seam sub-segment, no door
                         }
                     }
                 }
                 Vector2 xz = f.CellToWorld(w.Ix, w.Iz);
                 rawRouteWaypoints.Add(new Vector3(xz.x, f.FloorY, xz.y));
+                rawWaypointKinds.Add(isStairLanding ? (SimpleNavWaypointKind?)SimpleNavWaypointKind.Stairs : null);
                 // Door list for the segment LEAVING this cell-waypoint (i -> i+1), appended
                 // only for non-terminal waypoints to keep one entry per emitted segment.
                 if (i < waypoints.Count - 1)
@@ -549,7 +562,7 @@ namespace DateEverythingAccess
                     expandedSegmentDoors.Add(seg ?? new List<string>(0));
                 }
             }
-            AddRouteWaypoints(rawRouteWaypoints, expandedSegmentDoors, route);
+            AddRouteWaypoints(rawRouteWaypoints, expandedSegmentDoors, rawWaypointKinds, route);
             route.EnsureSemanticWaypoints();
             while (route.SegmentDoorNames.Count < route.Waypoints.Count - 1)
                 route.SegmentDoorNames.Add(new List<string>(0));
@@ -1037,6 +1050,22 @@ namespace DateEverythingAccess
                                 }
                                 floor.OpeningRadiusByName[d.name] = maxR;
                             }
+                        }
+                        // Doorway OPENING cells in world space — the threshold grown into the
+                        // navigable doorway gap (baked as opening_cells_list). TagDoors tests
+                        // proximity to the nearest of these so wide/edge-crossed doors tag.
+                        if (d.opening_cells_list != null && d.opening_cells_list.Length > 0
+                            && !floor.OpeningCellsByName.ContainsKey(d.name))
+                        {
+                            var pts = new List<Vector2>(d.opening_cells_list.Length);
+                            for (int ci = 0; ci < d.opening_cells_list.Length; ci++)
+                            {
+                                int[] pair = d.opening_cells_list[ci];
+                                if (pair == null || pair.Length < 2) continue;
+                                pts.Add(floor.CellToWorld(pair[0], pair[1]));
+                            }
+                            if (pts.Count > 0)
+                                floor.OpeningCellsByName[d.name] = pts.ToArray();
                         }
                         // FREED-CELLS FALLBACK: a door that frees cells but has NO opening_center
                         // and NO threshold cells (the nested INNER closet doors —
@@ -2382,6 +2411,28 @@ namespace DateEverythingAccess
                     Vector2 wb = floor.CellToWorld(b.Ix, b.Iz);
                     foreach (KeyValuePair<string, Vector3> kv in floor.OpeningCenterByName)
                     {
+                        // Prefer the OPENING CELLS test: the route threads this doorway if the
+                        // segment passes within one cell of ANY navigable doorway-opening cell.
+                        // This tags wide doors whose crossing is at the navigable doorway edge,
+                        // which the threshold-centroid circle below missed (it sat ~1-1.5m off
+                        // the true crossing). Falls back to the centroid+radius circle for doors
+                        // with no opening cells (container/explicit-center doors).
+                        if (floor.OpeningCellsByName.TryGetValue(kv.Key, out Vector2[] cells))
+                        {
+                            float minCellDist = float.PositiveInfinity;
+                            for (int ci = 0; ci < cells.Length; ci++)
+                            {
+                                float cd = PointSegmentDistance(cells[ci].x, cells[ci].y, wa.x, wa.y, wb.x, wb.y);
+                                if (cd < minCellDist) minCellDist = cd;
+                            }
+                            // ~3 cells (0.6m): the route may pass a cell-or-two off the nearest
+                            // opening cell when it crosses at the doorway edge. Tight enough that
+                            // it only tags doors the route actually threads, not ones it passes by.
+                            if (minCellDist <= floor.CellSize * 3f)
+                                tagged.Add(kv.Key);
+                            continue;
+                        }
+
                         Vector3 dp = kv.Value;
                         float dist = PointSegmentDistance(dp.x, dp.z, wa.x, wa.y, wb.x, wb.y);
                         float openR = floor.OpeningRadiusByName.TryGetValue(kv.Key, out float orr) ? orr : 0f;
@@ -2432,12 +2483,23 @@ namespace DateEverythingAccess
         private static void AddRouteWaypoints(
             List<Vector3> rawWaypoints,
             List<List<string>> rawSegmentDoors,
+            List<SimpleNavWaypointKind?> rawWaypointKinds,
             SimpleNavRoute route)
         {
             if (rawWaypoints == null || rawWaypoints.Count == 0)
                 return;
 
-            route.AddWaypoint(rawWaypoints[0], SimpleNavWaypointKind.Navigation);
+            // Per-raw-waypoint kind override (e.g. Stairs landings), defaulting to the positional
+            // rule (Navigation, or Target for the last) when no override is supplied.
+            SimpleNavWaypointKind KindFor(int rawIndex, SimpleNavWaypointKind fallback)
+            {
+                if (rawWaypointKinds != null && rawIndex < rawWaypointKinds.Count &&
+                    rawWaypointKinds[rawIndex].HasValue)
+                    return rawWaypointKinds[rawIndex].Value;
+                return fallback;
+            }
+
+            route.AddWaypoint(rawWaypoints[0], KindFor(0, SimpleNavWaypointKind.Navigation));
             for (int i = 0; i < rawWaypoints.Count - 1; i++)
             {
                 Vector3 a = rawWaypoints[i];
@@ -2461,7 +2523,10 @@ namespace DateEverythingAccess
                         AddSemanticDoorWaypoint(route, doors, opening, SimpleNavWaypointKind.DoorOpening, null);
                 }
 
-                AddSemanticDoorWaypoint(route, doors, b, isFinalSegment ? SimpleNavWaypointKind.Target : SimpleNavWaypointKind.Navigation, null);
+                // The end waypoint b is rawWaypoints[i+1]; its kind override (if any) wins over the
+                // positional Navigation/Target default. A Stairs landing keeps its tag this way.
+                SimpleNavWaypointKind endKind = KindFor(i + 1, isFinalSegment ? SimpleNavWaypointKind.Target : SimpleNavWaypointKind.Navigation);
+                AddSemanticDoorWaypoint(route, doors, b, endKind, null);
             }
         }
 
@@ -2655,6 +2720,13 @@ namespace DateEverythingAccess
             // "the route threads THIS doorway" test, not a magic constant. Indexed at load.
             public readonly Dictionary<string, float> OpeningRadiusByName =
                 new Dictionary<string, float>(StringComparer.Ordinal);
+            // Per-door doorway OPENING cells in WORLD space (threshold grown into the navigable
+            // doorway gap). TagDoors tests route-segment proximity to the NEAREST of these,
+            // which tags wide doors whose crossing is at the navigable doorway edge — the
+            // threshold-centroid circle missed them. See
+            // [[project-navigation-bedroom-door-sealed-2026-06-17]].
+            public readonly Dictionary<string, Vector2[]> OpeningCellsByName =
+                new Dictionary<string, Vector2[]>(StringComparer.Ordinal);
             // Per-state-wall freed-cells, parallel to DoorFreedByName. State-gated walls
             // (DresserWall and similar) contribute freed cells when their collider is
             // disabled at runtime.
@@ -2874,6 +2946,12 @@ namespace DateEverythingAccess
             // threads the opening instead of pure-pursuing a cell past the door jamb.
             // See [[project-navigation-office-doorway-wedge-2026-05-30]].
             [DataMember] public int[][] threshold_cells_list;
+            // Doorway OPENING cells: threshold cells grown into the adjacent navigable
+            // doorway gap. TagDoors tests route-segment proximity to ANY of these cells
+            // (not a threshold-centroid circle), so wide doors whose crossing is at the
+            // navigable EDGE of the doorway still get tagged. See
+            // [[project-navigation-bedroom-door-sealed-2026-06-17]].
+            [DataMember] public int[][] opening_cells_list;
             [DataMember] public bool locked;
             [DataMember] public bool default_open;
             // True for a CONTAINER door (cupboard/fridge/breaker) baked with operability

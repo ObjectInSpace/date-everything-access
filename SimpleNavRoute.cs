@@ -13,6 +13,12 @@ namespace DateEverythingAccess
         DoorApproach,
         DoorOpening,
         DoorExit,
+        // A staircase LANDING — the floor cell at the bottom/top of a baked stair ramp where a
+        // cross-floor route changes floor (both ends of the crossing are tagged). A route landmark
+        // like a door: any cross-floor route must pass through the stairs, so it punctuates the path
+        // ("head to the stairs") and bounds the next-landmark audio cue. See
+        // [[project-tracker-tone-distance-pitch]] and the stair-ramp polyline work.
+        Stairs,
         Target
     }
 
