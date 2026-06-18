@@ -107,7 +107,6 @@ namespace DateEverythingAccess
 
         private const float PopupSelectionSuppressionSeconds = 0.75f;
         private const float UIDialogSelectionSuppressionSeconds = 0.75f;
-        private const float SpecsSelectionSuppressionSeconds = 0.75f;
         private const float CreditsSelectionSuppressionSeconds = 0.75f;
         private const float SpecsInitialAnnouncementGraceSeconds = 1f;
         private const float SpecsTutorialDialogStartTimeoutSeconds = 3f;
@@ -180,6 +179,8 @@ namespace DateEverythingAccess
         private const int VkReturn = 0x0D;
         private const int VkSpace = 0x20;
         private const int VkEscape = 0x1B;
+        private const int VkPageUp = 0x21;   // VK_PRIOR
+        private const int VkPageDown = 0x22; // VK_NEXT
 
         private static readonly Regex RichTextRegex = new Regex("<[^>]+>", RegexOptions.Compiled);
         private static readonly Regex SpriteTagRegex = new Regex(
@@ -329,7 +330,6 @@ namespace DateEverythingAccess
         private float _suppressDateADexSelectionUntil;
         private float _suppressPopupSelectionUntil;
         private float _suppressUIDialogSelectionUntil;
-        private float _suppressSpecsSelectionUntil;
         private float _suppressCreditsSelectionUntil;
         private float _suppressPendingSpecsTutorialUntil;
         private float _lastAutoWalkProgressTime;
@@ -356,6 +356,16 @@ namespace DateEverythingAccess
         // failure). Reset on each sweep route start. See [[project-navigation-stalls-are-proximity-miscount-2026-06-13]].
         internal static bool LastSweepDriveArrived { get; private set; }
         private SpecsAnnouncementMode _lastSpecsAnnouncementMode;
+        // PageUp/PageDown section stepper, shared by the SPECS / Rumors / DateADex detail screens.
+        // Each builds an ordered list of "meaty" sections; PageDown reads the next, PageUp the prior,
+        // one per press. The full-page read on open is unchanged — this is additive re-hearing. The
+        // section list + index are rebuilt when the active screen or its content changes (keyed by
+        // _sectionStepperKey), so stepping always reflects what's on screen.
+        private List<string> _sectionStepperSections;
+        private int _sectionStepperIndex = -1;
+        private string _sectionStepperKey;
+        private bool _pageUpWasDown;
+        private bool _pageDownWasDown;
         private InteractableObj _trackedInteractable;
         private string _trackedInteractableId;
         private string _trackedInteractableLabel;
@@ -882,6 +892,9 @@ namespace DateEverythingAccess
             AnnounceResultScreenIfNeeded();
             AnnounceTimeChangeIfNeeded();
             AnnounceProgressionChangesIfNeeded();
+            // After the detail builders above have captured their section lists this frame, let
+            // PageUp/PageDown step through them (SPECS / Rumors / DateADex). Additive to the page read.
+            HandleSectionStepperInput();
         }
 
         // The game reads `move`/`look` in FixedUpdate and OVERWRITES them from live input
@@ -6033,8 +6046,96 @@ namespace DateEverythingAccess
 
             _lastSpecsAnnouncement = announcement;
             _lastSpecsAnnouncementMode = mode;
-            _suppressSpecsSelectionUntil = Time.unscaledTime + SpecsSelectionSuppressionSeconds;
             ScreenReader.Say(announcement);
+        }
+
+        // PageUp/PageDown section stepper for the SPECS / Rumors / DateADex detail screens. The
+        // full-page read on open is unchanged; this lets the player re-hear one section at a time.
+        // Sections come from the same builders that produce the spoken page (captured as a side
+        // effect), so the stepper and the page never disagree. Reset when the active screen or its
+        // content changes (keyed). Polled each frame; no-op unless one of the three screens is up.
+        private void HandleSectionStepperInput()
+        {
+            List<string> sections = ResolveActiveSectionStepperSections(out string key);
+
+            if (sections == null || sections.Count == 0)
+            {
+                // No stepper-eligible screen (or no content yet): drop state so a fresh open starts
+                // at the top, and don't consume the keys.
+                _sectionStepperSections = null;
+                _sectionStepperIndex = -1;
+                _sectionStepperKey = null;
+                return;
+            }
+
+            // Rebuild on screen/content change so the index always maps to what's on screen.
+            if (!string.Equals(key, _sectionStepperKey, StringComparison.Ordinal))
+            {
+                _sectionStepperKey = key;
+                _sectionStepperSections = sections;
+                _sectionStepperIndex = -1; // first PageDown reads section 0
+            }
+            else
+            {
+                _sectionStepperSections = sections; // refresh contents (values may have updated)
+            }
+
+            bool pageDown = WasChoiceKeyPressed(KeyCode.PageDown, VkPageDown, ref _pageDownWasDown);
+            bool pageUp = WasChoiceKeyPressed(KeyCode.PageUp, VkPageUp, ref _pageUpWasDown);
+            if (!pageDown && !pageUp)
+                return;
+
+            int count = _sectionStepperSections.Count;
+            if (pageDown)
+                _sectionStepperIndex = Mathf.Min(count - 1, _sectionStepperIndex + 1);
+            else // pageUp
+                _sectionStepperIndex = Mathf.Max(0, _sectionStepperIndex < 0 ? 0 : _sectionStepperIndex - 1);
+
+            string section = _sectionStepperSections[Mathf.Clamp(_sectionStepperIndex, 0, count - 1)];
+            if (!string.IsNullOrWhiteSpace(section))
+            {
+                // "3 of 7. <text>" so the player knows where they are in the list.
+                ScreenReader.Say(Loc.Get("section_stepper_item",
+                    _sectionStepperIndex + 1, count, section), interrupt: true);
+            }
+        }
+
+        // The section list + a change-detection key for whichever stepper-eligible detail screen is
+        // currently up (SPECS page, an open Rumor detail, or an open DateADex entry detail). Null when
+        // none is active. The key changes when the screen or its content changes so the stepper resets.
+        private List<string> ResolveActiveSectionStepperSections(out string key)
+        {
+            key = null;
+
+            // SPECS profile / glossary page.
+            if (SpecStatMain.Instance != null && SpecStatMain.Instance.visible
+                && !ShouldSuppressSpecsAnnouncements()
+                && _lastSpecsSections != null && _lastSpecsSections.Count > 0)
+            {
+                key = "specs:" + (IsSpecsGlossaryPage() ? "glossary" : "stats")
+                    + ":" + string.Join("|", _lastSpecsSections.ToArray()).GetHashCode();
+                return _lastSpecsSections;
+            }
+
+            // DateADex entry detail.
+            if (DateADex.Instance != null && DateADex.Instance.DateADexWindow != null
+                && DateADex.Instance.DateADexWindow.activeInHierarchy
+                && _lastDateADexDetailSections != null && _lastDateADexDetailSections.Count > 0)
+            {
+                key = "dateadex:" + string.Join("|", _lastDateADexDetailSections.ToArray()).GetHashCode();
+                return _lastDateADexDetailSections;
+            }
+
+            // Rumors entry detail.
+            if (Roomers.Instance != null && Roomers.Instance.RoomersWindow != null
+                && Roomers.Instance.RoomersWindow.activeInHierarchy
+                && _lastRoomersDetailSections != null && _lastRoomersDetailSections.Count > 0)
+            {
+                key = "rumors:" + string.Join("|", _lastRoomersDetailSections.ToArray()).GetHashCode();
+                return _lastRoomersDetailSections;
+            }
+
+            return null;
         }
 
         private void AnnounceCreditsIfNeeded()
@@ -6369,16 +6470,15 @@ namespace DateEverythingAccess
 
         private bool ShouldSuppressSpecsSelection(GameObject selectedObject)
         {
-            if (ShouldSuppressSpecsAnnouncements())
-            {
-                return selectedObject != null &&
-                    SpecStatMain.Instance != null &&
-                    SpecStatMain.Instance.visible &&
-                    selectedObject.transform.IsChildOf(SpecStatMain.Instance.transform);
-            }
-
+            // Suppress the raw focus announcement WHENEVER the SPECS screen is visible and the focused
+            // object is part of it — not just inside the post-announce timing window. The screen reader
+            // (AnnounceSpecsDetailIfNeeded, which runs earlier each frame) reads the full profile/glossary
+            // including the focused block, so the focus echo is redundant. Gating on the timing window
+            // alone raced: on the frame SPECS opens, the focus is already set but the screen content
+            // (Active_Stat_Blocks) may not be built yet, so the screen-read produced nothing and never
+            // set the window — letting the focus read fire first ("reads the current focus instead of
+            // the screen"). Tying suppression to "SPECS visible + focus is a SPECS child" is race-free.
             return selectedObject != null &&
-                Time.unscaledTime < _suppressSpecsSelectionUntil &&
                 SpecStatMain.Instance != null &&
                 SpecStatMain.Instance.visible &&
                 selectedObject.transform.IsChildOf(SpecStatMain.Instance.transform);
@@ -7015,10 +7115,15 @@ namespace DateEverythingAccess
             AddAnnouncementPart(parts, BuildLabeledValue("roomers_location", GetRoomersCharacterObjectName(entry.character)));
             AddAnnouncementPart(parts, NormalizeText(entry.description));
 
+            // Tip sections: group each tip's name + info into ONE section (meatier step granularity),
+            // rather than separate name/info parts, so PageUp/PageDown moves tip-by-tip.
             if (entry.skylarTipIsFound && !string.IsNullOrWhiteSpace(entry.skylar))
             {
-                AddAnnouncementPart(parts, Loc.Get("roomers_character", "Skylar"));
-                AddAnnouncementPart(parts, NormalizeText(entry.skylar));
+                AddAnnouncementPart(parts, JoinAnnouncementParts(new List<string>
+                {
+                    Loc.Get("roomers_character", "Skylar"),
+                    NormalizeText(entry.skylar),
+                }));
             }
             else if (entry.tips != null)
             {
@@ -7028,8 +7133,11 @@ namespace DateEverythingAccess
                     if (tip == null || !tip.isFound)
                         continue;
 
-                    AddAnnouncementPart(parts, NormalizeText(tip.tipNameAfterValidation));
-                    AddAnnouncementPart(parts, NormalizeText(tip.tipInfoAfterValidation));
+                    AddAnnouncementPart(parts, JoinAnnouncementParts(new List<string>
+                    {
+                        NormalizeText(tip.tipNameAfterValidation),
+                        NormalizeText(tip.tipInfoAfterValidation),
+                    }));
                 }
             }
 
@@ -7303,6 +7411,9 @@ namespace DateEverythingAccess
             if (!string.IsNullOrEmpty(emptyState))
                 AddAnnouncementPart(parts, emptyState);
 
+            // Sections for the PageUp/PageDown stepper — the live on-screen rumor detail.
+            _lastRoomersDetailSections = parts.Count > 0 ? new List<string>(parts) : null;
+
             announcement = JoinAnnouncementParts(parts);
             if (string.IsNullOrEmpty(announcement))
                 return false;
@@ -7380,9 +7491,19 @@ namespace DateEverythingAccess
             AddAnnouncementPart(parts, BuildLabeledValue("dateadex_collectables", collectables));
             AddAnnouncementPart(parts, recipe);
 
+            // Each part is already a meaty, self-contained section ("Likes: ...", the description,
+            // etc.) — exactly the granularity the PageUp/PageDown stepper wants, so expose it.
+            _lastDateADexDetailSections = parts.Count > 0 ? new List<string>(parts) : null;
+
             announcement = JoinAnnouncementParts(parts);
             return !string.IsNullOrEmpty(announcement);
         }
+
+        // Most-recent section lists captured by the detail builders, consumed by the section stepper
+        // (PageUp/PageDown). Captured as a side effect of the normal full-read build so the stepper
+        // and the spoken page never disagree about what's on screen.
+        private static List<string> _lastDateADexDetailSections;
+        private static List<string> _lastRoomersDetailSections;
 
         private static string GetActiveDateADexText(TMP_Text textComponent)
         {
@@ -7692,8 +7813,13 @@ namespace DateEverythingAccess
                 }
             }
 
+            // Each stat block is one section for the PageUp/PageDown stepper.
+            _lastSpecsSections = parts.Count > 0 ? new List<string>(parts) : null;
             return hasActiveBlock ? JoinAnnouncementParts(parts) : null;
         }
+
+        // Most-recent SPECS section list (one per stat/glossary block), for the section stepper.
+        private static List<string> _lastSpecsSections;
 
         private static string BuildSpecsGlossaryAnnouncement()
         {
@@ -7713,6 +7839,7 @@ namespace DateEverythingAccess
                 }
             }
 
+            _lastSpecsSections = parts.Count > 0 ? new List<string>(parts) : null;
             return hasActiveBlock ? JoinAnnouncementParts(parts) : null;
         }
 

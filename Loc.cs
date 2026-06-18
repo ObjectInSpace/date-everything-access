@@ -266,6 +266,7 @@ namespace DateEverythingAccess
             // Doors-only announcements.
             Add("navigation_object_picker_filter_doors_on", "nur Tueren", "doors only");
             Add("navigation_object_picker_filter_doors_off", "alle Objekte", "all objects");
+            Add("section_stepper_item", "{0} von {1}. {2}", "{0} of {1}. {2}");
             Add("room_scan_title", "Raum: {0}", "Room: {0}");
             Add("room_scan_empty", "Raum: {0}. Keine verfolgbaren Objekte in diesem Raum.", "Room: {0}. No trackable objects in this room.");
             Add("room_scan_unavailable", "Raumbericht ist gerade nicht verfuegbar.", "Room report is not available right now.");
