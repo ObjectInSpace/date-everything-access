@@ -27,6 +27,11 @@ namespace DateEverythingAccess
         private static readonly System.Collections.Generic.List<SimpleNavWaypoint> _semanticWaypoints =
             new System.Collections.Generic.List<SimpleNavWaypoint>(8);
         private static int _waypointIndex;
+        // Player XZ position recorded at the last waypoint transition (advance or regress). Manual-nav
+        // regression is suppressed until the player moves RegressHysteresisM away from this point, so
+        // standing on a waypoint boundary can't ping-pong advance↔regress every frame. Reset on
+        // BeginRoute. NaN sentinel = no transition recorded yet (regression allowed once eligible).
+        private static Vector3 _lastTransitionPlayerPos = new Vector3(float.NaN, 0f, float.NaN);
 
         // O5 route-driven mode (object-first navigation). When non-null, the bridge is driving
         // an object-route polyline. _activeDoor is updated per segment from the route's door tags.
@@ -52,6 +57,11 @@ namespace DateEverythingAccess
         private const float DoorWaypointArrivalRadius = 2.2f;
         private const float DoorOpeningArrivalRadius = 0.9f;
         private const float WorldTargetArrivalRadius = 0.45f;
+        // Manual-nav regression hysteresis (metres): the player must be at least this much closer to
+        // the previous waypoint than the current one before the active leg regresses. Larger than the
+        // advance arrival radius (1.35m) so advancing and regressing can never co-trigger — kills the
+        // standing-on-a-waypoint ping-pong. See TryRegressWaypoint.
+        private const float RegressHysteresisM = 1.5f;
 
         // Telemetry recorded per active route. Used by RecordFrameProgress so failures can be
         // diagnosed without log scraping.
@@ -63,6 +73,24 @@ namespace DateEverythingAccess
         /// <see cref="TryAdvanceWaypoint"/> call.
         /// </summary>
         public static Vector3 LastResolvedTarget => _activeTarget;
+
+        /// <summary>Active waypoint index and total, for diagnostics (e.g. spotting a single-leg route
+        /// where no advance/landmark cue can ever fire). Format "index/lastIndex".</summary>
+        public static string WaypointProgressDebug =>
+            _activeTargetValid ? (_waypointIndex + "/" + (_waypoints.Count - 1)) : "<none>";
+
+        /// <summary>Count of LANDMARK waypoints (non-Navigation: doors, stairs, target) on the active
+        /// route, for diagnostics — a route with only the Target landmark has no intermediate cue.</summary>
+        public static int LandmarkCountDebug
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < _semanticWaypoints.Count; i++)
+                    if (_semanticWaypoints[i].Kind != SimpleNavWaypointKind.Navigation) n++;
+                return n;
+            }
+        }
 
         /// <summary>The planner's final waypoint (the goal stand-cell chosen for its clear line to
         /// the target), or Vector3.zero if no route is active. The close-range settle uses it so the
@@ -238,6 +266,9 @@ namespace DateEverythingAccess
             _waypointIndex = route.Waypoints.Count > 1 ? 1 : 0;
             _activeTarget = _waypoints[_waypointIndex];
             _activeTargetValid = true;
+            // Fresh route: no transition recorded yet, so regression is allowed as soon as it's
+            // otherwise eligible (NaN sentinel = "no last-transition gate").
+            _lastTransitionPlayerPos = new Vector3(float.NaN, 0f, float.NaN);
             ResolveActiveDoorForSegment(_activeRouteSegment);
             if (Main.Log != null)
                 Main.Log.LogInfo("SimpleNavBridge.BeginRoute target=" + (route.TargetName ?? "<null>") +
@@ -326,6 +357,42 @@ namespace DateEverythingAccess
                     return null;
                 return _semanticWaypoints[_waypointIndex];
             }
+        }
+
+        // Walk-distance (metres, along the polyline) from the player to the NEXT LANDMARK — the next
+        // door / stair-landing / target waypoint, skipping plain Navigation corners. This is the
+        // mid-tier "how far to the next meaningful place" the audio volume cue uses: bounded by
+        // construction (a landmark is rarely more than a room away), so the swell stays meaningful on
+        // both a 3 m hop and a 30 m cross-house route, unlike whole-route distance. Returns the path
+        // distance (player→current waypoint, then segment-by-segment to the landmark), or -1 if none.
+        public static float DistanceToNextLandmark(Vector3 playerPos)
+        {
+            if (!_activeTargetValid || _semanticWaypoints.Count == 0 ||
+                _waypointIndex < 0 || _waypointIndex >= _semanticWaypoints.Count)
+            {
+                return -1f;
+            }
+
+            // Start with the leg the player is currently on (XZ; matches the follower's basis).
+            Vector3 prev = playerPos;
+            float total = 0f;
+            for (int i = _waypointIndex; i < _semanticWaypoints.Count; i++)
+            {
+                Vector3 wp = _semanticWaypoints[i].Position;
+                float dx = wp.x - prev.x, dz = wp.z - prev.z;
+                total += Mathf.Sqrt(dx * dx + dz * dz);
+                prev = wp;
+
+                // The current waypoint itself can be a landmark (e.g. we just advanced onto a door
+                // approach); the FIRST landmark at-or-ahead bounds the distance. A door's triple
+                // (approach/opening/exit) collapses because we stop at the first of them.
+                if (_semanticWaypoints[i].Kind != SimpleNavWaypointKind.Navigation)
+                    return total;
+            }
+
+            // No landmark ahead (shouldn't happen — the final waypoint is Target) — fall back to the
+            // full remaining path distance so the caller still gets a usable value.
+            return total;
         }
 
         // Fallback radius used when the door has no InteractableObj component (or we can't read
@@ -760,6 +827,9 @@ namespace DateEverythingAccess
             }
             _waypointIndex++;
             _activeTarget = _waypoints[_waypointIndex];
+            // Record where this transition happened so manual-nav regression can't immediately undo it
+            // until the player physically moves away (see TryRegressWaypoint / _lastTransitionPlayerPos).
+            _lastTransitionPlayerPos = playerPos;
             if (_activeRoute != null)
             {
                 // Segment index = (waypointIndex - 1) since segment N spans waypoints N→N+1.
@@ -774,6 +844,68 @@ namespace DateEverythingAccess
                     " kind=" + (ActiveWaypoint != null ? ActiveWaypoint.Kind.ToString() : "<none>") +
                     (_activeRoute != null ? (" segment=" + _activeRouteSegment +
                         " door=" + (_activeDoor != null && _activeDoor.gameObject != null ? _activeDoor.gameObject.name : "<none>")) : ""));
+            return true;
+        }
+
+        // Mirror of TryAdvanceWaypoint for MANUAL navigation only (the player drives, so they can walk
+        // BACK along the route). The advance path is deliberately monotonic for autowalk — autowalk
+        // never reverses — so regression lives in its own method that only the manual-nav tick calls.
+        //
+        // Hysteresis is MOVEMENT-GATED, not geometry-gated. Earlier geometry attempts (shared arrival
+        // radius; "closer to prev than cur by a margin") all ping-ponged because advance and regress
+        // gate on DIFFERENT waypoints (cur vs prev) that SHIFT when either fires — so right after a
+        // transition the opposite one is satisfiable from the very same spot, and standing on a
+        // boundary oscillates every frame. The robust fix keys off the ONE thing that's actually
+        // stable when standing still: the player hasn't MOVED. We record the player position at each
+        // transition (_lastTransitionPlayerPos) and refuse to regress until they've physically moved
+        // RegressHysteresisM away from it. Standing still ⇒ zero movement ⇒ no transition, ever.
+        public static bool TryRegressWaypoint(Vector3 playerPos)
+        {
+            if (!_activeTargetValid || _waypoints.Count == 0) return false;
+            if (_waypointIndex <= 1) return false;
+
+            // Must have moved clear of the last transition point before any opposite transition fires.
+            if (!float.IsNaN(_lastTransitionPlayerPos.x))
+            {
+                float mdx = playerPos.x - _lastTransitionPlayerPos.x;
+                float mdz = playerPos.z - _lastTransitionPlayerPos.z;
+                if (mdx * mdx + mdz * mdz < RegressHysteresisM * RegressHysteresisM)
+                    return false;
+            }
+
+            Vector3 prev = _waypoints[_waypointIndex - 1];
+            Vector3 cur = _waypoints[_waypointIndex];
+
+            float pdx = prev.x - playerPos.x;
+            float pdz = prev.z - playerPos.z;
+            float distToPrev = pdx * pdx + pdz * pdz;
+
+            float cdx = cur.x - playerPos.x;
+            float cdz = cur.z - playerPos.z;
+            float distToCur = cdx * cdx + cdz * cdz;
+
+            // And must genuinely be retreating: closer to the previous waypoint than to the current.
+            if (distToPrev >= distToCur)
+                return false;
+
+            // Y gate, same as advance: don't regress across a level change (mid-stairs) on XZ alone.
+            if (Mathf.Abs(prev.y - playerPos.y) > WaypointArrivalMaxYDeltaM)
+                return false;
+
+            _waypointIndex--;
+            _activeTarget = _waypoints[_waypointIndex];
+            _lastTransitionPlayerPos = playerPos;
+            if (_activeRoute != null)
+            {
+                _activeRouteSegment = _waypointIndex - 1;
+                if (_activeRouteSegment < 0)
+                    _activeRouteSegment = 0;
+                ResolveActiveDoorForSegment(_activeRouteSegment);
+            }
+            if (Main.Log != null)
+                Main.Log.LogInfo("SimpleNavBridge regress step=" + (_activeStepKey ?? "<null>") +
+                    " waypoint=" + _waypointIndex + "/" + (_waypoints.Count - 1) +
+                    " kind=" + (ActiveWaypoint != null ? ActiveWaypoint.Kind.ToString() : "<none>"));
             return true;
         }
 

@@ -1307,8 +1307,23 @@ namespace DateEverythingAccess
             {
                 Vector3 playerPos = BetterPlayerControl.Instance.transform.position;
                 Vector3 waypoint = SimpleNavBridge.LastResolvedTarget;
+                // Manual navigation (not autowalk): the player drives, so the active leg can move
+                // FORWARD as they reach a waypoint or BACKWARD if they retreat along the route. Mark
+                // each transition with its own blip — forward (rising) = closer to goal, reverse
+                // (falling) = backtracked — so a moving pan/volume reads as a known leg change rather
+                // than ambiguous progress. Advance is tried first; regression only when not advancing
+                // (they share a boundary, so at most one fires). Autowalk keeps the monotonic advance
+                // path and never calls regress.
                 if (SimpleNavBridge.TryAdvanceWaypoint(playerPos))
+                {
                     waypoint = SimpleNavBridge.LastResolvedTarget;
+                    ObjectTracker.NotifyWaypointAdvanced();
+                }
+                else if (SimpleNavBridge.TryRegressWaypoint(playerPos))
+                {
+                    waypoint = SimpleNavBridge.LastResolvedTarget;
+                    ObjectTracker.NotifyWaypointRegressed();
+                }
                 ObjectTracker.StartTracking(waypoint, requiresInteraction: false);
             }
         }
