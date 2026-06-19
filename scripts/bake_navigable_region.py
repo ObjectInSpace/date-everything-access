@@ -1178,7 +1178,7 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             # then walks full-speed into it (confirmed in-game: bedroom jam, player driving +Z
             # into SM_Walls_Bedroom 0.45m ahead, velocity 0). See
             # [[project-navigation-doorway-capsule-clearance-2026-06-18]].
-            if dilated[jx][jz] and not blocked_bm[jx][jz]:
+            if dilated[jx][jz]:
                 dilated[jx][jz] = False
                 door_carves += 1
 
@@ -1230,7 +1230,7 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             for jz in range(max(0, bz0), min(nz, bz1 + 1)):
                 # As in the door-position carve: clear only the dilation halo, never a raw blocker
                 # cell (un-blocking a wall makes solid wall navigable).
-                if dilated[jx][jz] and not post_halo[jx][jz] and not blocked_bm[jx][jz]:
+                if dilated[jx][jz] and not post_halo[jx][jz]:
                     dilated[jx][jz] = False
                     door_carves += 1
 
@@ -1845,6 +1845,25 @@ def _verify_bake_invariants(report, mesh_colliders):
     # reachable from the main component (a stair edge that lands in a stranded pocket
     # would pass 7a but still leave a floor unroutable).
     if len(stair_floor_set) > 1:
+        # Doors-OPEN navigable set per floor: static 'N' plus every unlocked door's freed/threshold
+        # cells (and state-wall freed cells), since the in-game planner opens any non-locked door on
+        # the path. A room reachable only THROUGH a door must count as connected, or the connectivity
+        # checks below would false-positive on every closed-door room. Locked doors stay shut.
+        _freed_by_floor = {}
+        for lab, f in floors_by_label.items():
+            extra = set()
+            for door in f.get("doors", []):
+                if door.get("locked"):
+                    continue
+                for c in door.get("freed_cells", []) or []:
+                    extra.add((c[0], c[1]))
+                for c in door.get("threshold_cells_list", []) or []:
+                    extra.add((c[0], c[1]))
+            for wall in f.get("state_walls", []):
+                for c in wall.get("freed_cells", []) or []:
+                    extra.add((c[0], c[1]))
+            _freed_by_floor[lab] = extra
+
         def _nav(label, ix, iz):
             f = floors_by_label.get(label)
             if f is None:
@@ -1852,7 +1871,9 @@ def _verify_bake_invariants(report, mesh_colliders):
             fr = f["frame"]
             if not (0 <= ix < fr["nx"] and 0 <= iz < fr["nz"]):
                 return False
-            return f["bitmap_rows"][ix][iz] == 'N'
+            if f["bitmap_rows"][ix][iz] == 'N':
+                return True
+            return (ix, iz) in _freed_by_floor.get(label, ())
 
         bridges = {}
         for edge in stair_edges:
@@ -1888,7 +1909,7 @@ def _verify_bake_invariants(report, mesh_colliders):
                         seen.add(nb)
                         reached.add(nb[0])
                         q.append(nb)
-            return reached
+            return reached, seen
 
         # Seed from the LARGEST component of a stair-joined floor — NOT the first 'N'
         # cell, which can sit in a stranded pocket and under-report connectivity.
@@ -1919,7 +1940,7 @@ def _verify_bake_invariants(report, mesh_colliders):
                     best_size, best_seed = len(comp), (seed_label, ix, iz)
 
         if best_seed is not None:
-            reached_floors = _flood(best_seed)
+            reached_floors, reached_cells = _flood(best_seed)
             unreached = stair_floor_set - reached_floors
             if unreached:
                 errors.append(
@@ -1928,6 +1949,54 @@ def _verify_bake_invariants(report, mesh_colliders):
                     f"edge lands in a stranded pocket. Routes to those floors will "
                     f"return no_path. Check the stair landing cells in "
                     f"derive_inter_floor_edges."
+                )
+
+            # STRANDED-POCKET check. The floor-level check above only verifies the MAIN component
+            # reaches the other floors — a navigable POCKET disconnected from the main component is
+            # invisible to it. That is the regression class where a bake change (e.g. an over-broad
+            # carve guard re-sealing a doorway) walls off part of a floor: routes that START in the
+            # pocket get no_path even though the floors are "connected" overall. The scene HAS some
+            # expected-isolated regions (exterior perimeter strips, locked-content rooms), so a hard
+            # error would false-fail the baseline. Instead WARN with the largest pockets and the
+            # total stranded-cell count: a regression shows up as a big jump in stranded cells / a
+            # large NEW pocket against this baseline. See
+            # [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+            STRANDED_POCKET_MIN_CELLS = 200
+            pocket_report = []
+            total_stranded = 0
+            for lab in stair_floor_set:
+                rows = floors_by_label[lab]["bitmap_rows"]
+                lnx = floors_by_label[lab]["frame"]["nx"]
+                lnz = floors_by_label[lab]["frame"]["nz"]
+                seen_pockets = set()
+                for ix in range(lnx):
+                    row = rows[ix]
+                    for iz in range(lnz):
+                        if row[iz] != 'N' or (lab, ix, iz) in reached_cells or (ix, iz) in seen_pockets:
+                            continue
+                        pocket = {(ix, iz)}
+                        dq = deque([(ix, iz)])
+                        while dq:
+                            cx, cz = dq.popleft()
+                            for dx in (-1, 0, 1):
+                                for dz in (-1, 0, 1):
+                                    nc = (cx + dx, cz + dz)
+                                    if (dx or dz) and nc not in pocket and _nav(lab, cx + dx, cz + dz):
+                                        pocket.add(nc)
+                                        dq.append(nc)
+                        seen_pockets |= pocket
+                        if len(pocket) >= STRANDED_POCKET_MIN_CELLS:
+                            total_stranded += len(pocket)
+                            pocket_report.append((len(pocket), lab, (ix, iz)))
+            if pocket_report:
+                pocket_report.sort(reverse=True)
+                top = "; ".join(f"{lab} {n} cells @{cell}" for n, lab, cell in pocket_report[:5])
+                warnings.append(
+                    f"stranded navigable pockets (doors-open) disconnected from the main "
+                    f"stairs-joined component: {len(pocket_report)} pocket(s), {total_stranded} "
+                    f"cells total. Largest: {top}. Routes STARTING in a pocket return no_path. "
+                    f"Baseline has a few expected-isolated regions (exterior strips, locked rooms); "
+                    f"a sudden jump here means a carve/dilation change walled off a doorway."
                 )
 
     return errors, warnings
