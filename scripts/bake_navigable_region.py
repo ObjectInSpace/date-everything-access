@@ -709,25 +709,6 @@ def _is_structural_mesh(record):
     return any(marker in text for marker in structural_markers)
 
 
-# Open-archway carve. Doorframe meshes (SM_Doorframe_*, Door_frame_*) are thin
-# walls with an opening, rasterized from their per-cell columns like any other
-# mesh. But the frame's footprint is a CLOSED loop — its threshold/sill
-# and lintel cross-pieces span the opening width and
-# seal the doorway line at floor level, so a narrow archway (e.g.
-# SM_Doorframe_Small_13, 1.23m throat) gets walled off, isolating whole rooms.
-#
-# Real doors are repaired by the door-position carve (Doors_* interactables) or
-# the per-door freed-cells state machine (panel-based door_records). But ~18
-# frames in this scene are open archways with NO associated door, so nothing
-# opens them. For those, carve the frame's footprint bbox clear of dilation
-# (bounded to the bbox + a small margin so it can't leak past the jambs) in the
-# door-carve pass below. See [[project-navigation-upper-hall2-archway-seal]],
-# [[project-navigation-bake-doorframe-gap-outcome]].
-def _is_doorframe(record):
-    text = f"{record.get('Name', '')} {record.get('GameObjectName', '')} {record.get('Path', '')}".lower()
-    return "doorframe" in text or "door_frame" in text
-
-
 # Floor / ceiling slabs (SM_Floor_*, SM_Ceiling_*). These are the storey-cap
 # meshes: a thin horizontal slab spanning a whole room. You WALK ON floors and
 # never collide with a ceiling as a navigation obstacle, so neither belongs in
@@ -1020,52 +1001,6 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
     # triangle-slice segments contributes its actual surface traces, regardless
     # of whether it is a wall, fireplace, table, counter, bookshelf, etc.
     # Dilation below expands those traces by the player capsule radius.
-    # Anchors for the "is this archway carved by a door?" test. A doorframe
-    # within DOOR_COMPONENT_CARVE_RADIUS of any door anchor is a REAL door's
-    # frame — its passability is governed by the door-position carve (for
-    # Doors_* interactables) or the per-door freed-cells state machine (for
-    # panel-based door_records like AtticDoor_11, BackDoorPivot, the front
-    # door). Those frames must NOT be archway-carved: doing so would force the
-    # doorway permanently open and bypass locked/closed-door state. Frames with
-    # no nearby door anchor are genuine open archways and get carved.
-    #
-    # Both anchor sources matter: `doors` covers Doors_*-named carve anchors;
-    # door_records covers panel-based doors whose names don't start with Doors_
-    # (e.g. AtticDoor_11 frames SM_Doorframe_Small_12 — a LOCKED attic door
-    # that must stay shut). Missing door_records here wrongly opened it.
-    door_anchor_xz = [
-        (d["x"], d["z"]) for d in doors
-        if abs(d.get("y", fy) - fy) <= 2.0
-    ]
-    for dr in door_records:
-        wp = dr.get("WorldPosition") or {}
-        ax = wp.get("x")
-        az = wp.get("z")
-        ay = wp.get("y")
-        if ax is None or az is None:
-            continue
-        if ay is not None and abs(ay - fy) > 2.0:
-            continue
-        door_anchor_xz.append((ax, az))
-
-    def _frame_has_door(record):
-        c = record.get("Footprint", {}).get("Center") or {}
-        cx = c.get("x")
-        cz = c.get("z")
-        if cx is None or cz is None:
-            return False
-        return any(
-            math.hypot(cx - ax, cz - az) <= DOOR_COMPONENT_CARVE_RADIUS
-            for ax, az in door_anchor_xz
-        )
-
-    # Open-archway carve anchors. Doorframes with no associated door
-    # (open archways) get a clearance disc carved at the frame center, exactly
-    # like a real door — the door-carve below is proven to punch through a
-    # doorway's asymmetric segment stubs + dilation. Collected here, applied in
-    # the door-carve pass. See [[project-navigation-upper-hall2-archway-seal]].
-    archway_carves = []
-
     for m in mesh_colliders:
         if not _is_solid_blocker(m):
             continue
@@ -1086,13 +1021,12 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         # (interior untouched, like the old segments), while a solid object's
         # top-surface triangles paint every interior cell, so the interior fills
         # itself with no hull/flood-fill heuristic.
-        if _is_doorframe(m) and not _frame_has_door(m):
-            bb = m.get("Bounds2D")
-            if bb:
-                # Keep the frame's own in-band columns alongside its bbox so the
-                # archway carve can rebuild the jamb-post halo and open only the
-                # threshold gap between the posts.
-                archway_carves.append((bb, columns))
+        #
+        # Doorframes (with or without an associated door) contribute their jamb
+        # posts here like any other mesh. There is no special archway carve: an
+        # open archway is the gap between two post columns, handled by ordinary
+        # dilation/clearance. A real door's passability is governed by the
+        # per-door freed_cells/open_blocked_cells state machine.
         marked = _rasterize_columns_into(
             blocked_bm, columns, floor_y_bm, band_top_y,
             minx, minz, nx, nz, CELL, COL_CELL,
@@ -1108,29 +1042,15 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
     # must contribute to the blocked bitmap — otherwise the doorway is always
     # passable in the bake and "freed when open" is meaningless. Container doors
     # (fridge/cupboard) live entirely at chest height; their columns block the
-    # floor band correctly where fixed-Y slice planes missed them.
-    # Closed door-panel cells, kept as their own mask. These cells (and their
-    # capsule-clearance halo) are governed ENTIRELY by the per-door state machine:
-    # blocked while the door is closed, freed via freed_cells when it opens. The
-    # carves below must never touch them. The old carves cleared dilation here
-    # unconditionally, which (a) made a closed panel's clearance navigable and
-    # (b) over-reached onto the adjacent wall — the bedroom "wall-clip". Build the
-    # raw panel mask, then dilate it so the carve also leaves the closed panel's
-    # clearance halo intact. See
-    # [[project-navigation-doorway-capsule-clearance-2026-06-18]].
-    panel_closed_raw_all = [[False] * nz for _ in range(nx)]
+    # floor band correctly where fixed-Y slice planes missed them. These cells
+    # (and their dilation halo) are governed end-to-end by the per-door state
+    # machine: blocked while closed, freed via freed_cells when the door opens.
     for door_rec in door_records:
         for panel in door_rec.get("Panels", []):
-            cols = panel.get("ColumnsClosed") or []
             _rasterize_columns_into(
-                blocked_bm, cols,
+                blocked_bm, panel.get("ColumnsClosed") or [],
                 floor_y_bm, band_top_y, minx, minz, nx, nz, CELL, COL_CELL,
             )
-            _rasterize_columns_into(
-                panel_closed_raw_all, cols,
-                floor_y_bm, band_top_y, minx, minz, nx, nz, CELL, COL_CELL,
-            )
-    panel_closed_mask = _dilate_disc(panel_closed_raw_all, nx, nz, DILATE_CELLS)
 
     for b in blockers:
         if not _is_solid_blocker(b): continue
@@ -1178,101 +1098,20 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
     else:
         dilated = blocked_bm
 
-    # Door-position carve: undo dilation in a disc around each door on this
-    # floor. Several wall meshes cut doorways on only one face; dilation
-    # re-seals them.
-    #
-    # Doors that have per-door freed-cells exported (Panels[] with
-    # SegmentsClosed/OpenSegmentSets) are skipped here -- their closed-pose
-    # panel mesh is now a blocker, and consumers apply freed-cells when the
-    # door opens. The carve still runs for doors WITHOUT per-door data
-    # (older datable Doors_* interactables that lack a DoorComponent and
-    # therefore have no panel mesh association in the exporter).
-    doors_with_panel_data = set()
-    for door_rec in door_records:
-        name = door_rec.get("Name")
-        if name and door_rec.get("Panels"):
-            doors_with_panel_data.add(name)
-
+    # No dilation carves. Doorway passability is governed entirely by the per-door
+    # freed_cells/open_blocked_cells state machine (below); open archways are just
+    # the gap between two jamb-post columns. The former door-position carve (a disc
+    # of un-dilation around each Doors_* interactable) and open-archway carve (the
+    # door-less doorframe bbox un-dilation) were heuristic compensations for two
+    # things now fixed at the source: floor/ceiling slab phantoms (no longer
+    # rasterized as blockers) and closed door panels (owned by the door state
+    # machine). With those gone the carves are unnecessary — removing both keeps
+    # the inter-floor stair edge, holds the stranded-pocket baseline, and routes
+    # all cross-floor/same-floor CLI cases. The carves also un-blocked raw wall
+    # cells, which caused the bedroom wall-clip. Reported as door_carves=0 for
+    # downstream compatibility. See
+    # [[project-navigation-doorway-capsule-clearance-2026-06-18]].
     door_carves = 0
-    for d in doors:
-        if d.get("name") in doors_with_panel_data:
-            continue
-        dy = d["y"]
-        if abs(dy - fy) > 2.0: continue  # different floor
-        dx_w, dz_w = d["x"], d["z"]
-        ix = int((dx_w - minx) / CELL)
-        iz = int((dz_w - minz) / CELL)
-        radius = d.get("radius", DOOR_CARVE_RADIUS)
-        cr = int(math.ceil(radius / CELL))
-        carve_offsets = [(dx, dz) for dx in range(-cr, cr+1) for dz in range(-cr, cr+1)
-                         if dx*dx + dz*dz <= cr*cr]
-        for dx, dz in carve_offsets:
-            jx = ix + dx; jz = iz + dz
-            if jx < 0 or jx >= nx or jz < 0 or jz >= nz: continue
-            # Only clear DILATION (the capsule-clearance halo around walls), never a RAW blocker
-            # cell. A carve that un-blocks a wall cell makes solid wall navigable — the follower
-            # then walks full-speed into it (confirmed in-game: bedroom jam, player driving +Z
-            # into SM_Walls_Bedroom 0.45m ahead, velocity 0). See
-            # [[project-navigation-doorway-capsule-clearance-2026-06-18]].
-            # Never clear a closed door-panel cell or its halo: those are owned by
-            # the door's freed_cells/open_blocked_cells state machine.
-            if dilated[jx][jz] and not panel_closed_mask[jx][jz]:
-                dilated[jx][jz] = False
-                door_carves += 1
-
-    # Open-archway carve: for doorframes with no associated door, undo dilation
-    # across the doorway throat so the passage opens. Masked to the frame's own
-    # XZ bounding box (plus a margin) so the carve cannot leak far from the
-    # frame. Like the door-carve, only dilated cells are cleared and the final
-    # `walkable AND NOT dilated` keeps non-floor cells blocked.
-    #
-    # Margin is floor-aware. Ground frames use a tight 0.5m margin: ground
-    # rooms are densely packed and a wide carve over-widens many doorways at
-    # once (merging components that should stay doorway-gated). The upper floor
-    # uses 1.2m to bridge the stair-newel dilation pinch that seals the stair
-    # landing from the upstairs archway corridor — the newel post + jamb
-    # dilation close a ~1m doorway about one capsule-width past the
-    # SM_Doorframe_Small_13 frame, and a 0.5m box stops just short of it. The
-    # upper floor is safe to carve wider because the per-cell column raster no
-    # longer paints phantom ground-wall lips on the upper floor for a wide carve
-    # to graze (a ground wall's top only blocks the upper floor where it genuinely
-    # rises >0.30m above the 12.84 surface — the step-over rule in
-    # _column_blocks_floor — so there is nothing spurious near the carve).
-    # See [[project-navigation-upper-hall2-archway-seal]],
-    # [[project-navigation-bake-percell-vertical-span]].
-    # POST-CLEARANCE GUARD: a doorframe is not a clean hole — it has solid jamb
-    # POSTS. The carve must open the threshold GAP between the posts but must NOT
-    # remove the capsule-clearance dilation hugging the posts, or the planner
-    # routes the player flush against a post and the runtime collider stops them
-    # (e.g. SM_Doorframe_Small_7's east post: bake said navigable, player walked
-    # into it and stalled). For each frame, re-rasterize its own columns and
-    # dilate by the capsule radius; that post-halo is preserved (never cleared),
-    # while the threshold gap — which is >1 capsule-width from either post — is
-    # opened. See [[project-navigation-executor-corner-stall]].
-    ARCHWAY_CARVE_MARGIN_M = 1.2 if fy > 6.0 else 0.5
-    mgn = ARCHWAY_CARVE_MARGIN_M
-    for bb, columns in archway_carves:
-        bx0 = int((bb["MinX"] - mgn - minx) / CELL)
-        bx1 = int((bb["MaxX"] + mgn - minx) / CELL)
-        bz0 = int((bb["MinZ"] - mgn - minz) / CELL)
-        bz1 = int((bb["MaxZ"] + mgn - minz) / CELL)
-
-        # Build the frame's own post-halo (raw post cells dilated by capsule R)
-        # from the frame's in-band columns — same cells that blocked above.
-        post_raw = [[False] * nz for _ in range(nx)]
-        _rasterize_columns_into(post_raw, columns, floor_y_bm, band_top_y,
-                                minx, minz, nx, nz, CELL, COL_CELL)
-        post_halo = _dilate_disc(post_raw, nx, nz, DILATE_CELLS)
-
-        for jx in range(max(0, bx0), min(nx, bx1 + 1)):
-            for jz in range(max(0, bz0), min(nz, bz1 + 1)):
-                # As in the door-position carve: clear only the dilation halo, never a raw blocker
-                # cell (un-blocking a wall makes solid wall navigable), and never a closed
-                # door-panel cell or its halo (owned by the door state machine).
-                if dilated[jx][jz] and not post_halo[jx][jz] and not panel_closed_mask[jx][jz]:
-                    dilated[jx][jz] = False
-                    door_carves += 1
 
     # Navigable = walkable AND NOT dilated
     navigable_bm = [[walkable_bm[ix][iz] and not dilated[ix][iz]
