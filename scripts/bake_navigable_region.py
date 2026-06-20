@@ -728,6 +728,21 @@ def _is_doorframe(record):
     return "doorframe" in text or "door_frame" in text
 
 
+# Floor / ceiling slabs (SM_Floor_*, SM_Ceiling_*). These are the storey-cap
+# meshes: a thin horizontal slab spanning a whole room. You WALK ON floors and
+# never collide with a ceiling as a navigation obstacle, so neither belongs in
+# the navigation blocker grid — they only ever appear there as phantom blockers
+# where a slab's boundary triangles rasterize at room edges (the very phantoms
+# the door/archway carves were compensating for). Walkability comes from the
+# separate WalkableSurfaces pipeline, where these same meshes legitimately act
+# as the walkable floor (e.g. SM_Ceiling_Hall doubles as the upstairs hall
+# floor). Excluding them from blocked_bm therefore loses nothing and removes the
+# phantoms. See [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+def _is_floor_or_ceiling_slab(record):
+    text = f"{record.get('Name', '')} {record.get('GameObjectName', '')} {record.get('Path', '')}".lower()
+    return "sm_floor" in text or "sm_ceiling" in text
+
+
 def _is_solid_blocker(record):
     if record.get("IsTrigger"):
         return False
@@ -1053,6 +1068,12 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
 
     for m in mesh_colliders:
         if not _is_solid_blocker(m):
+            continue
+        # Floor / ceiling slabs are never navigation obstacles (you walk on
+        # floors; ceilings are above you). Their only contribution to blocked_bm
+        # was phantom boundary blockers at room edges. Skip them here; their
+        # walkable role is handled by the WalkableSurfaces pipeline.
+        if _is_floor_or_ceiling_slab(m):
             continue
         if m["TopY"] < y_lo or m["BottomY"] > y_hi:
             continue
