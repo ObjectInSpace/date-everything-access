@@ -1203,6 +1203,23 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
                 for iz in range(max(0, cz - cr), min(nz, cz + cr + 1)):
                     if panel_closed_dil[ix][iz]:
                         seeds.append((ix, iz))
+            # Also seed from the door ANCHOR's own cell (and its walkable
+            # neighbours). A sliding CLOSET with two co-located panels that just
+            # trade places — Gym/Bedroom closet inner doors — has its inner
+            # panel's closed-dilation sitting OFF the doorway opening, so the
+            # panel-only seeds above never reach the throat and the inner doorway
+            # bakes pinched (96/107 sweep freezes wedged at Doors_Gym_ClosetInner).
+            # The anchor sits IN the opening by construction. Seeds still have to
+            # satisfy the same spread predicate (walkable, not a foreign raw
+            # blocker), so adding them can only EXTEND the flood through the same
+            # door's own opening — never past a wall — leaving every door the
+            # panel seeds already handled unchanged. See
+            # [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+            for sx, sz in ((cx, cz), (cx + 1, cz), (cx - 1, cz),
+                           (cx, cz + 1), (cx, cz - 1)):
+                if 0 <= sx < nx and 0 <= sz < nz and walkable_bm[sx][sz] \
+                        and not (blocked_bm[sx][sz] and not panel_closed_raw[sx][sz]):
+                    seeds.append((sx, sz))
             if seeds:
                 reach = set(seeds)
                 queue = deque(seeds)
@@ -1355,6 +1372,12 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             "name": door_rec.get("Name"),
             "kind": door_rec.get("Kind"),
             "component_id": door_rec.get("ComponentId"),
+            # Passage (walked-through) vs container (opened-in-place). Carried into
+            # the report so post-bake invariants don't have to re-derive it from the
+            # name — the scene-path classifier (_is_container_door) is the authority,
+            # and a container that happened to free a few cells on the passage path
+            # must still be excluded from the doorway capsule-width check.
+            "is_passage": not is_container,
             "panel_count": len(door_rec.get("Panels", [])),
             "closed_cells": sum(sum(row) for row in panel_closed_dil),
             "open_cells": sum(sum(row) for row in panel_open_dil),
@@ -1877,6 +1900,107 @@ def _verify_bake_invariants(report, mesh_colliders):
                     f"Baseline has a few expected-isolated regions (exterior strips, locked rooms); "
                     f"a sudden jump here means a carve/dilation change walled off a doorway."
                 )
+
+    # 8. DOORWAY CAPSULE-WIDTH CLEARANCE. Every PASSAGE door must open a throat the
+    # follower's capsule can actually thread. The planner's A* threads single cells,
+    # but the follower drives a 0.4m-radius capsule whose CENTRE can only occupy cells
+    # that are navigable along with their whole capsule-radius neighbourhood. A door
+    # whose open throat is a single-file diagonal (navigable cells but no cell with a
+    # full capsule-radius clear disc) lets A* plan a route the follower then FREEZES
+    # on at the doorway — the dominant real sweep failure (freeze-at-launch, wedged at
+    # Doors_Gym_ClosetInner). Nothing asserted this, which is why the carve-removal
+    # commits pinched closet throats undetected.
+    #
+    # Test: erode the doors-open navigable set (static 'N' + this door's freed +
+    # threshold − open_blocked) by the capsule radius; the throat is traversable iff
+    # ≥1 throat cell survives erosion (admits the capsule centre).
+    #
+    # WARNING, not error, and only for PASSAGE doors: a CONTAINER door is opened in
+    # place, never threaded. A closet whose INTERIOR is itself un-navigable (too small
+    # for the capsule — reached by interaction-LOS from the doorway, never entered) is
+    # NOT a bake defect; its door correctly yields 0 traversable cells. We can't tell
+    # those apart from a genuine pinch in the bake alone, so we surface the count the
+    # same way as the stranded-pocket check: a JUMP against baseline flags a
+    # regression. Baseline: Doors_Office_Closet + Doors_Bedroom_ClosetRight_Inner
+    # (tiny closet interiors). See [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+    erode_r = DILATE_CELLS
+    erode_disc = [(dx, dz) for dx in range(-erode_r, erode_r + 1)
+                  for dz in range(-erode_r, erode_r + 1)
+                  if dx * dx + dz * dz <= erode_r * erode_r]
+    pinched = []
+    for floor in report["floors"]:
+        if "error" in floor:
+            continue
+        label = floor["label"]
+        rows = floor["bitmap_rows"]
+        nx = floor["frame"]["nx"]
+        nz = floor["frame"]["nz"]
+        for door in floor.get("doors", []):
+            # Container doors (fridge/cupboard/iron-cupboard) are opened in place and
+            # never threaded — exclude them whether they were emitted operability-only
+            # or (because their panel diff happened to free a few cells) on the passage
+            # path. The scene-path classifier is the authority, same as the bake's own
+            # _is_container_door (passage doors live under /MultiRoom/Doors/).
+            if door.get("container_operable_only"):
+                continue
+            if not door.get("is_passage", True):
+                continue
+            if door.get("panel_count", 0) == 0:
+                continue
+            throat = [(c[0], c[1]) for c in (door.get("freed_cells") or [])]
+            throat += [(c[0], c[1]) for c in (door.get("threshold_cells_list") or [])]
+            if not throat:
+                # A passage door with panels but no freed/threshold throat at all is
+                # already caught by invariant 6 (0 freed_cells); don't double-report.
+                continue
+            open_nav = set()
+            xs = [c[0] for c in throat]
+            zs = [c[1] for c in throat]
+            pad = erode_r + 2
+            x0 = max(0, min(xs) - pad); x1 = min(nx, max(xs) + pad + 1)
+            z0 = max(0, min(zs) - pad); z1 = min(nz, max(zs) + pad + 1)
+            for ix in range(x0, x1):
+                for iz in range(z0, z1):
+                    if rows[ix][iz] == 'N':
+                        open_nav.add((ix, iz))
+            open_nav |= set(throat)
+            for c in (door.get("open_blocked_cells") or []):
+                open_nav.discard((c[0], c[1]))
+            # Capsule centre fits at a throat cell iff its whole erosion disc is
+            # navigable in the doors-open set.
+            def _fits(ix, iz):
+                for dx, dz in erode_disc:
+                    if (ix + dx, iz + dz) not in open_nav:
+                        return False
+                return True
+            if not any(_fits(ix, iz) for (ix, iz) in throat):
+                pinched.append(f"{label}/{door.get('name')!r}")
+    # Baseline = doors whose CLOSET INTERIOR is itself too small for the capsule, so 0
+    # traversable cells is correct (the item inside is reached by interaction-LOS from
+    # the doorway, never by entering). A door OUTSIDE this set with a pinched throat is a
+    # fresh regression and must fail the bake; a baseline door staying pinched only warns.
+    PINCHED_THROAT_BASELINE = {
+        "upper/'Doors_Bedroom_ClosetRight_Inner'",
+    }
+    new_pinched = [p for p in pinched if p not in PINCHED_THROAT_BASELINE]
+    if new_pinched:
+        errors.append(
+            f"doorway capsule-width: {len(new_pinched)} PASSAGE door(s) open a throat "
+            f"too narrow for the capsule centre (single-file — A* threads it, the follower "
+            f"freezes at the doorway): {sorted(new_pinched)}. A carve/dilation/door-throat "
+            f"change pinched the opening. Restore a capsule-diameter channel (the door's "
+            f"threshold BFS / anchor seed) or, if the interior is genuinely un-enterable, "
+            f"add it to PINCHED_THROAT_BASELINE with a justification."
+        )
+    expected_still_pinched = [p for p in pinched if p in PINCHED_THROAT_BASELINE]
+    if expected_still_pinched:
+        warnings.append(
+            f"doorway capsule-width: {len(expected_still_pinched)} baseline door(s) still "
+            f"have an un-threadable throat (closet interiors too small for the capsule — "
+            f"reached by interaction-LOS from the doorway, never entered): "
+            f"{sorted(expected_still_pinched)}. Expected; tracked so a planner goal-cell "
+            f"fix can clear them later."
+        )
 
     return errors, warnings
 

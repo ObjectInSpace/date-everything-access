@@ -13390,9 +13390,9 @@
     {
       "name": "Doors_Bedroom_ClosetRight_Inner",
       "position": [
-        -4.543,
+        -4.9756,
         12.8248,
-        -20.6038
+        -20.4767
       ],
       "floor": "upper",
       "object_ids": [
@@ -13450,9 +13450,9 @@
     {
       "name": "Doors_Gym_ClosetInner",
       "position": [
-        -4.56,
+        -5.2283,
         12.8248,
-        23.9323
+        24.2428
       ],
       "floor": "upper",
       "object_ids": [
@@ -20654,6 +20654,7 @@
           "name": "SM_Fridge_Door_1_MODEL_UPDATE",
           "kind": "Door",
           "component_id": 58975,
+          "is_passage": false,
           "panel_count": 1,
           "closed_cells": 76,
           "open_cells": 118,
@@ -22682,6 +22683,7 @@
           "name": "Cabinet_Bathroom1_Sink",
           "kind": "Door",
           "component_id": 59247,
+          "is_passage": false,
           "panel_count": 1,
           "closed_cells": 111,
           "open_cells": 222,
@@ -26782,6 +26784,7 @@
           "name": "SM_Kitchen_Cupboard_Door_9_MODEL_UPDATE",
           "kind": "Door",
           "component_id": 60988,
+          "is_passage": false,
           "panel_count": 1,
           "closed_cells": 112,
           "open_cells": 108,
@@ -28958,6 +28961,7 @@
           "name": "ShowerDoor",
           "kind": "Door",
           "component_id": 61722,
+          "is_passage": false,
           "panel_count": 1,
           "closed_cells": 120,
           "open_cells": 159,
@@ -31346,6 +31350,7 @@
           "name": "SM_IronCupboard_Door_MODEL_UPDATE",
           "kind": "Door",
           "component_id": 62376,
+          "is_passage": false,
           "panel_count": 1,
           "closed_cells": 63,
           "open_cells": 118,
@@ -33061,6 +33066,7 @@
           "name": "Doors_Laundry_Closet",
           "kind": "Door",
           "component_id": 63891,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 161,
           "open_cells": 237,
@@ -35741,6 +35747,7 @@
           "name": "BackDoorPivot",
           "kind": "Door",
           "component_id": 64820,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 204,
           "open_cells": 48,
@@ -37471,6 +37478,7 @@
           "name": "SM_Kithcen_Cupboard_Door_12_MODEL_UPDATE",
           "kind": "Door",
           "component_id": 64882,
+          "is_passage": false,
           "panel_count": 1,
           "closed_cells": 116,
           "open_cells": 92,
@@ -39856,6 +39864,7 @@
           "name": "SM_Kithcen_Cupboard_Door_12_MODEL_UPDATE",
           "kind": "Door",
           "component_id": 65458,
+          "is_passage": false,
           "panel_count": 1,
           "closed_cells": 112,
           "open_cells": 95,
@@ -41904,6 +41913,7 @@
           "name": "SM_Kitchen_Cupboard_Door_9_MODEL_UPDATE",
           "kind": "Door",
           "component_id": 65948,
+          "is_passage": false,
           "panel_count": 1,
           "closed_cells": 106,
           "open_cells": 102,
@@ -43736,6 +43746,7 @@
           "name": "Doors_Office_Closet",
           "kind": "Door",
           "component_id": 66671,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 158,
           "open_cells": 249,
@@ -46204,6 +46215,7 @@
           "name": "Doors_Laundry",
           "kind": "Door",
           "component_id": 66672,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 174,
           "open_cells": 241,
@@ -49408,6 +49420,7 @@
           "name": "Doors_Bathroom1",
           "kind": "Door",
           "component_id": 66677,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 168,
           "open_cells": 174,
@@ -52160,6 +52173,7 @@
           "name": "Doors_Office",
           "kind": "Door",
           "component_id": 66678,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 176,
           "open_cells": 187,
@@ -56257,6 +56271,7 @@
           "name": "Doors_Gym_ClosetOuter",
           "kind": "SlidingDoor",
           "component_id": 59274,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 126,
           "open_cells": 126,
@@ -58716,6 +58731,7 @@
           "name": "Doors_Bedroom_ClosetRight_Outer",
           "kind": "SlidingDoor",
           "component_id": 60400,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 126,
           "open_cells": 132,
@@ -62280,6 +62296,7 @@
           "name": "AtticDoor_11_MODEL_UPDATE",
           "kind": "Door",
           "component_id": 62147,
+          "is_passage": true,
           "panel_count": 2,
           "closed_cells": 174,
           "open_cells": 230,
@@ -65152,12 +65169,302 @@
           "name": "Doors_Gym_ClosetInner",
           "kind": "SlidingDoor",
           "component_id": 63110,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 132,
           "open_cells": 126,
-          "threshold_cells": 0,
-          "threshold_cells_list": [],
+          "threshold_cells": 36,
+          "threshold_cells_list": [
+            [
+              136,
+              295
+            ],
+            [
+              136,
+              296
+            ],
+            [
+              137,
+              295
+            ],
+            [
+              137,
+              296
+            ],
+            [
+              138,
+              295
+            ],
+            [
+              138,
+              296
+            ],
+            [
+              138,
+              300
+            ],
+            [
+              139,
+              296
+            ],
+            [
+              139,
+              297
+            ],
+            [
+              139,
+              298
+            ],
+            [
+              139,
+              299
+            ],
+            [
+              139,
+              300
+            ],
+            [
+              140,
+              294
+            ],
+            [
+              140,
+              295
+            ],
+            [
+              140,
+              296
+            ],
+            [
+              140,
+              297
+            ],
+            [
+              140,
+              298
+            ],
+            [
+              140,
+              299
+            ],
+            [
+              140,
+              300
+            ],
+            [
+              140,
+              301
+            ],
+            [
+              141,
+              293
+            ],
+            [
+              141,
+              294
+            ],
+            [
+              141,
+              295
+            ],
+            [
+              141,
+              296
+            ],
+            [
+              141,
+              297
+            ],
+            [
+              141,
+              298
+            ],
+            [
+              141,
+              299
+            ],
+            [
+              141,
+              300
+            ],
+            [
+              141,
+              301
+            ],
+            [
+              142,
+              287
+            ],
+            [
+              142,
+              288
+            ],
+            [
+              142,
+              289
+            ],
+            [
+              142,
+              290
+            ],
+            [
+              142,
+              291
+            ],
+            [
+              142,
+              292
+            ],
+            [
+              142,
+              293
+            ]
+          ],
           "freed_cells": [
+            [
+              136,
+              295
+            ],
+            [
+              136,
+              296
+            ],
+            [
+              137,
+              295
+            ],
+            [
+              137,
+              296
+            ],
+            [
+              138,
+              295
+            ],
+            [
+              138,
+              296
+            ],
+            [
+              138,
+              300
+            ],
+            [
+              139,
+              296
+            ],
+            [
+              139,
+              297
+            ],
+            [
+              139,
+              298
+            ],
+            [
+              139,
+              299
+            ],
+            [
+              139,
+              300
+            ],
+            [
+              140,
+              294
+            ],
+            [
+              140,
+              295
+            ],
+            [
+              140,
+              296
+            ],
+            [
+              140,
+              297
+            ],
+            [
+              140,
+              298
+            ],
+            [
+              140,
+              299
+            ],
+            [
+              140,
+              300
+            ],
+            [
+              140,
+              301
+            ],
+            [
+              141,
+              293
+            ],
+            [
+              141,
+              294
+            ],
+            [
+              141,
+              295
+            ],
+            [
+              141,
+              296
+            ],
+            [
+              141,
+              297
+            ],
+            [
+              141,
+              298
+            ],
+            [
+              141,
+              299
+            ],
+            [
+              141,
+              300
+            ],
+            [
+              141,
+              301
+            ],
+            [
+              142,
+              287
+            ],
+            [
+              142,
+              288
+            ],
+            [
+              142,
+              289
+            ],
+            [
+              142,
+              290
+            ],
+            [
+              142,
+              291
+            ],
+            [
+              142,
+              292
+            ],
+            [
+              142,
+              293
+            ],
             [
               143,
               262
@@ -65479,7 +65786,7 @@
               275
             ]
           ],
-          "freed_count": 80,
+          "freed_count": 116,
           "open_blocked_cells": [],
           "open_blocked_count": 0,
           "panel_dilated_cells": [
@@ -66874,12 +67181,206 @@
           "name": "Doors_Bedroom_ClosetRight_Inner",
           "kind": "SlidingDoor",
           "component_id": 63579,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 126,
           "open_cells": 126,
-          "threshold_cells": 0,
-          "threshold_cells_list": [],
+          "threshold_cells": 24,
+          "threshold_cells_list": [
+            [
+              140,
+              71
+            ],
+            [
+              140,
+              72
+            ],
+            [
+              140,
+              73
+            ],
+            [
+              140,
+              74
+            ],
+            [
+              140,
+              75
+            ],
+            [
+              141,
+              70
+            ],
+            [
+              141,
+              71
+            ],
+            [
+              141,
+              72
+            ],
+            [
+              141,
+              73
+            ],
+            [
+              141,
+              74
+            ],
+            [
+              141,
+              75
+            ],
+            [
+              141,
+              76
+            ],
+            [
+              141,
+              77
+            ],
+            [
+              141,
+              78
+            ],
+            [
+              142,
+              64
+            ],
+            [
+              142,
+              65
+            ],
+            [
+              142,
+              66
+            ],
+            [
+              142,
+              67
+            ],
+            [
+              142,
+              68
+            ],
+            [
+              142,
+              69
+            ],
+            [
+              142,
+              70
+            ],
+            [
+              142,
+              76
+            ],
+            [
+              142,
+              77
+            ],
+            [
+              142,
+              78
+            ]
+          ],
           "freed_cells": [
+            [
+              140,
+              71
+            ],
+            [
+              140,
+              72
+            ],
+            [
+              140,
+              73
+            ],
+            [
+              140,
+              74
+            ],
+            [
+              140,
+              75
+            ],
+            [
+              141,
+              70
+            ],
+            [
+              141,
+              71
+            ],
+            [
+              141,
+              72
+            ],
+            [
+              141,
+              73
+            ],
+            [
+              141,
+              74
+            ],
+            [
+              141,
+              75
+            ],
+            [
+              141,
+              76
+            ],
+            [
+              141,
+              77
+            ],
+            [
+              141,
+              78
+            ],
+            [
+              142,
+              64
+            ],
+            [
+              142,
+              65
+            ],
+            [
+              142,
+              66
+            ],
+            [
+              142,
+              67
+            ],
+            [
+              142,
+              68
+            ],
+            [
+              142,
+              69
+            ],
+            [
+              142,
+              70
+            ],
+            [
+              142,
+              76
+            ],
+            [
+              142,
+              77
+            ],
+            [
+              142,
+              78
+            ],
             [
               143,
               39
@@ -66989,7 +67490,7 @@
               51
             ]
           ],
-          "freed_count": 27,
+          "freed_count": 51,
           "open_blocked_cells": [],
           "open_blocked_count": 0,
           "panel_dilated_cells": [
@@ -68924,6 +69425,7 @@
           "name": "Doors_Bedroom_ClosetLeft_Inner",
           "kind": "SlidingDoor",
           "component_id": 64807,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 126,
           "open_cells": 126,
@@ -71130,6 +71632,7 @@
           "name": "Doors_Bedroom_Bathroom",
           "kind": "Door",
           "component_id": 66670,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 167,
           "open_cells": 184,
@@ -74170,6 +74673,7 @@
           "name": "Doors_UpperHall_Electric",
           "kind": "Door",
           "component_id": 66673,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 167,
           "open_cells": 173,
@@ -76998,6 +77502,7 @@
           "name": "Doors_Gym_Hall",
           "kind": "Door",
           "component_id": 66674,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 174,
           "open_cells": 185,
@@ -80006,6 +80511,7 @@
           "name": "Doors_Bedroom",
           "kind": "Door",
           "component_id": 66675,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 172,
           "open_cells": 187,
@@ -83150,6 +83656,7 @@
           "name": "Doors_Gym_Bathroom",
           "kind": "Door",
           "component_id": 66676,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 176,
           "open_cells": 184,
@@ -86250,6 +86757,7 @@
           "name": "Doors_Bedroom_ClosetLeft_Outer",
           "kind": "SlidingDoor",
           "component_id": 67116,
+          "is_passage": true,
           "panel_count": 1,
           "closed_cells": 126,
           "open_cells": 132,
