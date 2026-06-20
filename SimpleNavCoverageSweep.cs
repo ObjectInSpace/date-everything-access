@@ -936,8 +936,13 @@ namespace DateEverythingAccess
             }
             _results.Add(result);
             if (Main.Log != null)
+                // entry.cell is null for driven offline-no_path entries (no_collider / no_los —
+                // they carry object_xyz instead of a baked cell); guard the deref so logging a
+                // successfully-driven such leg doesn't NPE into a bogus exception result.
                 Main.Log.LogInfo("SimpleNavCoverageSweep result idx=" + _currentManifestIndex +
-                    " floor=" + entry.floor + " cell=(" + entry.cell[0] + "," + entry.cell[1] + ")" +
+                    " floor=" + entry.floor +
+                    " cell=" + (entry.cell != null && entry.cell.Length >= 2
+                        ? "(" + entry.cell[0] + "," + entry.cell[1] + ")" : "(none)") +
                     " outcome=" + outcome +
                     " elapsed=" + (Time.unscaledTime - _routeStartUnscaledTime).ToString("0.0") +
                     " start=" + startPos.ToString("F2") + " end=" + endPos.ToString("F2") +
