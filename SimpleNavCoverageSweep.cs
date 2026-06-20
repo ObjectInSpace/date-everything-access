@@ -415,6 +415,14 @@ namespace DateEverythingAccess
                 var e = _manifest.entries[_entryIndex];
                 if (e == null) continue;
                 if (string.Equals(e.status, "ok", StringComparison.Ordinal)) continue;
+                // Upgradeable offline no_path (no_collider / no_los) with a resolvable target:
+                // do NOT veto it up front. Leave it unvisited so the picker drives it and the
+                // LIVE planner decides — the offline raycaster can't see a collider the live
+                // component-walk resolves, nor live physics LOS. Only record the offline verdict
+                // for genuinely-unrouteable entries. See
+                // [[project-navigation-no-collider-root-cause-2026-06-17]].
+                if (e.drive_offline_no_path && e.object_xyz != null && e.object_xyz.Length >= 3)
+                    continue;
                 _results.Add(new RouteResult
                 {
                     manifest_index = _entryIndex,
@@ -479,7 +487,12 @@ namespace DateEverythingAccess
                 if (_objectVisited.Contains(i)) continue;
                 if (excludeRecentlyFailed && _recentlyFailed.Contains(i)) continue;
                 var e = _manifest.entries[i];
-                if (e == null || !string.Equals(e.status, "ok", StringComparison.Ordinal)) continue;
+                if (e == null) continue;
+                // Eligible: an "ok" entry, OR an upgradeable offline no_path (no_collider /
+                // no_los) we want the live planner to re-decide. Both need a resolvable target.
+                bool eligible = string.Equals(e.status, "ok", StringComparison.Ordinal)
+                    || (e.drive_offline_no_path && e.object_xyz != null && e.object_xyz.Length >= 3);
+                if (!eligible) continue;
                 if (e.object_xyz == null || e.object_xyz.Length < 3) continue;
                 float dx = e.object_xyz[0] - fromPos.x;
                 float dy = e.object_xyz[1] - fromPos.y;
@@ -2184,6 +2197,14 @@ namespace DateEverythingAccess
             [DataMember] public int[] from_cell;
             [DataMember] public float[] from_world_xz;
             [DataMember] public string from_name;
+            // Why the OFFLINE planner marked this entry unreachable (no_collider / no_los /
+            // gate_blocked / unresolved). Diagnostic + paired with drive_offline_no_path.
+            [DataMember] public string unreachable_reason;
+            // True when the offline no_path verdict is UPGRADEABLE in-game (no_collider /
+            // no_los) and the manifest carries object_xyz + unique id(s): drive it and let
+            // the LIVE planner decide, rather than vetoing it offline. See
+            // [[project-navigation-no-collider-root-cause-2026-06-17]].
+            [DataMember] public bool drive_offline_no_path;
         }
 #pragma warning restore CS0649
 

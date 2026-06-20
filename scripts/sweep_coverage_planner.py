@@ -611,16 +611,33 @@ def _emit_object_manifest(planner, start_node, start_world, manifest, out_dir):
             })
             counts["off_floor"] = counts.get("off_floor", 0) + 1
             continue
-        manifest["entries"].append({
+        pos = u.get("position") or {}
+        # Upgradeable offline verdicts: no_collider (offline export lacked a collider the
+        # live component-walk resolves) and no_los (offline raycaster can't see what live
+        # physics LOS can). Carry the live-resolution keys + FULL object_xyz so the in-game
+        # sweep DRIVES these and records no_path only if the LIVE planner also refuses —
+        # rather than the offline veto suppressing the in-game upgrade the design intends.
+        # Genuinely-unrouteable verdicts (unresolved / gate_blocked) stay recorded-only.
+        # See [[project-navigation-no-collider-root-cause-2026-06-17]].
+        is_upgradeable = reason in ("no_collider", "no_los")
+        entry = {
             "floor": None,
             "cell": None,
-            "world_xz": [round((u.get("position") or {}).get("x", 0.0), 4),
-                         round((u.get("position") or {}).get("z", 0.0), 4)],
+            "world_xz": [round(pos.get("x", 0.0), 4), round(pos.get("z", 0.0), 4)],
             "status": "no_path",
             "name": u.get("name"),
             "member_count": 1,
             "unreachable_reason": reason,
-        })
+        }
+        if is_upgradeable:
+            entry["object_xyz"] = [round(pos.get("x", 0.0), 4),
+                                   round(pos.get("y", 0.0), 4),
+                                   round(pos.get("z", 0.0), 4)]
+            entry["unique_id"] = u.get("unique_id")
+            entry["unique_ids"] = u.get("unique_ids") or []
+            # Hint to the harness that this offline no_path should be re-validated in-game.
+            entry["drive_offline_no_path"] = True
+        manifest["entries"].append(entry)
         counts["no_path"] = counts.get("no_path", 0) + 1
     manifest["excluded_exterior"] = excluded_exterior
 

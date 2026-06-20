@@ -1487,8 +1487,16 @@ def object_sweep_nodes(planner, roster):
             # it resolved nowhere; None is the legacy/no-position case. Carry the reason so the
             # manifest can separate expected-exterior from gate-blocked from not-interactable.
             reason = node if isinstance(node, str) else "unresolved"
+            # Carry the live-resolution keys (unique_id(s)) and the FULL object position
+            # so the in-game sweep can DRIVE the upgradeable verdicts (no_collider /
+            # no_los), not just record them. The offline raycaster can't see a collider
+            # the live component-walk resolves, nor live physics LOS — so these are
+            # re-validated in-game rather than vetoed offline. See
+            # [[project-navigation-no-collider-root-cause-2026-06-17]].
             unreachable.append({"name": name, "object_id": object_ids[0],
                                 "object_ids": object_ids,
+                                "unique_id": entry.get("unique_id"),
+                                "unique_ids": entry.get("unique_ids") or [],
                                 "position": item.get("Position"), "reason": reason})
             continue
         floor_label, rep, goals = node
