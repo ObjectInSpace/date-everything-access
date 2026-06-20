@@ -12,11 +12,6 @@
   <ItemGroup>
     <Compile Remove="decompiled\**" />
     <Compile Remove="templates\**" />
-    <!-- Unrelated sibling projects that live in this tree but are NOT part of the mod.
-         Without these, the SDK default-compile glob pulls in their generated obj/*.cs
-         (duplicate AssemblyInfo, ASP.NET GlobalUsings) and breaks the mod build. -->
-    <Compile Remove="personal site\**" />
-    <Compile Remove="objectinspace.github.io\**" />
   </ItemGroup>
 
   <ItemGroup>
