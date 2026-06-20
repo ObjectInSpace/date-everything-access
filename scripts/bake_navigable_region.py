@@ -1109,12 +1109,28 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
     # passable in the bake and "freed when open" is meaningless. Container doors
     # (fridge/cupboard) live entirely at chest height; their columns block the
     # floor band correctly where fixed-Y slice planes missed them.
+    # Closed door-panel cells, kept as their own mask. These cells (and their
+    # capsule-clearance halo) are governed ENTIRELY by the per-door state machine:
+    # blocked while the door is closed, freed via freed_cells when it opens. The
+    # carves below must never touch them. The old carves cleared dilation here
+    # unconditionally, which (a) made a closed panel's clearance navigable and
+    # (b) over-reached onto the adjacent wall — the bedroom "wall-clip". Build the
+    # raw panel mask, then dilate it so the carve also leaves the closed panel's
+    # clearance halo intact. See
+    # [[project-navigation-doorway-capsule-clearance-2026-06-18]].
+    panel_closed_raw_all = [[False] * nz for _ in range(nx)]
     for door_rec in door_records:
         for panel in door_rec.get("Panels", []):
+            cols = panel.get("ColumnsClosed") or []
             _rasterize_columns_into(
-                blocked_bm, panel.get("ColumnsClosed") or [],
+                blocked_bm, cols,
                 floor_y_bm, band_top_y, minx, minz, nx, nz, CELL, COL_CELL,
             )
+            _rasterize_columns_into(
+                panel_closed_raw_all, cols,
+                floor_y_bm, band_top_y, minx, minz, nx, nz, CELL, COL_CELL,
+            )
+    panel_closed_mask = _dilate_disc(panel_closed_raw_all, nx, nz, DILATE_CELLS)
 
     for b in blockers:
         if not _is_solid_blocker(b): continue
@@ -1199,7 +1215,9 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             # then walks full-speed into it (confirmed in-game: bedroom jam, player driving +Z
             # into SM_Walls_Bedroom 0.45m ahead, velocity 0). See
             # [[project-navigation-doorway-capsule-clearance-2026-06-18]].
-            if dilated[jx][jz]:
+            # Never clear a closed door-panel cell or its halo: those are owned by
+            # the door's freed_cells/open_blocked_cells state machine.
+            if dilated[jx][jz] and not panel_closed_mask[jx][jz]:
                 dilated[jx][jz] = False
                 door_carves += 1
 
@@ -1250,8 +1268,9 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         for jx in range(max(0, bx0), min(nx, bx1 + 1)):
             for jz in range(max(0, bz0), min(nz, bz1 + 1)):
                 # As in the door-position carve: clear only the dilation halo, never a raw blocker
-                # cell (un-blocking a wall makes solid wall navigable).
-                if dilated[jx][jz] and not post_halo[jx][jz]:
+                # cell (un-blocking a wall makes solid wall navigable), and never a closed
+                # door-panel cell or its halo (owned by the door state machine).
+                if dilated[jx][jz] and not post_halo[jx][jz] and not panel_closed_mask[jx][jz]:
                     dilated[jx][jz] = False
                     door_carves += 1
 
