@@ -252,6 +252,11 @@ namespace DateEverythingAccess
         private static string _pendingCardPoseDesc;
         private static float _pendingCardPoseNotBefore;
         private static float _pendingCardPoseExpiresAt;
+        // The pose-card description most recently spoken, kept so Ctrl+F1 can repeat it while the
+        // card is still on screen. Plain Say() leaves it in _lastSpokenText, but any later speech
+        // (menu focus, a hover) overwrites that buffer; serving the pose text from the context-aware
+        // repeat tier (see TryBuildCardPoseAnnouncement) keeps repeat working for the whole card.
+        private static string _lastCardPoseDesc;
         // Delay before a pose-card description is spoken, letting the card stinger's loud attack
         // pass so the speech lands over the quieter tail. The stinger clips run 6.1s (awaken) to
         // 11.6s (love ending) — waiting for the whole clip would leave the player in silence and
@@ -802,6 +807,9 @@ namespace DateEverythingAccess
             if (!found || string.IsNullOrWhiteSpace(description))
                 return;
 
+            // Clear the repeat cache for the incoming card: until this description actually fires
+            // (~3s later), a Ctrl+F1 press shouldn't replay the previous datable's pose text.
+            _lastCardPoseDesc = null;
             _pendingCardPoseDesc = description;
             _pendingCardPoseNotBefore = Time.unscaledTime + CardPoseSpeechDelaySeconds;
             _pendingCardPoseExpiresAt = _pendingCardPoseNotBefore + CardPoseSpeechWindowSeconds;
@@ -982,7 +990,10 @@ namespace DateEverythingAccess
             _pendingCardPoseDesc = null;
 
             if (!string.IsNullOrWhiteSpace(description))
+            {
+                _lastCardPoseDesc = description;
                 ScreenReader.Say(description);
+            }
         }
 
         private static bool ShouldSuppressDateADexOpenEntrySelection(GameObject selectedObject)
@@ -6360,7 +6371,8 @@ namespace DateEverythingAccess
                 return true;
             }
 
-            if (TryBuildCurrentDialogueAnnouncement(out announcement) ||
+            if (TryBuildCardPoseAnnouncement(out announcement) ||
+                TryBuildCurrentDialogueAnnouncement(out announcement) ||
                 TryBuildPopupAnnouncement(out announcement) ||
                 TryBuildTutorialAnnouncement(out announcement) ||
                 TryBuildSubtitleAnnouncement(out announcement) ||
@@ -8175,6 +8187,31 @@ namespace DateEverythingAccess
                 ? Loc.Get("phone_app_open_generic")
                 : Loc.Get("screen_open", appName);
             return !string.IsNullOrEmpty(announcement);
+        }
+
+        // Ctrl+F1 repeat for the fullscreen datable pose card. While either splash screen is open,
+        // serve the description we spoke for it (HandleCardPoseAnnouncement stores it), so repeat
+        // works even after other speech has overwritten the generic last-spoken buffer. Once both
+        // cards close we drop the cached text so it can't leak into a later repeat press.
+        private static bool TryBuildCardPoseAnnouncement(out string announcement)
+        {
+            announcement = null;
+
+            bool cardOpen =
+                (AwakenSplashScreen.Instance != null && AwakenSplashScreen.Instance.isOpen) ||
+                (ResultSplashScreen.Instance != null && ResultSplashScreen.Instance.isOpen);
+
+            if (!cardOpen)
+            {
+                _lastCardPoseDesc = null;
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(_lastCardPoseDesc))
+                return false;
+
+            announcement = _lastCardPoseDesc;
+            return true;
         }
 
         private static bool TryBuildResultAnnouncement(out string announcement)
