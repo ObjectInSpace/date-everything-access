@@ -6664,8 +6664,33 @@ namespace DateEverythingAccess
                 return text;
             }
 
+            // Icon-only control (no readable TMP label) — read it by GameObject name rather than going silent. This is
+            // the general path for every labelless button/icon (phone home-screen launchers, collectable icons, app
+            // tabs, etc.), so individual screens don't each need a bespoke handler. Resolve the name from the nearest
+            // named selectable in the parent chain (the focused object is often an unnamed "Icon"/"Image" child), and
+            // clean it up: strip a trailing "Button" and normalize identifier casing/separators.
             branch = "generic_name";
-            return NormalizeText(selectedObject.name.Replace("_", " "));
+            return BuildIconNameAnnouncement(selectedObject);
+        }
+
+        // Spoken label for a control that has no text: the cleaned GameObject name of the nearest meaningfully-named
+        // selectable (or the object itself). Strips a trailing "Button"/"Icon" so "Thiscord Button" -> "Thiscord" and
+        // normalizes casing/underscores. Returns null only if nothing usable can be derived.
+        private static string BuildIconNameAnnouncement(GameObject selectedObject)
+        {
+            if (selectedObject == null)
+                return null;
+
+            // Climb to the owning Selectable so a focused unnamed sub-object ("Icon", "Image", "Highlight") reports
+            // the button's name instead. Falls back to the object itself if it isn't inside a Selectable.
+            Selectable selectable = selectedObject.GetComponentInParent<Selectable>();
+            string rawName = selectable != null ? selectable.gameObject.name : selectedObject.name;
+
+            rawName = StripTrailingWord(rawName, "Button");
+            rawName = StripTrailingWord(rawName, "Icon");
+
+            string label = NormalizeIdentifierName(rawName);
+            return string.IsNullOrEmpty(label) ? null : label;
         }
 
         private void TraceSelectionDebug(GameObject rawSelectedObject, GameObject selectedObject, string selectionSource, string branch, string announcement, string outcome)
@@ -7073,6 +7098,24 @@ namespace DateEverythingAccess
             return Loc.Get("specs_button_profile");
         }
 
+        // Trim a trailing whole word (case-insensitive) from a raw identifier, e.g. "Thiscord Button" -> "Thiscord",
+        // "HomeButton" -> "Home". Leaves the string unchanged if removing the word would empty it.
+        private static string StripTrailingWord(string value, string word)
+        {
+            if (string.IsNullOrEmpty(value) || string.IsNullOrEmpty(word))
+                return value;
+
+            string trimmed = value.TrimEnd();
+            if (trimmed.Length > word.Length &&
+                trimmed.EndsWith(word, StringComparison.OrdinalIgnoreCase))
+            {
+                trimmed = trimmed.Substring(0, trimmed.Length - word.Length).TrimEnd();
+                return string.IsNullOrEmpty(trimmed) ? value : trimmed;
+            }
+
+            return value;
+        }
+
         private static bool TryBuildDateADexSelectionAnnouncement(GameObject selectedObject, out string announcement)
         {
             announcement = null;
@@ -7114,6 +7157,19 @@ namespace DateEverythingAccess
                 return true;
             }
 
+            // A collectable grid icon (CollectableView): read its name + description/hint. The screen-level
+            // collectableName/collectableDesc text only updates when a collectable is INSPECTED (clicked), so
+            // navigating the grid wouldn't read anything from those; read the focused view's own data instead.
+            // GetName/GetDescription already encode the locked state ("???" + the hint for locked, real name +
+            // description for unlocked), so no unrevealed text leaks. (Without this, it would fall through to the
+            // generic name fallback and read the raw view name instead of the collectable's actual name/description.)
+            CollectableView collectableView = selectedObject.GetComponentInParent<CollectableView>();
+            if (collectableView != null)
+            {
+                announcement = BuildCollectableViewAnnouncement(collectableView);
+                return !string.IsNullOrEmpty(announcement);
+            }
+
             DexEntryButton entryButton = selectedObject.GetComponentInParent<DexEntryButton>();
             if (entryButton != null)
             {
@@ -7121,14 +7177,35 @@ namespace DateEverythingAccess
                 return true;
             }
 
-            Button selectedButton = selectedObject.GetComponentInParent<Button>();
-            if (selectedButton != null && selectedObject.transform.IsChildOf(DateADex.Instance.DateADexWindow.transform))
+            // Any other button on the DateADex screen falls through to the generic icon-name fallback in
+            // BuildSelectionAnnouncement, which reads its actual name (so a real Back button still says "Back", but
+            // other icon-only buttons read as themselves instead of being blanket-labeled "Back").
+            return false;
+        }
+
+        // Spoken description of a focused collectable grid icon. Unlocked: "<name>. <description>". Locked: the
+        // game returns "???"/"????" for the name and a hint for the description, so announce it as a locked
+        // collectable plus that hint — never the real (unrevealed) name or description.
+        private static string BuildCollectableViewAnnouncement(CollectableView view)
+        {
+            if (view == null)
+                return null;
+
+            string name = NormalizeText(view.GetName());
+            string description = NormalizeText(view.GetDescription());
+            bool locked = string.IsNullOrEmpty(name) || name == "???" || name == "????";
+
+            if (locked)
             {
-                announcement = Loc.Get("button_back");
-                return true;
+                return string.IsNullOrEmpty(description)
+                    ? Loc.Get("dateadex_collectable_locked_plain")
+                    : Loc.Get("dateadex_collectable_locked", description);
             }
 
-            return false;
+            if (string.IsNullOrEmpty(description))
+                return name;
+
+            return Loc.Get("dateadex_collectable_unlocked", name, description);
         }
 
         private static bool TryBuildRoomersSelectionAnnouncement(GameObject selectedObject, out string announcement)
@@ -7487,8 +7564,17 @@ namespace DateEverythingAccess
             string item = isEntryVisible
                 ? GetActiveDateADexText(DateADex.Instance.Item)
                 : null;
+            // The description is scrollable and only meant to be read with the mouse wheel/scrollbar (not keyboard-
+            // navigable). The live page read mirrors the screen (the lines currently in the viewport), but the
+            // PageUp/PageDown stepper reads the WHOLE scrollable description so a keyboard-only player hears all of
+            // it. This grabs every UNLOCKED line: Desc.text is CharDYK, which the game builds by prepending only the
+            // dex comments the player has unlocked (DateADex.cs), so locked/not-yet-revealed text is never in the
+            // string and is excluded for free. Capture both forms.
             string description = isEntryVisible
                 ? GetVisibleDateADexDescription(DateADex.Instance.Desc, DateADex.Instance.DescScroll)
+                : null;
+            string fullDescription = isEntryVisible
+                ? GetActiveDateADexText(DateADex.Instance.Desc)
                 : null;
             string voiceActor = isEntryVisible
                 ? GetActiveDateADexText(DateADex.Instance.VoActor)
@@ -7527,20 +7613,35 @@ namespace DateEverythingAccess
                     dislikes = isMet ? NormalizeText(entryOverride.CharDislikes) : null;
             }
 
-            var parts = new List<string>();
-            AddAnnouncementPart(parts, item);
-            AddAnnouncementPart(parts, description);
-            AddAnnouncementPart(parts, BuildLabeledValue("dateadex_voice_actor", voiceActor));
-            AddAnnouncementPart(parts, BuildLabeledValue("dateadex_likes", likes));
-            AddAnnouncementPart(parts, BuildLabeledValue("dateadex_dislikes", dislikes));
-            AddAnnouncementPart(parts, BuildLabeledValue("dateadex_pronouns", pronouns));
-            AddAnnouncementPart(parts, listSummary);
-            AddAnnouncementPart(parts, BuildLabeledValue("dateadex_collectables", collectables));
-            AddAnnouncementPart(parts, recipe);
+            // When the live visible-clip read came up empty, the override block above already set `description` to
+            // the full CharDYK; mirror that into fullDescription so the stepper never reads LESS than the page.
+            if (string.IsNullOrEmpty(fullDescription))
+                fullDescription = description;
+
+            // Build the section list twice from one helper: the live read uses the visible-clip description, the
+            // PageUp/PageDown stepper uses the full unlocked description. Everything else is identical.
+            List<string> BuildSections(string desc)
+            {
+                var p = new List<string>();
+                AddAnnouncementPart(p, item);
+                AddAnnouncementPart(p, desc);
+                AddAnnouncementPart(p, BuildLabeledValue("dateadex_voice_actor", voiceActor));
+                AddAnnouncementPart(p, BuildLabeledValue("dateadex_likes", likes));
+                AddAnnouncementPart(p, BuildLabeledValue("dateadex_dislikes", dislikes));
+                AddAnnouncementPart(p, BuildLabeledValue("dateadex_pronouns", pronouns));
+                AddAnnouncementPart(p, listSummary);
+                AddAnnouncementPart(p, BuildLabeledValue("dateadex_collectables", collectables));
+                AddAnnouncementPart(p, recipe);
+                return p;
+            }
+
+            var parts = BuildSections(description);
 
             // Each part is already a meaty, self-contained section ("Likes: ...", the description,
-            // etc.) — exactly the granularity the PageUp/PageDown stepper wants, so expose it.
-            _lastDateADexDetailSections = parts.Count > 0 ? new List<string>(parts) : null;
+            // etc.) — exactly the granularity the PageUp/PageDown stepper wants, so expose it. The stepper gets the
+            // FULL unlocked description so a keyboard-only player can hear all of it (the page read stays on screen).
+            List<string> stepperParts = BuildSections(fullDescription);
+            _lastDateADexDetailSections = stepperParts.Count > 0 ? new List<string>(stepperParts) : null;
 
             announcement = JoinAnnouncementParts(parts);
             return !string.IsNullOrEmpty(announcement);

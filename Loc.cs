@@ -186,6 +186,9 @@ namespace DateEverythingAccess
             Add("dateadex_unmet_description", "Du hast diese Person noch nicht getroffen.", "You haven't met this character yet.");
             Add("dateadex_button_collectables", "Sammelstuecke", "Collectables");
             Add("dateadex_button_collectables_value", "Sammelstuecke. {0}", "Collectables. {0}");
+            Add("dateadex_collectable_unlocked", "{0}. {1}", "{0}. {1}");
+            Add("dateadex_collectable_locked", "Gesperrtes Sammelstueck. {0}", "Locked collectable. {0}");
+            Add("dateadex_collectable_locked_plain", "Gesperrtes Sammelstueck", "Locked collectable");
             Add("dateadex_button_sort", "Sortierung", "Sort");
             Add("dateadex_button_sort_value", "Sortierung. {0}", "Sort. {0}");
             Add("dateadex_button_recipe", "Rezept", "Recipe");
