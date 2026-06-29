@@ -371,6 +371,11 @@ namespace DateEverythingAccess
         private string _sectionStepperKey;
         private bool _pageUpWasDown;
         private bool _pageDownWasDown;
+        // Edge-detected each FRAME (not on the throttled 0.1s poll) so a quick PageUp/PageDown tap that begins and
+        // ends inside one poll gap isn't missed. Sampled by PollSectionStepperKeys(); consumed by the throttled
+        // HandleSectionStepperInput(), which is the only place that has the resolved section list to act on.
+        private bool _pageUpPending;
+        private bool _pageDownPending;
         private InteractableObj _trackedInteractable;
         private string _trackedInteractableId;
         private string _trackedInteractableLabel;
@@ -856,6 +861,10 @@ namespace DateEverythingAccess
             HandleNavigationRequests();
             HandleCoverageSweepRequest();
             SimpleNavCoverageSweep.Tick();
+
+            // Sample the section-stepper keys EVERY frame so a fast tap inside a poll gap is caught (the stepper
+            // itself runs only on the 0.1s poll below). Edge-detection state must advance every frame for this to work.
+            PollSectionStepperKeys();
 
             bool isSettingsMenuOpen = ModConfig.IsMenuOpen;
             if (isSettingsMenuOpen)
@@ -6065,6 +6074,18 @@ namespace DateEverythingAccess
         // Sections come from the same builders that produce the spoken page (captured as a side
         // effect), so the stepper and the page never disagree. Reset when the active screen or its
         // content changes (keyed). Polled each frame; no-op unless one of the three screens is up.
+        // Edge-detect PageUp/PageDown once per frame and latch the press until the throttled stepper consumes it.
+        // Called from Update() every frame (outside the 0.1s poll gate) because GetAsyncKeyState edge-detection only
+        // catches a press if it's sampled while the key is held — a tap that starts and ends between two polls would
+        // otherwise be lost, which read as "PageUp/PageDown does nothing" on every stepper screen.
+        private void PollSectionStepperKeys()
+        {
+            if (WasChoiceKeyPressed(KeyCode.PageDown, VkPageDown, ref _pageDownWasDown))
+                _pageDownPending = true;
+            if (WasChoiceKeyPressed(KeyCode.PageUp, VkPageUp, ref _pageUpWasDown))
+                _pageUpPending = true;
+        }
+
         private void HandleSectionStepperInput()
         {
             List<string> sections = ResolveActiveSectionStepperSections(out string key);
@@ -6072,10 +6093,12 @@ namespace DateEverythingAccess
             if (sections == null || sections.Count == 0)
             {
                 // No stepper-eligible screen (or no content yet): drop state so a fresh open starts
-                // at the top, and don't consume the keys.
+                // at the top, and discard any latched press so it can't fire on the next eligible screen.
                 _sectionStepperSections = null;
                 _sectionStepperIndex = -1;
                 _sectionStepperKey = null;
+                _pageUpPending = false;
+                _pageDownPending = false;
                 return;
             }
 
@@ -6091,8 +6114,10 @@ namespace DateEverythingAccess
                 _sectionStepperSections = sections; // refresh contents (values may have updated)
             }
 
-            bool pageDown = WasChoiceKeyPressed(KeyCode.PageDown, VkPageDown, ref _pageDownWasDown);
-            bool pageUp = WasChoiceKeyPressed(KeyCode.PageUp, VkPageUp, ref _pageUpWasDown);
+            bool pageDown = _pageDownPending;
+            bool pageUp = _pageUpPending;
+            _pageDownPending = false;
+            _pageUpPending = false;
             if (!pageDown && !pageUp)
                 return;
 
