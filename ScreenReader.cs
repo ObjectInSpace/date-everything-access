@@ -107,12 +107,38 @@ namespace DateEverythingAccess
 
             try
             {
-                Tolk_Output(text, interrupt);
+                Output(text, interrupt);
             }
             catch (Exception ex)
             {
                 Main.Log.LogWarning("ScreenReader.Say failed: " + ex.Message);
             }
+        }
+
+        /// <summary>
+        /// Sends text to Tolk, issuing an explicit silence first when interrupting.
+        ///
+        /// Tolk's own interrupt flag (Tolk_Output(text, true)) bundles a cancel + speak, but with NVDA in SLEEP MODE
+        /// that bundled cancel does not clear NVDA's speech queue, so a new focus-change announcement gets appended
+        /// BEHIND whatever is still being spoken instead of cutting it off. Calling Tolk_Silence() (→ NVDA controller
+        /// cancelSpeech) as a separate, ordered call before the output reliably flushes the queue first, so the latest
+        /// announcement is spoken immediately. Harmless when NVDA is awake (silence then speak is the normal interrupt).
+        /// </summary>
+        private static void Output(string text, bool interrupt)
+        {
+            if (interrupt)
+            {
+                try
+                {
+                    Tolk_Silence();
+                }
+                catch
+                {
+                    // A failed pre-silence must not block the speak that follows.
+                }
+            }
+
+            Tolk_Output(text, interrupt);
         }
 
         /// <summary>
@@ -144,7 +170,7 @@ namespace DateEverythingAccess
 
             try
             {
-                Tolk_Output(lastSpokenText, interrupt);
+                Output(lastSpokenText, interrupt);
             }
             catch (Exception ex)
             {
