@@ -6744,10 +6744,20 @@ namespace DateEverythingAccess
         {
             announcement = null;
 
-            if (Singleton<CanvasUIManager>.Instance == null || Singleton<CanvasUIManager>.Instance._activeMenu == null)
+            if (selectedObject == null)
                 return false;
 
-            SettingsMenu settingsMenu = Singleton<CanvasUIManager>.Instance._activeMenu.GetComponent<SettingsMenu>();
+            // Resolve the SettingsMenu from the FOCUSED object's parent chain, not from CanvasUIManager._activeMenu.
+            // The settings panel is the same singleton MenuComponent whether it's reached from the main menu or from
+            // the in-game phone, but only the main-menu path makes it the _activeMenu: opening settings from the phone
+            // shows the panel while _activeMenu stays the Phone/Pause menu, so the old _activeMenu.GetComponent
+            // <SettingsMenu>() check returned null and no option titles were spoken. Every settings control (selector,
+            // slider, apply button) lives UNDER the SettingsMenu transform, so climbing from the selection finds it in
+            // both cases. Fall back to the active menu for any selection that isn't itself under the panel.
+            SettingsMenu settingsMenu = selectedObject.GetComponentInParent<SettingsMenu>();
+            if (settingsMenu == null && Singleton<CanvasUIManager>.Instance != null && Singleton<CanvasUIManager>.Instance._activeMenu != null)
+                settingsMenu = Singleton<CanvasUIManager>.Instance._activeMenu.GetComponent<SettingsMenu>();
+
             if (settingsMenu == null || !settingsMenu.gameObject.activeInHierarchy)
                 return false;
 
