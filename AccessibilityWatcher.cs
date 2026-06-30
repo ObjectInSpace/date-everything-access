@@ -803,11 +803,23 @@ namespace DateEverythingAccess
         /// <see cref="CardPoseDescriptions"/>; if found, the speech is held until the awaken/ending
         /// stinger has had time to play (see <see cref="CardPoseSpeechDelaySeconds"/>).
         /// </summary>
-        internal static void RequestCardPoseAnnouncement(string internalName, E_General_Poses pose, E_Facial_Expressions expression)
+        internal static void RequestCardPoseAnnouncement(string internalName, E_General_Poses pose, E_Facial_Expressions expression, bool allowNeutralFallback)
         {
-            bool found = CardPoseDescriptions.TryGet(internalName, pose, expression, out string description);
+            bool found = CardPoseDescriptions.TryGet(internalName, pose, expression, allowNeutralFallback, out string description);
             if (Main.Log != null)
-                Main.Log.LogInfo("[card-pose] key=" + CardPoseDescriptions.BuildKey(internalName, pose, expression) + " found=" + found);
+            {
+                string msg = "[card-pose] key=" + CardPoseDescriptions.BuildKey(internalName, pose, expression)
+                    + " fallback=" + allowNeutralFallback + " found=" + found;
+                // A miss means a datable card read silent. First-meet misses are real gaps worth surfacing at
+                // Warning; ending cards have no authored pose description yet and are expected to be silent, so
+                // log those at Info to avoid noise.
+                if (found)
+                    Main.Log.LogInfo(msg);
+                else if (allowNeutralFallback)
+                    Main.Log.LogWarning(msg + " (NO DESCRIPTION — card will be silent)");
+                else
+                    Main.Log.LogInfo(msg + " (ending card, no pose description authored — silent)");
+            }
 
             if (!found || string.IsNullOrWhiteSpace(description))
                 return;

@@ -21,11 +21,20 @@ namespace DateEverythingAccess
         private static void OnAwakenInitialize(
             DateADexEntry entry,
             string internalName,
+            bool forceCustomCharName,
             E_General_Poses PoseToUse,
             E_Facial_Expressions ExpressionToUse)
         {
-            string name = (entry != null && !string.IsNullOrEmpty(entry.internalName)) ? entry.internalName : internalName;
-            AccessibilityWatcher.RequestCardPoseAnnouncement(name, PoseToUse, ExpressionToUse);
+            // Mirror AwakenSplashScreen.Initialize's own sprite source so our description matches the art:
+            // when forceCustomCharName is set the game loads the sprite from the internalName ARG, not the
+            // entry — that's the variant identity (clarence, volt, …) which differs from entry.internalName
+            // (dirk, eddie). Otherwise the entry's internalName is the displayed identity.
+            string name = (!forceCustomCharName && entry != null && !string.IsNullOrEmpty(entry.internalName))
+                ? entry.internalName
+                : internalName;
+            // First-meet card: the descriptions are authored for these, keyed neutral|neutral, so allow the
+            // neutral fallback to cover the per-character non-neutral first-meet poses.
+            AccessibilityWatcher.RequestCardPoseAnnouncement(name, PoseToUse, ExpressionToUse, allowNeutralFallback: true);
         }
 
         // Ending card. ResultSplashScreen.Initialize loads the neutral sprite first, then the
@@ -43,7 +52,11 @@ namespace DateEverythingAccess
             if (!ResolveEndingPose(status, name, charName, out string artName, out E_General_Poses pose, out E_Facial_Expressions expr))
                 return;
 
-            AccessibilityWatcher.RequestCardPoseAnnouncement(artName, pose, expr);
+            // Ending card: no ending-pose descriptions are authored yet, so require an exact key (no neutral
+            // fallback). Today this is always a miss and the card stays silent — by design — rather than
+            // re-reading the character's first-meet appearance blurb. Authoring ending descriptions is a
+            // future content task; when added, they'll match here without further code changes.
+            AccessibilityWatcher.RequestCardPoseAnnouncement(artName, pose, expr, allowNeutralFallback: false);
         }
 
         /// <summary>

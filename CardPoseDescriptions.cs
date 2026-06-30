@@ -31,38 +31,77 @@ namespace DateEverythingAccess
         private static Dictionary<string, string> _active;
         private static Dictionary<string, string> _english;
 
+        // Variant/transform datables whose first-meet card carries an internalName that differs from the
+        // canonical key the description is authored under. The appearance is shared with the base form, so we
+        // resolve the alias to the base before building the key. Sourced from the game's own remaps:
+        //   - "volt" is the Volt form of Eddie; its description lives under "eddie_volt".
+        //   - "timmy" -> "tim" and "jonwick" -> "scandalabra" are the same art-name remaps the ending card uses.
+        // NOTE: "clarence" is a Dirk variant but is NOT aliased — Clarence has a visually distinct look (clean,
+        // re-arranged clothes), so it has its own "clarence|neutral|neutral" entry rather than reusing Dirk's.
+        private static readonly Dictionary<string, string> NameAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "volt", "eddie_volt" },
+            { "timmy", "tim" },
+            { "jonwick", "scandalabra" },
+        };
+
         /// <summary>
         /// Builds the lookup key for a card's stable identity. Uses the enum names directly so the
-        /// JSON keys read like <c>maggie|love|flirt</c> / <c>penelope|love|joy</c>.
+        /// JSON keys read like <c>maggie|love|flirt</c> / <c>penelope|love|joy</c>. Variant internal
+        /// names are resolved to their canonical description name first (see <see cref="NameAliases"/>).
         /// </summary>
         internal static string BuildKey(string internalName, E_General_Poses pose, E_Facial_Expressions expression)
         {
             string name = (internalName ?? string.Empty).Trim().ToLowerInvariant();
+            if (NameAliases.TryGetValue(name, out string canonical))
+                name = canonical;
             return name + "|" + pose + "|" + expression;
         }
 
         /// <summary>
         /// Tries to resolve a description for the given card identity. Returns the active-language
         /// text if present, else the English text, else false (caller stays silent).
+        ///
+        /// The authored description is a PHYSICAL APPEARANCE blurb keyed on the character at
+        /// <c>&lt;name&gt;|neutral|neutral</c>. The game varies the FIRST-MEET pose/expression per character
+        /// (diana|neutral|shock, penelope|love|joy, dorian|front|think, connie|folded|smirk, …), so an exact
+        /// lookup misses for those; <paramref name="allowNeutralFallback"/> lets the first-meet card fall back
+        /// to the neutral key so it still reads the appearance. Ending cards pass <c>false</c>: no ending-pose
+        /// descriptions are authored, and they should stay silent rather than re-read the first-meet blurb.
+        /// The exact key is always tried first, so a future author can override a specific pose.
         /// </summary>
-        internal static bool TryGet(string internalName, E_General_Poses pose, E_Facial_Expressions expression, out string description)
+        internal static bool TryGet(string internalName, E_General_Poses pose, E_Facial_Expressions expression, bool allowNeutralFallback, out string description)
         {
             description = null;
             if (string.IsNullOrEmpty(internalName))
                 return false;
 
-            string key = BuildKey(internalName, pose, expression);
+            string exactKey = BuildKey(internalName, pose, expression);
+            string neutralKey = BuildKey(internalName, E_General_Poses.neutral, E_Facial_Expressions.neutral);
 
             lock (_lock)
             {
                 EnsureLoaded();
 
-                if (_active != null && _active.TryGetValue(key, out description) && !string.IsNullOrWhiteSpace(description))
+                if (TryLookup(exactKey, out description))
                     return true;
 
-                if (_english != null && _english.TryGetValue(key, out description) && !string.IsNullOrWhiteSpace(description))
+                if (allowNeutralFallback && !string.Equals(neutralKey, exactKey, StringComparison.Ordinal) && TryLookup(neutralKey, out description))
                     return true;
             }
+
+            description = null;
+            return false;
+        }
+
+        // Caller holds _lock. Active language first, then English fallback.
+        private static bool TryLookup(string key, out string description)
+        {
+            if (_active != null && _active.TryGetValue(key, out description) && !string.IsNullOrWhiteSpace(description))
+                return true;
+
+            if (_english != null && _english.TryGetValue(key, out description) && !string.IsNullOrWhiteSpace(description))
+                return true;
 
             description = null;
             return false;
