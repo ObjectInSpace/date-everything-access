@@ -44,13 +44,22 @@ OUT_PNG_DIR = REPO / "artifacts/navigation"
 # grazes return, address them with per-mesh inflation rather than a global
 # bump that closes legitimate doorways.
 CAPSULE_R = 0.40
-# Live-measured player capsule height (floor .. floor + 3.2m). The old 2.50
-# value was a stale under-measurement: it let chest-to-head-height geometry
-# (e.g. an open cupboard/fridge door panel at world Y ~2.3-2.7) sit just above
-# the band and slip through unblocked. 3.2m matches the export's capsule band
-# ([-0.7,2.9] ground = floorY-0.2 .. floorY+3.2) and the live capsule-probe in
-# [[project-navigation-capsule-radius-groundtruth-2026-05-29]].
-CAPSULE_H = 3.20
+# Player STANDING collider height = 2.5m (BetterPlayerControl.colliderHeightNormal).
+# This is the real height the walking capsule occupies; geometry above it does NOT
+# obstruct a standing player.
+#
+# History: this was bumped to 3.20 to catch open cupboard/fridge door PANELS at head
+# height (world Y ~2.3-2.7) that the 2.5m band let slip through. That reason is now
+# OBSOLETE -- those panels are handled independently as container door_records (see
+# repair_door_fixture_positions / the container-door operability bake), so they block
+# regardless of capsule height. The inflated 3.2m only caused collateral OVER-BLOCKING:
+# it marked ~3,300 ground floor cells blocked under furniture/prop TOPS at head height
+# (shelves, hamper lid, fruit bowl, globe, desk paper, the magic-piano overhang) and the
+# upper-floor slab/ceiling ~12m up -- all of which a 2.5m player clears. Measured with
+# scripts/measure_crouch_clearance.py. Reverted to the true 2.5m collider; the panel
+# regression cannot recur because cupboard/fridge doors are door_records, not band hits.
+# See [[project_navigation_capsule_height_overblock_2026_06_30]].
+CAPSULE_H = 2.50
 STEP_UP_TOL = 0.25
 # A column whose top clears the floor by less than this is a sill/threshold/lip
 # the capsule's FOOT steps over — the one honest physical rule that survives the
@@ -83,6 +92,18 @@ DOOR_CARVE_RADIUS = 0.40
 # repairs doorway component splits caused by wall/doorframe dilation without
 # widening every name-only door-like object.
 DOOR_COMPONENT_CARVE_RADIUS = 1.50
+
+# Closet interior recovery (the capsule-width walk-in channel; see the recovery block
+# in bake_floor and [[project_navigation_closet_interior_eroded_2026_06_30]]). A real
+# closet interior is a small enclosed pocket; an unbounded flood through the connected
+# wall-dilation web leaks ~1273 cells across the floor, so a recovered eroded-floor
+# component larger than the cap is treated as a leak and discarded. 120 covers every
+# measured closet (largest real interior ~72 cells) with ~10x margin below any leak.
+CLOSET_INTERIOR_CELL_CAP = 120
+# How far (cells) beyond the door's throat bbox to search for the eroded interior
+# component. The closet sits adjacent to the throat; a small pad keeps the seed search
+# local to this door's opening.
+CLOSET_INTERIOR_SEARCH_PAD = 12
 
 # Reach radius for the door-operability standpoint (meters). Door.cs opens via
 # InteractableObj.Interact, gated by InteractionRadius (7.5m default). The
@@ -1347,6 +1368,233 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         # dilation band — that's the wall opening dilation seals over. The
         # adjacency-to-panel_closed_dil constraint above keeps them legitimate.
         threshold_cells_list = sorted([list(c) for c in threshold_cells])
+
+        # CLOSET INTERIOR RECOVERY (the capsule-width walk-in channel). A closet is a
+        # NARROW walk-in space (~0.6-1.0m deep) that the radius-2 capsule dilation
+        # (DILATE_CELLS = CAPSULE_R/CELL = 2, i.e. 0.8m total width) erodes to ZERO
+        # navigable cells — every interior cell is within 0.4m of a wall. But the player
+        # physically walks INTO these closets and the objects inside (shelves, hangers,
+        # boxes) occupy navigable interior space: the game's EFFECTIVE navigation radius
+        # is ~0.4m (velocity-driven rigidbody wall-SLIDING lets the player squeeze gaps
+        # narrower than the 0.8m geometric capsule — same reason the player uses the 1.0m
+        # house doors). So a narrow-passage interior is passable at the effective radius
+        # even though radius-2 dilation says otherwise. See
+        # [[project_navigation_closet_interior_eroded_2026_06_30]] and
+        # [[project-navigation-capsule-radius-groundtruth-2026-05-29]].
+        #
+        # Recover the enclosed walkable pocket as door-open navigable (added to freed_cells,
+        # gated on THIS door being open exactly like freed_cells/threshold, so consumers OR
+        # them in unchanged and nested Inner/Outer doors compose via the existing per-door
+        # overlay). Bounds that keep it safe:
+        #   - Flood only WALKABLE, NON-raw-wall cells (never un-block a wall mesh -> no
+        #     wall-clip, the bf32c87 bedroom regression) that are NOT already navigable
+        #     (the pocket IS the dilation-eroded floor; stopping at 'N' keeps it from
+        #     escaping into the open house through the doorway).
+        #   - CAP at CLOSET_INTERIOR_CELL_CAP: a real narrow passage is small; an unbounded
+        #     flood leaks ~1273 cells along the connected wall-dilation web, so a component
+        #     over the cap is a leak and is discarded.
+        #   - GATED on a PINCHED throat: only run when the door's open throat has NO cell
+        #     whose full capsule disc is clear (the same radius-2 erosion test as invariant
+        #     #8). A door that opens into a roomy passage already has capsule-fitting throat
+        #     cells, so recovery is skipped and it keeps plain radius-2 routing untouched.
+        #     This generalises the original closet-name gate: ANY passage door that opens
+        #     into a narrow eroded passage (closet, wardrobe corridor, tight nook) is fixed,
+        #     by the geometry that actually fails, not by name. Healthy doors are no-ops.
+        interior_recovered = []
+        throat_for_gate = set(threshold_cells) | set(freed_set)
+        run_recovery = False
+        if (not is_container) and throat_for_gate:
+            # Door-open navigable around the throat: static 'N' + throat − open-leaf sweep.
+            erode_r = DILATE_CELLS
+            edisc = [(dx, dz) for dx in range(-erode_r, erode_r + 1)
+                     for dz in range(-erode_r, erode_r + 1)
+                     if dx * dx + dz * dz <= erode_r * erode_r]
+            gxs = [c[0] for c in throat_for_gate]
+            gzs = [c[1] for c in throat_for_gate]
+            gpad = erode_r + 2
+            gx0 = max(0, min(gxs) - gpad); gx1 = min(nx, max(gxs) + gpad + 1)
+            gz0 = max(0, min(gzs) - gpad); gz1 = min(nz, max(gzs) + gpad + 1)
+            open_nav_gate = set(throat_for_gate)
+            for ix in range(gx0, gx1):
+                for iz in range(gz0, gz1):
+                    if navigable_bm[ix][iz]:
+                        open_nav_gate.add((ix, iz))
+            # Subtract this door's open-leaf footprint (cells the swung leaf fills).
+            for ix in range(nx):
+                for iz in range(nz):
+                    if panel_open_raw[ix][iz] and navigable_bm[ix][iz]:
+                        open_nav_gate.discard((ix, iz))
+
+            def _throat_cell_fits(cx2, cz2):
+                for dx, dz in edisc:
+                    if (cx2 + dx, cz2 + dz) not in open_nav_gate:
+                        return False
+                return True
+            run_recovery = not any(_throat_cell_fits(c[0], c[1])
+                                   for c in throat_for_gate)
+        if run_recovery:
+            from collections import deque as _deque
+            # Seed from eroded-interior cells (walkable, not raw-blocked, not navigable)
+            # in a box around the door's throat, then flood each connected component
+            # bounded by raw walls and the navigable region. The throat box keeps the
+            # search local to this door's opening.
+            seed_box = [(c[0], c[1]) for c in threshold_cells] + list(freed_set)
+            recovered_set = set()
+            visited = set()
+            if seed_box:
+                bxs = [c[0] for c in seed_box]
+                bzs = [c[1] for c in seed_box]
+                pad = CLOSET_INTERIOR_SEARCH_PAD
+                rx0 = max(0, min(bxs) - pad); rx1 = min(nx, max(bxs) + pad + 1)
+                rz0 = max(0, min(bzs) - pad); rz1 = min(nz, max(bzs) + pad + 1)
+                for sx in range(rx0, rx1):
+                    for sz in range(rz0, rz1):
+                        if (sx, sz) in visited:
+                            continue
+                        if not walkable_bm[sx][sz] or blocked_bm[sx][sz] \
+                                or navigable_bm[sx][sz]:
+                            continue
+                        # Flood this connected eroded-floor component.
+                        comp = {(sx, sz)}
+                        cq = _deque([(sx, sz)])
+                        leaked = False
+                        while cq:
+                            cx2, cz2 = cq.popleft()
+                            for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                                ax, az = cx2 + dx, cz2 + dz
+                                if ax < 0 or ax >= nx or az < 0 or az >= nz:
+                                    continue
+                                if (ax, az) in comp:
+                                    continue
+                                if not walkable_bm[ax][az] or blocked_bm[ax][az] \
+                                        or navigable_bm[ax][az]:
+                                    continue
+                                comp.add((ax, az))
+                                cq.append((ax, az))
+                                if len(comp) > CLOSET_INTERIOR_CELL_CAP:
+                                    leaked = True
+                                    break
+                            if leaked:
+                                break
+                        visited |= comp
+                        if not leaked:
+                            recovered_set |= comp
+            # BRIDGE the recovered interior to the door's throat across sealed doorways.
+            # A closet doorway (and internal dividers — shelves/partitions) is a PHANTOM
+            # SEAL: the mesh rasterizes over walkable floor (asymmetric export, same class
+            # as the bedroom doorway), so the eroded interior splits into several pockets
+            # separated by a few walkable-under-wall cells, and from the freed/threshold
+            # throat (which is wired to the house). Without bridging, each pocket is a
+            # NAVIGABLE ISLAND the follower can never route into.
+            #
+            # Connect them with straight walkable corridors. Starting from the throat
+            # (already house-connected), repeatedly take the interior cell-component
+            # nearest the connected set and carve the shortest straight corridor (Bresenham
+            # over REAL walkable floor only) between the nearest connected/disconnected cell
+            # pair, then absorb that component. Each corridor is short (a seal is ~1-6
+            # cells), 1-wide, stays on real floor (so it punches a phantom seal, never
+            # crosses a void/neighbour room), and runs between two fixed known-good
+            # endpoints, so it cannot sprawl the way an open flood does. Iterating absorbs
+            # internal dividers so the WHOLE interior ends up house-reachable, not just the
+            # nearest pocket. See [[project_navigation_closet_interior_eroded_2026_06_30]].
+            def _straight_corridor(a, b):
+                """4-connected (orthogonal, L-shaped) corridor of cells from a to b;
+                None if it leaves walkable floor. ORTHOGONAL, not Bresenham diagonal:
+                the planner is 8-connected with CORNER-CUT PREVENTION (a diagonal step
+                needs both flanking orthogonal cells clear), so a diagonal corridor
+                through a seal whose flanks are walls is rejected at route time and the
+                pocket stays unreachable. A 4-connected staircase is always traversable.
+                Step the long axis first, then the short axis."""
+                (cx0, cz0), (cx1, cz1) = a, b
+                pts = []
+                cx, cz = cx0, cz0
+                # Order axes so the longer run goes first (shorter visible seam).
+                if abs(cx1 - cx0) >= abs(cz1 - cz0):
+                    axes = (('x', cx1), ('z', cz1))
+                else:
+                    axes = (('z', cz1), ('x', cx1))
+                pts.append((cx, cz))
+                for axis, target in axes:
+                    while (cx if axis == 'x' else cz) != target:
+                        step = 1 if target > (cx if axis == 'x' else cz) else -1
+                        if axis == 'x':
+                            cx += step
+                        else:
+                            cz += step
+                        if not walkable_bm[cx][cz]:
+                            return None
+                        pts.append((cx, cz))
+                return pts
+
+            bridge_cells = set()
+            # Seed the connected set with ONLY the throat cells genuinely wired to the
+            # house: flood the door-open set (freed ∪ threshold) and keep the component
+            # that touches static-'N' navigable floor. The throat can itself be a few
+            # disconnected fragments; bridging a pocket to a stranded throat fragment
+            # would keep an unreachable pocket (the Office_Closet left arm bug). Seeding
+            # from the house-wired component guarantees every kept pocket is reachable.
+            throat_all = set(threshold_cells) | set(freed_set)
+            connected = set()
+            seed_q = _deque()
+            for tc in throat_all:
+                for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    ax, az = tc[0] + dx, tc[1] + dz
+                    if 0 <= ax < nx and 0 <= az < nz and navigable_bm[ax][az] \
+                            and tc not in connected:
+                        connected.add(tc); seed_q.append(tc)
+            while seed_q:
+                cx2, cz2 = seed_q.popleft()
+                for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    ax, az = cx2 + dx, cz2 + dz
+                    if (ax, az) in throat_all and (ax, az) not in connected:
+                        connected.add((ax, az)); seed_q.append((ax, az))
+            remaining = set(recovered_set)
+            # Cap the bridging work; a closet has only a handful of internal pockets.
+            for _ in range(16):
+                if not remaining or not connected:
+                    break
+                # Find the closest connected/remaining cell pair (Manhattan).
+                best = None; best_d = None
+                for cc in connected:
+                    for rc in remaining:
+                        dman = abs(cc[0] - rc[0]) + abs(cc[1] - rc[1])
+                        if best_d is None or dman < best_d:
+                            best_d = dman; best = (cc, rc)
+                if best is None:
+                    break
+                corridor = _straight_corridor(best[0], best[1])
+                if corridor is None:
+                    # No real-floor corridor to the nearest pocket; it's genuinely
+                    # walled off (not a phantom seal). Stop — the island invariant
+                    # will flag any interior left unconnected.
+                    break
+                # Absorb the corridor + the pocket it just reached (flood the reached
+                # cell's interior component) into the connected set.
+                bridge_cells.update(corridor)
+                connected.update(corridor)
+                reached = best[1]
+                comp = {reached}; cq = _deque([reached])
+                while cq:
+                    px, pz = cq.popleft()
+                    for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        ax, az = px + dx, pz + dz
+                        if (ax, az) in remaining and (ax, az) not in comp:
+                            comp.add((ax, az)); cq.append((ax, az))
+                connected.update(comp)
+                remaining -= comp
+            # Drop interior pockets the bridge could NOT reach: they're walled off from
+            # this door by REAL geometry (a separate closet section reached by a different
+            # route, or a genuinely sealed void the pad-12 search box happened to catch),
+            # not a phantom doorway seal. Keeping them would re-create navigable islands.
+            # Recover only the cells now wired to the house through this door.
+            recovered_set = (recovered_set - remaining) | bridge_cells
+            interior_recovered = sorted([list(c) for c in recovered_set])
+            # Add to freed so consumers make them navigable when this door opens.
+            for c in recovered_set:
+                if list(c) not in freed:
+                    freed.append(list(c))
+            freed.sort()
+
         # OPEN-BLOCKED cells = the door's open-leaf footprint: navigable floor (door CLOSED) the
         # leaf sweeps into when OPEN. Mirror of freed_cells (closed:blocked->open:navigable);
         # this is closed:navigable->open:blocked. The consumer removes these from navigable when
@@ -1383,6 +1631,14 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
             "open_cells": sum(sum(row) for row in panel_open_dil),
             "threshold_cells": len(threshold_cells),
             "threshold_cells_list": threshold_cells_list,
+            # Closet interior cells recovered at the effective (sub-radius-2) clearance
+            # the game permits — a subset of freed_cells, emitted separately so the
+            # post-bake invariants can exempt them from the radius-2 dilation checks
+            # (these cells ARE radius-2 dilation-blocked by design; the player still
+            # fits). Empty for non-closet doors. See
+            # [[project_navigation_closet_interior_eroded_2026_06_30]].
+            "interior_recovered_cells": interior_recovered,
+            "interior_recovered_count": len(interior_recovered),
             "freed_cells": freed,
             "freed_count": len(freed),
             # Open-leaf footprint: navigable-when-closed cells the leaf fills when open. Mirror
@@ -1577,10 +1833,16 @@ def _verify_bake_invariants(report, mesh_colliders):
             # the carve adjacency constraint keeps them inside the door's
             # actual opening rather than in an unrelated wall.
             thresholds = {(c[0], c[1]) for c in door.get("threshold_cells_list", [])}
+            # Closet interior cells are radius-2 dilation-blocked BY DESIGN — they're the
+            # narrow walk-in floor the capsule clears at the game's effective radius, not
+            # the geometric one. Exempt them like threshold cells. See
+            # [[project_navigation_closet_interior_eroded_2026_06_30]].
+            interior_rec = {(c[0], c[1]) for c in door.get("interior_recovered_cells", [])}
             violating = [(c[0], c[1]) for c in door.get("freed_cells", [])
                          if _is_dilated_blocked(c[0], c[1])
                          and (c[0], c[1]) not in own
-                         and (c[0], c[1]) not in thresholds]
+                         and (c[0], c[1]) not in thresholds
+                         and (c[0], c[1]) not in interior_rec]
             if violating:
                 errors.append(
                     f"floor={label} door={door.get('name')!r}: "
@@ -1928,6 +2190,7 @@ def _verify_bake_invariants(report, mesh_colliders):
                   for dz in range(-erode_r, erode_r + 1)
                   if dx * dx + dz * dz <= erode_r * erode_r]
     pinched = []
+    island_interiors = []
     for floor in report["floors"]:
         if "error" in floor:
             continue
@@ -1946,6 +2209,52 @@ def _verify_bake_invariants(report, mesh_colliders):
             if not door.get("is_passage", True):
                 continue
             if door.get("panel_count", 0) == 0:
+                continue
+            # Passage doors that recovered an interior pocket (the narrow-passage recovery
+            # in bake_floor; see [[project_navigation_closet_interior_eroded_2026_06_30]])
+            # are enterable at the game's EFFECTIVE navigation radius. A narrow passage
+            # (closet, wardrobe corridor, tight nook) is a walk-in the radius-2 capsule disc
+            # never fits — the geometric disc test would always (correctly) report
+            # "pinched", but the player physically walks in (wall-slide squeeze, effective
+            # radius ~0.4m), so the recovered pocket is the passing condition, not a
+            # radius-2 clear disc. BUT a recovered interior is only useful if it is
+            # CONNECTED to the house: the bridge across the doorway seal must actually join
+            # it to the throat (which is itself connected to the navigable house), else the
+            # interior is a navigable ISLAND the follower can never route into. Assert that
+            # connectivity here.
+            if door.get("interior_recovered_count", 0) > 0:
+                interior = {(c[0], c[1]) for c in door.get("interior_recovered_cells", [])}
+                open_set = set(interior)
+                open_set |= {(c[0], c[1]) for c in (door.get("freed_cells") or [])}
+                open_set |= {(c[0], c[1]) for c in (door.get("threshold_cells_list") or [])}
+                for c in (door.get("open_blocked_cells") or []):
+                    open_set.discard((c[0], c[1]))
+                # Flood the door-open set FROM the house (static-'N' cells adjacent to it),
+                # 4-connected to match the planner (8-connected but with corner-cut
+                # prevention, so a diagonal-only link is not a real route). EVERY recovered
+                # interior cell must be reached, not just one: a passage split by internal
+                # dividers can have the doorway pocket reachable while a back pocket stays
+                # a stranded island (the Office_Closet left-arm bug). Require full coverage.
+                from collections import deque as _dq
+                seen_i = set()
+                qi = _dq()
+                for cell in open_set:
+                    for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        ax, az = cell[0] + dx, cell[1] + dz
+                        if 0 <= ax < nx and 0 <= az < nz and rows[ax][az] == 'N' \
+                                and cell not in seen_i:
+                            seen_i.add(cell); qi.append(cell)
+                while qi:
+                    cx2, cz2 = qi.popleft()
+                    for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        ax, az = cx2 + dx, cz2 + dz
+                        if (ax, az) in open_set and (ax, az) not in seen_i:
+                            seen_i.add((ax, az)); qi.append((ax, az))
+                unreached = interior - seen_i
+                if unreached:
+                    island_interiors.append(
+                        f"{label}/{door.get('name')!r} ({len(unreached)}/{len(interior)} "
+                        f"interior cells unreachable)")
                 continue
             throat = [(c[0], c[1]) for c in (door.get("freed_cells") or [])]
             throat += [(c[0], c[1]) for c in (door.get("threshold_cells_list") or [])]
@@ -1975,31 +2284,33 @@ def _verify_bake_invariants(report, mesh_colliders):
                 return True
             if not any(_fits(ix, iz) for (ix, iz) in throat):
                 pinched.append(f"{label}/{door.get('name')!r}")
-    # Baseline = doors whose CLOSET INTERIOR is itself too small for the capsule, so 0
-    # traversable cells is correct (the item inside is reached by interaction-LOS from
-    # the doorway, never by entering). A door OUTSIDE this set with a pinched throat is a
-    # fresh regression and must fail the bake; a baseline door staying pinched only warns.
-    PINCHED_THROAT_BASELINE = {
-        "upper/'Doors_Bedroom_ClosetRight_Inner'",
-    }
-    new_pinched = [p for p in pinched if p not in PINCHED_THROAT_BASELINE]
-    if new_pinched:
+    # A door reaching this list has a pinched throat AND the narrow-passage recovery
+    # produced NO interior pocket (a recovered door takes the connectivity branch above,
+    # never this one). With recovery now gated on the pinch test itself, that means: the
+    # door's throat fails the capsule disc, yet there is no walkable eroded pocket behind
+    # it to recover — a genuine defect (a real single-file gap A* threads but the follower
+    # freezes on). There is no "expected baseline" any more: the old
+    # PINCHED_THROAT_BASELINE (un-enterable closets) is obsolete because those closets ARE
+    # now recovered as enterable narrow passages.
+    if pinched:
         errors.append(
-            f"doorway capsule-width: {len(new_pinched)} PASSAGE door(s) open a throat "
-            f"too narrow for the capsule centre (single-file — A* threads it, the follower "
-            f"freezes at the doorway): {sorted(new_pinched)}. A carve/dilation/door-throat "
-            f"change pinched the opening. Restore a capsule-diameter channel (the door's "
-            f"threshold BFS / anchor seed) or, if the interior is genuinely un-enterable, "
-            f"add it to PINCHED_THROAT_BASELINE with a justification."
+            f"doorway capsule-width: {len(pinched)} PASSAGE door(s) open a throat too "
+            f"narrow for the capsule centre with NO recoverable walkable pocket behind it "
+            f"(single-file — A* threads it, the follower freezes at the doorway): "
+            f"{sorted(pinched)}. Either a carve/dilation change pinched the opening, or the "
+            f"narrow-passage recovery's flood/cap/bridge could not reach the interior. "
+            f"Investigate the throat geometry in bake_floor. See "
+            f"[[project_navigation_closet_interior_eroded_2026_06_30]]."
         )
-    expected_still_pinched = [p for p in pinched if p in PINCHED_THROAT_BASELINE]
-    if expected_still_pinched:
-        warnings.append(
-            f"doorway capsule-width: {len(expected_still_pinched)} baseline door(s) still "
-            f"have an un-threadable throat (closet interiors too small for the capsule — "
-            f"reached by interaction-LOS from the doorway, never entered): "
-            f"{sorted(expected_still_pinched)}. Expected; tracked so a planner goal-cell "
-            f"fix can clear them later."
+    if island_interiors:
+        errors.append(
+            f"interior island: {len(island_interiors)} passage door(s) recovered an "
+            f"interior pocket that is NOT connected to the house in the door-open set "
+            f"(the doorway-seal bridge failed to join the interior to the throat): "
+            f"{sorted(island_interiors)}. The follower could never route in. Fix the bridge "
+            f"in bake_floor's narrow-passage recovery (the throat<->interior corridor "
+            f"across the phantom doorway seal). See "
+            f"[[project_navigation_closet_interior_eroded_2026_06_30]]."
         )
 
     return errors, warnings
