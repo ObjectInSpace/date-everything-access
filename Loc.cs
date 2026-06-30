@@ -125,8 +125,8 @@ namespace DateEverythingAccess
             Add("settings_menu_opened", "Zugaenglichkeitseinstellungen geoeffnet.", "Accessibility settings opened.");
             Add("settings_menu_closed", "Zugaenglichkeitseinstellungen geschlossen und gespeichert.", "Accessibility settings closed and saved.");
             Add("settings_menu_item",
-                "{0} von {1}: {2}, {3}. Links und rechts aendern den Wert. Enter und Leertaste funktionieren auch. Escape schliesst.",
-                "{0} of {1}: {2}, {3}. Left and right change the value. Enter and Space also work. Escape closes.");
+                "{0} von {1}: {2}, {3}. Links und rechts aendern den Wert. Enter und Leertaste funktionieren auch. Ruecktaste schliesst.",
+                "{0} of {1}: {2}, {3}. Left and right change the value. Enter and Space also work. Backspace closes.");
             Add("settings_menu_changed", "{0}: {1}", "{0}: {1}");
             Add("settings_value_on", "Ein", "On");
             Add("settings_value_off", "Aus", "Off");

@@ -178,7 +178,7 @@ namespace DateEverythingAccess
         private const int VkRight = 0x27;
         private const int VkReturn = 0x0D;
         private const int VkSpace = 0x20;
-        private const int VkEscape = 0x1B;
+        private const int VkBackspace = 0x08; // VK_BACK
         private const int VkPageUp = 0x21;   // VK_PRIOR
         private const int VkPageDown = 0x22; // VK_NEXT
 
@@ -283,7 +283,7 @@ namespace DateEverythingAccess
         private static bool _pickerUpWasDown;
         private static bool _pickerDownWasDown;
         private static bool _pickerReturnWasDown;
-        private static bool _pickerEscapeWasDown;
+        private static bool _pickerBackspaceWasDown;
         // Filter/sort toggle keys (Left/Right = sort, F = floor, M = section, D = doors).
         private static bool _pickerLeftWasDown;
         private static bool _pickerRightWasDown;
@@ -3118,8 +3118,8 @@ namespace DateEverythingAccess
         // interacted with, or examined the object. Entries are grouped DateADex-style into a
         // Met section (by character name) and an Encountered section (object name only).
         // Up/Down move selection; Enter selects (drives the same nav-tone flow as Ctrl+F6);
-        // Escape closes. Left/Right cycle the sort, F toggles current-floor-only, M cycles the
-        // section filter, D toggles doors-only.
+        // Backspace backs out / closes. Left/Right cycle the sort, F toggles current-floor-only,
+        // M cycles the section filter, D toggles doors-only.
         private void OpenKnownObjectPicker()
         {
             Loc.RefreshLanguage();
@@ -3253,10 +3253,11 @@ namespace DateEverythingAccess
                 return;
             }
 
-            if (WasChoiceKeyPressed(KeyCode.Escape, VkEscape, ref _pickerEscapeWasDown))
+            if (WasChoiceKeyPressed(KeyCode.Backspace, VkBackspace, ref _pickerBackspaceWasDown))
             {
-                // Escape backs OUT one drill level (object -> room -> top), and only closes the
+                // Backspace backs OUT one drill level (object -> room -> top), and only closes the
                 // picker when already at the top — so a player who drilled in can step back up.
+                // (Was Escape; Backspace conflicts less with the game's own menu/cancel handling.)
                 AscendOrClosePicker();
             }
         }
@@ -3498,7 +3499,7 @@ namespace DateEverythingAccess
             BeginNavigationAndStartTrackerTone(targetZone, targetLabel);
         }
 
-        // Escape behaviour: ascend one drill level (Objects -> InRoom -> Rooms), else close at the
+        // Backspace behaviour: ascend one drill level (Objects -> InRoom -> Rooms), else close at the
         // Rooms level. Returns true if it ascended (picker stays open), false if it closed.
         private bool AscendOrClosePicker()
         {
@@ -3557,7 +3558,7 @@ namespace DateEverythingAccess
             _pickerUpWasDown = (GetAsyncKeyState(VkUp) & 0x8000) != 0;
             _pickerDownWasDown = (GetAsyncKeyState(VkDown) & 0x8000) != 0;
             _pickerReturnWasDown = (GetAsyncKeyState(VkReturn) & 0x8000) != 0;
-            _pickerEscapeWasDown = (GetAsyncKeyState(VkEscape) & 0x8000) != 0;
+            _pickerBackspaceWasDown = (GetAsyncKeyState(VkBackspace) & 0x8000) != 0;
             _pickerLeftWasDown = (GetAsyncKeyState(VkLeft) & 0x8000) != 0;
             _pickerRightWasDown = (GetAsyncKeyState(VkRight) & 0x8000) != 0;
             _pickerFloorKeyWasDown = (GetAsyncKeyState(0x46) & 0x8000) != 0;

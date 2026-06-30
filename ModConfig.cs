@@ -18,7 +18,7 @@ namespace DateEverythingAccess
         private const int VkRight = 0x27;
         private const int VkReturn = 0x0D;
         private const int VkSpace = 0x20;
-        private const int VkEscape = 0x1B;
+        private const int VkBackspace = 0x08;
         private const int FocusedItemsIndex = 0;
         private const int DialogueTextIndex = 1;
         private const int DialogueChoicesIndex = 2;
@@ -60,7 +60,7 @@ namespace DateEverythingAccess
         private static bool _rightWasDown;
         private static bool _returnWasDown;
         private static bool _spaceWasDown;
-        private static bool _escapeWasDown;
+        private static bool _backspaceWasDown;
 
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int vKey);
@@ -213,7 +213,8 @@ namespace DateEverythingAccess
                 return;
             }
 
-            if (WasPressed(KeyCode.Escape, VkEscape, ref _escapeWasDown))
+            // Backspace closes the menu (was Escape — Backspace conflicts less with the game's own pause/cancel).
+            if (WasPressed(KeyCode.Backspace, VkBackspace, ref _backspaceWasDown))
             {
                 ToggleMenu();
             }
@@ -235,7 +236,7 @@ namespace DateEverythingAccess
             _rightWasDown = IsVirtualKeyDown(VkRight);
             _returnWasDown = IsVirtualKeyDown(VkReturn);
             _spaceWasDown = IsVirtualKeyDown(VkSpace);
-            _escapeWasDown = IsVirtualKeyDown(VkEscape);
+            _backspaceWasDown = IsVirtualKeyDown(VkBackspace);
         }
 
         private static bool IsVirtualKeyDown(int virtualKey)
