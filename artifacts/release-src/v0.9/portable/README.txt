@@ -26,7 +26,8 @@ Current coverage includes:
 - Dialogue text and dialogue choice announcements
 - Ctrl+F1 repeat-last-spoken support
 - Spoken accessibility settings menu
-- Spoken game settings menu (from the main menu and from the phone)
+- Spoken game settings menu (from the main menu and from the phone), including
+  the Controls tab
 - Phone app and menu text announcements
 - Date A Dex biography announcements, full profile via PageUp/PageDown
 - Date A Dex collectable icon names and descriptions
@@ -54,10 +55,13 @@ WHAT'S NEW IN 0.9
   description, not just the lines currently scrolled into view.
 - Settings: option titles are now read when the settings menu is opened from the
   phone, matching how it already worked from the main menu.
+- Settings: the Controls tab now reads each row as its action and bound key.
 - PageUp/PageDown section stepping (SPECS / Rumors / Date A Dex) now reliably
   catches key presses that were previously dropped, so it no longer goes silent.
 - Speech now interrupts correctly when NVDA is in sleep mode: a new focus
   announcement cuts off the current one instead of being queued behind it.
+- The mod's own menus (object list and accessibility settings) now back out and
+  close with Backspace instead of Escape, which conflicts less with the game.
 
 WHAT'S NEW IN 0.85
 ==================
@@ -130,6 +134,8 @@ F9 - Toggle debug mode
 Ctrl+F9 - Open accessibility settings
 PageUp / PageDown - Step through sections on the SPECS, Rumors, and Date A Dex
   detail screens (Date A Dex reads the full profile description this way)
+Backspace - Back out of / close the mod's own menus (the known objects list and
+  the accessibility settings menu)
 
 POSE CARD DESCRIPTIONS
 ======================
