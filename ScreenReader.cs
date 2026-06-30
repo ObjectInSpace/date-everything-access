@@ -36,6 +36,19 @@ namespace DateEverythingAccess
         private static string _lastSpokenText;
         private static string _lastRepeatableText;
 
+        // Coalesced-cycle interrupt. The ambient world announcers (nearby object, room,
+        // screen summary, status) run as a chain every poll tick. They must NOT cut each
+        // other off WITHIN a tick (room + a newly-in-range object that appear on the same
+        // tick should both speak), but the FIRST of them in a tick SHOULD interrupt
+        // whatever stale announcement is still playing/queued from an earlier tick —
+        // otherwise walking quickly past objects queues their names behind one another
+        // (the bug: world focus changes pile up while menu focus changes cut off). Flow:
+        // the watcher calls BeginCoalescedCycle() once at the top of the ambient chain;
+        // the first SayCoalesced() that actually emits consumes the flag and interrupts,
+        // the rest in that tick append. Menus don't use this — they call Say(interrupt:true)
+        // directly. See the ambient block in AccessibilityWatcher.Update.
+        private static bool _coalescedInterruptPending;
+
         /// <summary>
         /// Loads Tolk and detects the active screen reader.
         /// </summary>
@@ -113,6 +126,33 @@ namespace DateEverythingAccess
             {
                 Main.Log.LogWarning("ScreenReader.Say failed: " + ex.Message);
             }
+        }
+
+        /// <summary>
+        /// Arms the next coalesced announcement of this poll tick to interrupt. Call once
+        /// at the start of the ambient announcer chain.
+        /// </summary>
+        public static void BeginCoalescedCycle()
+        {
+            _coalescedInterruptPending = true;
+        }
+
+        /// <summary>
+        /// Speaks an ambient announcement that coalesces within a poll tick: the FIRST one
+        /// to emit after BeginCoalescedCycle() interrupts stale speech from earlier ticks;
+        /// later ones in the same tick append so co-occurring announcements all play. This
+        /// makes world focus changes (looking from object to object while walking) cut off
+        /// the previous one instead of queueing, matching menu behaviour, without one
+        /// ambient announcer clobbering another that fired on the same tick.
+        /// </summary>
+        public static void SayCoalesced(string text, bool remember = true, bool rememberAsRepeatable = false)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+
+            bool interrupt = _coalescedInterruptPending;
+            _coalescedInterruptPending = false;
+            Say(text, interrupt: interrupt, remember: remember, rememberAsRepeatable: rememberAsRepeatable);
         }
 
         /// <summary>

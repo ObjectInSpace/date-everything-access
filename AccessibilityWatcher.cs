@@ -897,6 +897,11 @@ namespace DateEverythingAccess
 
             _nextPollTime = Time.unscaledTime + 0.1f;
             UpdateSpecsVisibilityState();
+            // Arm the ambient announcer chain so the first one to speak this tick cuts off
+            // stale speech queued from an earlier tick (walking past objects quickly used
+            // to queue their names); co-occurring announcements in the same tick still
+            // chain. See ScreenReader.BeginCoalescedCycle / SayCoalesced.
+            ScreenReader.BeginCoalescedCycle();
             AnnounceScreenSummaryIfNeeded();
             AnnounceRoomIfNeeded();
             AnnounceInteractableIfNeeded();
@@ -5625,7 +5630,7 @@ namespace DateEverythingAccess
 
             _lastScreenSummary = summary;
             if (!string.IsNullOrEmpty(summary))
-                ScreenReader.Say(summary, interrupt: false);
+                ScreenReader.SayCoalesced(summary);
         }
 
         private void AnnounceRoomIfNeeded()
@@ -5650,7 +5655,7 @@ namespace DateEverythingAccess
                 return;
 
             _lastRoomName = roomName;
-            ScreenReader.Say(Loc.Get("room_announcement", roomName), interrupt: false);
+            ScreenReader.SayCoalesced(Loc.Get("room_announcement", roomName));
         }
 
         private void AnnounceInteractableIfNeeded()
@@ -5694,7 +5699,7 @@ namespace DateEverythingAccess
 
             _lastInteractableId = identifier;
             string name = GetInteractableDisplayName(interactable);
-            ScreenReader.Say(Loc.Get("nearby_announcement_without_prompt", name), interrupt: false);
+            ScreenReader.SayCoalesced(Loc.Get("nearby_announcement_without_prompt", name));
         }
 
         private void AnnounceDateviatorsStateIfNeeded()
@@ -5718,7 +5723,7 @@ namespace DateEverythingAccess
                 return;
 
             string status = Loc.Get(equipped ? "dateviators_equipped" : "dateviators_unequipped");
-            ScreenReader.Say(Loc.Get("dateviators_state", status, charges), interrupt: false);
+            ScreenReader.SayCoalesced(Loc.Get("dateviators_state", status, charges));
         }
 
         private void AnnounceDialogueIfNeeded()
