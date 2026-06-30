@@ -6585,6 +6585,12 @@ namespace DateEverythingAccess
                 return specialAnnouncement;
             }
 
+            if (TryBuildControlsItemSelectionAnnouncement(selectedObject, out specialAnnouncement))
+            {
+                branch = "controls_item";
+                return specialAnnouncement;
+            }
+
             if (TryBuildValidateQuestionsSelectionAnnouncement(selectedObject, out specialAnnouncement, out branch))
                 return specialAnnouncement;
 
@@ -6788,6 +6794,41 @@ namespace DateEverythingAccess
                 return normalized.Substring(0, 160) + "...";
 
             return normalized;
+        }
+
+        // The Controls tab in the settings menu is a list of InitControlItem rows, each holding an Action label
+        // ("Interact:") and a Map label (the bound key, e.g. "E") as two TMP fields. The settings reader only knows
+        // SettingsMenuSelector / sliders / the apply button, and the controls list lives in its own InitControlMenu
+        // panel (not under SettingsMenu), so these rows fell through and read nothing. Resolve the focused row's
+        // InitControlItem and speak "action, key". The focused object may be the row, a child, or a sibling button,
+        // so we look up the parent chain and, failing that, in the focused object's row container.
+        private static bool TryBuildControlsItemSelectionAnnouncement(GameObject selectedObject, out string announcement)
+        {
+            announcement = null;
+
+            if (selectedObject == null)
+                return false;
+
+            InitControlItem item = selectedObject.GetComponentInParent<InitControlItem>();
+            if (item == null && selectedObject.transform.parent != null)
+                item = selectedObject.transform.parent.GetComponentInChildren<InitControlItem>();
+            if (item == null)
+                return false;
+
+            string action = NormalizeText(item.Action != null ? item.Action.text : null);
+            string map = NormalizeText(item.Map != null ? item.Map.text : null);
+
+            // Action.text is built as "<name>:"; drop the trailing colon so it reads cleanly.
+            if (!string.IsNullOrEmpty(action))
+                action = action.TrimEnd(':', ' ');
+
+            if (string.IsNullOrEmpty(action) && string.IsNullOrEmpty(map))
+                return false;
+
+            announcement = string.IsNullOrEmpty(map)
+                ? action
+                : (string.IsNullOrEmpty(action) ? map : action + ", " + map);
+            return !string.IsNullOrEmpty(announcement);
         }
 
         private static bool TryBuildSettingsSelectionAnnouncement(GameObject selectedObject, out string announcement)
