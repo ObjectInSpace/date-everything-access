@@ -62,6 +62,11 @@ WHAT'S NEW IN 0.9
   announcement cuts off the current one instead of being queued behind it.
 - The mod's own menus (object list and accessibility settings) now back out and
   close with Backspace instead of Escape, which conflicts less with the game.
+- Pose cards: several first-meeting cards that previously read silent now speak
+  their description again. Their cards use a non-neutral pose or a variant name
+  (Diana, Penelope, Connie, Mateo, Tina, Tydus, Wallace, the Dorian forms, Volt,
+  Timmy, Jon Wick) that no longer prevents the description from being found, and
+  Clarence now has his own description split out from Dirk's.
 
 WHAT'S NEW IN 0.85
 ==================
