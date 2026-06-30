@@ -6814,39 +6814,66 @@ namespace DateEverythingAccess
             return normalized;
         }
 
-        // The Controls tab in the settings menu is a list of InitControlItem rows, each holding an Action label
-        // ("Interact:") and a Map label (the bound key, e.g. "E") as two TMP fields. The settings reader only knows
-        // SettingsMenuSelector / sliders / the apply button, and the controls list lives in its own InitControlMenu
-        // panel (not under SettingsMenu), so these rows fell through and read nothing. Resolve the focused row's
-        // InitControlItem and speak "action, key". The focused object may be the row, a child, or a sibling button,
-        // so we look up the parent chain and, failing that, in the focused object's row container.
+        // The settings Controls tab is the Rewired-style keybind list (hierarchy ...> Item > ItemArea >
+        // KeybindKeyboard<Action> > ... > MenuInternal_Keybind...). Each row is a container named "Item" holding:
+        //   - a TMP named "Item"               -> the action name ("Move Forward")
+        //   - a TMP named "SelectedOptionText" -> the current binding ("W"; empty until a frame after focus)
+        //   - "Reassign" and "Clear" buttons   -> the focused control is one of these (a ReassignButton/ClearButton
+        //                                          with its own "Reassign"/"Clear" TMP child)
+        // The default reader saw only the focused button's "Reassign" TMP and read "Reassign" for every row. Resolve
+        // the row container, then speak "<action>, <binding>, <button>" so the player hears what they're rebinding,
+        // the current key, and which button is focused. (Verified from a live focus dump of this menu.)
         private static bool TryBuildControlsItemSelectionAnnouncement(GameObject selectedObject, out string announcement)
         {
             announcement = null;
 
-            if (selectedObject == null)
+            if (selectedObject == null || selectedObject.transform == null)
                 return false;
 
-            InitControlItem item = selectedObject.GetComponentInParent<InitControlItem>();
-            if (item == null && selectedObject.transform.parent != null)
-                item = selectedObject.transform.parent.GetComponentInChildren<InitControlItem>();
-            if (item == null)
+            // Find the row container named "Item" by climbing the parent chain (the focused button sits a couple of
+            // levels below it). Bounded climb so this stays cheap and can't run away on unrelated selections.
+            Transform row = null;
+            Transform t = selectedObject.transform;
+            for (int i = 0; i < 6 && t != null; i++)
+            {
+                if (string.Equals(t.gameObject.name, "Item", StringComparison.Ordinal))
+                {
+                    row = t;
+                    break;
+                }
+                t = t.parent;
+            }
+            if (row == null)
                 return false;
 
-            string action = NormalizeText(item.Action != null ? item.Action.text : null);
-            string map = NormalizeText(item.Map != null ? item.Map.text : null);
+            // Pull the action name and current binding from the named TMPs in the row.
+            string action = null;
+            string binding = null;
+            foreach (TMP_Text text in row.GetComponentsInChildren<TMP_Text>(true))
+            {
+                if (text == null)
+                    continue;
+                string name = text.gameObject.name;
+                if (action == null && string.Equals(name, "Item", StringComparison.Ordinal))
+                    action = NormalizeText(text.text);
+                else if (binding == null && string.Equals(name, "SelectedOptionText", StringComparison.Ordinal))
+                    binding = NormalizeText(text.text);
+            }
 
-            // Action.text is built as "<name>:"; drop the trailing colon so it reads cleanly.
-            if (!string.IsNullOrEmpty(action))
-                action = action.TrimEnd(':', ' ');
-
-            if (string.IsNullOrEmpty(action) && string.IsNullOrEmpty(map))
+            if (string.IsNullOrEmpty(action))
                 return false;
 
-            announcement = string.IsNullOrEmpty(map)
-                ? action
-                : (string.IsNullOrEmpty(action) ? map : action + ", " + map);
-            return !string.IsNullOrEmpty(announcement);
+            // Which button is focused (Reassign / Clear); read its own label so the player knows the action.
+            string button = NormalizeText(ExtractTextFromObject(selectedObject));
+
+            var parts = new List<string>();
+            parts.Add(action);
+            parts.Add(string.IsNullOrEmpty(binding) ? Loc.Get("controls_unbound") : binding);
+            if (!string.IsNullOrEmpty(button))
+                parts.Add(button);
+
+            announcement = string.Join(", ", parts.ToArray());
+            return true;
         }
 
         private static bool TryBuildSettingsSelectionAnnouncement(GameObject selectedObject, out string announcement)

@@ -154,6 +154,7 @@ namespace DateEverythingAccess
             Add("choice_locked_suffix", "{0}. Gesperrt.", "{0}. Locked.");
             Add("choice_locked_activate", "Diese Option ist gesperrt.", "This option is locked.");
             Add("apply_display_settings", "Anzeigeeinstellungen anwenden", "Apply display settings");
+            Add("controls_unbound", "nicht zugewiesen", "unbound");
             Add("new_game_field_name", "Name", "Name");
             Add("new_game_field_town", "Wohnort", "Town");
             Add("new_game_field_favorite_thing", "Lieblingssache", "Favorite thing");
