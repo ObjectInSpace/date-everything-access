@@ -46,11 +46,28 @@ namespace DateEverythingAccess
     [HarmonyPatch(typeof(GameController), nameof(GameController.SelectObj))]
     internal static class SelectObjInteractHistoryPatch
     {
+        // SelectObj runs the alternate interaction synchronously in its body (it calls
+        // alternateInteraction.Interact() directly), so marking a player-driven interaction as
+        // active for the duration of SelectObj lets the environmental-feedback patches
+        // (InteractionFeedbackPatches) tell a player flip from a programmatic one. Prefix sets it,
+        // finalizer clears it even if the body throws.
+        [HarmonyPrefix]
+        private static void Prefix()
+        {
+            AccessibilityWatcher.IsPlayerDrivenInteractionActive = true;
+        }
+
         [HarmonyPostfix]
         private static void Postfix(InteractableObj iObj, GameController.SelectObjResult __result)
         {
             if (__result == GameController.SelectObjResult.ALT_INTERACTION)
                 AccessibilityWatcher.RememberInteractedObject(iObj);
+        }
+
+        [HarmonyFinalizer]
+        private static void Finalizer()
+        {
+            AccessibilityWatcher.IsPlayerDrivenInteractionActive = false;
         }
     }
 
@@ -139,6 +156,12 @@ namespace DateEverythingAccess
                 }
             }
         }
+
+        // True while GameController.SelectObj is running — i.e. the current interaction is
+        // player-driven. Lets InteractionFeedbackPatches announce a player's light flip while
+        // staying silent on LightingScenarios' programmatic toggles, which call the same
+        // Lights_Inter.Interact(bool) outside any SelectObj.
+        internal static bool IsPlayerDrivenInteractionActive { get; set; }
 
         // -1 = no slot known yet (main menu / pre-load). While unknown, evidence still accumulates
         // in memory but is not written; it gets flushed once a slot is first known.
