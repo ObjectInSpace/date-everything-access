@@ -59,11 +59,10 @@ WHAT'S NEW IN 0.99
   faucet or fireplace, are left alone.
 - Ctrl+F6 now falls back to helpful nearby targets when there is no active
   tutorial objective: it steers toward the key (or the rat trap once the key is
-  taken) while you are in the crawlspace, Zoey while you are in the attic with
-  the glasses off, Ayrin after you turn the thermostat to cold, and the dust
-  bunny after the couch reveals it. A real tutorial objective still takes
-  priority. "Find more datables" now points only at datables you have not
-  discovered yet.
+  taken) while you are in the crawlspace, Zoey while her ghost is present, Ayrin
+  while the thermostat is set to cold, and the dust bunny once the couch has
+  revealed it. A real tutorial objective still takes priority. "Find more
+  datables" now points only at datables you have not discovered yet.
 - The day of the week from the calendar is now spoken together with the time of
   day, so time changes read as, for example, "Monday, morning".
 - Known objects are remembered better: objects you have examined or interacted
