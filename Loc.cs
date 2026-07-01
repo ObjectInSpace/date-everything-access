@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using T17.Services;
-using UnityEngine;
 
 namespace DateEverythingAccess
 {
@@ -12,8 +11,12 @@ namespace DateEverythingAccess
         private static bool _initialized;
         private static string _currentLang = "en";
 
-        private static readonly Dictionary<string, string> _german = new Dictionary<string, string>();
+        // The mod supports exactly the languages the game supports (TextLanguage enum: English,
+        // Japanese). English is the base; Japanese is populated only for entries that actually
+        // differ — format-only templates ("{0}", "{0}: {1}") and proper nouns (SPECS, Canopy,
+        // Dateviators, ...) fall through to English. See AddJa / InitializeJapanese.
         private static readonly Dictionary<string, string> _english = new Dictionary<string, string>();
+        private static readonly Dictionary<string, string> _japanese = new Dictionary<string, string>();
 
         /// <summary>
         /// Initializes the localization dictionaries and selects the active language.
@@ -37,7 +40,7 @@ namespace DateEverythingAccess
         }
 
         /// <summary>
-        /// The currently selected language code (e.g. "en", "de"). Other mod systems that ship
+        /// The currently selected language code ("en" or "ja"). Other mod systems that ship
         /// their own per-language data (see <c>CardPoseDescriptions</c>) select files with this
         /// so their language tracks the game's text-language setting exactly like <see cref="Get"/>.
         /// </summary>
@@ -62,8 +65,8 @@ namespace DateEverythingAccess
             if (!_initialized)
                 Initialize();
 
-            Dictionary<string, string> dict = _currentLang == "de" ? _german : _english;
-            if (dict.TryGetValue(key, out value))
+            // Japanese where provided, English otherwise (base + fallback for untranslated keys).
+            if (_currentLang == "ja" && _japanese.TryGetValue(key, out value))
                 return value;
 
             if (_english.TryGetValue(key, out englishValue))
@@ -90,225 +93,392 @@ namespace DateEverythingAccess
 
         private static string GetGameLanguage()
         {
+            // Match the game's text-language setting exactly. TextLanguage enum: 0 = English,
+            // 1 = Japanese. Anything else (or read failure) falls back to English.
             try
             {
-                if (Services.GameSettings != null && Services.GameSettings.GetInt("textLanguage", 0) != 0)
-                    return "en";
+                if (Services.GameSettings != null && Services.GameSettings.GetInt("textLanguage", 0) == 1)
+                    return "ja";
             }
             catch
             {
             }
 
-            return Application.systemLanguage == SystemLanguage.German ? "de" : "en";
+            return "en";
         }
 
-        private static void Add(string key, string german, string english)
+        private static void Add(string key, string english)
         {
-            _german[key] = german;
             _english[key] = english;
+        }
+
+        // Japanese override for a key. Call only for entries whose Japanese differs from the
+        // English base — untranslated keys correctly fall through to English in Get().
+        private static void AddJa(string key, string japanese)
+        {
+            _japanese[key] = japanese;
         }
 
         private static void InitializeStrings()
         {
-            Add("mod_loaded",
-                "Date Everything Access geladen. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen werden automatisch vorgelesen. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F6 meldet den aktuellen Raum und Objekte relativ zu deiner Blickrichtung. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Liste bekannter Objekte. In der Liste bewegen Hoch und Runter die Auswahl, Eingabe waehlt aus, Escape schliesst, Links und Rechts wechseln die Sortierung, F schaltet nur diese Etage um, M wechselt den Abschnittsfilter und D schaltet nur Tueren um. Strg+Alt+F6 schaltet den Auto-Lauf zum ausgewaehlten Ziel um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen.",
-                "Date Everything Access loaded. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes are spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F6 reports the current room and objects relative to the direction you are facing. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the known objects list. In the list, Up and Down move the selection, Enter selects, Escape closes, Left and Right change the sort, F toggles this floor only, M cycles the section filter, and D toggles doors only. Ctrl+Alt+F6 toggles auto-walk to the selected target. Ctrl+F9 opens accessibility settings.");
-            Add("help_text",
-                "Date Everything Access. Fokus, Dialoge, Bildschirmtexte, Telefon-App-Texte, Raeume, Objekte in der Naehe und Statusaenderungen koennen automatisch vorgelesen werden. F1 fuer Hilfe. Strg+F1 wiederholt die letzte Sprachausgabe. F6 meldet den aktuellen Raum und Objekte relativ zu deiner Blickrichtung. Strg+F6 verfolgt das aktuelle Ziel. Strg+Umschalt+F6 oeffnet die Liste bekannter Objekte. In der Liste bewegen Hoch und Runter die Auswahl, Eingabe waehlt aus, Escape schliesst, Links und Rechts wechseln die Sortierung, F schaltet nur diese Etage um, M wechselt den Abschnittsfilter und D schaltet nur Tueren um. Strg+Alt+F6 schaltet den Auto-Lauf zum ausgewaehlten Ziel um. Strg+F9 oeffnet die Zugaenglichkeitseinstellungen.",
-                "Date Everything Access. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes can be spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F6 reports the current room and objects relative to the direction you are facing. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the known objects list. In the list, Up and Down move the selection, Enter selects, Escape closes, Left and Right change the sort, F toggles this floor only, M cycles the section filter, and D toggles doors only. Ctrl+Alt+F6 toggles auto-walk to the selected target. Ctrl+F9 opens accessibility settings.");
-            Add("debug_mode_enabled", "Debug-Modus aktiviert.", "Debug mode enabled.");
-            Add("debug_mode_enabled_with_mapping_dump",
-                "Debug-Modus aktiviert. Aktuelle Eingabebelegungen fuer {0} Geraete wurden ins Protokoll geschrieben.",
-                "Debug mode enabled. Current input mappings for {0} devices were written to the log.");
-            Add("debug_mode_disabled", "Debug-Modus deaktiviert.", "Debug mode disabled.");
-            Add("repeat_last_unavailable", "Noch keine Sprachausgabe zum Wiederholen vorhanden.", "Nothing has been spoken yet.");
-            Add("settings_menu_opened", "Zugaenglichkeitseinstellungen geoeffnet.", "Accessibility settings opened.");
-            Add("settings_menu_closed", "Zugaenglichkeitseinstellungen geschlossen und gespeichert.", "Accessibility settings closed and saved.");
-            Add("settings_menu_item",
-                "{0} von {1}: {2}, {3}. Links und rechts aendern den Wert. Enter und Leertaste funktionieren auch. Ruecktaste schliesst.",
-                "{0} of {1}: {2}, {3}. Left and right change the value. Enter and Space also work. Backspace closes.");
-            Add("settings_menu_changed", "{0}: {1}", "{0}: {1}");
-            Add("settings_value_on", "Ein", "On");
-            Add("settings_value_off", "Aus", "Off");
-            Add("config_focused_items", "Fokussierte Elemente", "Focused items");
-            Add("config_dialogue_text", "Dialogtext", "Dialogue text");
-            Add("config_dialogue_choices", "Dialogoptionen", "Dialogue choices");
-            Add("config_screen_text", "Bildschirmtexte", "Screen text");
-            Add("config_phone_app_text", "Telefon-App-Texte", "Phone app text");
-            Add("config_room_changes", "Raumwechsel", "Room changes");
-            Add("config_nearby_objects", "Nahe Objekte", "Nearby objects");
-            Add("config_status_changes", "Statusaenderungen", "Status changes");
-            Add("room_announcement", "Raum: {0}", "Room: {0}");
-            Add("nearby_announcement_without_prompt", "{0}", "{0}");
-            Add("dateviators_equipped", "ausgeruestet", "equipped");
-            Add("dateviators_unequipped", "abgesetzt", "unequipped");
-            Add("dateviators_state", "Dateviators {0}. {1} Ladungen.", "Dateviators {0}. {1} charges.");
-            Add("time_announcement", "Zeit: {0}.", "Time: {0}.");
+            InitializeEnglish();
+            InitializeJapanese();
+        }
+
+        private static void InitializeEnglish()
+        {
+            Add("mod_loaded", "Date Everything Access loaded. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes are spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F6 reports the current room and objects relative to the direction you are facing. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the known objects list. In the list, Up and Down move the selection, Enter selects, Escape closes, Left and Right change the sort, F toggles this floor only, M cycles the section filter, and D toggles doors only. Ctrl+Alt+F6 toggles auto-walk to the selected target. Ctrl+F9 opens accessibility settings.");
+            Add("help_text", "Date Everything Access. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes can be spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F6 reports the current room and objects relative to the direction you are facing. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the known objects list. In the list, Up and Down move the selection, Enter selects, Escape closes, Left and Right change the sort, F toggles this floor only, M cycles the section filter, and D toggles doors only. Ctrl+Alt+F6 toggles auto-walk to the selected target. Ctrl+F9 opens accessibility settings.");
+            Add("debug_mode_enabled", "Debug mode enabled.");
+            Add("debug_mode_enabled_with_mapping_dump", "Debug mode enabled. Current input mappings for {0} devices were written to the log.");
+            Add("debug_mode_disabled", "Debug mode disabled.");
+            Add("repeat_last_unavailable", "Nothing has been spoken yet.");
+            Add("settings_menu_opened", "Accessibility settings opened.");
+            Add("settings_menu_closed", "Accessibility settings closed and saved.");
+            Add("settings_menu_item", "{0} of {1}: {2}, {3}. Left and right change the value. Enter and Space also work. Backspace closes.");
+            Add("settings_menu_changed", "{0}: {1}");
+            Add("settings_value_on", "On");
+            Add("settings_value_off", "Off");
+            Add("config_focused_items", "Focused items");
+            Add("config_dialogue_text", "Dialogue text");
+            Add("config_dialogue_choices", "Dialogue choices");
+            Add("config_screen_text", "Screen text");
+            Add("config_phone_app_text", "Phone app text");
+            Add("config_room_changes", "Room changes");
+            Add("config_nearby_objects", "Nearby objects");
+            Add("config_status_changes", "Status changes");
+            Add("room_announcement", "Room: {0}");
+            Add("nearby_announcement_without_prompt", "{0}");
+            Add("dateviators_equipped", "equipped");
+            Add("dateviators_unequipped", "unequipped");
+            Add("dateviators_state", "Dateviators {0}. {1} charges.");
+            Add("time_announcement", "Time: {0}.");
             // Time change with the day of the week from the calendar. {0} = day, {1} = phase.
-            Add("day_time_announcement", "{0}, {1}.", "{0}, {1}.");
+            Add("day_time_announcement", "{0}, {1}.");
             // Day names (calendar day of week). Keyed by the game's English DayOfWeek.ToString().
-            Add("day_monday", "Montag", "Monday");
-            Add("day_tuesday", "Dienstag", "Tuesday");
-            Add("day_wednesday", "Mittwoch", "Wednesday");
-            Add("day_thursday", "Donnerstag", "Thursday");
-            Add("day_friday", "Freitag", "Friday");
-            Add("day_saturday", "Samstag", "Saturday");
-            Add("day_sunday", "Sonntag", "Sunday");
-            Add("collectable_unlocked", "Sammelobjekt freigeschaltet. {0} insgesamt.", "Collectable unlocked. {0} total.");
-            Add("dateable_added", "Neue Dateable im Date A Dex hinzugefuegt. {0} getroffen.", "New dateable added to Date A Dex. {0} met.");
-            Add("friend_ending_recorded", "Freundschaftsende gespeichert. {0} insgesamt.", "Friend ending recorded. {0} total.");
-            Add("love_ending_recorded", "Liebesende gespeichert. {0} insgesamt.", "Love ending recorded. {0} total.");
-            Add("hate_ending_recorded", "Hassende gespeichert. {0} insgesamt.", "Hate ending recorded. {0} total.");
-            Add("realized_ending_recorded", "Realized-Ende gespeichert. {0} insgesamt.", "Realized ending recorded. {0} total.");
-            Add("choice_announcement", "Option {0} von {1}. {2}", "Choice {0} of {1}. {2}");
-            Add("choice_locked_suffix", "{0}. Gesperrt.", "{0}. Locked.");
-            Add("choice_locked_activate", "Diese Option ist gesperrt.", "This option is locked.");
-            Add("apply_display_settings", "Anzeigeeinstellungen anwenden", "Apply display settings");
-            Add("controls_unbound", "nicht zugewiesen", "unbound");
-            Add("new_game_field_name", "Name", "Name");
-            Add("new_game_field_town", "Wohnort", "Town");
-            Add("new_game_field_favorite_thing", "Lieblingssache", "Favorite thing");
-            Add("new_game_field_pronouns", "Pronomen", "Pronouns");
-            Add("new_game_field_confirmation", "Bestaetigung", "Confirmation");
-            Add("new_game_field_empty", "Leer", "Empty");
-            Add("new_game_toggle_selected", "Ausgewaehlt", "Selected");
-            Add("new_game_toggle_not_selected", "Nicht ausgewaehlt", "Not selected");
-            Add("new_game_pronoun_he_him", "Er/Ihn", "He/Him");
-            Add("new_game_pronoun_she_her", "Sie/Ihr", "She/Her");
-            Add("new_game_pronoun_they_them", "They/Them", "They/Them");
-            Add("phone_app_open_generic", "Telefon-App geoeffnet.", "Phone app open.");
-            Add("screen_open", "{0} geoeffnet.", "{0} open.");
-            Add("roomers_character", "Charakter: {0}", "Character: {0}");
-            Add("roomers_location", "Ort: {0}", "Location: {0}");
-            Add("canopy_no_messages", "Canopy. Keine aktiven Nachrichten.", "Canopy. No active messages.");
-            Add("music_no_track_selected", "Kein Titel ausgewaehlt", "No track selected");
-            Add("music_playing", "Wird abgespielt", "Playing");
-            Add("music_stopped", "Gestoppt", "Stopped");
-            Add("music_detail", "Musik. {0}. {1}.", "Music. {0}. {1}.");
-            Add("objective_announcement", "Ziel. {0}", "Objective. {0}");
-            Add("loading_announcement", "Laden. {0}", "Loading. {0}");
-            Add("outcome_announcement", "Ergebnis. {0}", "Outcome. {0}");
-            Add("phone_menu_summary", "Telefonmenu.", "Phone menu.");
-            Add("dateadex_voice_actor", "Sprechrolle: {0}", "Voice actor: {0}");
-            Add("dateadex_likes", "Mag: {0}", "Likes: {0}");
-            Add("dateadex_dislikes", "Mag nicht: {0}", "Dislikes: {0}");
-            Add("dateadex_pronouns", "Pronomen: {0}", "Pronouns: {0}");
-            Add("dateadex_collectables", "Sammelstuecke: {0}", "Collectables: {0}");
-            Add("dateadex_unmet_description", "Du hast diese Person noch nicht getroffen.", "You haven't met this character yet.");
-            Add("dateadex_button_collectables", "Sammelstuecke", "Collectables");
-            Add("dateadex_button_collectables_value", "Sammelstuecke. {0}", "Collectables. {0}");
-            Add("dateadex_collectable_unlocked", "{0}. {1}", "{0}. {1}");
-            Add("dateadex_collectable_locked", "Gesperrtes Sammelstueck. {0}", "Locked collectable. {0}");
-            Add("dateadex_collectable_locked_plain", "Gesperrtes Sammelstueck", "Locked collectable");
-            Add("dateadex_button_sort", "Sortierung", "Sort");
-            Add("dateadex_button_sort_value", "Sortierung. {0}", "Sort. {0}");
-            Add("dateadex_button_recipe", "Rezept", "Recipe");
-            Add("dateadex_button_show_bio", "Bio anzeigen", "Show bio");
-            Add("save_new_slot", "Neuer Speicherstand", "New save");
-            Add("button_back", "Zurueck", "Back");
-            Add("button_save", "Speichern", "Save");
-            Add("button_load", "Laden", "Load");
-            Add("button_delete", "Loeschen", "Delete");
-            Add("art_detail", "Kunst. {0}. {1}.", "Art. {0}. {1}.");
-            Add("specs_summary_stats", "SPECS. Statuswerte.", "SPECS. Stats.");
-            Add("specs_summary_glossary", "SPECS. Glossar.", "SPECS. Glossary.");
-            Add("specs_button_glossary", "Glossar oeffnen", "Open glossary");
-            Add("specs_button_stats", "Zu den Statuswerten zurueck", "Return to stats");
-            Add("specs_button_profile", "Zum Profil zurueck", "Return to profile");
-            Add("credits_summary", "Credits.", "Credits.");
-            Add("language_english", "Englisch", "English");
-            Add("language_japanese", "Japanisch", "Japanese");
-            Add("settings_summary",
-                "Einstellungen. Textsprache {0}. Gesamtlautstaerke {1} Prozent. Musiklautstaerke {2} Prozent.",
-                "Settings. Text language {0}. Master volume {1} percent. Music volume {2} percent.");
-            Add("unknown_object", "Objekt", "object");
-            Add("value_number", "Wert {0}", "Value {0}");
-            Add("settings_slider_camera_sensitivity", "Kameraempfindlichkeit. Wert {0}", "Camera sensitivity. Value {0}");
-            Add("settings_slider_master_volume", "Gesamtlautstaerke. Wert {0}", "Master volume. Value {0}");
-            Add("settings_slider_sfx_volume", "Effektlautstaerke. Wert {0}", "Sound effects volume. Value {0}");
-            Add("settings_slider_music_volume", "Musiklautstaerke. Wert {0}", "Music volume. Value {0}");
-            Add("settings_slider_voice_volume", "Sprachlautstaerke. Wert {0}", "Voice volume. Value {0}");
-            Add("settings_slider_field_of_view", "Sichtfeld. Wert {0}", "Field of view. Value {0}");
-            Add("settings_slider_movement_speed", "Bewegungsgeschwindigkeit. Wert {0}", "Movement speed. Value {0}");
-            Add("chat_app_only", "{0}", "{0}");
-            Add("chat_contact_only", "{0}. {1}", "{0}. {1}");
-            Add("chat_latest_message_without_contact", "{0}. Letzte Nachricht. {1}", "{0}. Latest message. {1}");
-            Add("chat_latest_message_with_contact", "{0}. {1}. Letzte Nachricht. {2}", "{0}. {1}. Latest message. {2}");
-            Add("chat_options", "Optionen. {0}", "Options. {0}");
-            Add("navigation_no_objective", "Kein aktuelles Ziel.", "No current objective.");
-            Add("navigation_arrived", "Ziel erreicht.", "Arrived at target.");
-            Add("navigation_blocked", "Navigation blockiert oder unterbrochen.", "Navigation blocked or interrupted.");
-            Add("navigation_no_path", "Kein Weg zu {0} gefunden.", "No path found to {0}.");
-            Add("navigation_tutorial_gift_delivery_trigger", "Geschenk-Lieferausloeser", "Gift delivery trigger");
-            Add("navigation_planner_not_ready", "Navigationsdaten noch nicht bereit.", "Navigation data not ready yet.");
-            Add("navigation_object_picker_title", "Bekannte Objekte", "Known objects");
+            Add("day_monday", "Monday");
+            Add("day_tuesday", "Tuesday");
+            Add("day_wednesday", "Wednesday");
+            Add("day_thursday", "Thursday");
+            Add("day_friday", "Friday");
+            Add("day_saturday", "Saturday");
+            Add("day_sunday", "Sunday");
+            Add("collectable_unlocked", "Collectable unlocked. {0} total.");
+            Add("dateable_added", "New dateable added to Date A Dex. {0} met.");
+            Add("friend_ending_recorded", "Friend ending recorded. {0} total.");
+            Add("love_ending_recorded", "Love ending recorded. {0} total.");
+            Add("hate_ending_recorded", "Hate ending recorded. {0} total.");
+            Add("realized_ending_recorded", "Realized ending recorded. {0} total.");
+            Add("choice_announcement", "Choice {0} of {1}. {2}");
+            Add("choice_locked_suffix", "{0}. Locked.");
+            Add("choice_locked_activate", "This option is locked.");
+            Add("apply_display_settings", "Apply display settings");
+            Add("controls_unbound", "unbound");
+            Add("new_game_field_name", "Name");
+            Add("new_game_field_town", "Town");
+            Add("new_game_field_favorite_thing", "Favorite thing");
+            Add("new_game_field_pronouns", "Pronouns");
+            Add("new_game_field_confirmation", "Confirmation");
+            Add("new_game_field_empty", "Empty");
+            Add("new_game_toggle_selected", "Selected");
+            Add("new_game_toggle_not_selected", "Not selected");
+            Add("new_game_pronoun_he_him", "He/Him");
+            Add("new_game_pronoun_she_her", "She/Her");
+            Add("new_game_pronoun_they_them", "They/Them");
+            Add("phone_app_open_generic", "Phone app open.");
+            Add("screen_open", "{0} open.");
+            Add("roomers_character", "Character: {0}");
+            Add("roomers_location", "Location: {0}");
+            Add("canopy_no_messages", "Canopy. No active messages.");
+            Add("music_no_track_selected", "No track selected");
+            Add("music_playing", "Playing");
+            Add("music_stopped", "Stopped");
+            Add("music_detail", "Music. {0}. {1}.");
+            Add("objective_announcement", "Objective. {0}");
+            Add("loading_announcement", "Loading. {0}");
+            Add("outcome_announcement", "Outcome. {0}");
+            Add("phone_menu_summary", "Phone menu.");
+            Add("dateadex_voice_actor", "Voice actor: {0}");
+            Add("dateadex_likes", "Likes: {0}");
+            Add("dateadex_dislikes", "Dislikes: {0}");
+            Add("dateadex_pronouns", "Pronouns: {0}");
+            Add("dateadex_collectables", "Collectables: {0}");
+            Add("dateadex_unmet_description", "You haven't met this character yet.");
+            Add("dateadex_button_collectables", "Collectables");
+            Add("dateadex_button_collectables_value", "Collectables. {0}");
+            Add("dateadex_collectable_unlocked", "{0}. {1}");
+            Add("dateadex_collectable_locked", "Locked collectable. {0}");
+            Add("dateadex_collectable_locked_plain", "Locked collectable");
+            Add("dateadex_button_sort", "Sort");
+            Add("dateadex_button_sort_value", "Sort. {0}");
+            Add("dateadex_button_recipe", "Recipe");
+            Add("dateadex_button_show_bio", "Show bio");
+            Add("save_new_slot", "New save");
+            Add("button_back", "Back");
+            Add("button_save", "Save");
+            Add("button_load", "Load");
+            Add("button_delete", "Delete");
+            Add("art_detail", "Art. {0}. {1}.");
+            Add("specs_summary_stats", "SPECS. Stats.");
+            Add("specs_summary_glossary", "SPECS. Glossary.");
+            Add("specs_button_glossary", "Open glossary");
+            Add("specs_button_stats", "Return to stats");
+            Add("specs_button_profile", "Return to profile");
+            Add("credits_summary", "Credits.");
+            Add("language_english", "English");
+            Add("language_japanese", "Japanese");
+            Add("settings_summary", "Settings. Text language {0}. Master volume {1} percent. Music volume {2} percent.");
+            Add("unknown_object", "object");
+            Add("value_number", "Value {0}");
+            Add("settings_slider_camera_sensitivity", "Camera sensitivity. Value {0}");
+            Add("settings_slider_master_volume", "Master volume. Value {0}");
+            Add("settings_slider_sfx_volume", "Sound effects volume. Value {0}");
+            Add("settings_slider_music_volume", "Music volume. Value {0}");
+            Add("settings_slider_voice_volume", "Voice volume. Value {0}");
+            Add("settings_slider_field_of_view", "Field of view. Value {0}");
+            Add("settings_slider_movement_speed", "Movement speed. Value {0}");
+            Add("chat_app_only", "{0}");
+            Add("chat_contact_only", "{0}. {1}");
+            Add("chat_latest_message_without_contact", "{0}. Latest message. {1}");
+            Add("chat_latest_message_with_contact", "{0}. {1}. Latest message. {2}");
+            Add("chat_options", "Options. {0}");
+            Add("navigation_no_objective", "No current objective.");
+            Add("navigation_arrived", "Arrived at target.");
+            Add("navigation_blocked", "Navigation blocked or interrupted.");
+            Add("navigation_no_path", "No path found to {0}.");
+            Add("navigation_tutorial_gift_delivery_trigger", "Gift delivery trigger");
+            Add("navigation_planner_not_ready", "Navigation data not ready yet.");
+            Add("navigation_object_picker_title", "Known objects");
             // Trailing position counter spoken AFTER the entry details: {0}=index, {1}=total.
-            Add("navigation_object_picker_position", "{0} von {1}", "{0} of {1}");
-            Add("navigation_object_picker_empty", "Keine bekannten Objekte verfuegbar.", "No known objects available.");
-            Add("navigation_object_picker_no_data", "Navigationsdaten fehlen. Der Bake ist unvollstaendig.", "Navigation data missing. The bake is incomplete.");
-            Add("navigation_object_picker_empty_filtered", "Keine Objekte entsprechen den Filtern.", "No objects match the filters.");
-            Add("navigation_object_picker_closed", "Objektliste geschlossen.", "Object list closed.");
+            Add("navigation_object_picker_position", "{0} of {1}");
+            Add("navigation_object_picker_empty", "No known objects available.");
+            Add("navigation_object_picker_no_data", "Navigation data missing. The bake is incomplete.");
+            Add("navigation_object_picker_empty_filtered", "No objects match the filters.");
+            Add("navigation_object_picker_closed", "Object list closed.");
             // Section headers: {0}=count in section.
-            Add("navigation_object_picker_section_met", "Kennengelernt, {0}", "Met, {0}");
-            Add("navigation_object_picker_section_encountered", "Gesehen, {0}", "Encountered, {0}");
+            Add("navigation_object_picker_section_met", "Met, {0}");
+            Add("navigation_object_picker_section_encountered", "Encountered, {0}");
             // Met entry name: {0}=character, {1}=object.
-            Add("navigation_object_picker_met_name", "{0}, {1}", "{0}, {1}");
+            Add("navigation_object_picker_met_name", "{0}, {1}");
             // Floor tags.
-            Add("navigation_object_picker_floor_named", "Etage {0}", "{0} floor");
-            Add("navigation_object_picker_floor_other", "andere Etage", "other floor");
+            Add("navigation_object_picker_floor_named", "{0} floor");
+            Add("navigation_object_picker_floor_other", "other floor");
             // Distance: {0}=metres.
-            Add("navigation_object_picker_distance_m", "{0} Meter", "{0} metres");
+            Add("navigation_object_picker_distance_m", "{0} metres");
             // Drill-in: a group's member count, spoken so the player knows to press Enter to open it.
-            Add("navigation_object_picker_group_count", "{0} Objekte", "{0} objects");
+            Add("navigation_object_picker_group_count", "{0} objects");
             // Room name when a target has no resolved zone.
-            Add("navigation_object_picker_room_unknown", "unbekannter Raum", "unknown room");
+            Add("navigation_object_picker_room_unknown", "unknown room");
             // Breadcrumb headers spoken when descending a level (ROOM-FIRST: rooms -> in-room -> objects).
             //   level_inroom: {0}=room — inside a room, choosing a datable or unmet object.
             //   level_objects: {0}=datable, {1}=room — a met datable's found objects in that room.
-            Add("navigation_object_picker_level_inroom", "{0}", "{0}");
-            Add("navigation_object_picker_level_objects", "{0}, {1}", "{0}, {1}");
+            Add("navigation_object_picker_level_inroom", "{0}");
+            Add("navigation_object_picker_level_objects", "{0}, {1}");
             // Sort-mode announcements.
-            Add("navigation_object_picker_sort_distance", "naechstes zuerst", "nearest first");
-            Add("navigation_object_picker_sort_alpha", "alphabetisch", "alphabetical");
+            Add("navigation_object_picker_sort_distance", "nearest first");
+            Add("navigation_object_picker_sort_alpha", "alphabetical");
             // Floor-filter announcements.
-            Add("navigation_object_picker_filter_floor_all", "alle Etagen", "all floors");
-            Add("navigation_object_picker_filter_floor_current", "nur diese Etage", "this floor only");
+            Add("navigation_object_picker_filter_floor_all", "all floors");
+            Add("navigation_object_picker_filter_floor_current", "this floor only");
             // Section-filter announcements.
-            Add("navigation_object_picker_filter_section_all", "alle", "all");
-            Add("navigation_object_picker_filter_section_met", "nur kennengelernt", "met only");
-            Add("navigation_object_picker_filter_section_encountered", "nur gesehen", "encountered only");
+            Add("navigation_object_picker_filter_section_all", "all");
+            Add("navigation_object_picker_filter_section_met", "met only");
+            Add("navigation_object_picker_filter_section_encountered", "encountered only");
             // Doors-only announcements.
-            Add("navigation_object_picker_filter_doors_on", "nur Tueren", "doors only");
-            Add("navigation_object_picker_filter_doors_off", "alle Objekte", "all objects");
-            Add("section_stepper_item", "{0} von {1}. {2}", "{0} of {1}. {2}");
-            Add("room_scan_title", "Raum: {0}", "Room: {0}");
-            Add("room_scan_empty", "Raum: {0}. Keine verfolgbaren Objekte in diesem Raum.", "Room: {0}. No trackable objects in this room.");
-            Add("room_scan_unavailable", "Raumbericht ist gerade nicht verfuegbar.", "Room report is not available right now.");
-            Add("room_scan_unknown_room", "Unbekannter Raum", "Unknown room");
-            Add("room_scan_group", "{0}: {1}", "{0}: {1}");
-            Add("room_scan_direction_here", "Hier", "Here");
-            Add("room_scan_direction_ahead", "Vorne", "Ahead");
-            Add("room_scan_direction_ahead_right", "Vorne rechts", "Ahead right");
-            Add("room_scan_direction_right", "Rechts", "Right");
-            Add("room_scan_direction_behind_right", "Hinten rechts", "Behind right");
-            Add("room_scan_direction_behind", "Hinten", "Behind");
-            Add("room_scan_direction_behind_left", "Hinten links", "Behind left");
-            Add("room_scan_direction_left", "Links", "Left");
-            Add("room_scan_direction_ahead_left", "Vorne links", "Ahead left");
-            Add("navigation_target_in_current_room", "Aktueller Raum", "Current room");
-            Add("navigation_autowalk_started", "Auto-Lauf begonnen.", "Auto-walk started.");
-            Add("navigation_autowalk_stopped", "Auto-Lauf gestoppt.", "Auto-walk stopped.");
+            Add("navigation_object_picker_filter_doors_on", "doors only");
+            Add("navigation_object_picker_filter_doors_off", "all objects");
+            Add("section_stepper_item", "{0} of {1}. {2}");
+            Add("room_scan_title", "Room: {0}");
+            Add("room_scan_empty", "Room: {0}. No trackable objects in this room.");
+            Add("room_scan_unavailable", "Room report is not available right now.");
+            Add("room_scan_unknown_room", "Unknown room");
+            Add("room_scan_group", "{0}: {1}");
+            Add("room_scan_direction_here", "Here");
+            Add("room_scan_direction_ahead", "Ahead");
+            Add("room_scan_direction_ahead_right", "Ahead right");
+            Add("room_scan_direction_right", "Right");
+            Add("room_scan_direction_behind_right", "Behind right");
+            Add("room_scan_direction_behind", "Behind");
+            Add("room_scan_direction_behind_left", "Behind left");
+            Add("room_scan_direction_left", "Left");
+            Add("room_scan_direction_ahead_left", "Ahead left");
+            Add("navigation_target_in_current_room", "Current room");
+            Add("navigation_autowalk_started", "Auto-walk started.");
+            Add("navigation_autowalk_stopped", "Auto-walk stopped.");
             // Interaction feedback: state changes that only have visual feedback in the base
             // game (no distinct sound conveys the resulting state). See InteractionFeedbackPatches.
             // Thermostat temperature. Cold blows the vents; room temperature is the default.
-            Add("thermostat_room_temp", "Zimmertemperatur.", "Room temperature.");
-            Add("thermostat_cold", "Kalt.", "Cold.");
+            Add("thermostat_room_temp", "Room temperature.");
+            Add("thermostat_cold", "Cold.");
             // Light switch result. {0} = the light's type/name (e.g. "Lights", "Lamp").
             // The switch click sounds identical either way, so the on/off state is visual-only.
-            Add("light_on", "{0} an.", "{0} on.");
-            Add("light_off", "{0} aus.", "{0} off.");
+            Add("light_on", "{0} on.");
+            Add("light_off", "{0} off.");
             // Fallback name when a light switch has no configured type label.
-            Add("light_default_name", "Licht", "Light");
+            Add("light_default_name", "Light");
+        }
+
+        // Japanese overrides. Only entries whose Japanese differs from English are listed;
+        // format-only templates ("{0}", "{0}: {1}", "{0}, {1}.") and proper nouns (SPECS, Canopy,
+        // Credits, Dateviators, Date A Dex, He/Him ...) are intentionally omitted and fall through
+        // to the English base. Placeholders {0..n} are preserved so string.Format still works.
+        private static void InitializeJapanese()
+        {
+            AddJa("mod_loaded",
+                "Date Everything Access を読み込みました。フォーカス項目、会話、画面テキスト、電話アプリのテキスト、部屋、近くのオブジェクト、状態の変化を自動で読み上げます。F1でヘルプ。Ctrl+F1で最後の読み上げを繰り返します。F6で現在の部屋と、向いている方向を基準にしたオブジェクトを知らせます。Ctrl+F6で現在の目標を追跡します。Ctrl+Shift+F6で既知オブジェクトの一覧を開きます。一覧では上下で選択を移動、Enterで決定、Escapeで閉じる、左右で並び替え、Fでこの階のみ切り替え、Mでセクションフィルターを切り替え、Dでドアのみ切り替えます。Ctrl+Alt+F6で選択した目標へのオートウォークを切り替えます。Ctrl+F9でアクセシビリティ設定を開きます。");
+            AddJa("help_text",
+                "Date Everything Access。フォーカス項目、会話、画面テキスト、電話アプリのテキスト、部屋、近くのオブジェクト、状態の変化を自動で読み上げできます。F1でヘルプ。Ctrl+F1で最後の読み上げを繰り返します。F6で現在の部屋と、向いている方向を基準にしたオブジェクトを知らせます。Ctrl+F6で現在の目標を追跡します。Ctrl+Shift+F6で既知オブジェクトの一覧を開きます。一覧では上下で選択を移動、Enterで決定、Escapeで閉じる、左右で並び替え、Fでこの階のみ切り替え、Mでセクションフィルターを切り替え、Dでドアのみ切り替えます。Ctrl+Alt+F6で選択した目標へのオートウォークを切り替えます。Ctrl+F9でアクセシビリティ設定を開きます。");
+            AddJa("debug_mode_enabled", "デバッグモードを有効にしました。");
+            AddJa("debug_mode_enabled_with_mapping_dump", "デバッグモードを有効にしました。{0} 台のデバイスの現在の入力割り当てをログに書き出しました。");
+            AddJa("debug_mode_disabled", "デバッグモードを無効にしました。");
+            AddJa("repeat_last_unavailable", "まだ何も読み上げていません。");
+            AddJa("settings_menu_opened", "アクセシビリティ設定を開きました。");
+            AddJa("settings_menu_closed", "アクセシビリティ設定を閉じて保存しました。");
+            AddJa("settings_menu_item", "{1} 件中 {0} 件目: {2}、{3}。左右で値を変更します。EnterとSpaceも使えます。Backspaceで閉じます。");
+            AddJa("settings_value_on", "オン");
+            AddJa("settings_value_off", "オフ");
+            AddJa("config_focused_items", "フォーカス項目");
+            AddJa("config_dialogue_text", "会話テキスト");
+            AddJa("config_dialogue_choices", "会話の選択肢");
+            AddJa("config_screen_text", "画面テキスト");
+            AddJa("config_phone_app_text", "電話アプリのテキスト");
+            AddJa("config_room_changes", "部屋の移動");
+            AddJa("config_nearby_objects", "近くのオブジェクト");
+            AddJa("config_status_changes", "状態の変化");
+            AddJa("room_announcement", "部屋: {0}");
+            AddJa("dateviators_equipped", "装着");
+            AddJa("dateviators_unequipped", "取り外し");
+            AddJa("dateviators_state", "デートビュエーター{0}。チャージ {1}。");
+            AddJa("time_announcement", "時刻: {0}。");
+            AddJa("day_monday", "月曜日");
+            AddJa("day_tuesday", "火曜日");
+            AddJa("day_wednesday", "水曜日");
+            AddJa("day_thursday", "木曜日");
+            AddJa("day_friday", "金曜日");
+            AddJa("day_saturday", "土曜日");
+            AddJa("day_sunday", "日曜日");
+            AddJa("collectable_unlocked", "コレクションを解除しました。合計 {0} 個。");
+            AddJa("dateable_added", "Date A Dex に新しいデート相手を追加しました。{0} 人と対面済み。");
+            AddJa("friend_ending_recorded", "友情エンドを記録しました。合計 {0} 個。");
+            AddJa("love_ending_recorded", "恋愛エンドを記録しました。合計 {0} 個。");
+            AddJa("hate_ending_recorded", "険悪エンドを記録しました。合計 {0} 個。");
+            AddJa("realized_ending_recorded", "覚醒エンドを記録しました。合計 {0} 個。");
+            AddJa("choice_announcement", "選択肢 {1} 件中 {0} 件目。{2}");
+            AddJa("choice_locked_suffix", "{0}。ロック中。");
+            AddJa("choice_locked_activate", "この選択肢はロックされています。");
+            AddJa("apply_display_settings", "表示設定を適用");
+            AddJa("controls_unbound", "未割り当て");
+            AddJa("new_game_field_name", "名前");
+            AddJa("new_game_field_town", "町");
+            AddJa("new_game_field_favorite_thing", "好きなもの");
+            AddJa("new_game_field_pronouns", "代名詞");
+            AddJa("new_game_field_confirmation", "確認");
+            AddJa("new_game_field_empty", "空");
+            AddJa("new_game_toggle_selected", "選択中");
+            AddJa("new_game_toggle_not_selected", "未選択");
+            AddJa("phone_app_open_generic", "電話アプリを開きました。");
+            AddJa("screen_open", "{0} を開きました。");
+            AddJa("roomers_character", "キャラクター: {0}");
+            AddJa("roomers_location", "場所: {0}");
+            AddJa("canopy_no_messages", "Canopy。アクティブなメッセージはありません。");
+            AddJa("music_no_track_selected", "トラックが選択されていません");
+            AddJa("music_playing", "再生中");
+            AddJa("music_stopped", "停止");
+            AddJa("music_detail", "音楽。{0}。{1}。");
+            AddJa("objective_announcement", "目標。{0}");
+            AddJa("loading_announcement", "読み込み中。{0}");
+            AddJa("outcome_announcement", "結果。{0}");
+            AddJa("phone_menu_summary", "電話メニュー。");
+            AddJa("dateadex_voice_actor", "声優: {0}");
+            AddJa("dateadex_likes", "好き: {0}");
+            AddJa("dateadex_dislikes", "嫌い: {0}");
+            AddJa("dateadex_pronouns", "代名詞: {0}");
+            AddJa("dateadex_collectables", "コレクション: {0}");
+            AddJa("dateadex_unmet_description", "このキャラクターとはまだ対面していません。");
+            AddJa("dateadex_button_collectables", "コレクション");
+            AddJa("dateadex_button_collectables_value", "コレクション。{0}");
+            AddJa("dateadex_collectable_locked", "ロック中のコレクション。{0}");
+            AddJa("dateadex_collectable_locked_plain", "ロック中のコレクション");
+            AddJa("dateadex_button_sort", "並び替え");
+            AddJa("dateadex_button_sort_value", "並び替え。{0}");
+            AddJa("dateadex_button_recipe", "レシピ");
+            AddJa("dateadex_button_show_bio", "プロフィールを表示");
+            AddJa("save_new_slot", "新規セーブ");
+            AddJa("button_back", "戻る");
+            AddJa("button_save", "セーブ");
+            AddJa("button_load", "ロード");
+            AddJa("button_delete", "削除");
+            AddJa("art_detail", "アート。{0}。{1}。");
+            AddJa("specs_summary_stats", "SPECS。ステータス。");
+            AddJa("specs_summary_glossary", "SPECS。用語集。");
+            AddJa("specs_button_glossary", "用語集を開く");
+            AddJa("specs_button_stats", "ステータスに戻る");
+            AddJa("specs_button_profile", "プロフィールに戻る");
+            AddJa("language_english", "英語");
+            AddJa("language_japanese", "日本語");
+            AddJa("settings_summary", "設定。テキスト言語 {0}。マスター音量 {1} パーセント。音楽音量 {2} パーセント。");
+            AddJa("unknown_object", "オブジェクト");
+            AddJa("value_number", "値 {0}");
+            AddJa("settings_slider_camera_sensitivity", "カメラ感度。値 {0}");
+            AddJa("settings_slider_master_volume", "マスター音量。値 {0}");
+            AddJa("settings_slider_sfx_volume", "効果音の音量。値 {0}");
+            AddJa("settings_slider_music_volume", "音楽の音量。値 {0}");
+            AddJa("settings_slider_voice_volume", "ボイスの音量。値 {0}");
+            AddJa("settings_slider_field_of_view", "視野角。値 {0}");
+            AddJa("settings_slider_movement_speed", "移動速度。値 {0}");
+            AddJa("chat_latest_message_without_contact", "{0}。最新のメッセージ。{1}");
+            AddJa("chat_latest_message_with_contact", "{0}。{1}。最新のメッセージ。{2}");
+            AddJa("chat_options", "オプション。{0}");
+            AddJa("navigation_no_objective", "現在の目標はありません。");
+            AddJa("navigation_arrived", "目標に到着しました。");
+            AddJa("navigation_blocked", "ナビゲーションが妨げられたか中断されました。");
+            AddJa("navigation_no_path", "{0} への経路が見つかりません。");
+            AddJa("navigation_tutorial_gift_delivery_trigger", "ギフト配達トリガー");
+            AddJa("navigation_planner_not_ready", "ナビゲーションデータの準備がまだできていません。");
+            AddJa("navigation_object_picker_title", "既知のオブジェクト");
+            AddJa("navigation_object_picker_position", "{1} 件中 {0} 件目");
+            AddJa("navigation_object_picker_empty", "利用できる既知オブジェクトはありません。");
+            AddJa("navigation_object_picker_no_data", "ナビゲーションデータがありません。ベイクが不完全です。");
+            AddJa("navigation_object_picker_empty_filtered", "フィルターに一致するオブジェクトはありません。");
+            AddJa("navigation_object_picker_closed", "オブジェクト一覧を閉じました。");
+            AddJa("navigation_object_picker_section_met", "対面済み、{0}");
+            AddJa("navigation_object_picker_section_encountered", "発見済み、{0}");
+            AddJa("navigation_object_picker_floor_named", "{0} 階");
+            AddJa("navigation_object_picker_floor_other", "別の階");
+            AddJa("navigation_object_picker_distance_m", "{0} メートル");
+            AddJa("navigation_object_picker_group_count", "{0} 個のオブジェクト");
+            AddJa("navigation_object_picker_room_unknown", "不明な部屋");
+            AddJa("navigation_object_picker_sort_distance", "近い順");
+            AddJa("navigation_object_picker_sort_alpha", "五十音順");
+            AddJa("navigation_object_picker_filter_floor_all", "すべての階");
+            AddJa("navigation_object_picker_filter_floor_current", "この階のみ");
+            AddJa("navigation_object_picker_filter_section_all", "すべて");
+            AddJa("navigation_object_picker_filter_section_met", "対面済みのみ");
+            AddJa("navigation_object_picker_filter_section_encountered", "発見済みのみ");
+            AddJa("navigation_object_picker_filter_doors_on", "ドアのみ");
+            AddJa("navigation_object_picker_filter_doors_off", "すべてのオブジェクト");
+            AddJa("section_stepper_item", "{1} 件中 {0} 件目。{2}");
+            AddJa("room_scan_title", "部屋: {0}");
+            AddJa("room_scan_empty", "部屋: {0}。この部屋に追跡可能なオブジェクトはありません。");
+            AddJa("room_scan_unavailable", "現在、部屋レポートは利用できません。");
+            AddJa("room_scan_unknown_room", "不明な部屋");
+            AddJa("room_scan_direction_here", "ここ");
+            AddJa("room_scan_direction_ahead", "前");
+            AddJa("room_scan_direction_ahead_right", "右前");
+            AddJa("room_scan_direction_right", "右");
+            AddJa("room_scan_direction_behind_right", "右後ろ");
+            AddJa("room_scan_direction_behind", "後ろ");
+            AddJa("room_scan_direction_behind_left", "左後ろ");
+            AddJa("room_scan_direction_left", "左");
+            AddJa("room_scan_direction_ahead_left", "左前");
+            AddJa("navigation_target_in_current_room", "現在の部屋");
+            AddJa("navigation_autowalk_started", "オートウォークを開始しました。");
+            AddJa("navigation_autowalk_stopped", "オートウォークを停止しました。");
+            AddJa("thermostat_room_temp", "常温。");
+            AddJa("thermostat_cold", "冷房。");
+            AddJa("light_on", "{0} オン。");
+            AddJa("light_off", "{0} オフ。");
+            AddJa("light_default_name", "ライト");
         }
     }
 }
