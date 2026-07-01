@@ -288,6 +288,17 @@ namespace DateEverythingAccess
             Add("navigation_target_in_current_room", "Aktueller Raum", "Current room");
             Add("navigation_autowalk_started", "Auto-Lauf begonnen.", "Auto-walk started.");
             Add("navigation_autowalk_stopped", "Auto-Lauf gestoppt.", "Auto-walk stopped.");
+            // Interaction feedback: state changes that only have visual feedback in the base
+            // game (no distinct sound conveys the resulting state). See InteractionFeedbackPatches.
+            // Thermostat temperature. Cold blows the vents; room temperature is the default.
+            Add("thermostat_room_temp", "Zimmertemperatur.", "Room temperature.");
+            Add("thermostat_cold", "Kalt.", "Cold.");
+            // Light switch result. {0} = the light's type/name (e.g. "Lights", "Lamp").
+            // The switch click sounds identical either way, so the on/off state is visual-only.
+            Add("light_on", "{0} an.", "{0} on.");
+            Add("light_off", "{0} aus.", "{0} off.");
+            // Fallback name when a light switch has no configured type label.
+            Add("light_default_name", "Licht", "Light");
         }
     }
 }
