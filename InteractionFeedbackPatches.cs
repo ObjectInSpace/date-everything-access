@@ -29,11 +29,6 @@ namespace DateEverythingAccess
             if (!AccessibilityWatcher.IsPlayerDrivenInteractionActive)
                 return;
 
-            // Arm the Ctrl+F6 "thermostat → Ayrin" context default (independent of the spoken
-            // status toggle, which the player can disable).
-            NavigationContextTriggers.ThermostatInteracted = true;
-            NavigationContextTriggers.ThermostatRoom = AccessibilityWatcher.GetPlayerRoomForContext();
-
             if (!ModConfig.ReadStatusChanges)
                 return;
 
