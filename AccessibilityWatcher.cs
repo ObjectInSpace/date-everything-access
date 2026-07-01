@@ -481,7 +481,9 @@ namespace DateEverythingAccess
         // encountered/datable filter. So a flat Y gate cleanly separates crawlspace from house.
         private const float CrawlspaceCeilingY = -3.5f;
 
-        private static readonly HashSet<string> _examinedObjectKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Identity keys of interactables the player has examined live in the _examinedObjects
+        // PersistedKeySet (AccessibilityWatcher.KnownObjectHistory), persisted per save slot — the
+        // game itself keeps no examine history.
         // Full, unfiltered candidate set built on open. The displayed list (_knownObjectView) is
         // derived from this each time a filter/sort toggle changes, so toggling never re-scans
         // the scene.
@@ -858,9 +860,9 @@ namespace DateEverythingAccess
 
         private static void AddExaminedObjectKey(string value)
         {
-            string key = BuildComparisonKey(value);
-            if (!string.IsNullOrEmpty(key))
-                _examinedObjectKeys.Add(key);
+            // AddAndPersist flushes to the active slot's file when the key is new; no-op until a
+            // slot is known (main menu). See KnownObjectHistory.
+            _examinedObjects.AddAndPersist(BuildComparisonKey(value), _activeHistorySlot);
         }
 
         private void Update()
@@ -2143,6 +2145,17 @@ namespace DateEverythingAccess
             return false;
         }
 
+        // True when the current tutorial objective is the GENERIC "go find more datables" prompt
+        // (AnyUnmetDatable), as opposed to a SPECIFIC objective (Maggie, Skylar, computer, gift
+        // box, front door, ...) or none at all. Ctrl+F6 lets its location-based context defaults
+        // outrank this generic objective but still yield to specific ones. See
+        // StartNavigationToCurrentTarget.
+        private static bool IsGenericFindDatablesObjective()
+        {
+            return TryResolveTutorialObjectiveKind(out TutorialObjectiveKind objectiveKind) &&
+                objectiveKind == TutorialObjectiveKind.AnyUnmetDatable;
+        }
+
         private bool TryResolveCurrentObjectiveInteractable(out InteractableObj interactable, out string targetZone, out string targetLabel)
         {
             interactable = null;
@@ -2797,14 +2810,21 @@ namespace DateEverythingAccess
                 if (string.IsNullOrWhiteSpace(internalName))
                     continue;
 
-                // Game knowledge: an unmet datable (a named date target the player hasn't dated),
-                // including ones the player has never noticed — that's the point of "find more".
+                // Game knowledge: a named date target the player hasn't dated yet.
                 if (!save.TryGetNameByInternalName(internalName, out string displayName) ||
                     string.IsNullOrWhiteSpace(displayName))
                 {
                     continue;
                 }
                 if (save.GetDateStatus(internalName) != RelationshipStatus.Unmet)
+                    continue;
+
+                // "Find more" = discover datables the player DOESN'T KNOW ABOUT yet. Skip any the
+                // player has already interacted with or examined — those are known (they appear in
+                // the Ctrl+Shift+F6 picker) and aren't what "find more datables" should reveal.
+                // This is a different, narrower category than the game's "Unmet" date status. See
+                // IsEncounteredKnownObject.
+                if (IsEncounteredKnownObject(candidate))
                     continue;
 
                 Vector3 candidatePos = candidate.transform.position;
@@ -3082,20 +3102,49 @@ namespace DateEverythingAccess
         {
             Loc.RefreshLanguage();
 
+            // Precedence:
+            //   1. A SPECIFIC tutorial objective (Maggie, Skylar, computer, gift box, office exit,
+            //      ...) always wins.
+            //   2. Otherwise a location-based context default (crawlspace, attic, thermostat, couch).
+            //   3. Otherwise the GENERIC "find more datables" objective (nearest unexplored room).
+            //   4. Otherwise nothing.
+            // The generic objective is checked LAST so the context defaults outrank it while still
+            // yielding to specific objectives. See IsGenericFindDatablesObjective.
             if (TryResolveCurrentObjectiveWorldTarget(out string worldTargetZone, out string worldTargetLabel))
             {
                 BeginNavigationAndStartTrackerTone(worldTargetZone, worldTargetLabel);
                 return;
             }
 
-            if (!TryResolveCurrentObjectiveInteractable(out InteractableObj interactable, out string targetZone, out string targetLabel))
+            bool genericObjective = IsGenericFindDatablesObjective();
+
+            if (!genericObjective &&
+                TryResolveCurrentObjectiveInteractable(out InteractableObj interactable, out string targetZone, out string targetLabel))
             {
-                ScreenReader.Say(Loc.Get("navigation_no_objective"));
+                SetTrackedInteractable(interactable, targetZone, targetLabel);
+                BeginNavigationAndStartTrackerTone(targetZone, targetLabel);
                 return;
             }
 
-            SetTrackedInteractable(interactable, targetZone, targetLabel);
-            BeginNavigationAndStartTrackerTone(targetZone, targetLabel);
+            // No specific objective — a context default takes priority over the generic
+            // "find more datables" objective.
+            if (TryResolveContextDefaultTarget(out InteractableObj contextInteractable, out string contextZone, out string contextLabel))
+            {
+                SetTrackedInteractable(contextInteractable, contextZone, contextLabel);
+                BeginNavigationAndStartTrackerTone(contextZone, contextLabel);
+                return;
+            }
+
+            // Fall back to the generic objective (nearest unexplored room) if it's active.
+            if (genericObjective &&
+                TryResolveCurrentObjectiveInteractable(out InteractableObj genericInteractable, out string genericZone, out string genericLabel))
+            {
+                SetTrackedInteractable(genericInteractable, genericZone, genericLabel);
+                BeginNavigationAndStartTrackerTone(genericZone, genericLabel);
+                return;
+            }
+
+            ScreenReader.Say(Loc.Get("navigation_no_objective"));
         }
 
         // Shared selection tail: BeginNavigation, plan the route, and start the tracker tone at
@@ -4332,19 +4381,17 @@ namespace DateEverythingAccess
                 ContainsToken(value, "hidden");
         }
 
-        // An object is "encountered" (and thus a valid picker target) if the player has met
-        // its datable, normally interacted with it, or examined it. The first two are persisted
-        // by the game (GetDateStatus / ObjectSaveData.hasNormalInteracted) and survive a reload,
-        // so they form the durable starting list.
-        //
-        // KNOWN LIMITATION: the game does NOT persist that an object was examined. ObjectSaveData
-        // stores only activeSelf/activatedAnimation/isClean/hasNormalInteracted. (The save's
-        // boxExamenDictionary is NOT an examine history — it is only the moving-box "Boxing Day"
-        // achievement tally, keyed by a running counter, and covers no other objects.) So examine
-        // evidence lives solely in our session-only _examinedObjectKeys set, and examine-only
-        // entries DROP from the picker after a save/reload. Accepted for now: examine is an extra
-        // encounter signal on top of the persisted set, and the player re-examines objects over a
-        // play session. Revisit with a mod-side persisted examine history if this proves limiting.
+        // An object is "encountered" (and thus a valid picker target) if the player has met its
+        // datable, environmentally interacted with it, or examined it. Each source is covered
+        // independently and persists across reloads:
+        //   - met datable      → GetDateStatus (game-persisted);
+        //   - interact / examine → our own per-slot histories in KnownObjectHistory
+        //     (_interactedObjects / _examinedObjects), keyed off the interactable's stable
+        //     identity (InternalName etc.), because the game persists neither usefully.
+        // We deliberately do NOT read ObjectSaveData.hasNormalInteracted: it only reflects the
+        // alt-interaction TOGGLE state (and only for objects that have one), and our interact
+        // history already records the same alt-interaction event (SelectObj → ALT_INTERACTION)
+        // more completely — so the game flag is redundant here.
         private static bool IsEncounteredKnownObject(InteractableObj interactable)
         {
             if (interactable == null)
@@ -4353,18 +4400,17 @@ namespace DateEverythingAccess
             if (IsDatedInteractable(interactable))
                 return true;
 
-            ObjectSaveData saveData = interactable.objSaveData;
-            if (saveData != null && saveData.hasNormalInteracted)
+            if (IsInteractedInteractable(interactable))
                 return true;
 
             return IsExaminedInteractable(interactable);
         }
 
-        // True only when the player has examined THIS interactable during the session.
-        // Examine evidence is session-only: the game persists no general "examined" flag
-        // (see IsEncounteredKnownObject), so the only source is _examinedObjectKeys, which
-        // RememberExaminedObject populates with the owning interactable's identity keys at
-        // examine time (ObjectExamine.ShowExamine postfix).
+        // True when the player has examined THIS interactable. The game persists no general
+        // "examined" flag (see IsEncounteredKnownObject), so the source is the _examinedObjects
+        // set, which RememberExaminedObject populates with the owning interactable's identity keys
+        // at examine time (ObjectExamine.ShowExamine postfix). That set is persisted per save slot
+        // by AccessibilityWatcher.KnownObjectHistory, so this survives a save/reload.
         //
         // The previous implementation also (1) walked GetComponentInParent<ObjectExamine>,
         // attributing a shared parent's examine to every child interactable, and (2) matched
@@ -4386,7 +4432,7 @@ namespace DateEverythingAccess
         private static bool HasRememberedExaminedObjectKey(string value)
         {
             string key = BuildComparisonKey(value);
-            return !string.IsNullOrEmpty(key) && _examinedObjectKeys.Contains(key);
+            return !string.IsNullOrEmpty(key) && _examinedObjects.Keys.Contains(key);
         }
 
         private static bool IsDatedInteractable(InteractableObj interactable)
@@ -6320,7 +6366,38 @@ namespace DateEverythingAccess
             if (!hadPreviousPhase)
                 return;
 
-            ScreenReader.Say(Loc.Get("time_announcement", NormalizeIdentifierName(currentPhase.ToString())), interrupt: false);
+            string phase = NormalizeIdentifierName(currentPhase.ToString());
+
+            // Bundle the calendar's day of the week with the phase so the player hears e.g.
+            // "Monday, morning". The day only changes at the day boundary (which is itself a phase
+            // change), so reading it on every time-change line keeps the player oriented.
+            if (TryGetLocalizedDayOfWeek(out string dayName))
+            {
+                ScreenReader.Say(Loc.Get("day_time_announcement", dayName, phase), interrupt: false);
+                return;
+            }
+
+            ScreenReader.Say(Loc.Get("time_announcement", phase), interrupt: false);
+        }
+
+        // The current day of the week from the calendar (DayNightCycle.GetDayOfWeek returns the
+        // English DayOfWeek name), mapped to a localized day name. False if unavailable.
+        private static bool TryGetLocalizedDayOfWeek(out string dayName)
+        {
+            dayName = null;
+
+            if (Singleton<DayNightCycle>.Instance == null)
+                return false;
+
+            string rawDay = Singleton<DayNightCycle>.Instance.GetDayOfWeek();
+            if (string.IsNullOrWhiteSpace(rawDay))
+                return false;
+
+            string key = "day_" + rawDay.Trim().ToLowerInvariant();
+            string localized = Loc.Get(key);
+            // Loc.Get returns the key itself when there's no entry; fall back to the raw name.
+            dayName = string.Equals(localized, key, StringComparison.Ordinal) ? rawDay : localized;
+            return true;
         }
 
         private void AnnounceProgressionChangesIfNeeded()

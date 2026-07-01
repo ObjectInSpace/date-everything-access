@@ -255,7 +255,7 @@ namespace DateEverythingAccess
             // from the bake — are dropped to null here so they route through the prop collider
             // branch below: front-approach, swing arc as a footprint blocker, no operable-cell
             // requirement (which would fail-fast on them). See the three-buckets memo.
-            Door targetDoor = ResolveTargetDoor(targetGameObjectId);
+            Door targetDoor = ResolveTargetDoor(targetGameObjectId, targetName);
             if (targetDoor != null && targetDoor.gameObject != null &&
                 !_bakedDoorNames.Contains(targetDoor.gameObject.name))
             {
@@ -1299,33 +1299,42 @@ namespace DateEverythingAccess
         // player looks up at them and interacts via beam/glasses. The rule
         // picks the highest floor with floor_y - UpwardSlack <= y.
         //
-        // UpwardSlack = 0.3m: tight enough that Y=12.2 (ground ceiling) falls
-        // below the upper-floor cutoff and routes to ground. The 0.3m absorbs
-        // floor-mesh-Y model quirks (ground SM_Floor mesh at -0.57 vs FloorY -0.5).
+        // UpwardSlack (see the constant below) is tight enough that Y=12.2 (ground
+        // ceiling) falls below the upper-floor cutoff and routes to ground, yet loose
+        // enough that a ground door pivot ~0.12m under the floor plane still resolves
+        // to ground (not the crawlspace).
         private static Floor FloorForTargetY(float y)
         {
-            const float UpwardSlackM = 0.1f;
+            // 0.2m. Bracketed by two constraints:
+            //   LOWER bound (≥ ~0.12m): ground door pivots sit ~0.12m UNDER the ground floor plane
+            //   (Y=-0.62 vs floor_y=-0.5). The previous 0.1m slack made ground's cutoff (-0.6)
+            //   reject a -0.62 pivot, so the ONLY floor passing the "stand below, look up" test was
+            //   the CRAWLSPACE (anything above -9.99 qualifies) — sending these ground doors to the
+            //   crawlspace grid, where their (x,z) is off-grid → TargetUnreachable. 0.2m lets
+            //   ground (-0.5) accept the pivot and win as the highest qualifying floor.
+            //   UPPER bound (< 0.3m): the Y=12.2 ground ceiling light must stay on ground, i.e.
+            //   below the upper floor's cutoff (12.5 - slack). At 0.3m that cutoff is exactly 12.2
+            //   and 12.2 >= 12.2 wrongly routes it to upper; 0.2m keeps the cutoff at 12.3.
+            const float UpwardSlackM = 0.2f;
             // Highest floor whose floor_y - slack <= y (the floor the player stands on to
-            // interact with a target above it). If the target is BELOW every floor plane,
-            // fall back to the lowest floor — door pivots sit ~0.12m under the ground plane
-            // (Y=-0.62 vs floor_y=-0.5), and without this fallback they return null →
-            // TargetOffBake, making all five ground doors (Laundry, Office, their closets,
-            // Bathroom1) un-targetable. Mirrors plan_object_route._floor_for_target_y, which
-            // has this fallback (it's why the offline plan succeeded where the C# failed).
+            // interact with a target above it). If the target is below every floor plane, fall
+            // back to the NEAREST floor by |Δy| rather than the lowest, so a target just under a
+            // floor doesn't drop to a far-below floor. Mirrors plan_object_route._floor_for_target_y.
             Floor best = null;
             float bestFloorY = float.NegativeInfinity;
-            Floor lowest = null;
-            float lowestFloorY = float.PositiveInfinity;
+            Floor nearest = null;
+            float nearestDy = float.PositiveInfinity;
             for (int i = 0; i < _floors.Count; i++)
             {
                 float floorY = _floors[i].FloorY;
-                if (floorY < lowestFloorY) { lowestFloorY = floorY; lowest = _floors[i]; }
+                float dy = Mathf.Abs(floorY - y);
+                if (dy < nearestDy) { nearestDy = dy; nearest = _floors[i]; }
                 if (y >= floorY - UpwardSlackM && floorY > bestFloorY)
                 {
                     bestFloorY = floorY; best = _floors[i];
                 }
             }
-            return best ?? lowest;
+            return best ?? nearest;
         }
 
         private static List<NodeKey> GoalCellsAround(Floor floor, float wx, float wz, float radiusM)
@@ -1917,16 +1926,42 @@ namespace DateEverythingAccess
         // Returns null if no match or the object has no collider.
         // Find the Door component for a target GameObject (by InstanceID), if any. Used to
         // exempt door targets from the collider-band goal-cell filter.
-        private static Door ResolveTargetDoor(int targetGameObjectId)
+        // Resolve the live Door for a target. The primary match is by GameObject instance id (the
+        // door and the target's InteractableObj share a GameObject for most doors). But some doors
+        // carry the Door component on a RELATED GameObject — a parent or child of the InteractableObj
+        // the picker tracks (observed on Doors_Laundry_Closet: the instance-id match misses, the
+        // planner then treats it as a non-door prop and fails with TargetNoLineOfSight). So if the
+        // id match fails, fall back to a baked passage door whose NAME matches targetName — the bake
+        // and interactables export agree on the door's GameObject name, so the name is a reliable
+        // second key. IsDoorInteractable already accepts the Door on self/parent/child; this mirrors
+        // that tolerance at plan time.
+        private static Door ResolveTargetDoor(int targetGameObjectId, string targetName)
         {
-            if (targetGameObjectId == 0) return null;
             Door[] all = UnityEngine.Object.FindObjectsOfType<Door>();
-            for (int i = 0; i < all.Length; i++)
+
+            if (targetGameObjectId != 0)
             {
-                Door d = all[i];
-                if (d == null || d.gameObject == null) continue;
-                if (d.gameObject.GetInstanceID() == targetGameObjectId) return d;
+                for (int i = 0; i < all.Length; i++)
+                {
+                    Door d = all[i];
+                    if (d == null || d.gameObject == null) continue;
+                    if (d.gameObject.GetInstanceID() == targetGameObjectId) return d;
+                }
             }
+
+            // Name fallback: only for baked passage doors, so we don't misclassify a container/prop
+            // door (fridge/cupboard) as a passage door — those must stay on the collider branch.
+            if (!string.IsNullOrEmpty(targetName) && _bakedDoorNames.Contains(targetName))
+            {
+                for (int i = 0; i < all.Length; i++)
+                {
+                    Door d = all[i];
+                    if (d == null || d.gameObject == null) continue;
+                    if (string.Equals(d.gameObject.name, targetName, StringComparison.Ordinal))
+                        return d;
+                }
+            }
+
             return null;
         }
 

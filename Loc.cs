@@ -144,6 +144,16 @@ namespace DateEverythingAccess
             Add("dateviators_unequipped", "abgesetzt", "unequipped");
             Add("dateviators_state", "Dateviators {0}. {1} Ladungen.", "Dateviators {0}. {1} charges.");
             Add("time_announcement", "Zeit: {0}.", "Time: {0}.");
+            // Time change with the day of the week from the calendar. {0} = day, {1} = phase.
+            Add("day_time_announcement", "{0}, {1}.", "{0}, {1}.");
+            // Day names (calendar day of week). Keyed by the game's English DayOfWeek.ToString().
+            Add("day_monday", "Montag", "Monday");
+            Add("day_tuesday", "Dienstag", "Tuesday");
+            Add("day_wednesday", "Mittwoch", "Wednesday");
+            Add("day_thursday", "Donnerstag", "Thursday");
+            Add("day_friday", "Freitag", "Friday");
+            Add("day_saturday", "Samstag", "Saturday");
+            Add("day_sunday", "Sonntag", "Sunday");
             Add("collectable_unlocked", "Sammelobjekt freigeschaltet. {0} insgesamt.", "Collectable unlocked. {0} total.");
             Add("dateable_added", "Neue Dateable im Date A Dex hinzugefuegt. {0} getroffen.", "New dateable added to Date A Dex. {0} met.");
             Add("friend_ending_recorded", "Freundschaftsende gespeichert. {0} insgesamt.", "Friend ending recorded. {0} total.");
@@ -288,6 +298,17 @@ namespace DateEverythingAccess
             Add("navigation_target_in_current_room", "Aktueller Raum", "Current room");
             Add("navigation_autowalk_started", "Auto-Lauf begonnen.", "Auto-walk started.");
             Add("navigation_autowalk_stopped", "Auto-Lauf gestoppt.", "Auto-walk stopped.");
+            // Interaction feedback: state changes that only have visual feedback in the base
+            // game (no distinct sound conveys the resulting state). See InteractionFeedbackPatches.
+            // Thermostat temperature. Cold blows the vents; room temperature is the default.
+            Add("thermostat_room_temp", "Zimmertemperatur.", "Room temperature.");
+            Add("thermostat_cold", "Kalt.", "Cold.");
+            // Light switch result. {0} = the light's type/name (e.g. "Lights", "Lamp").
+            // The switch click sounds identical either way, so the on/off state is visual-only.
+            Add("light_on", "{0} an.", "{0} on.");
+            Add("light_off", "{0} aus.", "{0} off.");
+            // Fallback name when a light switch has no configured type label.
+            Add("light_default_name", "Licht", "Light");
         }
     }
 }
