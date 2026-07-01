@@ -6366,7 +6366,38 @@ namespace DateEverythingAccess
             if (!hadPreviousPhase)
                 return;
 
-            ScreenReader.Say(Loc.Get("time_announcement", NormalizeIdentifierName(currentPhase.ToString())), interrupt: false);
+            string phase = NormalizeIdentifierName(currentPhase.ToString());
+
+            // Bundle the calendar's day of the week with the phase so the player hears e.g.
+            // "Monday, morning". The day only changes at the day boundary (which is itself a phase
+            // change), so reading it on every time-change line keeps the player oriented.
+            if (TryGetLocalizedDayOfWeek(out string dayName))
+            {
+                ScreenReader.Say(Loc.Get("day_time_announcement", dayName, phase), interrupt: false);
+                return;
+            }
+
+            ScreenReader.Say(Loc.Get("time_announcement", phase), interrupt: false);
+        }
+
+        // The current day of the week from the calendar (DayNightCycle.GetDayOfWeek returns the
+        // English DayOfWeek name), mapped to a localized day name. False if unavailable.
+        private static bool TryGetLocalizedDayOfWeek(out string dayName)
+        {
+            dayName = null;
+
+            if (Singleton<DayNightCycle>.Instance == null)
+                return false;
+
+            string rawDay = Singleton<DayNightCycle>.Instance.GetDayOfWeek();
+            if (string.IsNullOrWhiteSpace(rawDay))
+                return false;
+
+            string key = "day_" + rawDay.Trim().ToLowerInvariant();
+            string localized = Loc.Get(key);
+            // Loc.Get returns the key itself when there's no entry; fall back to the raw name.
+            dayName = string.Equals(localized, key, StringComparison.Ordinal) ? rawDay : localized;
+            return true;
         }
 
         private void AnnounceProgressionChangesIfNeeded()
