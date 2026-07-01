@@ -255,7 +255,7 @@ namespace DateEverythingAccess
             // from the bake — are dropped to null here so they route through the prop collider
             // branch below: front-approach, swing arc as a footprint blocker, no operable-cell
             // requirement (which would fail-fast on them). See the three-buckets memo.
-            Door targetDoor = ResolveTargetDoor(targetGameObjectId);
+            Door targetDoor = ResolveTargetDoor(targetGameObjectId, targetName);
             if (targetDoor != null && targetDoor.gameObject != null &&
                 !_bakedDoorNames.Contains(targetDoor.gameObject.name))
             {
@@ -1917,16 +1917,42 @@ namespace DateEverythingAccess
         // Returns null if no match or the object has no collider.
         // Find the Door component for a target GameObject (by InstanceID), if any. Used to
         // exempt door targets from the collider-band goal-cell filter.
-        private static Door ResolveTargetDoor(int targetGameObjectId)
+        // Resolve the live Door for a target. The primary match is by GameObject instance id (the
+        // door and the target's InteractableObj share a GameObject for most doors). But some doors
+        // carry the Door component on a RELATED GameObject — a parent or child of the InteractableObj
+        // the picker tracks (observed on Doors_Laundry_Closet: the instance-id match misses, the
+        // planner then treats it as a non-door prop and fails with TargetNoLineOfSight). So if the
+        // id match fails, fall back to a baked passage door whose NAME matches targetName — the bake
+        // and interactables export agree on the door's GameObject name, so the name is a reliable
+        // second key. IsDoorInteractable already accepts the Door on self/parent/child; this mirrors
+        // that tolerance at plan time.
+        private static Door ResolveTargetDoor(int targetGameObjectId, string targetName)
         {
-            if (targetGameObjectId == 0) return null;
             Door[] all = UnityEngine.Object.FindObjectsOfType<Door>();
-            for (int i = 0; i < all.Length; i++)
+
+            if (targetGameObjectId != 0)
             {
-                Door d = all[i];
-                if (d == null || d.gameObject == null) continue;
-                if (d.gameObject.GetInstanceID() == targetGameObjectId) return d;
+                for (int i = 0; i < all.Length; i++)
+                {
+                    Door d = all[i];
+                    if (d == null || d.gameObject == null) continue;
+                    if (d.gameObject.GetInstanceID() == targetGameObjectId) return d;
+                }
             }
+
+            // Name fallback: only for baked passage doors, so we don't misclassify a container/prop
+            // door (fridge/cupboard) as a passage door — those must stay on the collider branch.
+            if (!string.IsNullOrEmpty(targetName) && _bakedDoorNames.Contains(targetName))
+            {
+                for (int i = 0; i < all.Length; i++)
+                {
+                    Door d = all[i];
+                    if (d == null || d.gameObject == null) continue;
+                    if (string.Equals(d.gameObject.name, targetName, StringComparison.Ordinal))
+                        return d;
+                }
+            }
+
             return null;
         }
 
