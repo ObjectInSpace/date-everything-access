@@ -1148,16 +1148,20 @@ namespace DateEverythingAccess
                 forward = Vector3.forward;
             forward.Normalize();
 
-            // Player's room from the SAME hierarchy/bounds model the targets' Zone uses (built by the
-            // BuildKnownObjectTargets call above), so the same-room comparison is apples-to-apples —
-            // GetCurrentRoomName() uses camera zones, a different system that wouldn't string-match.
-            string playerRoom = ResolveRoomByBounds(playerPosition);
-
-            // Bucket nearby same-floor targets by facing-relative direction. Gate out objects the
-            // player can't perceive from here: keep a target only if it's in the SAME ROOM or the
-            // player has a clear LINE OF SIGHT to it (so F6 no longer reads objects through walls,
-            // while still mentioning what's visible through a doorway into the next room).
+            // Bucket targets by facing-relative direction. The perceivability model is "what the
+            // player could see from where they stand if they looked around": a single gate, LINE OF
+            // SIGHT from the player's eye to the object, which is facing-independent (the player can
+            // rotate the camera in place). Cross-room targets visible through a doorway pass; a
+            // closed drawer/cabinet door or a wall occludes its contents, so they drop out — no
+            // per-container-type modelling needed. Objects with no visible renderer (inactive,
+            // not-yet-revealed, or purely logical) are dropped too: you can't see what isn't drawn.
+            //
+            // Dedup so each thing is announced once: first by live object identity (multiple roster
+            // fixtures can resolve to the SAME instance), then by datable identity (the same
+            // character can have several instances/copies in view — linkedWigglers et al.).
             var grouped = new Dictionary<FacingRelativeDirection, List<KnownObjectTarget>>();
+            var seenObjects = new HashSet<InteractableObj>();
+            var seenDatables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (KnownObjectTarget target in targets)
             {
                 if (target.Interactable == null || !target.IsOnPlayerFloor)
@@ -1165,16 +1169,16 @@ namespace DateEverythingAccess
                 if (target.Distance > RoomScanRadiusM)
                     continue;
 
-                // Items stored INSIDE a closed cabinet/drawer aren't perceivable — the closed door
-                // conceals them. Skip a target enclosed by a closed container, but keep the
-                // container datable itself (e.g. cabrizzio_cabinet, which IS a Cabinet). See
-                // IsInsideClosedContainer.
-                if (IsInsideClosedContainer(target.Interactable))
+                if (!HasVisibleRenderer(target.Interactable))
                     continue;
 
-                bool sameRoom = !string.IsNullOrEmpty(playerRoom)
-                    && string.Equals(playerRoom, target.Zone, StringComparison.OrdinalIgnoreCase);
-                if (!sameRoom && !HasRoomScanLineOfSight(playerPosition, target.Interactable))
+                if (!HasRoomScanLineOfSight(playerPosition, target.Interactable))
+                    continue;
+
+                if (!seenObjects.Add(target.Interactable))
+                    continue;
+                string datableKey = GetRoomScanDatableKey(target);
+                if (datableKey != null && !seenDatables.Add(datableKey))
                     continue;
 
                 FacingRelativeDirection direction = GetFacingRelativeDirection(
@@ -1239,27 +1243,40 @@ namespace DateEverythingAccess
             ScreenReader.Say(report.ToString());
         }
 
-        // True when the object is stored inside a container (Cabinet) that is currently CLOSED, so
-        // the player can't perceive it. The container datable itself is NOT hidden: a Cabinet's own
-        // InteractableObj sits on the SAME GameObject as the Cabinet component, so we only treat the
-        // container as concealing when the Cabinet is a STRICT ANCESTOR (a parent object) of the
-        // target — i.e. the target is a child stored inside. Reads the live Cabinet.Open flag so the
-        // moment the player opens it the contents start being reported.
-        private static bool IsInsideClosedContainer(InteractableObj target)
+        // True when the object has geometry the player could actually see: at least one enabled
+        // Renderer that is itself enabled and on an active GameObject. This drops objects that exist
+        // in the scene but aren't drawn — inactive/not-yet-revealed datables and purely logical
+        // interactables — which a bare LOS ray would otherwise "reach" at their pivot. Checks the
+        // whole hierarchy so a datable whose mesh lives on a child still counts.
+        private static bool HasVisibleRenderer(InteractableObj target)
         {
             if (target == null || target.transform == null)
                 return false;
 
-            // Walk parents only (exclusive of the target's own object): a Cabinet on the target
-            // itself means the target IS the cabinet, which should always be reported.
-            for (Transform t = target.transform.parent; t != null; t = t.parent)
+            Renderer[] renderers = target.GetComponentsInChildren<Renderer>(includeInactive: false);
+            for (int i = 0; i < renderers.Length; i++)
             {
-                Cabinet cabinet = t.GetComponent<Cabinet>();
-                if (cabinet != null)
-                    return !cabinet.Open;
+                Renderer r = renderers[i];
+                if (r != null && r.enabled && r.gameObject.activeInHierarchy)
+                    return true;
             }
-
             return false;
+        }
+
+        // Stable identity for room-scan dedup: the datable a target belongs to, so the same
+        // character appearing in several places (or via linkedWigglers copies) is announced once.
+        // inkFileName is the canonical datable key; InternalName() is the fallback. Returns null
+        // when neither is available, so such a target is only object-identity-deduped.
+        private static string GetRoomScanDatableKey(KnownObjectTarget target)
+        {
+            InteractableObj obj = target.Interactable;
+            if (obj == null)
+                return null;
+
+            string key = BuildComparisonKey(obj.inkFileName);
+            if (string.IsNullOrEmpty(key))
+                key = BuildComparisonKey(obj.InternalName());
+            return string.IsNullOrEmpty(key) ? null : key;
         }
 
         // True if the player has a clear line of sight to the object — no wall between them. Used by
