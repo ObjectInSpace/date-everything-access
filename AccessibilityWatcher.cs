@@ -1097,10 +1097,12 @@ namespace DateEverythingAccess
         // one announcement. Cross-floor targets are excluded regardless of distance.
         private const float RoomScanRadiusM = 10f;
 
-        // F6: announce the current room and the known objects near the player, grouped by their
-        // facing-relative direction (Ahead, Ahead right, Right, ...). Reuses the known-object
-        // enumeration that backs the Ctrl+Shift+F6 picker, so it respects the same
-        // encountered/met semantics and per-object dedup.
+        // F6: announce the current room and the objects near the player, grouped by their
+        // facing-relative direction (Ahead, Ahead right, Right, ...). Reuses the same fixture
+        // enumeration that backs the Ctrl+Shift+F6 picker, but passes includeUnencountered so it
+        // reports EVERYTHING perceivable — met or not — not just what this save knows. Unmet
+        // datables surface by object name (no character name); the picker keeps the met/encountered
+        // filter. The spatial gates (floor, radius, same-room-or-LOS) decide what's perceivable.
         private void DescribeCurrentRoom()
         {
             if (Singleton<GameController>.Instance == null ||
@@ -1123,7 +1125,11 @@ namespace DateEverythingAccess
             if (string.IsNullOrEmpty(roomName))
                 roomName = Loc.Get("room_scan_unknown_room");
 
-            KnownObjectBuildResult scanBuild = BuildKnownObjectTargets(out List<KnownObjectTarget> targets);
+            // F6 describes what's physically around the player, so include unmet/un-encountered
+            // fixtures too — the spatial gates below (floor, radius, same-room-or-LOS) decide what
+            // is perceivable. Unmet datables come back with an object-name label (no character
+            // name), so this reveals presence without spoiling identities.
+            KnownObjectBuildResult scanBuild = BuildKnownObjectTargets(out List<KnownObjectTarget> targets, includeUnencountered: true);
             if (scanBuild == KnownObjectBuildResult.RosterMissing)
             {
                 ScreenReader.Say(Loc.Get("navigation_object_picker_no_data"));
@@ -3653,7 +3659,11 @@ namespace DateEverythingAccess
         // of the roster is to surface a missing dependency immediately.
         private enum KnownObjectBuildResult { Ok, RosterMissing, Empty }
 
-        private KnownObjectBuildResult BuildKnownObjectTargets(out List<KnownObjectTarget> targets)
+        // includeUnencountered: when true, the encounter (met/interacted/examined) filter is
+        // skipped so EVERY live, active, on-floor fixture is returned — used by the F6 room scan,
+        // which describes what the player can physically perceive, not just what this save knows.
+        // The Ctrl+Shift+F6 picker leaves it false so it stays a memory aid for known objects.
+        private KnownObjectBuildResult BuildKnownObjectTargets(out List<KnownObjectTarget> targets, bool includeUnencountered = false)
         {
             targets = new List<KnownObjectTarget>();
 
@@ -3714,8 +3724,10 @@ namespace DateEverythingAccess
 
                 // SECOND-ORDER FILTER: only objects the player has encountered (met / interacted /
                 // examined) appear, plus the seeded startup office door. The roster defines what
-                // EXISTS; this narrows it to what THIS SAVE knows.
-                if (!IsStartupOfficeDoorObject(liveObj, fixture.name) &&
+                // EXISTS; this narrows it to what THIS SAVE knows. Skipped when includeUnencountered
+                // is set (F6 room scan): the spatial gates there already model "what's perceivable."
+                if (!includeUnencountered &&
+                    !IsStartupOfficeDoorObject(liveObj, fixture.name) &&
                     !IsEncounteredKnownObject(liveObj))
                 {
                     continue;
