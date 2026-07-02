@@ -1165,6 +1165,13 @@ namespace DateEverythingAccess
                 if (target.Distance > RoomScanRadiusM)
                     continue;
 
+                // Items stored INSIDE a closed cabinet/drawer aren't perceivable — the closed door
+                // conceals them. Skip a target enclosed by a closed container, but keep the
+                // container datable itself (e.g. cabrizzio_cabinet, which IS a Cabinet). See
+                // IsInsideClosedContainer.
+                if (IsInsideClosedContainer(target.Interactable))
+                    continue;
+
                 bool sameRoom = !string.IsNullOrEmpty(playerRoom)
                     && string.Equals(playerRoom, target.Zone, StringComparison.OrdinalIgnoreCase);
                 if (!sameRoom && !HasRoomScanLineOfSight(playerPosition, target.Interactable))
@@ -1230,6 +1237,29 @@ namespace DateEverythingAccess
             }
 
             ScreenReader.Say(report.ToString());
+        }
+
+        // True when the object is stored inside a container (Cabinet) that is currently CLOSED, so
+        // the player can't perceive it. The container datable itself is NOT hidden: a Cabinet's own
+        // InteractableObj sits on the SAME GameObject as the Cabinet component, so we only treat the
+        // container as concealing when the Cabinet is a STRICT ANCESTOR (a parent object) of the
+        // target — i.e. the target is a child stored inside. Reads the live Cabinet.Open flag so the
+        // moment the player opens it the contents start being reported.
+        private static bool IsInsideClosedContainer(InteractableObj target)
+        {
+            if (target == null || target.transform == null)
+                return false;
+
+            // Walk parents only (exclusive of the target's own object): a Cabinet on the target
+            // itself means the target IS the cabinet, which should always be reported.
+            for (Transform t = target.transform.parent; t != null; t = t.parent)
+            {
+                Cabinet cabinet = t.GetComponent<Cabinet>();
+                if (cabinet != null)
+                    return !cabinet.Open;
+            }
+
+            return false;
         }
 
         // True if the player has a clear line of sight to the object — no wall between them. Used by
