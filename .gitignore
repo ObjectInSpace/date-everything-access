@@ -43,6 +43,7 @@ artifacts/navigation/mesh_guid_index.cache.json
 # Export-SceneBlockerData.ps1; the consumed output is navigable_region.bake.json,
 # which is committed). Over GitHub's 100MB per-file push limit, so not tracked.
 artifacts/navigation/thirdpersongreybox-blockers.COLUMNS.json
+artifacts/navigation/thirdpersongreybox-blockers.json
 
 # Python bytecode cache
 **/__pycache__/
