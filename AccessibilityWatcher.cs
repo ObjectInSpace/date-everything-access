@@ -181,6 +181,14 @@ namespace DateEverythingAccess
         private const int VkBackspace = 0x08; // VK_BACK
         private const int VkPageUp = 0x21;   // VK_PRIOR
         private const int VkPageDown = 0x22; // VK_NEXT
+        // Bare-key accessibility shortcuts. These are polled here (not registered as global OS hotkeys)
+        // so they don't steal the letters/backtick from text-entry fields. See PollAccessibilityShortcutKeys.
+        private const int VkL = 0x4C;         // Look around (room scan)
+        private const int VkO = 0x4F;         // Object / objective tracker + auto-walk (with Shift / Alt)
+        private const int VkBacktick = 0xC0;  // VK_OEM_3 (`) — repeat last spoken line
+        private const int VkLShiftModifier = 0x10; // VK_SHIFT (either shift)
+        private const int VkLCtrlModifier = 0x11;  // VK_CONTROL
+        private const int VkLAltModifier = 0x12;   // VK_MENU (alt)
 
         private static readonly Regex RichTextRegex = new Regex("<[^>]+>", RegexOptions.Compiled);
         private static readonly Regex SpriteTagRegex = new Regex(
@@ -376,6 +384,10 @@ namespace DateEverythingAccess
         // HandleSectionStepperInput(), which is the only place that has the resolved section list to act on.
         private bool _pageUpPending;
         private bool _pageDownPending;
+        // Edge-detection state for the polled bare-key accessibility shortcuts (L / O / `).
+        private bool _lookAroundKeyWasDown;
+        private bool _objectTrackerKeyWasDown;
+        private bool _repeatLastKeyWasDown;
         private InteractableObj _trackedInteractable;
         private string _trackedInteractableId;
         private string _trackedInteractableLabel;
@@ -879,6 +891,12 @@ namespace DateEverythingAccess
             // Sample the section-stepper keys EVERY frame so a fast tap inside a poll gap is caught (the stepper
             // itself runs only on the 0.1s poll below). Edge-detection state must advance every frame for this to work.
             PollSectionStepperKeys();
+
+            // Bare-key accessibility shortcuts (L / O / Shift+O / Alt+O / `). Polled here rather than as
+            // global OS hotkeys so they stay typeable in text fields; the poll itself suppresses them
+            // while a text field or the settings menu is focused. Sampled every frame for the same
+            // fast-tap reason as the section stepper.
+            PollAccessibilityShortcutKeys();
 
             bool isSettingsMenuOpen = ModConfig.IsMenuOpen;
             if (isSettingsMenuOpen)
@@ -6207,6 +6225,98 @@ namespace DateEverythingAccess
                 _pageDownPending = true;
             if (WasChoiceKeyPressed(KeyCode.PageUp, VkPageUp, ref _pageUpWasDown))
                 _pageUpPending = true;
+        }
+
+        // Bare-key accessibility shortcuts, formerly global OS hotkeys but demoted to in-game polling so
+        // they don't swallow the letters/backtick from text-entry fields. Layout:
+        //   L        -> look around (room scan)      [was F6]
+        //   O        -> object tracker (picker)      [was Ctrl+Shift+F6]
+        //   Shift+O  -> objective tracker            [was Ctrl+F6]
+        //   Alt+O    -> auto-walk toggle             [was Ctrl+Alt+F6]
+        //   `        -> repeat last spoken line      [was Ctrl+F1]
+        // Suppressed entirely while a text field or the spoken settings menu is focused so typing and
+        // menu navigation aren't hijacked. Edge-detection state is advanced EVERY frame (even when
+        // suppressed) so a key held down before focus leaves the field doesn't fire a stale press after.
+        private void PollAccessibilityShortcutKeys()
+        {
+            bool lookPressed = WasChoiceKeyPressed(KeyCode.L, VkL, ref _lookAroundKeyWasDown);
+            bool objectPressed = WasChoiceKeyPressed(KeyCode.O, VkO, ref _objectTrackerKeyWasDown);
+            bool repeatPressed = WasChoiceKeyPressed(KeyCode.BackQuote, VkBacktick, ref _repeatLastKeyWasDown);
+
+            // Never act on these while typing or inside the settings menu; edge state above already advanced.
+            if (ModConfig.IsMenuOpen || IsTextInputFocused())
+                return;
+
+            bool shift = IsModifierKeyDownLocal(VkLShiftModifier);
+            bool ctrl = IsModifierKeyDownLocal(VkLCtrlModifier);
+            bool alt = IsModifierKeyDownLocal(VkLAltModifier);
+
+            // Ctrl is not part of any of these bindings; if it's held, defer to the global Ctrl+ hotkeys
+            // (e.g. Ctrl+F1 settings) and don't also fire a bare-key action.
+            if (ctrl)
+                return;
+
+            if (lookPressed && !shift && !alt)
+            {
+                Main.Log.LogInfo("Look-around shortcut (L) detected");
+                RequestDescribeCurrentRoom();
+                return;
+            }
+
+            if (objectPressed)
+            {
+                if (alt && !shift)
+                {
+                    Main.Log.LogInfo("Auto-walk shortcut (Alt+O) detected");
+                    RequestAutoWalk();
+                }
+                else if (shift && !alt)
+                {
+                    Main.Log.LogInfo("Objective tracker shortcut (Shift+O) detected");
+                    RequestNavigateToObjective();
+                }
+                else if (!shift && !alt)
+                {
+                    Main.Log.LogInfo("Object tracker shortcut (O) detected");
+                    RequestSelectNavigationTarget();
+                }
+                return;
+            }
+
+            if (repeatPressed && !shift && !alt)
+            {
+                Main.Log.LogInfo("Repeat-last shortcut (`) detected");
+                RequestRepeatLastSpeech();
+            }
+        }
+
+        private static bool IsModifierKeyDownLocal(int virtualKey)
+        {
+            return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+        }
+
+        // True when the player is typing: a UI text field (TMP_InputField or legacy InputField) is the
+        // focused EventSystem selection and actively accepting input. Used to suppress the bare-key
+        // shortcuts so 'l', 'o', and '`' remain typeable in name/save/search fields.
+        private static bool IsTextInputFocused()
+        {
+            EventSystem eventSystem = EventSystem.current;
+            if (eventSystem == null)
+                return false;
+
+            GameObject selected = eventSystem.currentSelectedGameObject;
+            if (selected == null)
+                return false;
+
+            TMP_InputField tmpField = selected.GetComponent<TMP_InputField>();
+            if (tmpField != null && tmpField.isFocused)
+                return true;
+
+            InputField legacyField = selected.GetComponent<InputField>();
+            if (legacyField != null && legacyField.isFocused)
+                return true;
+
+            return false;
         }
 
         private void HandleSectionStepperInput()

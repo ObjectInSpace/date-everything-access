@@ -21,7 +21,6 @@ namespace DateEverythingAccess
     public class Main : BaseUnityPlugin
     {
         private const int VkF1 = 0x70;
-        private const int VkF6 = 0x75;
         private const int VkF8 = 0x77;
         private const int VkF9 = 0x78;
         private const int WmHotkey = 0x0312;
@@ -33,12 +32,12 @@ namespace DateEverythingAccess
         private const int HelpHotkeyId = 1;
         private const int DebugHotkeyId = 2;
         private const int SettingsHotkeyId = 3;
-        private const int RepeatSpeechHotkeyId = 4;
-        private const int DescribeCurrentRoomHotkeyId = 5;
-        private const int NavigateToObjectiveHotkeyId = 6;
-        private const int SelectNavigationTargetHotkeyId = 7;
-        private const int AutoWalkHotkeyId = 8;
         private const int CoverageSweepHotkeyId = 13;
+        // NOTE: Repeat-last (`), look-around (L), object tracker (O), objective tracker (Shift+O),
+        // and auto-walk (Alt+O) are NO LONGER global OS hotkeys. Bare letter/backtick keys registered
+        // via RegisterHotKey would be swallowed from ALL text input (name/save entry) while the game is
+        // focused, so they are polled in AccessibilityWatcher.Update instead and suppressed while a text
+        // field or the settings menu has focus. Only F-key / Ctrl combos remain global below.
 
         private Thread _hotkeyThread;
         private volatile bool _hotkeyThreadRunning;
@@ -230,12 +229,7 @@ namespace DateEverythingAccess
                 int registered = 0;
                 registered += TryRegisterHotkey(HelpHotkeyId, VkF1, "F1") ? 1 : 0;
                 registered += TryRegisterHotkey(DebugHotkeyId, VkF9, "F9") ? 1 : 0;
-                registered += TryRegisterHotkey(SettingsHotkeyId, ModControl | ModNoRepeat, VkF9, "Ctrl+F9") ? 1 : 0;
-                registered += TryRegisterHotkey(RepeatSpeechHotkeyId, ModControl | ModNoRepeat, VkF1, "Ctrl+F1") ? 1 : 0;
-                registered += TryRegisterHotkey(DescribeCurrentRoomHotkeyId, VkF6, "F6") ? 1 : 0;
-                registered += TryRegisterHotkey(NavigateToObjectiveHotkeyId, ModControl | ModNoRepeat, VkF6, "Ctrl+F6") ? 1 : 0;
-                registered += TryRegisterHotkey(SelectNavigationTargetHotkeyId, ModControl | ModShift | ModNoRepeat, VkF6, "Ctrl+Shift+F6") ? 1 : 0;
-                registered += TryRegisterHotkey(AutoWalkHotkeyId, ModControl | ModAlt | ModNoRepeat, VkF6, "Ctrl+Alt+F6") ? 1 : 0;
+                registered += TryRegisterHotkey(SettingsHotkeyId, ModControl | ModNoRepeat, VkF1, "Ctrl+F1") ? 1 : 0;
                 registered += TryRegisterHotkey(CoverageSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF8, "Ctrl+Alt+Shift+F8") ? 1 : 0;
                 Logger.LogInfo("Background hotkey message loop active (" + registered + " hotkey(s) registered)");
 
@@ -261,11 +255,6 @@ namespace DateEverythingAccess
                 UnregisterHotKey(IntPtr.Zero, HelpHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, DebugHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, SettingsHotkeyId);
-                UnregisterHotKey(IntPtr.Zero, RepeatSpeechHotkeyId);
-                UnregisterHotKey(IntPtr.Zero, DescribeCurrentRoomHotkeyId);
-                UnregisterHotKey(IntPtr.Zero, NavigateToObjectiveHotkeyId);
-                UnregisterHotKey(IntPtr.Zero, SelectNavigationTargetHotkeyId);
-                UnregisterHotKey(IntPtr.Zero, AutoWalkHotkeyId);
                 UnregisterHotKey(IntPtr.Zero, CoverageSweepHotkeyId);
                 Logger.LogInfo("Background hotkey thread exiting");
             }
@@ -323,55 +312,6 @@ namespace DateEverythingAccess
                 return;
             }
 
-            if (hotkeyId == RepeatSpeechHotkeyId)
-            {
-                if (!IsModifierKeyDown(0x11) || IsModifierKeyDown(0x10) || IsModifierKeyDown(0x12))
-                    return;
-
-                RepeatLastSpeech();
-                return;
-            }
-
-            if (hotkeyId == DescribeCurrentRoomHotkeyId)
-            {
-                if (IsModifierKeyDown(0x10) || IsModifierKeyDown(0x11) || IsModifierKeyDown(0x12))
-                    return;
-
-                Logger.LogInfo("Describe current room hotkey detected");
-                AccessibilityWatcher.RequestDescribeCurrentRoom();
-                return;
-            }
-
-            if (hotkeyId == NavigateToObjectiveHotkeyId)
-            {
-                if (IsModifierKeyDown(0x10) || IsModifierKeyDown(0x12))
-                    return;
-
-                Logger.LogInfo("Navigate to objective hotkey detected");
-                AccessibilityWatcher.RequestNavigateToObjective();
-                return;
-            }
-
-            if (hotkeyId == SelectNavigationTargetHotkeyId)
-            {
-                if (!IsModifierKeyDown(0x10) || IsModifierKeyDown(0x12))
-                    return;
-
-                Logger.LogInfo("Select navigation target hotkey detected");
-                AccessibilityWatcher.RequestSelectNavigationTarget();
-                return;
-            }
-
-            if (hotkeyId == AutoWalkHotkeyId)
-            {
-                if (!IsModifierKeyDown(0x12) || IsModifierKeyDown(0x10))
-                    return;
-
-                Logger.LogInfo("Auto-walk hotkey detected");
-                AccessibilityWatcher.RequestAutoWalk();
-                return;
-            }
-
             if (hotkeyId == CoverageSweepHotkeyId)
             {
                 if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || !IsModifierKeyDown(0x12))
@@ -415,12 +355,6 @@ namespace DateEverythingAccess
         {
             Logger.LogInfo("Accessibility settings hotkey detected");
             ModConfig.ToggleMenu();
-        }
-
-        private void RepeatLastSpeech()
-        {
-            Logger.LogInfo("Repeat speech hotkey detected");
-            AccessibilityWatcher.RequestRepeatLastSpeech();
         }
     }
 

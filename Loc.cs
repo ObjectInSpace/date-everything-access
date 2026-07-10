@@ -127,8 +127,8 @@ namespace DateEverythingAccess
 
         private static void InitializeEnglish()
         {
-            Add("mod_loaded", "Date Everything Access loaded. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes are spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F6 reports the current room and objects relative to the direction you are facing. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the known objects list. In the list, Up and Down move the selection, Enter selects, Escape closes, Left and Right change the sort, F toggles this floor only, M cycles the section filter, and D toggles doors only. Ctrl+Alt+F6 toggles auto-walk to the selected target. Ctrl+F9 opens accessibility settings.");
-            Add("help_text", "Date Everything Access. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes can be spoken automatically. F1 for help. Ctrl+F1 repeats the last spoken line. F6 reports the current room and objects relative to the direction you are facing. Ctrl+F6 tracks the current objective. Ctrl+Shift+F6 opens the known objects list. In the list, Up and Down move the selection, Enter selects, Escape closes, Left and Right change the sort, F toggles this floor only, M cycles the section filter, and D toggles doors only. Ctrl+Alt+F6 toggles auto-walk to the selected target. Ctrl+F9 opens accessibility settings.");
+            Add("mod_loaded", "Date Everything Access loaded. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes are spoken automatically. F1 for help. Backtick repeats the last spoken line. L reports the current room and objects relative to the direction you are facing. Shift plus O tracks the current objective. O opens the known objects list. In the list, Up and Down move the selection, Enter selects, Escape closes, Left and Right change the sort, F toggles this floor only, M cycles the section filter, and D toggles doors only. Alt plus O toggles auto-walk to the selected target. Ctrl+F1 opens accessibility settings.");
+            Add("help_text", "Date Everything Access. Focused items, dialogue, screen text, phone app text, rooms, nearby objects, and status changes can be spoken automatically. F1 for help. Backtick repeats the last spoken line. L reports the current room and objects relative to the direction you are facing. Shift plus O tracks the current objective. O opens the known objects list. In the list, Up and Down move the selection, Enter selects, Escape closes, Left and Right change the sort, F toggles this floor only, M cycles the section filter, and D toggles doors only. Alt plus O toggles auto-walk to the selected target. Ctrl+F1 opens accessibility settings.");
             Add("debug_mode_enabled", "Debug mode enabled.");
             Add("debug_mode_enabled_with_mapping_dump", "Debug mode enabled. Current input mappings for {0} devices were written to the log.");
             Add("debug_mode_disabled", "Debug mode disabled.");
@@ -147,6 +147,10 @@ namespace DateEverythingAccess
             Add("config_room_changes", "Room changes");
             Add("config_nearby_objects", "Nearby objects");
             Add("config_status_changes", "Status changes");
+            Add("config_tracker_tone_pitch", "Tracker tone pitch");
+            Add("config_tracker_tone_pitch_low", "Low");
+            Add("config_tracker_tone_pitch_mid", "Mid");
+            Add("config_tracker_tone_pitch_high", "High");
             Add("room_announcement", "Room: {0}");
             Add("nearby_announcement_without_prompt", "{0}");
             Add("dateviators_equipped", "equipped");
@@ -325,9 +329,9 @@ namespace DateEverythingAccess
         private static void InitializeJapanese()
         {
             AddJa("mod_loaded",
-                "Date Everything Access を読み込みました。フォーカス項目、会話、画面テキスト、電話アプリのテキスト、部屋、近くのオブジェクト、状態の変化を自動で読み上げます。F1でヘルプ。Ctrl+F1で最後の読み上げを繰り返します。F6で現在の部屋と、向いている方向を基準にしたオブジェクトを知らせます。Ctrl+F6で現在の目標を追跡します。Ctrl+Shift+F6で既知オブジェクトの一覧を開きます。一覧では上下で選択を移動、Enterで決定、Escapeで閉じる、左右で並び替え、Fでこの階のみ切り替え、Mでセクションフィルターを切り替え、Dでドアのみ切り替えます。Ctrl+Alt+F6で選択した目標へのオートウォークを切り替えます。Ctrl+F9でアクセシビリティ設定を開きます。");
+                "Date Everything Access を読み込みました。フォーカス項目、会話、画面テキスト、電話アプリのテキスト、部屋、近くのオブジェクト、状態の変化を自動で読み上げます。F1でヘルプ。バッククォート（`）で最後の読み上げを繰り返します。Lで現在の部屋と、向いている方向を基準にしたオブジェクトを知らせます。Shift+Oで現在の目標を追跡します。Oで既知オブジェクトの一覧を開きます。一覧では上下で選択を移動、Enterで決定、Escapeで閉じる、左右で並び替え、Fでこの階のみ切り替え、Mでセクションフィルターを切り替え、Dでドアのみ切り替えます。Alt+Oで選択した目標へのオートウォークを切り替えます。Ctrl+F1でアクセシビリティ設定を開きます。");
             AddJa("help_text",
-                "Date Everything Access。フォーカス項目、会話、画面テキスト、電話アプリのテキスト、部屋、近くのオブジェクト、状態の変化を自動で読み上げできます。F1でヘルプ。Ctrl+F1で最後の読み上げを繰り返します。F6で現在の部屋と、向いている方向を基準にしたオブジェクトを知らせます。Ctrl+F6で現在の目標を追跡します。Ctrl+Shift+F6で既知オブジェクトの一覧を開きます。一覧では上下で選択を移動、Enterで決定、Escapeで閉じる、左右で並び替え、Fでこの階のみ切り替え、Mでセクションフィルターを切り替え、Dでドアのみ切り替えます。Ctrl+Alt+F6で選択した目標へのオートウォークを切り替えます。Ctrl+F9でアクセシビリティ設定を開きます。");
+                "Date Everything Access。フォーカス項目、会話、画面テキスト、電話アプリのテキスト、部屋、近くのオブジェクト、状態の変化を自動で読み上げできます。F1でヘルプ。バッククォート（`）で最後の読み上げを繰り返します。Lで現在の部屋と、向いている方向を基準にしたオブジェクトを知らせます。Shift+Oで現在の目標を追跡します。Oで既知オブジェクトの一覧を開きます。一覧では上下で選択を移動、Enterで決定、Escapeで閉じる、左右で並び替え、Fでこの階のみ切り替え、Mでセクションフィルターを切り替え、Dでドアのみ切り替えます。Alt+Oで選択した目標へのオートウォークを切り替えます。Ctrl+F1でアクセシビリティ設定を開きます。");
             AddJa("debug_mode_enabled", "デバッグモードを有効にしました。");
             AddJa("debug_mode_enabled_with_mapping_dump", "デバッグモードを有効にしました。{0} 台のデバイスの現在の入力割り当てをログに書き出しました。");
             AddJa("debug_mode_disabled", "デバッグモードを無効にしました。");
@@ -345,6 +349,10 @@ namespace DateEverythingAccess
             AddJa("config_room_changes", "部屋の移動");
             AddJa("config_nearby_objects", "近くのオブジェクト");
             AddJa("config_status_changes", "状態の変化");
+            AddJa("config_tracker_tone_pitch", "トラッカー音の高さ");
+            AddJa("config_tracker_tone_pitch_low", "低");
+            AddJa("config_tracker_tone_pitch_mid", "中");
+            AddJa("config_tracker_tone_pitch_high", "高");
             AddJa("room_announcement", "部屋: {0}");
             AddJa("dateviators_equipped", "装着");
             AddJa("dateviators_unequipped", "取り外し");
