@@ -18,9 +18,22 @@ namespace DateEverythingAccess
         private const string BlipReverseTrackName = "dea_navigation_blip_rev";
         private const string LogSource = "ObjectTracker";
         private const int SampleRate = 44100;
-        // Carrier tone. The CLIP is generated at this frequency; the live pitch multiplier (below)
-        // shifts it to encode distance, so this is just the synthesis base for a comfortable A4.
-        private const float BaseFrequency = 440f;
+        // Carrier tone. The CLIP is generated at a FUNDAMENTAL frequency chosen by the user's tone
+        // register (see ModConfig.TrackerToneFundamentalHz); the live pitch multiplier (below) shifts
+        // it to encode distance. We used to synthesize a pure 440 Hz sine, but two accessibility facts
+        // pushed us off that: (1) ISO 226 equal-loudness contours put human sensitivity on a broad
+        // plateau around 1 kHz, so a mid-register fundamental is audible to the widest range of
+        // hearing profiles; (2) a PURE sine puts all energy at one frequency, so a listener with a
+        // notch there hears nothing — so the carrier is a HARMONIC STACK (fundamental + a few
+        // harmonics at decaying amplitude), letting a loss at any single frequency be covered by the
+        // others. The register setting exists because no single fundamental is optimal for everyone;
+        // presbycusis spares the lows, some conductive/sensorineural losses spare the highs.
+        // Default fundamental if the register can't be read (mid register ~1 kHz).
+        private const float DefaultFundamentalFrequency = 1000f;
+        // Relative amplitudes of the fundamental and its harmonics (index 0 = fundamental at 1x freq,
+        // index 1 = 2x freq, ...). Decaying so the tone stays warm rather than buzzy, but every
+        // partial carries enough energy to be a fallback if the listener has a notch at another.
+        private static readonly float[] HarmonicAmplitudes = { 1f, 0.5f, 0.33f, 0.2f };
         // PITCH now encodes DISTANCE to the current waypoint (it used to encode vertical up/down, which
         // was dropped — that channel was near-silent on flat ground and the screen-projection it used
         // wandered as the player merely walked). Pitch DELTAS are far easier to perceive than volume
@@ -89,6 +102,27 @@ namespace DateEverythingAccess
             _blipReverseClip = CreateBuzzClip("DateEverythingNavBlipReverse");
             Main.Log.LogInfo("ObjectTracker initialized");
             DebugLogger.Log(LogCategory.State, LogSource, "Initialized tracker anchor and generated tone clip.");
+        }
+
+        /// <summary>
+        /// Regenerates the carrier clip from the current tone register and, if tracking is live,
+        /// restarts playback so the new fundamental takes effect immediately. Called by ModConfig
+        /// when the user cycles the "Tracker tone pitch" setting.
+        /// </summary>
+        public static void RefreshToneClip()
+        {
+            if (_toneClip == null)
+                return; // Not initialized yet; Initialize() will build the clip at the current register.
+
+            _toneClip = CreateToneClip();
+
+            if (!_isTracking)
+                return;
+
+            // Stop the looping track so it re-creates with the freshly generated clip, then restart.
+            if (Singleton<AudioManager>.Instance != null)
+                Singleton<AudioManager>.Instance.StopTrack(TrackerTrackName, 0f);
+            StartTonePlayback();
         }
 
         /// <summary>
@@ -413,21 +447,44 @@ namespace DateEverythingAccess
                 " position=" + audioSource.transform.position);
         }
 
+        // Synthesizes the continuous carrier as a harmonic stack over the user's chosen fundamental.
+        // Summing several partials would overflow [-1, 1], so we normalize by the total amplitude
+        // (worst case where all partials align) to keep the clip at unit peak — the live volume cue
+        // then scales from there. See the carrier comment above for WHY the tone is a stack, not a sine.
         private static AudioClip CreateToneClip()
         {
             int sampleCount = Mathf.RoundToInt(SampleRate * ClipDurationSeconds);
             float[] samples = new float[sampleCount];
-            float angularFrequency = BaseFrequency * 2f * Mathf.PI;
+            float fundamental = ResolveFundamentalFrequency();
+
+            float amplitudeSum = 0f;
+            for (int h = 0; h < HarmonicAmplitudes.Length; h++)
+                amplitudeSum += HarmonicAmplitudes[h];
+            float normalization = amplitudeSum > 0f ? 1f / amplitudeSum : 1f;
 
             for (int i = 0; i < sampleCount; i++)
             {
                 float t = i / (float)SampleRate;
-                samples[i] = Mathf.Sin(angularFrequency * t);
+                float value = 0f;
+                for (int h = 0; h < HarmonicAmplitudes.Length; h++)
+                {
+                    float harmonicFreq = fundamental * (h + 1);
+                    value += HarmonicAmplitudes[h] * Mathf.Sin(harmonicFreq * 2f * Mathf.PI * t);
+                }
+                samples[i] = value * normalization;
             }
 
             AudioClip clip = AudioClip.Create("DateEverythingNavigationTone", sampleCount, 1, SampleRate, false);
             clip.SetData(samples, 0);
             return clip;
+        }
+
+        // The fundamental the carrier is synthesized at, from the user's tone register. Falls back to
+        // the mid-register default if config isn't available (e.g. before ModConfig.Initialize ran).
+        private static float ResolveFundamentalFrequency()
+        {
+            float configured = ModConfig.TrackerToneFundamentalHz;
+            return configured > 0f ? configured : DefaultFundamentalFrequency;
         }
 
         // A short frequency sweep from startHz to endHz with a quick attack/decay envelope, used for
