@@ -9,13 +9,12 @@ namespace DateEverythingAccess
     public static class ObjectTracker
     {
         private const string TrackerTrackName = "dea_navigation_tracker";
-        // One-shot blip tracks played OVER the continuous tone to mark a waypoint transition. Forward
-        // Forward (rising chirp) = the active leg advanced toward the goal. Reverse = a BUZZ (not a
-        // chirp) so backtracking is unmistakably "wrong" rather than a mirror of the advance tone.
-        // Distinct names so they don't replace the tone or each other. See
-        // [[project-tracker-tone-distance-pitch]] for the channel split.
-        private const string BlipForwardTrackName = "dea_navigation_blip_fwd";
-        private const string BlipReverseTrackName = "dea_navigation_blip_rev";
+        // One-shot chirp played OVER the continuous tone when the player passes a route LANDMARK
+        // (door / stairs / target) — a real place, never a bare grid-corner waypoint. The old
+        // per-corner forward-chirp/reverse-buzz pair is gone: corners are planner artifacts the
+        // player can't perceive, and the buzz double-fired on normal forward travel (the regress
+        // ping-pong bug). Wrong-way travel is audible as the landmark pulse slowing instead.
+        private const string LandmarkBlipTrackName = "dea_navigation_blip_fwd";
         private const string LogSource = "ObjectTracker";
         private const int SampleRate = 44100;
         // Carrier tone. The CLIP is generated at a FUNDAMENTAL frequency chosen by the user's tone
@@ -34,57 +33,111 @@ namespace DateEverythingAccess
         // index 1 = 2x freq, ...). Decaying so the tone stays warm rather than buzzy, but every
         // partial carries enough energy to be a fallback if the listener has a notch at another.
         private static readonly float[] HarmonicAmplitudes = { 1f, 0.5f, 0.33f, 0.2f };
-        // PITCH now encodes DISTANCE to the current waypoint (it used to encode vertical up/down, which
-        // was dropped — that channel was near-silent on flat ground and the screen-projection it used
-        // wandered as the player merely walked). Pitch DELTAS are far easier to perceive than volume
-        // deltas, so this is the primary "am I getting closer" cue. FAR = low pitch, NEAR = high pitch,
-        // ramped over one leg (PitchDistanceFalloff). The multiplier range is musical, not screechy.
-        private const float MinDistancePitch = 0.7f;   // farthest (≥ PitchDistanceFalloff away)
-        private const float MaxDistancePitch = 1.6f;   // right on the waypoint
-        private const float PitchDistanceFalloff = 5f; // metres over which pitch sweeps min→max (one leg)
-        // VOLUME = closeness to the NEXT LANDMARK (door/stairs/target), a mid-tier cue between pitch
-        // (next corner) and the whole route. Bounded distance → meaningful even on a long route.
-        // SteadyVolume is the fallback floor when there's no route/landmark to measure.
-        private const float SteadyVolume = 0.45f;
-        private const float MinLandmarkVolume = 0.3f;   // landmark is far (≥ LandmarkVolumeFalloff)
-        private const float MaxLandmarkVolume = 0.75f;  // right at the landmark
-        private const float LandmarkVolumeFalloff = 8f; // metres over which the swell happens
-        // Heading-error → pan. We compute the L/R balance ourselves (panStereo) from the angle between
-        // the player's BODY forward and the direction to the waypoint. PanSensitivityGamma < 1 EXPANDS
-        // the near-aligned range so a few degrees off-axis is clearly audible; PanFullScaleDeg is the
-        // error that maps to full pan. A pure 2D hard-pan sounds "in-head"/artificial, so we add a
-        // SMALL spatialBlend (PanSpatialBlend) for positional air — kept low so the spatializer's own
-        // pan stays a minor contributor and our computed panStereo still dominates (no mushy centre).
-        private const float PanSensitivityGamma = 0.7f;
-        private const float PanFullScaleDeg = 90f;
+        // ---- Channel map: ONE meaning per channel, nothing shared ----
+        //
+        // The tracker has two modes with a deliberately different sound:
+        //
+        // ROUTE mode (walking, PULSING tone):
+        //   PAN         = steer left/right toward the tracked point (heading error, body basis)
+        //   VOLUME dip  = the tracked point is BEHIND you (turn around)
+        //   PULSE RATE  = distance to the next LANDMARK (door/stairs/target) — fast = near
+        //   PITCH       = constant. Two earlier pitch cues were removed after both leaked a
+        //                 confusing second distance signal: (1) pitch-as-distance (redundant with
+        //                 the pulse); (2) pitch-as-camera-elevation-aim — the required elevation to
+        //                 a FLOOR-level point steepens as you approach (−19° at 5m → −60° at 1m),
+        //                 so walking forward with a level camera made the tone rise and walking
+        //                 back made it fall, with the camera untouched. And since every tracked
+        //                 point is a floor cell, "vertical aim" could only ever say "look at the
+        //                 floor" — a useless channel while WALKING.
+        //
+        // AIM mode (arrived, STEADY tone): the tracked point is now the OBJECT itself (which can
+        // sit on a shelf or wall, unlike route points), the player is standing still (so the
+        // distance-coupling that poisoned the elevation cue mid-route is gone), and the job is to
+        // put the CAMERA on the object:
+        //   PAN         = unchanged (horizontal aim)
+        //   VOLUME dip  = unchanged (object behind you)
+        //   PULSE       = OFF — the steady carrier is itself the "you have arrived, now aim" signal
+        //   PITCH       = vertical aim, SIGNED: match the tone you heard while walking (the
+        //                 register fundamental) and the camera is vertically on the object. Tone
+        //                 too LOW → tilt the camera UP; too HIGH → tilt DOWN.
+        //
+        // PULSE (amplitude gating) RATE encodes DISTANCE to the next LANDMARK — the next door,
+        // stair landing, or the target itself along the route (SimpleNavBridge.DistanceToNextLandmark,
+        // path distance, so it's a true "how far to the next meaningful place"). FAST pulse = NEAR,
+        // SLOW = FAR, like a parking sensor. Landmarks (not waypoints) so the rate never resets at an
+        // invisible grid corner; each reset coincides with the audible landmark chirp, so it reads as
+        // "reached the door — now counting down to the next place". We gate the carrier amplitude
+        // with a raised-cosine at this rate rather than adding a second tone; PulseDepth < 1 keeps
+        // the tone audible in the troughs so it reads as a pulsing tone, not on/off beeping.
+        private const float MinPulseHz = 1.2f;          // farthest (≥ PulseDistanceFalloff away)
+        private const float MaxPulseHz = 8f;            // right on the landmark
+        private const float PulseDistanceFalloff = 10f; // metres over which the pulse ramps slow→fast
+        private const float PulseDepth = 0.6f;          // how deep the amplitude dips each pulse (0=none, 1=to silence)
+        // VOLUME base is CONSTANT. It used to swell with landmark proximity, which multiplied THREE
+        // signals into one channel (landmark swell × behind dip × pulse gate) — a volume change was
+        // unattributable. Landmark distance lives on the pulse rate now; volume only carries the
+        // behind-you dip.
+        private const float SteadyVolume = 0.65f;
+        // AIM-mode vertical cue: pitch offset = clamp(signed camera aim error / full-scale) × swing.
+        // Aim error = (camera's CURRENT elevation) − (elevation it MUST look at to hit the object):
+        // aimed too HIGH → positive → tone rises ("tilt down"); too LOW → negative → tone drops
+        // ("tilt up"); tone at the plain walking pitch (1.0) = vertically on the object.
+        private const float ElevationPitchSwing = 0.35f;     // ± pitch multiplier at full aim error
+        private const float ElevationAimFullScaleDeg = 35f;  // aim error (deg) mapped to full ± swing
+        // Heading-error → pan. We compute the L/R balance ourselves (panStereo) from the direction to
+        // the waypoint relative to the player's BODY forward. Pan = sin(headingError): this is the true
+        // LEFT/RIGHT component of the direction, which reverses SMOOTHLY through zero and — critically —
+        // has NO discontinuity when the target passes behind you. The old |SignedAngle|-with-full-scale
+        // curve flipped hard-left↔hard-right as a behind-target crossed ±180° (the "snap" bug) and
+        // pinned to full pan for any error past 90° (turning "did nothing" while off-axis). PanBoost < 1
+        // is a gamma that EXPANDS the near-aligned range so a few degrees off-axis is still audible,
+        // applied to the sine magnitude while preserving its sign. A pure 2D hard-pan sounds
+        // "in-head"/artificial, so we can add a SMALL spatialBlend (PanSpatialBlend) for positional air.
+        private const float PanBoost = 0.7f;
+        // sin() is zero both AHEAD and BEHIND, so those two read identically on pan alone. To
+        // disambiguate "turn around", attenuate the carrier when the target is BEHIND the player (cos of
+        // the heading error < 0): a behind target sounds duller/quieter, easing back to full level as you
+        // turn to face it. Bounded so behind never goes silent — it stays a guidance tone, not a dropout.
+        private const float BehindVolumeScaleMin = 0.55f; // multiplier at directly-behind (180°)
         // Pure 2D for now (panStereo fully authoritative). A non-zero blend let the spatializer pan
         // from the CAMERA→target geometry, which pulls the source toward centre and DILUTES our
         // heading pan (part of why "everything sounded in the middle"). Re-add a small blend for
         // "natural"/positional feel only AFTER confirming the 2D heading pan reads clearly.
         private const float PanSpatialBlend = 0f;
         private const float ClipDurationSeconds = 1f;
-        // Forward blip: short rising chirp. Reverse buzz: a low, rougher tone (see CreateBuzzClip).
+        // Landmark blip: short rising chirp, fired when a door/stairs/target waypoint is passed.
         private const float BlipDurationSeconds = 0.16f;
         private const float BlipStartFrequency = 520f;
         private const float BlipEndFrequency = 880f;
-        private const float BuzzDurationSeconds = 0.22f;
-        private const float BuzzFrequency = 160f;
         private const float BlipVolume = 0.7f;
+        // A door contributes a TRIPLE of landmark waypoints (approach/opening/exit) that can be
+        // crossed within a second of each other; the cooldown collapses them into ONE audible
+        // "passed the door" chirp instead of a stutter of three.
+        private const float LandmarkBlipCooldownSeconds = 2.5f;
         private const float TargetRefreshDistance = 0.2f;
         private const float DebugUpdateIntervalSeconds = 1f;
 
         private static GameObject _trackerAnchorObject;
         private static AudioClip _toneClip;
-        private static AudioClip _blipForwardClip;
-        private static AudioClip _blipReverseClip;
+        private static AudioClip _landmarkBlipClip;
+        private static float _nextLandmarkBlipTime;
         private static Vector3 _targetPosition;
         private static Vector3 _lastStartedTargetPosition;
         private static bool _requiresInteraction;
         private static bool _isTracking;
+        // AIM mode: the tracked point is the object itself and the tone is steady (no pulse) with
+        // pitch = vertical camera-aim error. Entered via StartAimTracking; any plain StartTracking
+        // (route guidance) or StopTracking drops back to route mode.
+        private static bool _isAimMode;
         private static bool _loggedMissingAudioManager;
         private static bool _loggedMissingReferenceTransform;
         private static bool _loggedMissingAudioSource;
         private static float _nextDebugUpdateTime;
+        // Running phase of the distance PULSE (0..1), advanced each frame by the current pulse rate.
+        // Kept as accumulated phase (not time*rate) so changing the rate doesn't jump the waveform —
+        // the pulse stays continuous as the player moves and the rate ramps. Reset when tracking starts.
+        private static float _pulsePhase;
+        private static float _lastPulseUpdateTime;
 
         /// <summary>
         /// Initializes the tracker audio source on demand.
@@ -98,8 +151,7 @@ namespace DateEverythingAccess
             _trackerAnchorObject.hideFlags = HideFlags.HideAndDontSave;
             UnityEngine.Object.DontDestroyOnLoad(_trackerAnchorObject);
             _toneClip = CreateToneClip();
-            _blipForwardClip = CreateChirpClip("DateEverythingNavBlipForward", BlipStartFrequency, BlipEndFrequency);
-            _blipReverseClip = CreateBuzzClip("DateEverythingNavBlipReverse");
+            _landmarkBlipClip = CreateChirpClip("DateEverythingNavBlipForward", BlipStartFrequency, BlipEndFrequency);
             Main.Log.LogInfo("ObjectTracker initialized");
             DebugLogger.Log(LogCategory.State, LogSource, "Initialized tracker anchor and generated tone clip.");
         }
@@ -140,6 +192,7 @@ namespace DateEverythingAccess
         {
             Initialize();
 
+            _isAimMode = false; // plain tracking = route mode; StartAimTracking re-sets the flag
             Vector3 previousTargetPosition = _targetPosition;
             bool shouldRestartTone = !_isTracking ||
                 _requiresInteraction != requiresInteraction ||
@@ -179,35 +232,54 @@ namespace DateEverythingAccess
         }
 
         /// <summary>
+        /// Switches the tone to AIM mode, tracking the object's own position (not a route point):
+        /// steady carrier (no pulse), pitch = signed vertical camera-aim error, pan/behind as
+        /// usual. Idempotent — call every frame while the aim phase is active.
+        /// </summary>
+        public static void StartAimTracking(Vector3 objectPosition)
+        {
+            StartTracking(objectPosition, requiresInteraction: false);
+            _isAimMode = true;
+        }
+
+        /// <summary>
         /// Stops the active tracking tone.
         /// </summary>
         public static void StopTracking()
         {
             _isTracking = false;
+            _isAimMode = false;
             _loggedMissingAudioSource = false;
             _loggedMissingReferenceTransform = false;
             _nextDebugUpdateTime = 0f;
+            _pulsePhase = 0f;
+            _lastPulseUpdateTime = 0f; // re-arm the pulse timer so the next track starts a clean cycle
             DebugLogger.Log(LogCategory.State, LogSource, "StopTracking");
             if (Singleton<AudioManager>.Instance != null)
                 Singleton<AudioManager>.Instance.StopTrack(TrackerTrackName, 0f);
         }
 
         /// <summary>
-        /// Plays the FORWARD transition blip (rising chirp): the active leg advanced toward the goal.
-        /// One-shot over the continuous tone; safe to call even if tracking just started.
+        /// Plays the LANDMARK chirp: the player just passed a real route landmark (door, stair
+        /// landing, target) — never a bare grid-corner waypoint. One-shot over the continuous
+        /// tone; rate-limited so a door's approach/opening/exit triple chirps once, not thrice.
         /// </summary>
-        public static void NotifyWaypointAdvanced()
+        public static void NotifyLandmarkReached()
         {
-            PlayBlip(BlipForwardTrackName, _blipForwardClip);
+            if (Time.unscaledTime < _nextLandmarkBlipTime)
+                return;
+            _nextLandmarkBlipTime = Time.unscaledTime + LandmarkBlipCooldownSeconds;
+            PlayBlip(LandmarkBlipTrackName, _landmarkBlipClip);
         }
 
         /// <summary>
-        /// Plays the REVERSE transition blip (falling chirp): the active leg regressed because the
-        /// player backtracked along the route. One-shot over the continuous tone.
+        /// Plays the success chirp for the AIM phase: the game's raycast has selected the target —
+        /// the camera is on it. Deliberately bypasses the landmark cooldown (arrival near a door
+        /// may have chirped moments earlier; this one must not be swallowed).
         /// </summary>
-        public static void NotifyWaypointRegressed()
+        public static void NotifyAimLocked()
         {
-            PlayBlip(BlipReverseTrackName, _blipReverseClip);
+            PlayBlip(LandmarkBlipTrackName, _landmarkBlipClip);
         }
 
         // Play a one-shot blip as its own non-looping 2D track so it layers over the guidance tone
@@ -302,16 +374,16 @@ namespace DateEverythingAccess
             // kept low (PanSpatialBlend) so the spatializer's own pan stays minor and our panStereo
             // dominates — no mushy centre. spatialize stays off (we don't want the platform spatializer
             // plugin on top); dopplerLevel is forced to 0 in StartTonePlayback so positional motion
-            // never shifts pitch — pitch is OURS, encoding distance.
+            // never shifts pitch — pitch is deliberately constant.
             audioSource.spatialBlend = PanSpatialBlend;
             audioSource.spatialize = false;
             audioSource.spread = 0f;
 
-            // All DISTANCE cues (pitch, landmark volume) measure from the player's BODY on the floor,
-            // flattened to XZ — NOT the camera. The camera sits back and above the player, so a
-            // camera→waypoint 3D distance never drops below ~2-4m even standing on the waypoint, which
-            // pinned pitch/volume near their floor values the whole time (the "nothing changed" bug).
-            // Body-XZ matches the follower's basis and the pan, and actually reaches ~0 at the waypoint.
+            // DISTANCE measures from the player's BODY on the floor, flattened to XZ — NOT the
+            // camera. The camera sits back and above the player, so a camera→point 3D distance never
+            // drops below ~2-4m even standing on the point, which pinned the cue near its floor value
+            // the whole time (the "nothing changed" bug). Body-XZ matches the follower's basis and
+            // the pan, and actually reaches ~0 at the point.
             Vector3 bodyPos = BetterPlayerControl.Instance != null
                 ? BetterPlayerControl.Instance.transform.position
                 : referenceTransform.position;
@@ -320,32 +392,33 @@ namespace DateEverythingAccess
             // and the direction to the waypoint (computed inside ComputeHeadingPan).
             audioSource.panStereo = ComputeHeadingPan();
 
-            // PITCH "how close to the current waypoint" — primary proximity cue (pitch deltas read more
-            // clearly than volume deltas). FAR = MinDistancePitch, NEAR = MaxDistancePitch over one leg
-            // (PitchDistanceFalloff). Flat XZ so vertical camera/target offset can't damp it.
-            float distance = FlatDistance(bodyPos, _targetPosition);
-            float proximityAmount = Mathf.Clamp01(1f - (distance / PitchDistanceFalloff));
-            proximityAmount *= proximityAmount;
-            audioSource.pitch = Mathf.Lerp(MinDistancePitch, MaxDistancePitch, proximityAmount);
+            // PITCH: constant in ROUTE mode (see the channel map at the top of the file); in AIM
+            // mode it carries the signed vertical camera-aim error — the tone returns to the plain
+            // walking pitch exactly when the camera is vertically on the object.
+            float elevationPitch = _isAimMode ? ComputeElevationPitchOffset() : 0f;
+            audioSource.pitch = 1f + elevationPitch;
 
-            // VOLUME = closeness to the NEXT LANDMARK (next door / stairs / target along the route),
-            // a mid-tier cue between pitch (next corner waypoint) and the whole route. Bounded by
-            // construction so it stays meaningful on long routes. Quiet when a landmark is far,
-            // swelling as the player nears it; resets when they pass one (the landmark advances). If
-            // no route/landmark is available, hold the steady carrier so the tone never drops out.
-            float landmarkDistance = SimpleNavBridge.DistanceToNextLandmark(bodyPos);
-            float volume;
-            if (landmarkDistance < 0f)
+            // PULSE RATE = distance to the next LANDMARK (door / stairs / target) along the route —
+            // path distance, so it slows when the player walks the wrong way. Falls back to the flat
+            // distance to the tracked point when no route/landmark is available (e.g. bare tracking),
+            // so the pulse never freezes. AIM mode is STEADY (no pulse): the un-pulsed carrier is
+            // itself the "arrived — now aim the camera" phase marker.
+            float landmarkDistance = -1f;
+            if (!_isAimMode)
             {
-                volume = SteadyVolume;
+                landmarkDistance = SimpleNavBridge.DistanceToNextLandmark(bodyPos);
+                if (landmarkDistance < 0f)
+                    landmarkDistance = FlatDistance(bodyPos, _targetPosition);
             }
-            else
-            {
-                float nearAmount = Mathf.Clamp01(1f - (landmarkDistance / LandmarkVolumeFalloff));
-                nearAmount *= nearAmount; // perceptual ramp toward the landmark
-                volume = Mathf.Lerp(MinLandmarkVolume, MaxLandmarkVolume, nearAmount);
-            }
-            audioSource.volume = _requiresInteraction ? Mathf.Min(1f, volume + 0.1f) : volume;
+
+            // VOLUME = constant base, dulled when the tracked point is BEHIND the player (sin-based
+            // pan is zero both ahead and behind, so the dip disambiguates "turn around"), gated by
+            // the landmark-distance pulse. Nothing else touches volume.
+            float volume = SteadyVolume;
+            if (_requiresInteraction)
+                volume = Mathf.Min(1f, volume + 0.1f);
+            float pulseGate = _isAimMode ? 1f : ComputeDistancePulse(landmarkDistance);
+            audioSource.volume = volume * ComputeBehindVolumeScale() * pulseGate;
 
             if (!audioSource.isPlaying)
                 StartTonePlayback();
@@ -359,12 +432,13 @@ namespace DateEverythingAccess
                     "Audio update source=" + audioSource.name +
                     " playing=" + audioSource.isPlaying +
                     " target=" + _targetPosition +
-                    " distance=" + distance.ToString("0.00") +
-                    " landmarkDist=" + landmarkDistance.ToString("0.00") +
+                    " mode=" + (_isAimMode ? "aim" : "route") +
+                    " landmarkDist=" + landmarkDistance.ToString("0.00") + " (drives pulse rate)" +
                     " volume=" + audioSource.volume.ToString("0.00") +
                     " pan=" + audioSource.panStereo.ToString("0.00") +
                     " headingErrDeg=" + GetHeadingErrorDegrees().ToString("0.0") +
-                    " pitch=" + audioSource.pitch.ToString("0.00") + " (=distance cue)" +
+                    " elevPitch=" + elevationPitch.ToString("0.00") +
+                    " pulsePhase=" + _pulsePhase.ToString("0.00") +
                     " wp=" + SimpleNavBridge.WaypointProgressDebug +
                     " landmarks=" + SimpleNavBridge.LandmarkCountDebug);
             }
@@ -422,9 +496,9 @@ namespace DateEverythingAccess
                 return;
 
             audioSource.loop = true;
-            // Mostly-2D: pan (panStereo) and pitch/volume are computed manually each frame in
+            // Mostly-2D: pan (panStereo) and volume are computed manually each frame in
             // UpdateTracking. Match its spatialBlend here so there's no first-frame flicker. doppler=0
-            // is critical — pitch is our distance cue, so positional motion must never shift it.
+            // is critical — pitch is deliberately constant, so positional motion must never shift it.
             audioSource.spatialBlend = PanSpatialBlend;
             audioSource.spatialize = false;
             audioSource.priority = 0;
@@ -487,10 +561,9 @@ namespace DateEverythingAccess
             return configured > 0f ? configured : DefaultFundamentalFrequency;
         }
 
-        // A short frequency sweep from startHz to endHz with a quick attack/decay envelope, used for
-        // the waypoint-transition blips. Sweeping UP vs DOWN is what tells the player whether the leg
-        // moved toward the goal (forward) or backtracked (reverse). The integral of the linearly
-        // ramped frequency gives the instantaneous phase, so the pitch glides smoothly across the blip.
+        // A short rising frequency sweep with a quick attack/decay envelope — the landmark chirp.
+        // The integral of the linearly ramped frequency gives the instantaneous phase, so the pitch
+        // glides smoothly across the blip.
         private static AudioClip CreateChirpClip(string name, float startHz, float endHz)
         {
             int sampleCount = Mathf.RoundToInt(SampleRate * BlipDurationSeconds);
@@ -539,53 +612,94 @@ namespace DateEverythingAccess
             return Vector3.SignedAngle(forward, toTarget.normalized, Vector3.up);
         }
 
-        // Map heading error → stereo pan in [-1, 1], applying PanSensitivityGamma so the near-aligned
-        // range gets expanded resolution (small errors are clearly audible) and far-off errors pin to
-        // the edge. We own this curve precisely because Unity's spatializer doesn't expose one.
         // XZ (horizontal) distance — the navigation basis. Vertical offsets (camera height, target on
         // a shelf) must not affect the proximity cues, or they pin near a floor value (the bug where
-        // pitch/volume "never changed" because camera→target 3D distance never reached ~0).
+        // the cue "never changed" because camera→target 3D distance never reached ~0).
         private static float FlatDistance(Vector3 a, Vector3 b)
         {
             float dx = a.x - b.x, dz = a.z - b.z;
             return Mathf.Sqrt(dx * dx + dz * dz);
         }
 
+        // Pan = the LEFT/RIGHT component of the direction to the target: sin(headingError). This is
+        // continuous everywhere — it rises to full pan at 90° off-axis and eases back toward centre as
+        // the target passes BEHIND (there is no ±180° sign flip, so no hard-left↔hard-right snap). A
+        // gamma (PanBoost < 1) on the magnitude expands the near-aligned range so small errors are still
+        // audible, with the sine's sign preserved. Behind/ahead ambiguity (both give small |sin|) is
+        // resolved by ComputeBehindVolumeScale, not here.
         private static float ComputeHeadingPan()
         {
-            float errorDeg = GetHeadingErrorDegrees();
-            float normalized = Mathf.Clamp01(Mathf.Abs(errorDeg) / PanFullScaleDeg);
-            float shaped = Mathf.Pow(normalized, PanSensitivityGamma);
-            return errorDeg >= 0f ? shaped : -shaped;
+            float errorRad = GetHeadingErrorDegrees() * Mathf.Deg2Rad;
+            float lateral = Mathf.Sin(errorRad); // −1 (hard left) .. +1 (hard right), 0 ahead AND behind
+            float shaped = Mathf.Pow(Mathf.Abs(lateral), PanBoost);
+            return lateral >= 0f ? shaped : -shaped;
         }
 
-        // The REVERSE-direction cue: a low, rough buzz (not a chirp), so backtracking along the route
-        // sounds unmistakably like a "wrong way" warning rather than a mirror image of the forward
-        // advance chirp. Roughness = a square-ish wave (odd harmonics) amplitude-modulated by a slow
-        // tremolo, which the ear reads as a buzzy alert. Envelope ramps in/out to avoid clicks.
-        private static AudioClip CreateBuzzClip(string name)
+        // AIM-mode SIGNED vertical camera-aim offset. 0 when the camera points straight at the
+        // object's height; POSITIVE (tone rises) when aimed too HIGH — "tilt down"; NEGATIVE (tone
+        // drops) when aimed too LOW — "tilt up". Centring the tone on the plain walking pitch =
+        // vertical line of sight. Only meaningful while STANDING at the object (aim phase): the
+        // required elevation depends on horizontal distance, which is why this cue was removed from
+        // the walking tone (it read as a phantom distance signal there). Uses the CAMERA transform:
+        // its position for the required angle, its forward for the current angle.
+        private static float ComputeElevationPitchOffset()
         {
-            int sampleCount = Mathf.RoundToInt(SampleRate * BuzzDurationSeconds);
-            float[] samples = new float[sampleCount];
-            float duration = BuzzDurationSeconds;
-            float angular = BuzzFrequency * 2f * Mathf.PI;
-            const float tremoloHz = 55f; // amplitude flutter that gives the "buzz" character
+            Transform cam = GetReferenceTransform();
+            if (cam == null)
+                return 0f;
 
-            for (int i = 0; i < sampleCount; i++)
-            {
-                float t = i / (float)SampleRate;
-                float u = t / duration; // 0..1
-                // Square-ish carrier (sign of a sine) softened slightly so it's harsh but not a pure
-                // square click-fest; rich in odd harmonics → buzzy.
-                float carrier = Mathf.Sign(Mathf.Sin(angular * t)) * 0.7f + Mathf.Sin(angular * t) * 0.3f;
-                float tremolo = 0.6f + 0.4f * Mathf.Sin(tremoloHz * 2f * Mathf.PI * t);
-                float envelope = Mathf.Sin(Mathf.PI * Mathf.Clamp01(u));
-                samples[i] = carrier * tremolo * envelope;
-            }
+            // Elevation the camera MUST look at to hit the object (from the camera's own position).
+            Vector3 toTarget = _targetPosition - cam.position;
+            float horizontal = new Vector2(toTarget.x, toTarget.z).magnitude;
+            if (horizontal < 0.01f && Mathf.Abs(toTarget.y) < 0.01f)
+                return 0f; // sitting on the object — centred (aligned)
+            float requiredElevDeg = Mathf.Atan2(toTarget.y, horizontal) * Mathf.Rad2Deg;
 
-            AudioClip clip = AudioClip.Create(name, sampleCount, 1, SampleRate, false);
-            clip.SetData(samples, 0);
-            return clip;
+            // Camera's CURRENT elevation: the vertical angle of its forward vector.
+            Vector3 fwd = cam.forward;
+            float fwdHoriz = new Vector2(fwd.x, fwd.z).magnitude;
+            float currentElevDeg = Mathf.Atan2(fwd.y, fwdHoriz) * Mathf.Rad2Deg;
+
+            float aimErrorDeg = currentElevDeg - requiredElevDeg;
+            float normalized = Mathf.Clamp(aimErrorDeg / ElevationAimFullScaleDeg, -1f, 1f);
+            return normalized * ElevationPitchSwing;
+        }
+
+        // Amplitude gate (0..1) for the DISTANCE pulse. The pulse RATE encodes distance to the next
+        // LANDMARK — fast near, slow far, like a parking sensor — while the gate depth (PulseDepth)
+        // stays fixed so the tone dips but never fully drops out (reads as a pulsing tone, not beeping).
+        // The rate is derived from distance each frame and the PHASE is accumulated (phase += rate*dt),
+        // so a ramping rate never jumps the waveform. Returns 1 (steady, no pulse) if we can't time the
+        // frame yet. Multiplies the base volume in UpdateTracking.
+        private static float ComputeDistancePulse(float distance)
+        {
+            float now = Time.unscaledTime;
+            float dt = _lastPulseUpdateTime > 0f ? now - _lastPulseUpdateTime : 0f;
+            _lastPulseUpdateTime = now;
+
+            // NEAR = fast, FAR = slow. Same one-leg falloff + squared perceptual ramp the pitch used.
+            float proximity = Mathf.Clamp01(1f - (distance / PulseDistanceFalloff));
+            proximity *= proximity;
+            float rateHz = Mathf.Lerp(MinPulseHz, MaxPulseHz, proximity);
+
+            // Advance and wrap the phase; guard against a huge dt (first frame / hitch) driving a jump.
+            _pulsePhase += rateHz * Mathf.Min(dt, 0.1f);
+            _pulsePhase -= Mathf.Floor(_pulsePhase);
+
+            // Raised-cosine gate: 1 at phase 0, dipping to (1-PulseDepth) mid-cycle. Smooth so it
+            // sounds like a swell, not a click.
+            float gate = 0.5f * (1f + Mathf.Cos(_pulsePhase * 2f * Mathf.PI)); // 1..0..1 across the cycle
+            return 1f - PulseDepth * (1f - gate);
+        }
+
+        // Volume multiplier that dulls the carrier when the target is BEHIND the player. cos(headingErr)
+        // is +1 dead ahead, 0 at the sides, −1 directly behind; we scale from full level (ahead/sides)
+        // down to BehindVolumeScaleMin (directly behind) so "turn around" is audible without a dropout.
+        private static float ComputeBehindVolumeScale()
+        {
+            float cos = Mathf.Cos(GetHeadingErrorDegrees() * Mathf.Deg2Rad);
+            float behindAmount = Mathf.Clamp01(-cos); // 0 when ahead/at sides, 1 when directly behind
+            return Mathf.Lerp(1f, BehindVolumeScaleMin, behindAmount);
         }
 
         private static Transform GetReferenceTransform()

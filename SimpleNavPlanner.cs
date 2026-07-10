@@ -371,6 +371,29 @@ namespace DateEverythingAccess
                         goalQuality[g] = GoalViewQuality(goalFloor, g, targetCollider, margin);
                     }
                 }
+
+                // FRONT-APPROACH: if this object faces one way and has LOS-clear cells on BOTH its
+                // front and back, keep only the front cells — a standpoint behind a monitor/TV/painting
+                // passes the offline ray (it hits the box's back face) but the game won't let the player
+                // interact from back there. Filters losClear + its parallel bookkeeping in lockstep;
+                // returns null (no change) for omnidirectional or one-sided objects. See the constant.
+                List<NodeKey> frontGoals = FrontApproachGoals(
+                    goalFloor, losClear, targetPos, TargetForwardXZ(targetGameObjectId), passedOf, clearanceOf);
+                if (frontGoals != null)
+                {
+                    losClear = frontGoals;
+                    // bestClearance may have been set by a now-discarded back cell; recompute over the
+                    // surviving front cells so the closest-clear-cell prune threshold stays correct.
+                    bestClearance = 0f;
+                    for (int i = 0; i < clearanceOf.Count; i++)
+                        if (clearanceOf[i] > bestClearance) bestClearance = clearanceOf[i];
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNavPlanner.Plan: front-approach preference kept " +
+                            losClear.Count + " front-of-object goal cell(s) for target=" +
+                            (targetName ?? "<null>") + "#" + targetGameObjectId +
+                            " (discarded back-of-object standpoints).");
+                }
+
                 if (losClear.Count > 0)
                 {
                     // CLOSEST-CLEAR-CELL: prefer SOLIDLY-clear standpoints over edge-grazing ones.
@@ -2167,6 +2190,88 @@ namespace DateEverythingAccess
         // below "solid"; finer resolution buys nothing for selection and multiplies cost over the
         // ~2300 goal cells of a wide-radius target. Ascending.
         private static readonly float[] LosProbeSideOffsetsM = { 0.20f, 0.45f };
+
+        // FRONT-APPROACH preference. Many datables face one way — a monitor/TV/painting/screen has a
+        // usable FRONT and a dead BACK. Their collider is often a single box spanning front-to-back, so
+        // a standpoint BEHIND the object still passes the offline interaction-LOS test (the ray hits the
+        // box's back face) even though the game won't trigger the interaction from back there. The
+        // player then gets routed behind the object, the camera pitches toward it, and nothing happens —
+        // exactly the monitor-at-the-desk case. General fix, not a per-object special case: among the
+        // LOS-clear goal cells, if ANY sit on the object's FRONT hemisphere, keep only those and discard
+        // the back-hemisphere cells. This is applied only when the object has a meaningful forward and
+        // both hemispheres are populated, so a free-standing directional object is approached from its
+        // face while an omnidirectional prop (or one only reachable from one side) is unaffected.
+        // A cell counts as "front" when the vector from the object to the cell has a positive component
+        // along the object's forward beyond this cosine slack (slightly negative so cells right at the
+        // 90° sides — still a usable oblique view of the face — are kept on the front side).
+        private const float FrontApproachCosSlack = -0.15f;
+
+        // The object's world FORWARD (the direction its face points), from the InteractableObj/datable
+        // transform. Zero vector if it can't be resolved or is degenerate — callers then skip the
+        // front-approach preference. Flattened to XZ: the goal cells are on the floor, so only the
+        // horizontal facing matters for which SIDE of the object the player stands on.
+        private static Vector3 TargetForwardXZ(int targetGameObjectId)
+        {
+            if (targetGameObjectId == 0) return Vector3.zero;
+            InteractableObj[] all = UnityEngine.Object.FindObjectsOfType<InteractableObj>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                InteractableObj io = all[i];
+                if (io == null || io.gameObject == null) continue;
+                if (io.gameObject.GetInstanceID() != targetGameObjectId) continue;
+                Vector3 fwd = io.transform.forward;
+                fwd.y = 0f;
+                return fwd.sqrMagnitude > 1e-4f ? fwd.normalized : Vector3.zero;
+            }
+            return Vector3.zero;
+        }
+
+        // Partition the LOS-clear goal cells into those on the object's FRONT hemisphere vs the back,
+        // using the object forward. Returns the front-side subset when it is non-empty AND the back
+        // subset is also non-empty (i.e. the object is free-standing enough to have a real choice);
+        // otherwise returns null to signal "no front/back distinction here, keep all cells". The
+        // parallel per-cell bookkeeping lists (passedOf/clearanceOf) are filtered in lockstep so the
+        // container-door and clearance data stays aligned with the surviving goals.
+        private static List<NodeKey> FrontApproachGoals(
+            Floor floor, List<NodeKey> losClear, Vector3 targetPos, Vector3 forwardXZ,
+            List<HashSet<string>> passedOf, List<float> clearanceOf)
+        {
+            if (forwardXZ.sqrMagnitude < 1e-4f || losClear.Count == 0)
+                return null;
+
+            var front = new List<NodeKey>(losClear.Count);
+            var frontPassed = new List<HashSet<string>>(losClear.Count);
+            var frontClearance = new List<float>(losClear.Count);
+            int backCount = 0;
+            for (int i = 0; i < losClear.Count; i++)
+            {
+                NodeKey g = losClear[i];
+                Vector2 xz = floor.CellToWorld(g.Ix, g.Iz);
+                Vector3 toCell = new Vector3(xz.x - targetPos.x, 0f, xz.y - targetPos.z);
+                if (toCell.sqrMagnitude < 1e-6f) { backCount++; continue; } // on the object — treat as non-front
+                float dot = Vector3.Dot(toCell.normalized, forwardXZ);
+                if (dot > FrontApproachCosSlack)
+                {
+                    front.Add(g);
+                    frontPassed.Add(passedOf[i]);
+                    frontClearance.Add(clearanceOf[i]);
+                }
+                else
+                {
+                    backCount++;
+                }
+            }
+
+            if (front.Count == 0 || backCount == 0)
+                return null; // no distinction to make — keep the full set
+
+            // Rewrite the bookkeeping lists in place to match the front subset.
+            passedOf.Clear();
+            passedOf.AddRange(frontPassed);
+            clearanceOf.Clear();
+            clearanceOf.AddRange(frontClearance);
+            return front;
+        }
 
         private static bool IsTargetCollider(Collider c, Collider targetCollider)
         {

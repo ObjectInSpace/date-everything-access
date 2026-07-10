@@ -146,6 +146,30 @@ namespace DateEverythingAccess
         // but large enough to avoid jitter. ~1 capsule-diameter + margin.
         // See [[project-navigation-executor-corner-stall]].
         private const float AutoWalkPursuitLookahead = 1.5f;
+        // Lookahead for the MANUAL-navigation guidance tone: the tone tracks the pure-pursuit
+        // "carrot" — a point sliding continuously along the planned polyline this far ahead of the
+        // player's projection — NOT the next waypoint vertex. Centred pan + walking forward then
+        // always means "on the path": the carrot rounds corners smoothly (no pan snap at each grid
+        // corner) and, via PursuitTarget's cross-track handling, steers the player back when they
+        // drift off the corridor. It is literally the same signal the autowalk follower steers by.
+        // Slightly longer than the autowalk lookahead because a human reacts slower than the
+        // per-frame follower, so a farther carrot smooths the steering.
+        private const float ManualNavToneLookahead = 2.0f;
+        // Manual-navigation arrival radius (XZ, metres to the goal stand-cell). Looser than the
+        // autowalk FinalArrivalRadius (0.3m) — a human driving by ear can't be expected to nail the
+        // exact cell; the planner's goal cell sits inside the target's interaction band, so within
+        // ~1m of it the player is in range and the arrival announcement should fire.
+        private const float ManualNavArrivalRadius = 1.0f;
+        // Exit radius for the manual AIM phase, deliberately larger than the entry radius so a
+        // player hovering on the arrival boundary doesn't flap between the pulsing route tone and
+        // the steady aim tone every frame. Walking back out past this drops cleanly back to route
+        // guidance (the carrot points at the goal cell, so approaching re-enters the aim phase).
+        private const float ManualNavAimExitRadius = 2.0f;
+        // True while manual navigation is in the post-arrival AIM phase: the route brought the
+        // player to the goal cell, the tone switched to the steady aim signal (pitch = vertical
+        // camera aim at the OBJECT), and the phase completes when the game's raycast selects the
+        // target. See ObjectTracker's channel map.
+        private bool _manualAimPhase;
         private const float TrackedInteractableApproachClearanceDistance = 0.9f;
         private const float TrackedInteractableApproachRetargetDistance = 0.75f;
         private const float TrackedInteractableApproachMinimumExtent = 0.35f;
@@ -355,6 +379,10 @@ namespace DateEverythingAccess
         private Vector3 _lastAutoWalkMove;
         private Vector3 _lastAutoWalkLook;
         private bool _hasAutoWalkInput;
+        // One-shot: once we've stripped the game's undocumented O->Move_Vertical binding (so the O
+        // object-tracker shortcut no longer also walks the player), stop retrying. Set true when the
+        // strip succeeds; until then it's retried each frame because Rewired isn't ready at mod load.
+        private bool _strippedObjectTrackerMovementBinding;
         // Start time of the current sweep interaction probe (turn-to-face episode). See
         // ProbeSweepInteraction.
         private float _sweepProbeStartTime;
@@ -882,6 +910,15 @@ namespace DateEverythingAccess
             if (Main.IsShuttingDown)
                 return;
 
+            // Strip the game's hidden O->walk binding once Rewired is ready, so the bare-O object
+            // tracker shortcut doesn't also move the player. Retried each frame until it lands because
+            // Rewired isn't initialized at mod load.
+            if (!_strippedObjectTrackerMovementBinding &&
+                InputMappingReporter.TryStripObjectTrackerMovementBinding())
+            {
+                _strippedObjectTrackerMovementBinding = true;
+            }
+
             HandleRepeatLastSpeechRequest();
             SimpleNavBridge.Tick();
             HandleNavigationRequests();
@@ -892,7 +929,7 @@ namespace DateEverythingAccess
             // itself runs only on the 0.1s poll below). Edge-detection state must advance every frame for this to work.
             PollSectionStepperKeys();
 
-            // Bare-key accessibility shortcuts (L / O / Shift+O / Alt+O / `). Polled here rather than as
+            // Bare-key accessibility shortcuts (L / O / Ctrl+O / Alt+O / `). Polled here rather than as
             // global OS hotkeys so they stay typeable in text fields; the poll itself suppresses them
             // while a text field or the settings menu is focused. Sampled every frame for the same
             // fast-tap reason as the section stepper.
@@ -1429,25 +1466,66 @@ namespace DateEverythingAccess
                 BetterPlayerControl.Instance != null)
             {
                 Vector3 playerPos = BetterPlayerControl.Instance.transform.position;
-                Vector3 waypoint = SimpleNavBridge.LastResolvedTarget;
-                // Manual navigation (not autowalk): the player drives, so the active leg can move
-                // FORWARD as they reach a waypoint or BACKWARD if they retreat along the route. Mark
-                // each transition with its own blip — forward (rising) = closer to goal, reverse
-                // (falling) = backtracked — so a moving pan/volume reads as a known leg change rather
-                // than ambiguous progress. Advance is tried first; regression only when not advancing
-                // (they share a boundary, so at most one fires). Autowalk keeps the monotonic advance
-                // path and never calls regress.
+                // Manual navigation (not autowalk): the player drives. Advance/regress keep the
+                // ACTIVE LEG correct (door preconditions, next-landmark distance) but no longer
+                // drive audio at every transition — grid-corner waypoints are planner artifacts the
+                // player can't perceive, and per-corner blips read as noise. The only discrete cue
+                // is the landmark chirp, fired when the waypoint just crossed is a REAL place
+                // (door / stairs / target). Regression is silent: walking the wrong way is already
+                // audible as the landmark pulse slowing. Autowalk keeps the monotonic advance path
+                // and never calls regress.
                 if (SimpleNavBridge.TryAdvanceWaypoint(playerPos))
                 {
-                    waypoint = SimpleNavBridge.LastResolvedTarget;
-                    ObjectTracker.NotifyWaypointAdvanced();
+                    SimpleNavWaypoint crossed = SimpleNavBridge.LastCrossedWaypoint;
+                    if (crossed != null && crossed.Kind != SimpleNavWaypointKind.Navigation)
+                        ObjectTracker.NotifyLandmarkReached();
                 }
-                else if (SimpleNavBridge.TryRegressWaypoint(playerPos))
+                else
                 {
-                    waypoint = SimpleNavBridge.LastResolvedTarget;
-                    ObjectTracker.NotifyWaypointRegressed();
+                    SimpleNavBridge.TryRegressWaypoint(playerPos);
                 }
-                ObjectTracker.StartTracking(waypoint, requiresInteraction: false);
+
+                // Manual arrival: reached the goal stand-cell (loose radius — driven by ear, not by
+                // the follower). Object targets enter the AIM phase: announce arrival once, then
+                // hold a STEADY tone on the object itself with pitch = vertical camera aim, until
+                // the game's raycast selects the target (success chirp + stop). Exit uses a larger
+                // radius than entry so hovering on the boundary can't flap between phases. World
+                // targets (no object to aim at) stop with the announcement as before.
+                SimpleNavRoute route = SimpleNavBridge.ActiveRoute;
+                float arrivalRadius = _manualAimPhase ? ManualNavAimExitRadius : ManualNavArrivalRadius;
+                if (SimpleNavBridge.HasArrivedAtRouteTarget(playerPos, arrivalRadius))
+                {
+                    if (IsWorldRouteTarget(route))
+                    {
+                        StopNavigationWithAnnouncement("navigation_arrived");
+                        return;
+                    }
+
+                    if (!_manualAimPhase)
+                    {
+                        _manualAimPhase = true;
+                        ScreenReader.Say(Loc.Get("navigation_arrived"));
+                    }
+
+                    if (IsSimpleRouteTargetSelected(route))
+                    {
+                        ObjectTracker.NotifyAimLocked();
+                        StopNavigationRuntime();
+                        return;
+                    }
+
+                    ObjectTracker.StartAimTracking(ResolveSimpleRouteTargetLookPoint(route));
+                    return;
+                }
+                _manualAimPhase = false;
+
+                // The tone tracks the pure-pursuit CARROT — a point sliding continuously along the
+                // route ahead of the player — not the raw waypoint vertex. Centred pan = on the
+                // path; the carrot rounds corners smoothly and pulls the player back onto the
+                // corridor when they drift (PursuitTarget's cross-track handling). Same signal the
+                // autowalk follower steers by.
+                Vector3 carrot = SimpleNavBridge.PursuitTarget(playerPos, ManualNavToneLookahead);
+                ObjectTracker.StartTracking(carrot, requiresInteraction: false);
             }
         }
 
@@ -1522,9 +1600,10 @@ namespace DateEverythingAccess
 
             // Roll forward through the polyline as the player reaches each leg's end. This also
             // updates the active door (per-segment door tags from the route).
+            SimpleNavBridge.TryAdvanceWaypoint(playerPos);
+            // Active waypoint, kept for the stall diagnostics / runtime-blocker probe below (the
+            // tone no longer tracks it — it tracks the pursuit carrot).
             Vector3 target = SimpleNavBridge.LastResolvedTarget;
-            if (SimpleNavBridge.TryAdvanceWaypoint(playerPos))
-                target = SimpleNavBridge.LastResolvedTarget;
             if (IsWorldRouteTarget(route) &&
                 SimpleNavBridge.ActiveWaypoint != null &&
                 SimpleNavBridge.ActiveWaypoint.Kind == SimpleNavWaypointKind.Target)
@@ -1532,11 +1611,12 @@ namespace DateEverythingAccess
                 target = route.TargetPosition;
             }
 
-            // Drive the audible tone source from the current next-waypoint so the player hears
-            // where they're being walked. The legacy executor does this via UpdateNavigationTracker;
-            // the route branch has no PathStep, so we call ObjectTracker.StartTracking directly
-            // with the route waypoint position. Cheap to call every frame — it's idempotent.
-            ObjectTracker.StartTracking(target, requiresInteraction: false);
+            // Drive the audible tone source from the pure-pursuit carrot — the same point the
+            // follower is steering toward — so the player hears where they're being walked, with
+            // no pan snap at waypoint transitions. Cheap to call every frame — it's idempotent.
+            ObjectTracker.StartTracking(
+                SimpleNavBridge.PursuitTarget(playerPos, AutoWalkPursuitLookahead),
+                requiresInteraction: false);
 
             // Arrival: within target interaction radius (XZ). The planner already routes to a
             // goal cell inside this disc, so this matches the goal-cell expansion in O4.
@@ -2119,6 +2199,7 @@ namespace DateEverythingAccess
                 " autoWalk=" + _isAutoWalking);
             _isNavigationActive = false;
             _isAutoWalking = false;
+            _manualAimPhase = false;
             _hasAutoWalkInput = false;  // stop re-asserting input in FixedUpdate
             _lastAutoWalkProgressTime = 0f;
             _nextSimpleRouteDiagnosticTime = 0f;
@@ -4555,6 +4636,30 @@ namespace DateEverythingAccess
             return false;
         }
 
+        // True when `interactable` is a door that is currently CLOSED — i.e. the player must open it
+        // before passing through. A door mid-swing (open flag already set, animation running) is NOT
+        // reported closed: it's transitioning and needs no action. Covers both swinging Door and
+        // translating SlidingDoor; searches self/parent/children to match IsDoorInteractable's reach.
+        // Used to tell a manually-walking audio user that the barrier they've reached needs opening —
+        // the game gives no audible cue for a closed door until you act on it.
+        private static bool IsClosedDoorInteractable(InteractableObj interactable)
+        {
+            if (interactable == null || interactable.gameObject == null)
+                return false;
+
+            GameObject go = interactable.gameObject;
+
+            Door swing = go.GetComponent<Door>() ?? go.GetComponentInParent<Door>() ?? go.GetComponentInChildren<Door>();
+            if (swing != null)
+                return !swing.open;
+
+            SlidingDoor slide = go.GetComponent<SlidingDoor>() ?? go.GetComponentInParent<SlidingDoor>() ?? go.GetComponentInChildren<SlidingDoor>();
+            if (slide != null)
+                return !slide.open;
+
+            return false;
+        }
+
         private void ToggleAutoWalk()
         {
             Loc.RefreshLanguage();
@@ -5822,7 +5927,14 @@ namespace DateEverythingAccess
 
             _lastInteractableId = identifier;
             string name = GetInteractableDisplayName(interactable);
-            ScreenReader.SayCoalesced(Loc.Get("nearby_announcement_without_prompt", name));
+            // A CLOSED door the player has walked up to gets flagged as closed so a manually-navigating
+            // audio user knows the barrier is shut, but we don't spell out HOW to open it (naming the
+            // interact key read awkwardly, e.g. "press Left Mouse Button"). An already-open door just
+            // announces its name (they can walk through). See [[project_interaction_feedback_visual_only]].
+            string message = IsClosedDoorInteractable(interactable)
+                ? Loc.Get("nearby_announcement_closed_door", name)
+                : Loc.Get("nearby_announcement_without_prompt", name);
+            ScreenReader.SayCoalesced(message);
         }
 
         private void AnnounceDateviatorsStateIfNeeded()
@@ -6231,7 +6343,7 @@ namespace DateEverythingAccess
         // they don't swallow the letters/backtick from text-entry fields. Layout:
         //   L        -> look around (room scan)      [was F6]
         //   O        -> object tracker (picker)      [was Ctrl+Shift+F6]
-        //   Shift+O  -> objective tracker            [was Ctrl+F6]
+        //   Ctrl+O   -> objective tracker            [was Ctrl+F6; moved off Shift+O to free Crouch]
         //   Alt+O    -> auto-walk toggle             [was Ctrl+Alt+F6]
         //   `        -> repeat last spoken line      [was Ctrl+F1]
         // Suppressed entirely while a text field or the spoken settings menu is focused so typing and
@@ -6251,8 +6363,18 @@ namespace DateEverythingAccess
             bool ctrl = IsModifierKeyDownLocal(VkLCtrlModifier);
             bool alt = IsModifierKeyDownLocal(VkLAltModifier);
 
-            // Ctrl is not part of any of these bindings; if it's held, defer to the global Ctrl+ hotkeys
-            // (e.g. Ctrl+F1 settings) and don't also fire a bare-key action.
+            // Ctrl+O is the objective tracker (moved off Shift+O to deconflict with the game's default
+            // Crouch binding, which is Shift). Handle it BEFORE the general Ctrl deference below so the
+            // combo still fires; every OTHER Ctrl+ combo defers to the global hotkeys.
+            if (objectPressed && ctrl && !shift && !alt)
+            {
+                Main.Log.LogInfo("Objective tracker shortcut (Ctrl+O) detected");
+                RequestNavigateToObjective();
+                return;
+            }
+
+            // Ctrl is not part of any of the remaining bindings; if it's held, defer to the global Ctrl+
+            // hotkeys (e.g. Ctrl+F1 settings) and don't also fire a bare-key action.
             if (ctrl)
                 return;
 
@@ -6269,11 +6391,6 @@ namespace DateEverythingAccess
                 {
                     Main.Log.LogInfo("Auto-walk shortcut (Alt+O) detected");
                     RequestAutoWalk();
-                }
-                else if (shift && !alt)
-                {
-                    Main.Log.LogInfo("Objective tracker shortcut (Shift+O) detected");
-                    RequestNavigateToObjective();
                 }
                 else if (!shift && !alt)
                 {

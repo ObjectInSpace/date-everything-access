@@ -7,6 +7,92 @@ namespace DateEverythingAccess
 {
     internal static class InputMappingReporter
     {
+        // Rewired action id for Move_Vertical (RewiredConsts.Action.Move_Vertical = 4). The game ships
+        // an UNDOCUMENTED secondary keyboard binding of the "O" key to this action (walk), NOT shown in
+        // the Controls UI. Because the mod's O accessibility shortcut is POLLED via GetAsyncKeyState
+        // (which doesn't consume the key), pressing O both opens the object tracker AND walks the
+        // player. We strip just that one binding at startup so O is free for the tracker; W/A/S/D and
+        // the arrows are untouched. See the hidden-keybinds reference memo.
+        private const int MoveVerticalActionId = 4;
+
+        // Display label of the key we strip off Move_Vertical. Rewired labels the letter keys by their
+        // letter, so matching elementIdentifierName is layout-stable rather than depending on a raw
+        // Rewired KeyboardKeyCode enum value.
+        private const string MoveVerticalKeyToStrip = "O";
+
+        // Removes the game's undocumented "O" -> Move_Vertical keyboard binding so the mod's O
+        // accessibility shortcut no longer also walks the player. One-shot: returns true once it has
+        // actually deleted the binding (or confirmed it's already gone); returns false while Rewired
+        // isn't ready yet so the caller can retry next frame. Scans ALL keyboard controller maps
+        // regardless of their enabled state — the input-mode state machine toggles map enabled flags,
+        // but the binding itself lives in the map and DeleteElementMap removes it permanently for the
+        // session. W/A/S/D and the arrows are left alone; only the O element map on action 4 is touched.
+        public static bool TryStripObjectTrackerMovementBinding()
+        {
+            try
+            {
+                if (!ReInput.isReady)
+                    return false;
+
+                Player player = ReInput.players.GetPlayer(0);
+                if (player == null || !player.controllers.hasKeyboard)
+                    return false;
+
+                Keyboard keyboard = player.controllers.Keyboard;
+                IList<ControllerMap> maps = player.controllers.maps.GetMaps(keyboard.type, keyboard.id);
+                if (maps == null || maps.Count == 0)
+                    return false; // maps not populated yet — retry next frame rather than latch as done
+
+                bool sawMoveVerticalMap = false;
+                int removed = 0;
+                for (int i = 0; i < maps.Count; i++)
+                {
+                    ControllerMap map = maps[i];
+                    if (map == null)
+                        continue;
+
+                    // Collect the element-map ids to delete first, then delete — deleting while
+                    // iterating AllMaps would mutate the collection under the loop.
+                    List<int> toDelete = null;
+                    for (int j = 0; j < map.AllMaps.Count; j++)
+                    {
+                        ActionElementMap m = map.AllMaps[j];
+                        if (m == null || m.actionId != MoveVerticalActionId)
+                            continue;
+                        sawMoveVerticalMap = true;
+                        if (!string.Equals(m.elementIdentifierName, MoveVerticalKeyToStrip, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        (toDelete ?? (toDelete = new List<int>())).Add(m.id);
+                    }
+
+                    if (toDelete != null)
+                    {
+                        for (int k = 0; k < toDelete.Count; k++)
+                            if (map.DeleteElementMap(toDelete[k]))
+                                removed++;
+                    }
+                }
+
+                // Only consider the job done once the Move_Vertical bindings actually exist to inspect.
+                // Before the game loads its controller maps, no action-4 map is present — keep retrying
+                // so we don't latch "done" against an empty map and miss the real binding.
+                if (!sawMoveVerticalMap)
+                    return false;
+
+                if (Main.Log != null)
+                    Main.Log.LogInfo("[INPUTMAP] Stripped " + removed + " '" + MoveVerticalKeyToStrip +
+                        "' -> Move_Vertical keyboard binding(s) so the object-tracker key no longer moves the player.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (Main.Log != null)
+                    Main.Log.LogWarning("[INPUTMAP] TryStripObjectTrackerMovementBinding failed: " + ex.Message);
+                return false; // let the caller retry; a transient not-ready state shouldn't be permanent
+            }
+        }
+
         public static bool TryDumpCurrentMappings(out int dumpedControllerCount)
         {
             dumpedControllerCount = 0;

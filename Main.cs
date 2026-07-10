@@ -33,7 +33,7 @@ namespace DateEverythingAccess
         private const int DebugHotkeyId = 2;
         private const int SettingsHotkeyId = 3;
         private const int CoverageSweepHotkeyId = 13;
-        // NOTE: Repeat-last (`), look-around (L), object tracker (O), objective tracker (Shift+O),
+        // NOTE: Repeat-last (`), look-around (L), object tracker (O), objective tracker (Ctrl+O),
         // and auto-walk (Alt+O) are NO LONGER global OS hotkeys. Bare letter/backtick keys registered
         // via RegisterHotKey would be swallowed from ALL text input (name/save entry) while the game is
         // focused, so they are polled in AccessibilityWatcher.Update instead and suppressed while a text

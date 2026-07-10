@@ -57,11 +57,17 @@ namespace DateEverythingAccess
         private const float DoorWaypointArrivalRadius = 2.2f;
         private const float DoorOpeningArrivalRadius = 0.9f;
         private const float WorldTargetArrivalRadius = 0.45f;
-        // Manual-nav regression hysteresis (metres): the player must be at least this much closer to
-        // the previous waypoint than the current one before the active leg regresses. Larger than the
-        // advance arrival radius (1.35m) so advancing and regressing can never co-trigger — kills the
-        // standing-on-a-waypoint ping-pong. See TryRegressWaypoint.
+        // Manual-nav regression hysteresis (metres): the player must have physically moved this far
+        // from the last waypoint transition before a regress is even considered. See TryRegressWaypoint.
         private const float RegressHysteresisM = 1.5f;
+        // Manual-nav regression trigger (metres ALONG THE ROUTE): the player's arc-length progress
+        // must be at least this far BEHIND the previous waypoint before the leg regresses. MUST be
+        // larger than the advance arrival radius (1.35m): an advance can fire up to that far BEFORE
+        // its waypoint, so a smaller margin would let the fresh post-advance position already count
+        // as "behind" and regress instantly (buzz the moment a waypoint was crossed — the confirmed
+        // walk-forward buzz bug). 2.0m means a genuine ~0.65m+ of backtracking past the transition
+        // point before the reverse cue fires.
+        private const float RegressBehindMarginM = 2.0f;
 
         // Telemetry recorded per active route. Used by RecordFrameProgress so failures can be
         // diagnosed without log scraping.
@@ -293,6 +299,16 @@ namespace DateEverythingAccess
 
         public static bool HasArrivedAtRouteTarget(Vector3 playerPos)
         {
+            return HasArrivedAtRouteTarget(playerPos, -1f);
+        }
+
+        /// <summary>
+        /// Arrival check with an overridden final radius (&gt; 0 to apply). Manual navigation uses a
+        /// looser radius than autowalk: a human driving by ear can't nail the exact goal cell the
+        /// way the follower does, and the goal cell sits inside the interaction band anyway.
+        /// </summary>
+        public static bool HasArrivedAtRouteTarget(Vector3 playerPos, float finalRadiusOverride)
+        {
             if (_activeRoute == null) return false;
             if (!_activeTargetValid || _waypoints.Count == 0) return false;
             if (_waypointIndex < _waypoints.Count - 1) return false;
@@ -308,7 +324,8 @@ namespace DateEverythingAccess
                 Vector3 worldTarget = _activeRoute.TargetPosition;
                 float tdx = worldTarget.x - playerPos.x;
                 float tdz = worldTarget.z - playerPos.z;
-                return (tdx * tdx + tdz * tdz) <= WorldTargetArrivalRadius * WorldTargetArrivalRadius;
+                float worldRadius = finalRadiusOverride > 0f ? finalRadiusOverride : WorldTargetArrivalRadius;
+                return (tdx * tdx + tdz * tdz) <= worldRadius * worldRadius;
             }
 
             // Arrival = the player reached the planner's final waypoint (the goal STAND-CELL),
@@ -324,7 +341,8 @@ namespace DateEverythingAccess
             Vector3 finalWaypoint = _waypoints[_waypoints.Count - 1];
             float wdx = finalWaypoint.x - playerPos.x;
             float wdz = finalWaypoint.z - playerPos.z;
-            return (wdx * wdx + wdz * wdz) <= FinalArrivalRadius * FinalArrivalRadius;
+            float radius = finalRadiusOverride > 0f ? finalRadiusOverride : FinalArrivalRadius;
+            return (wdx * wdx + wdz * wdz) <= radius * radius;
         }
 
         // Resolve _activeDoor from the route's segment door tags. Multiple doors per segment
@@ -356,6 +374,23 @@ namespace DateEverythingAccess
                 if (_waypointIndex < 0 || _waypointIndex >= _semanticWaypoints.Count)
                     return null;
                 return _semanticWaypoints[_waypointIndex];
+            }
+        }
+
+        /// <summary>
+        /// The waypoint most recently crossed (the one just behind the active target), or null.
+        /// After a <see cref="TryAdvanceWaypoint"/> returns true this is the waypoint the player
+        /// just passed — the manual-nav tick uses its Kind to chirp only at real landmarks
+        /// (door/stairs/target), never at bare grid-corner Navigation waypoints.
+        /// </summary>
+        public static SimpleNavWaypoint LastCrossedWaypoint
+        {
+            get
+            {
+                int i = _waypointIndex - 1;
+                if (i < 0 || i >= _semanticWaypoints.Count)
+                    return null;
+                return _semanticWaypoints[i];
             }
         }
 
@@ -851,14 +886,16 @@ namespace DateEverythingAccess
         // BACK along the route). The advance path is deliberately monotonic for autowalk — autowalk
         // never reverses — so regression lives in its own method that only the manual-nav tick calls.
         //
-        // Hysteresis is MOVEMENT-GATED, not geometry-gated. Earlier geometry attempts (shared arrival
-        // radius; "closer to prev than cur by a margin") all ping-ponged because advance and regress
-        // gate on DIFFERENT waypoints (cur vs prev) that SHIFT when either fires — so right after a
-        // transition the opposite one is satisfiable from the very same spot, and standing on a
-        // boundary oscillates every frame. The robust fix keys off the ONE thing that's actually
-        // stable when standing still: the player hasn't MOVED. We record the player position at each
-        // transition (_lastTransitionPlayerPos) and refuse to regress until they've physically moved
-        // RegressHysteresisM away from it. Standing still ⇒ zero movement ⇒ no transition, ever.
+        // The trigger is ROUTE-PROGRESS-GATED: regress only when the player's arc-length progress
+        // along the polyline has fallen more than RegressBehindMarginM BEHIND the previous waypoint,
+        // i.e. they genuinely walked back past it. Every point-to-point comparison tried before
+        // ("closer to prev than cur", shared radii) fired while WALKING FORWARD: an advance triggers
+        // up to 1.35m before its waypoint, so for the first half of the next leg the player is
+        // legitimately nearer the waypoint just passed than the one ahead — regress buzzed the moment
+        // they crossed each waypoint and the tone snapped to a point behind them (the "leads me in a
+        // circle" bug). Progress along the route is the one signal that's monotonic under correct
+        // forward travel, so gating on it makes a forward-walking regress impossible by construction.
+        // The movement gate (_lastTransitionPlayerPos) is kept so standing still can never transition.
         public static bool TryRegressWaypoint(Vector3 playerPos)
         {
             if (!_activeTargetValid || _waypoints.Count == 0) return false;
@@ -874,18 +911,10 @@ namespace DateEverythingAccess
             }
 
             Vector3 prev = _waypoints[_waypointIndex - 1];
-            Vector3 cur = _waypoints[_waypointIndex];
 
-            float pdx = prev.x - playerPos.x;
-            float pdz = prev.z - playerPos.z;
-            float distToPrev = pdx * pdx + pdz * pdz;
-
-            float cdx = cur.x - playerPos.x;
-            float cdz = cur.z - playerPos.z;
-            float distToCur = cdx * cdx + cdz * cdz;
-
-            // And must genuinely be retreating: closer to the previous waypoint than to the current.
-            if (distToPrev >= distToCur)
+            // Route-progress test: only regress when the player is well behind the previous
+            // waypoint measured ALONG the route (see comment above / RegressBehindMarginM).
+            if (ProgressBehindPreviousWaypoint(playerPos) < RegressBehindMarginM)
                 return false;
 
             // Y gate, same as advance: don't regress across a level change (mid-stairs) on XZ alone.
@@ -907,6 +936,54 @@ namespace DateEverythingAccess
                     " waypoint=" + _waypointIndex + "/" + (_waypoints.Count - 1) +
                     " kind=" + (ActiveWaypoint != null ? ActiveWaypoint.Kind.ToString() : "<none>"));
             return true;
+        }
+
+        // How far BEHIND the previous waypoint (w[_waypointIndex-1]) the player currently is,
+        // measured in metres of arc length ALONG the route polyline. <= 0 means at or ahead of it.
+        // The player is projected (XZ) onto the few segments around the active leg — the current
+        // leg plus up to two before it — rather than the whole route, so an out-and-back route
+        // passing near itself can't grab the projection from a distant earlier segment and fake a
+        // backtrack. Clamped projection means a player far off-route reads as "at" the nearest
+        // point of those segments, which errs toward NOT regressing — the safe default.
+        private static float ProgressBehindPreviousWaypoint(Vector3 playerPos)
+        {
+            int prevIndex = _waypointIndex - 1;   // waypoint the regress would step back to
+            int firstSeg = prevIndex - 2;         // segment s spans w[s] -> w[s+1]
+            if (firstSeg < 0) firstSeg = 0;
+            int lastSeg = _waypointIndex - 1;     // the current leg (w[prev] -> w[cur])
+
+            // Walk the candidate segments once, accumulating arc length from w[firstSeg]; record
+            // the arc-length position of the previous waypoint and of the player's best projection.
+            float cumulative = 0f;
+            float prevWaypointProgress = 0f;
+            float bestPlayerProgress = 0f;
+            float bestDistSq = float.PositiveInfinity;
+            for (int s = firstSeg; s <= lastSeg && s < _waypoints.Count - 1; s++)
+            {
+                Vector3 a = _waypoints[s];
+                Vector3 b = _waypoints[s + 1];
+                if (s + 1 == prevIndex)
+                {
+                    float sdx = b.x - a.x, sdz = b.z - a.z;
+                    prevWaypointProgress = cumulative + Mathf.Sqrt(sdx * sdx + sdz * sdz);
+                }
+
+                float t = ProjectParamXZ(a, b, playerPos);
+                Vector3 proj = Vector3.Lerp(a, b, t);
+                float dx = proj.x - playerPos.x;
+                float dz = proj.z - playerPos.z;
+                float d2 = dx * dx + dz * dz;
+                float abx = b.x - a.x, abz = b.z - a.z;
+                float segLen = Mathf.Sqrt(abx * abx + abz * abz);
+                if (d2 < bestDistSq)
+                {
+                    bestDistSq = d2;
+                    bestPlayerProgress = cumulative + t * segLen;
+                }
+                cumulative += segLen;
+            }
+
+            return prevWaypointProgress - bestPlayerProgress;
         }
 
         private static bool HasPassedActiveDoorWaypoint(Vector3 playerPos, float currentDistSq)
