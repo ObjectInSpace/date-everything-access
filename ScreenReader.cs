@@ -31,7 +31,20 @@ namespace DateEverythingAccess
         [DllImport("Tolk.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr Tolk_DetectScreenReader();
 
+        // Enables Tolk's built-in Windows SAPI driver as a fallback voice. Must be called
+        // BEFORE Tolk_Load() to take effect. When no screen reader is running, SAPI lets the
+        // mod still speak aloud through the OS voice instead of going silent.
+        [DllImport("Tolk.dll")]
+        private static extern bool Tolk_TrySAPI(bool trySAPI);
+
         private static bool _available;
+        private static bool _usingSapiFallback;
+
+        /// <summary>
+        /// True when Tolk has speech but no live screen reader is running, i.e. output is
+        /// going through the built-in SAPI voice fallback.
+        /// </summary>
+        public static bool IsUsingSapiFallback => _usingSapiFallback;
         private static bool _initialized;
         private static string _lastSpokenText;
         private static string _lastRepeatableText;
@@ -59,20 +72,32 @@ namespace DateEverythingAccess
 
             try
             {
+                // Enable the SAPI fallback BEFORE loading so Tolk can speak through the OS
+                // voice when no screen reader is running. Tolk still prefers a live screen
+                // reader when one is present; SAPI is only used as the last-resort driver.
+                Tolk_TrySAPI(true);
+
                 Tolk_Load();
                 _available = Tolk_IsLoaded() && Tolk_HasSpeech();
 
                 if (_available)
                 {
                     IntPtr srNamePtr = Tolk_DetectScreenReader();
-                    string srName = srNamePtr != IntPtr.Zero
-                        ? Marshal.PtrToStringUni(srNamePtr)
-                        : "Unknown";
-                    Main.Log.LogInfo("Screen reader detected: " + srName);
+                    if (srNamePtr != IntPtr.Zero)
+                    {
+                        string srName = Marshal.PtrToStringUni(srNamePtr);
+                        Main.Log.LogInfo("Screen reader detected: " + srName);
+                    }
+                    else
+                    {
+                        // No screen reader, but Tolk still has speech — that's the SAPI voice.
+                        _usingSapiFallback = true;
+                        Main.Log.LogInfo("No screen reader detected; using SAPI voice fallback.");
+                    }
                 }
                 else
                 {
-                    Main.Log.LogWarning("No screen reader detected or Tolk is unavailable");
+                    Main.Log.LogWarning("No screen reader detected and no SAPI voice available; Tolk output disabled.");
                 }
             }
             catch (DllNotFoundException)
