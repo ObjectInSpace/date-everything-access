@@ -12,6 +12,8 @@
   <ItemGroup>
     <Compile Remove="decompiled\**" />
     <Compile Remove="templates\**" />
+    <!-- Unrelated ASP.NET scratch project that lives in the repo root; not part of the mod. -->
+    <Compile Remove="Accessibility before the storm\**" />
   </ItemGroup>
 
   <ItemGroup>

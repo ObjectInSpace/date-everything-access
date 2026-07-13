@@ -77,7 +77,7 @@ namespace DateEverythingAccess
         // signals into one channel (landmark swell × behind dip × pulse gate) — a volume change was
         // unattributable. Landmark distance lives on the pulse rate now; volume only carries the
         // behind-you dip.
-        private const float SteadyVolume = 0.65f;
+        private const float SteadyVolume = 0.22f;
         // AIM-mode vertical cue: pitch offset = clamp(signed camera aim error / full-scale) × swing.
         // Aim error = (camera's CURRENT elevation) − (elevation it MUST look at to hit the object):
         // aimed too HIGH → positive → tone rises ("tilt down"); too LOW → negative → tone drops
@@ -109,7 +109,7 @@ namespace DateEverythingAccess
         private const float BlipDurationSeconds = 0.16f;
         private const float BlipStartFrequency = 520f;
         private const float BlipEndFrequency = 880f;
-        private const float BlipVolume = 0.7f;
+        private const float BlipVolume = 0.35f;
         // A door contributes a TRIPLE of landmark waypoints (approach/opening/exit) that can be
         // crossed within a second of each other; the cooldown collapses them into ONE audible
         // "passed the door" chirp instead of a stutter of three.

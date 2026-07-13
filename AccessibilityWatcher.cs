@@ -9278,6 +9278,17 @@ namespace DateEverythingAccess
             if (interactable == null)
                 return Loc.Get("unknown_object");
 
+            // Dunk's datables ship as many interactables that the game labels generically ("sports
+            // equipment") via mainText, or whose leaf GameObject is the uninformative
+            // "SM_SportEquiptment_N". The storyline needs the player to click a SPECIFIC piece at a
+            // specific time, so a descriptive category ("Baseball", "Dumbbell", "Tennis racket") must
+            // win over the generic text. Resolve from the transform hierarchy (the sport BIN the game
+            // authored) before the mainText/name chain below, since mainText would otherwise short-
+            // circuit it. Returns null for anything that isn't one of these bins.
+            string sportsEquipmentLabel = ResolveDunkSportsEquipmentLabel(interactable);
+            if (!string.IsNullOrEmpty(sportsEquipmentLabel))
+                return sportsEquipmentLabel;
+
             string mainTextName = NormalizeObjectLabelCandidate(interactable.mainText);
             if (!IsActionStyleObjectLabel(mainTextName))
                 return mainTextName;
@@ -9310,6 +9321,85 @@ namespace DateEverythingAccess
             }
 
             return string.Join(" ", names.ToArray());
+        }
+
+        // Descriptive category label for one of Dunk's sports-equipment datables, or null if the
+        // object isn't one. Category-only by design (the storyline keys off which BIN a piece is in,
+        // and the scene data reliably identifies the bin but not a stable per-item index). Matching is
+        // driven off the transform hierarchy: the game authored a folder per sport
+        // ("SportingGoods_Gym_Baseball", "SPORT_WEIGHTS_CIRCLE", ...), which survives even when the
+        // leaf GameObject is the generic "SM_SportEquiptment_N". Where a bin mixes item types (the
+        // RaquetKickball / Football / TennisAndWeights shelves), the leaf name disambiguates.
+        private static string ResolveDunkSportsEquipmentLabel(InteractableObj interactable)
+        {
+            if (interactable == null || interactable.transform == null)
+                return null;
+
+            // Only Dunk's items live under the Gym; a cheap gate that also avoids mislabeling any
+            // unrelated object elsewhere whose leaf happens to contain "ball" or "weight".
+            string hierarchy = GetInteractableHierarchyText(interactable);
+            if (!ContainsToken(hierarchy, "Gym"))
+                return null;
+
+            string leaf = interactable.name ?? string.Empty;
+
+            // Mixed bins first: the leaf tells us the specific item within the shelf.
+            if (ContainsToken(hierarchy, "SportingGoods_Gym_RaquetKickball"))
+            {
+                if (ContainsToken(leaf, "racket") || ContainsToken(leaf, "racquet"))
+                    return Loc.Get("dunk_tennis_racket");
+                if (ContainsToken(leaf, "ball"))
+                    return Loc.Get("dunk_kickball");
+                return Loc.Get("dunk_tennis_racket");
+            }
+            if (ContainsToken(hierarchy, "SportingGoods_Gym_Football"))
+            {
+                if (ContainsToken(leaf, "block"))
+                    return Loc.Get("dunk_foam_block");
+                return Loc.Get("dunk_football");
+            }
+            if (ContainsToken(hierarchy, "SportingGoods_Gym_TennisAndWeights"))
+            {
+                if (ContainsToken(leaf, "racket") || ContainsToken(leaf, "racquet"))
+                    return Loc.Get("dunk_tennis_racket");
+                if (ContainsToken(leaf, "kettlebell"))
+                    return Loc.Get("dunk_kettlebell");
+                if (ContainsToken(leaf, "dumbbell"))
+                    return Loc.Get("dunk_dumbbell");
+                return Loc.Get("dunk_weight_plate");
+            }
+
+            // Single-type bins: folder alone is authoritative, leaf may be the generic
+            // "SM_SportEquiptment_N".
+            if (ContainsToken(hierarchy, "SportingGoods_Gym_Baseball"))
+                return Loc.Get("dunk_baseball");
+            if (ContainsToken(hierarchy, "YogaMat"))
+                return Loc.Get("dunk_yoga_mat");
+
+            // The free-weights circle and dumbbell platform (SM_SportEquiptment_N weight plates and
+            // the rack that holds them).
+            if (ContainsToken(hierarchy, "SPORT_WEIGHTS_CIRCLE") ||
+                ContainsToken(hierarchy, "dumbbells_gym_rise_successful"))
+            {
+                if (ContainsToken(leaf, "WeightRack"))
+                    return Loc.Get("dunk_weight_rack");
+                return Loc.Get("dunk_weight_plate");
+            }
+
+            // The tidy "Boxes_Gym_SportingGoods" bin, whose leaves already say Ball/Racket/Weight but
+            // reach here when the game's mainText was the generic "sports equipment".
+            if (ContainsToken(hierarchy, "Boxes_Gym_SportingGoods") ||
+                ContainsToken(hierarchy, "Furniture_Gym_SM_SportingGoods"))
+            {
+                if (ContainsToken(leaf, "Racket") || ContainsToken(leaf, "Racquet"))
+                    return Loc.Get("dunk_tennis_racket");
+                if (ContainsToken(leaf, "Weight"))
+                    return Loc.Get("dunk_weight_plate");
+                if (ContainsToken(leaf, "Ball"))
+                    return Loc.Get("dunk_ball");
+            }
+
+            return null;
         }
 
         private static string GetInteractableDisplayName(InteractableObj interactable)

@@ -321,6 +321,21 @@ namespace DateEverythingAccess
             Add("light_off", "{0} off.");
             // Fallback name when a light switch has no configured type label.
             Add("light_default_name", "Light");
+            // Dunk's sports-equipment datables. The base game labels most of these generically as
+            // "sports equipment", but the storyline needs the player to click a SPECIFIC piece at a
+            // specific time, so we speak the equipment category instead. See
+            // ResolveDunkSportsEquipmentLabel in AccessibilityWatcher.
+            Add("dunk_baseball", "Baseball");
+            Add("dunk_football", "Football");
+            Add("dunk_ball", "Ball");
+            Add("dunk_kickball", "Kickball");
+            Add("dunk_foam_block", "Foam block");
+            Add("dunk_tennis_racket", "Tennis racket");
+            Add("dunk_dumbbell", "Dumbbell");
+            Add("dunk_kettlebell", "Kettlebell");
+            Add("dunk_weight_plate", "Weight plate");
+            Add("dunk_weight_rack", "Weight rack");
+            Add("dunk_yoga_mat", "Yoga mat");
         }
 
         // Japanese overrides. Only entries whose Japanese differs from English are listed;
@@ -489,6 +504,17 @@ namespace DateEverythingAccess
             AddJa("light_on", "{0} オン。");
             AddJa("light_off", "{0} オフ。");
             AddJa("light_default_name", "ライト");
+            AddJa("dunk_baseball", "野球ボール");
+            AddJa("dunk_football", "フットボール");
+            AddJa("dunk_ball", "ボール");
+            AddJa("dunk_kickball", "キックボール");
+            AddJa("dunk_foam_block", "フォームブロック");
+            AddJa("dunk_tennis_racket", "テニスラケット");
+            AddJa("dunk_dumbbell", "ダンベル");
+            AddJa("dunk_kettlebell", "ケトルベル");
+            AddJa("dunk_weight_plate", "ウェイトプレート");
+            AddJa("dunk_weight_rack", "ウェイトラック");
+            AddJa("dunk_yoga_mat", "ヨガマット");
         }
     }
 }
