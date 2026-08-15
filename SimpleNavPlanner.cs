@@ -175,7 +175,38 @@ namespace DateEverythingAccess
             // (with a small pad), substitute the collider's bounds centre. Inside-bounds positions
             // (large objects whose pivot is off-centre but still on the object) are left untouched.
             // See [[project_navigation_target_position_degenerate]].
-            Collider posCheckCollider = ResolveTargetCollider(targetGameObjectId);
+            // ANCHOR FIRST. Collider selection scores candidates by distance to the interactable's
+            // transform, and for a degenerate object that transform is the rig origin (~world
+            // zero) — so selection picks whatever ANCESTOR collider is nearest world zero rather
+            // than one on the actual object. Kopi (the coffee machine) has no collider of its own,
+            // so the parent walk answered with an enclosing counter/cabinet block at
+            // (-31.06,3.57,26.34); the position "correction" then centred on THAT, the LOS filter
+            // found almost no standpoint, and front-approach cut the goals to 28 cells stranded
+            // behind the counter → no_path from anywhere in the house.
+            // The RENDERER bounds locate the real object without needing a collider at all, so when
+            // the transform is degenerate we use the renderer centre as the anchor and re-select the
+            // collider against it. Non-degenerate objects are unaffected (anchor stays the
+            // transform, so the same collider is chosen as before).
+            Bounds? renderBoundsForAnchor = ResolveTargetRenderBounds(targetGameObjectId);
+            if (renderBoundsForAnchor.HasValue)
+            {
+                Bounds rb0 = renderBoundsForAnchor.Value;
+                const float anchorPad = 0.5f;
+                bool transformOffObject =
+                    targetPos.x < rb0.min.x - anchorPad || targetPos.x > rb0.max.x + anchorPad ||
+                    targetPos.z < rb0.min.z - anchorPad || targetPos.z > rb0.max.z + anchorPad;
+                if (transformOffObject)
+                {
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNavPlanner.Plan: degenerate transform for " +
+                            (targetName ?? "<null>") + "#" + targetGameObjectId + " at " +
+                            targetPos.ToString("F2") + "; anchoring collider selection at RENDERER centre " +
+                            rb0.center.ToString("F2"));
+                    targetPos = rb0.center;
+                }
+            }
+
+            Collider posCheckCollider = ResolveTargetCollider(targetGameObjectId, targetPos);
             if (posCheckCollider != null)
             {
                 Bounds b = posCheckCollider.bounds;
@@ -183,7 +214,15 @@ namespace DateEverythingAccess
                 bool outsideXZ =
                     targetPos.x < b.min.x - pad || targetPos.x > b.max.x + pad ||
                     targetPos.z < b.min.z - pad || targetPos.z > b.max.z + pad;
-                if (outsideXZ)
+                // Don't re-correct a position the renderer bounds already placed ON the object: for
+                // a collider-less interactable the resolved collider is an ANCESTOR (counter,
+                // cabinet, table) that merely encloses the object, and its centre can sit metres
+                // away — dragging the goal disc back off the target we just located. The renderer
+                // centre is the more specific point, so it wins.
+                bool anchoredByRenderer =
+                    renderBoundsForAnchor.HasValue &&
+                    targetPos == renderBoundsForAnchor.Value.center;
+                if (outsideXZ && !anchoredByRenderer)
                 {
                     Vector3 corrected = b.center;
                     if (Main.Log != null)
@@ -193,6 +232,8 @@ namespace DateEverythingAccess
                     targetPos = corrected;
                 }
             }
+            // (No collider-less branch needed: the renderer-anchor block above has already moved a
+            // degenerate targetPos onto the real object, whether or not a collider resolves.)
 
             Floor startFloor = FloorForY(startPos.y, StartFloorMatchToleranceM);
             Floor goalFloor = FloorForTargetY(targetPos.y);
@@ -2003,6 +2044,35 @@ namespace DateEverythingAccess
         // [[project_navigation_planner_los_goal_cells_2026_06_13]].
         private const float InteractionRimFractionM = 0.9f;
 
+        // A small object RESTING ON a surface (toaster on a counter, bobby pin in a desk pen holder,
+        // coffee machine on a worktop) has its ClosestPointOnBounds land on the collider's BOTTOM
+        // face for every standpoint on the floor: the 1.6m eye is above the object's underside, so
+        // the nearest bounds point is directly down onto the base. That aim point is occluded BY
+        // DEFINITION — the counter/desk the object sits on is between the eye and the underside —
+        // so the center ray hits the furniture, every candidate cell fails, and the object reports
+        // no_los / no_path with no reachable standpoint anywhere.
+        // Measured: toaster 1808/1808 cells and office bobby pin 2998/2998 cells aimed at the
+        // underside; re-aiming at the collider CENTRE recovers 63 valid standpoints for the toaster.
+        // FIX: when the nearest bounds point is on (or within this epsilon of) the collider's bottom
+        // face AND the collider's centre is above the eye's footing, aim at the bounds CENTRE
+        // instead — the visible body of the object, which is what the player actually looks at.
+        // Objects whose nearest point is a side/top face are untouched (normal aiming preserved).
+        private const float UndersideAimEpsilonM = 0.02f;
+
+        // Interaction aim point for an eye at `eye` looking at `targetCollider`: normally the
+        // collider's closest bounds point, but re-aimed at the bounds centre for a resting-on-a-
+        // surface object whose closest point is its occluded underside (see UndersideAimEpsilonM).
+        private static Vector3 InteractionAimPoint(Collider targetCollider, Vector3 eye)
+        {
+            Vector3 aim = targetCollider.ClosestPointOnBounds(eye);
+            Bounds b = targetCollider.bounds;
+            // Only re-aim when the nearest point is the BOTTOM face and the object's body sits above
+            // it — i.e. we'd be looking up into the base through whatever it rests on.
+            if (aim.y - b.min.y <= UndersideAimEpsilonM && b.center.y > aim.y)
+                return b.center;
+            return aim;
+        }
+
         // True if, standing on goal cell `g`, the player has a SOLID interaction line to the target:
         // (1) the game's camera ray from eye height toward the collider's closest bounds point hits
         // THAT collider first (no occluder) — mirrors BetterPlayerControl.cs:493-499 — AND (2) that
@@ -2049,7 +2119,7 @@ namespace DateEverythingAccess
 
             Vector2 xz = floor.CellToWorld(g.Ix, g.Iz);
             Vector3 eye = new Vector3(xz.x, floor.FloorY + InteractionEyeHeightM, xz.y);
-            Vector3 aim = targetCollider.ClosestPointOnBounds(eye);
+            Vector3 aim = InteractionAimPoint(targetCollider, eye);
             float rise = aim.y - eye.y;                 // how far the target sits above eye level
             if (rise <= HighMountEyeRiseM)
                 return quality;                         // not high-mounted — clearance only
@@ -2092,7 +2162,7 @@ namespace DateEverythingAccess
             {
                 Vector2 xz = floor.CellToWorld(g.Ix, g.Iz);
                 Vector3 eye = new Vector3(xz.x, floor.FloorY + InteractionEyeHeightM, xz.y);
-                Vector3 aimPoint = targetCollider.ClosestPointOnBounds(eye);
+                Vector3 aimPoint = InteractionAimPoint(targetCollider, eye);
                 Vector3 dir = aimPoint - eye;
                 float dist = dir.magnitude;
                 if (dist <= 0.0001f)
@@ -2436,20 +2506,86 @@ namespace DateEverythingAccess
             return null;
         }
 
+        // World-space bounds of the target's visible geometry, or null if it has no active renderer.
+        // Used ONLY as the degenerate-position fallback when no collider resolves: a collider-less
+        // interactable (e.g. the coffee machine / Kopi) still renders somewhere real, and the
+        // renderer bounds locate it just as well as a collider would. Encloses every renderer in the
+        // hierarchy so a multi-part prop reports its whole body, not one arbitrary sub-mesh.
+        private static Bounds? ResolveTargetRenderBounds(int targetGameObjectId)
+        {
+            if (targetGameObjectId == 0) return null;
+            InteractableObj[] all = UnityEngine.Object.FindObjectsOfType<InteractableObj>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                InteractableObj io = all[i];
+                if (io == null || io.gameObject == null) continue;
+                if (io.gameObject.GetInstanceID() != targetGameObjectId) continue;
+
+                Renderer[] renderers = io.GetComponentsInChildren<Renderer>(includeInactive: false);
+                if (renderers == null) return null;
+
+                Bounds acc = default(Bounds);
+                bool any = false;
+                for (int r = 0; r < renderers.Length; r++)
+                {
+                    Renderer rend = renderers[r];
+                    if (rend == null || !rend.enabled || rend.gameObject == null ||
+                        !rend.gameObject.activeInHierarchy)
+                    {
+                        continue;
+                    }
+                    if (!any) { acc = rend.bounds; any = true; }
+                    else acc.Encapsulate(rend.bounds);
+                }
+                return any ? acc : (Bounds?)null;
+            }
+            return null;
+        }
+
         private static Collider SelectBestTargetCollider(InteractableObj interactable)
+        {
+            return SelectBestTargetCollider(interactable, null);
+        }
+
+        // `anchorOverride`: the point colliders are scored against (nearest wins). Normally the
+        // interactable's own transform, but a DEGENERATE interactable reports its transform at the
+        // rig origin (~world zero), and scoring against THAT picks whatever ancestor collider is
+        // nearest world zero rather than the one on the actual object. For the coffee machine
+        // (Kopi) — which has no collider of its own, so the GetComponentsInParent walk below is
+        // what answers — this selected an enclosing counter/cabinet collider whose bounds are not
+        // the machine: the LOS filter then found almost no standpoint and front-approach cut the
+        // goals to 28 cells stranded behind the counter, giving no_path from anywhere.
+        // Callers that have already located the object pass the corrected point here so selection
+        // and correction agree. See [[project_navigation_kopi_no_collider_2026_08_14]].
+        private static Collider SelectBestTargetCollider(InteractableObj interactable, Vector3? anchorOverride)
         {
             if (interactable == null || interactable.gameObject == null)
                 return null;
 
             Collider best = null;
             float bestScore = float.PositiveInfinity;
-            Vector3 anchor = interactable.transform.position;
+            Vector3 anchor = anchorOverride ?? interactable.transform.position;
 
             ConsiderTargetColliders(interactable.GetComponents<Collider>(), anchor, 0f, ref best, ref bestScore);
             ConsiderTargetColliders(interactable.GetComponentsInChildren<Collider>(includeInactive: false), anchor, 1f, ref best, ref bestScore);
             ConsiderTargetColliders(interactable.GetComponentsInParent<Collider>(includeInactive: false), anchor, 2f, ref best, ref bestScore);
 
             return best;
+        }
+
+        // Collider for the target, re-selected against a corrected anchor point (see the overload).
+        private static Collider ResolveTargetCollider(int targetGameObjectId, Vector3 anchor)
+        {
+            if (targetGameObjectId == 0) return null;
+            InteractableObj[] all = UnityEngine.Object.FindObjectsOfType<InteractableObj>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                InteractableObj io = all[i];
+                if (io == null || io.gameObject == null) continue;
+                if (io.gameObject.GetInstanceID() != targetGameObjectId) continue;
+                return SelectBestTargetCollider(io, anchor);
+            }
+            return null;
         }
 
         private static void ConsiderTargetColliders(

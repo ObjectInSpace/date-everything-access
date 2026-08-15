@@ -866,6 +866,16 @@ namespace DateEverythingAccess
             if (!found || string.IsNullOrWhiteSpace(description))
                 return;
 
+            // A still-pending description from a PREVIOUS card is about to be overwritten by this
+            // one: back-to-back cards (Harper then Dirk) that land inside the 3s speech delay lose
+            // the first one silently, because there is only one pending slot. Surface it.
+            if (Interlocked.CompareExchange(ref _pendingCardPoseRequested, 0, 0) != 0 &&
+                !string.IsNullOrWhiteSpace(_pendingCardPoseDesc) && Main.Log != null)
+            {
+                Main.Log.LogWarning("[card-pose] OVERWRITTEN before it spoke (a newer card arrived " +
+                    "within the " + CardPoseSpeechDelaySeconds + "s delay): " + Trunc(_pendingCardPoseDesc));
+            }
+
             // Clear the repeat cache for the incoming card: until this description actually fires
             // (~3s later), a Ctrl+F1 press shouldn't replay the previous datable's pose text.
             _lastCardPoseDesc = null;
@@ -1052,6 +1062,20 @@ namespace DateEverythingAccess
             ScreenReader.Say(announcement);
         }
 
+        // True while either fullscreen datable pose card is on screen.
+        private static bool IsPoseCardOpen()
+        {
+            return (AwakenSplashScreen.Instance != null && AwakenSplashScreen.Instance.isOpen) ||
+                   (ResultSplashScreen.Instance != null && ResultSplashScreen.Instance.isOpen);
+        }
+
+        // First few words of a description, for log lines that only need to identify WHICH text.
+        private static string Trunc(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "<null>";
+            return s.Length <= 60 ? s : s.Substring(0, 60) + "…";
+        }
+
         private void HandleCardPoseAnnouncement()
         {
             if (Interlocked.CompareExchange(ref _pendingCardPoseRequested, 0, 0) == 0)
@@ -1060,9 +1084,18 @@ namespace DateEverythingAccess
             if (Time.unscaledTime < _pendingCardPoseNotBefore)
                 return;
 
-            // Held too long (card already dismissed) — drop it rather than speak stale text.
-            if (Time.unscaledTime > _pendingCardPoseExpiresAt)
+            // Held too long — drop it rather than speak stale text. The window exists to catch a card
+            // the player already DISMISSED, so it must not fire merely because wall-clock time passed:
+            // this runs from Update(), which Unity stops calling when the game loses focus, while
+            // Time.unscaledTime keeps advancing in real time. Alt-tabbing away from an open card for
+            // longer than the window therefore expired a description that was still perfectly valid —
+            // the first poll after refocusing saw now > expiresAt and dropped Dirk's card silently.
+            // So the card being GONE is the real drop condition; the timer only decides when to check.
+            if (Time.unscaledTime > _pendingCardPoseExpiresAt && !IsPoseCardOpen())
             {
+                if (Main.Log != null)
+                    Main.Log.LogWarning("[card-pose] DROPPED (card closed before its description could " +
+                        "speak): " + Trunc(_pendingCardPoseDesc));
                 Interlocked.Exchange(ref _pendingCardPoseRequested, 0);
                 _pendingCardPoseDesc = null;
                 return;
@@ -1074,6 +1107,8 @@ namespace DateEverythingAccess
 
             if (!string.IsNullOrWhiteSpace(description))
             {
+                if (Main.Log != null)
+                    Main.Log.LogInfo("[card-pose] SPEAKING: " + Trunc(description));
                 _lastCardPoseDesc = description;
                 ScreenReader.Say(description);
             }
@@ -4195,6 +4230,16 @@ namespace DateEverythingAccess
         // merged fixture). FALLBACK (older bakes / unresolved ids): the legacy bridge — the live
         // instance whose cleaned name matches and whose transform is nearest the fixture's
         // best-available-location.
+        // Max distance (squared, m²) between a roster fixture and a live object for the NAME-bucket
+        // bridge to be believed. Measured over the 58 multi-slot fixture names in the bake: genuine
+        // co-located duplicates (preset copies, hanger/glass stacks, clock tails) sit within ~1.9m of
+        // each other — tightest 0.01m, and 'ball' at 1.44m — while separate LOCATION slots of a
+        // moving datable start at 3.6m and run to 58m (the bobby pin's six slots are ≥4.58m apart).
+        // 2.5m sits in that empty band: close enough to keep every legitimate near-duplicate, far
+        // enough to reject a match that is really a different slot's object. Only the name fallback
+        // is bounded; the exact unique_id bridge is unaffected.
+        private const float NameBridgeMaxDistanceSqM = 2.5f * 2.5f;
+
         private static InteractableObj ResolveLiveForFixture(
             LiveInteractableIndex live, SimpleNavPlanner.Fixture fixture)
         {
@@ -4228,18 +4273,32 @@ namespace DateEverythingAccess
             if (string.IsNullOrWhiteSpace(key) || !live.ByName.TryGetValue(key, out List<InteractableObj> bucket))
                 return null;
 
+            // MOVING DATABLES: a dateable that relocates as the story advances (the bobby pin moves
+            // laundry box -> sink -> office -> attic -> nightstand -> kitchen counter) exists in the
+            // scene as one GameObject PER LOCATION, and the game activates exactly one at a time
+            // (MovingDateable.MoveDateable). The roster therefore holds ALL SIX slots while only one
+            // is ever live, and every slot shares the same cleaned name.
+            // Without a distance bound, all six fixtures fall past the by-id lookup (the five
+            // inactive ones aren't in the live index, which is built from FindObjectsOfType) into
+            // this name bucket and each resolves to the SAME live pin — six identical picker entries
+            // for one object, five of them naming a location it left long ago.
+            // A name+nearest match is only trustworthy when the live object is actually WHERE the
+            // fixture says it is; a match tens of metres away means this fixture's own instance is
+            // inactive and we're looking at a different slot's object. Reject those.
             Vector3 want = fixture.Position();
             InteractableObj best = null;
             float bestD2 = float.PositiveInfinity;
             for (int i = 0; i < bucket.Count; i++)
             {
                 InteractableObj o = bucket[i];
-                if (o == null || o.transform == null)
+                if (o == null || o.transform == null || o.gameObject == null)
+                    continue;
+                if (!o.gameObject.activeInHierarchy)
                     continue;
                 float d2 = (o.transform.position - want).sqrMagnitude;
                 if (d2 < bestD2) { bestD2 = d2; best = o; }
             }
-            return best;
+            return bestD2 <= NameBridgeMaxDistanceSqM ? best : null;
         }
 
         // Build the displayed list from the full candidate set by applying the live filters,
@@ -4768,13 +4827,99 @@ namespace DateEverythingAccess
             SimpleNavRoute route = SimpleNavPlanner.Plan(startPos, targetPos, radius, goName, goId, isDatable, target.inkFileName);
             if (route == null)
             {
+                // MULTI-PART DATABLE RETRY. A datable is often a whole assembly of InteractableObj
+                // parts sharing ONE inkFileName — the coffee machine (Kopi) is 9 of them: body, cup,
+                // plate, jug, bag, handle, bowl. Interacting with ANY part dates the same character,
+                // but they differ hugely as navigation targets: the drinking cup is 0.22m tall and
+                // sits just above the counter lip, so the counter occludes every sightline to it
+                // (no_los), while the machine body and 6 other parts route fine. The tracker had
+                // simply picked the cup and reported "no path to make coffee".
+                // So when the chosen part fails, try its siblings — the object the player wants is
+                // reachable, just not via that particular sub-mesh. Prefers the TALLEST remaining
+                // part: height above its supporting surface is exactly what clears the counter edge.
                 SimpleNavPlanner.PlanFailure why = SimpleNavPlanner.LastFailure;
-                if (Main.Log != null) Main.Log.LogInfo("ToggleAutoWalk: planner returned no route for target=" + goName + " reason=" + why);
-                ScreenReader.Say(Loc.Get("navigation_no_path", label) + " (" + why + ")");
-                return false;
+                route = TryPlanDatableSibling(target, startPos, ref goName, ref goId);
+                if (route == null)
+                {
+                    if (Main.Log != null) Main.Log.LogInfo("ToggleAutoWalk: planner returned no route for target=" + goName + " reason=" + why);
+                    ScreenReader.Say(Loc.Get("navigation_no_path", label) + " (" + why + ")");
+                    return false;
+                }
             }
             SimpleNavBridge.BeginRoute(route);
             return true;
+        }
+
+        // Re-plan a failed datable route against the OTHER InteractableObj parts that share the
+        // target's inkFileName (the same character). Returns the first successful route and reports
+        // the substituted part through goName/goId, or null when no sibling is routable either.
+        // Ordered TALLEST-FIRST: a part's height above its supporting furniture is what lets the
+        // sightline clear the counter/desk edge that occluded the original pick. See the call site.
+        private SimpleNavRoute TryPlanDatableSibling(
+            InteractableObj target, Vector3 startPos, ref string goName, ref int goId)
+        {
+            if (target == null || string.IsNullOrWhiteSpace(target.inkFileName))
+                return null;
+
+            int originalId = target.gameObject != null ? target.gameObject.GetInstanceID() : 0;
+            InteractableObj[] all = FindObjectsOfType<InteractableObj>();
+
+            // Collect the sibling parts of this datable, tallest first.
+            List<InteractableObj> siblings = new List<InteractableObj>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                InteractableObj c = all[i];
+                if (c == null || c.gameObject == null) continue;
+                if (!c.gameObject.activeInHierarchy) continue;
+                if (c.gameObject.GetInstanceID() == originalId) continue;
+                if (!string.Equals(c.inkFileName, target.inkFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                siblings.Add(c);
+            }
+            if (siblings.Count == 0)
+                return null;
+
+            siblings.Sort((a, b) => PartHeight(b).CompareTo(PartHeight(a)));
+
+            for (int i = 0; i < siblings.Count; i++)
+            {
+                InteractableObj c = siblings[i];
+                Vector3 pos = IsComputerInteractable(c)
+                    ? GetInteractablePlanningPosition(c)
+                    : c.transform.position;
+                int id = c.gameObject.GetInstanceID();
+                string name = c.gameObject.name;
+                SimpleNavRoute r = SimpleNavPlanner.Plan(
+                    startPos, pos, GetInteractableApproachRadius(c), name, id, true, c.inkFileName);
+                if (r == null)
+                    continue;
+
+                if (Main.Log != null)
+                    Main.Log.LogInfo("ToggleAutoWalk: '" + goName + "' unroutable; routing to sibling part '" +
+                        name + "' of the same datable (ink=" + c.inkFileName + ")");
+                goName = name;
+                goId = id;
+                return r;
+            }
+            return null;
+        }
+
+        // Renderer height (m) of an interactable part, or 0 when it has no renderer. Used only to
+        // order sibling parts so the tallest — the one most likely to clear its supporting surface
+        // — is tried first.
+        private static float PartHeight(InteractableObj interactable)
+        {
+            if (interactable == null) return 0f;
+            Renderer[] rs = interactable.GetComponentsInChildren<Renderer>(includeInactive: false);
+            if (rs == null || rs.Length == 0) return 0f;
+            float lo = float.PositiveInfinity, hi = float.NegativeInfinity;
+            for (int i = 0; i < rs.Length; i++)
+            {
+                Renderer r = rs[i];
+                if (r == null || !r.enabled) continue;
+                lo = Mathf.Min(lo, r.bounds.min.y);
+                hi = Mathf.Max(hi, r.bounds.max.y);
+            }
+            return hi > lo ? hi - lo : 0f;
         }
 
         private static bool IsTutorialSkylarGiftTarget(InteractableObj interactable)
@@ -8782,11 +8927,7 @@ namespace DateEverythingAccess
         {
             announcement = null;
 
-            bool cardOpen =
-                (AwakenSplashScreen.Instance != null && AwakenSplashScreen.Instance.isOpen) ||
-                (ResultSplashScreen.Instance != null && ResultSplashScreen.Instance.isOpen);
-
-            if (!cardOpen)
+            if (!IsPoseCardOpen())
             {
                 _lastCardPoseDesc = null;
                 return false;

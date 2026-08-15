@@ -1260,6 +1260,33 @@ def resolve_target_collider_for_path(target_path, target_pos=None):
     return best[1] if best else None
 
 
+def _sibling_bounds_for_path(target_path):
+    """World AABB (lo, hi) unioned over the collider records that are SIBLINGS of `target_path`
+    (i.e. share its immediate parent), or None. Offline stand-in for the C# renderer-bounds
+    fallback: it locates a collider-less datable whose geometry lives in sibling nodes rather
+    than descendants — the coffee-machine/Kopi shape, where the datable is a leaf beside the
+    parts that carry the colliders. Only used to correct a DEGENERATE position, never to invent
+    a target collider or LOS."""
+    if not target_path:
+        return None
+    _ensure_los_context()
+    parent = target_path.rsplit("/", 1)[0]
+    if not parent:
+        return None
+    prefix = parent + "/"
+    lo = [float("inf")] * 3
+    hi = [float("-inf")] * 3
+    found = False
+    for col_path, c in _LOS_TARGET_BY_PATH.items():
+        if col_path == target_path or not col_path.startswith(prefix):
+            continue
+        for i in range(3):
+            lo[i] = min(lo[i], c.aabb_lo[i])
+            hi[i] = max(hi[i], c.aabb_hi[i])
+        found = True
+    return (tuple(lo), tuple(hi)) if found else None
+
+
 def filter_goals_by_los(floor, goals, target_collider, target_x, target_z, radius_m):
     """Narrow goal cells to those that are valid interaction standpoints, exactly as
     SimpleNavPlanner.Plan does for a non-door collider target:
@@ -1552,6 +1579,25 @@ def plan(target_spec, start_xz=None, start_floor=None, interaction_radius_overri
             tx = (lo[0] + hi[0]) / 2.0
             ty = (lo[1] + hi[1]) / 2.0
             tz = (lo[2] + hi[2]) / 2.0
+    else:
+        # NO COLLIDER RESOLVED, so the correction above can't fire and a degenerate position
+        # sails through uncorrected: the goal disc centres on the rig origin (empty space near
+        # world zero), A* "arrives" without moving, and the object is never really reachable.
+        # Kopi (the coffee machine) is exactly this — transform (0.19,-0.02,-0.04) while its
+        # geometry is in the Kitchen at x≈-30.8, z≈24-27, yielding a 0.0m route.
+        # The datable node is a LEAF SIBLING of the geometry, not its ancestor, so the exporter's
+        # descendant-only Bounds3D union finds nothing (0 blocker records at/under it, 8 under the
+        # shared parent). Offline stand-in for the C# renderer-bounds fallback: union the SIBLING
+        # colliders under the shared parent to locate the object. Mirror of
+        # SimpleNavPlanner.ResolveTargetRenderBounds.
+        sib = _sibling_bounds_for_path(target.get("Path"))
+        if sib is not None:
+            lo, hi = sib
+            pad = 0.5
+            if tx < lo[0] - pad or tx > hi[0] + pad or tz < lo[2] - pad or tz > hi[2] + pad:
+                tx = (lo[0] + hi[0]) / 2.0
+                ty = (lo[1] + hi[1]) / 2.0
+                tz = (lo[2] + hi[2]) / 2.0
 
     tfloor = planner._floor_for_target_y(ty)
     if tfloor is None:

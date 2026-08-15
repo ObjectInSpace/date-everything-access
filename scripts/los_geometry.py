@@ -229,6 +229,34 @@ def closest_point_on_bounds(c, p):
     )
 
 
+# Mirror of SimpleNavPlanner.UndersideAimEpsilonM / InteractionAimPoint. A small object RESTING
+# ON a surface (toaster on a counter, bobby pin in a desk pen holder, coffee machine on a worktop)
+# has its closest-bounds-point land on the collider's BOTTOM face for every floor standpoint: the
+# 1.6m eye is above the object's underside. That aim point is occluded BY DEFINITION — the
+# counter/desk it rests on sits between eye and underside — so every candidate cell fails and the
+# object reports no_los with no standpoint anywhere. Measured: toaster 1808/1808 cells and office
+# bobby pin 2998/2998 cells aimed at the underside; re-aiming at the bounds CENTRE recovers 63
+# valid standpoints for the toaster. Objects whose nearest point is a side/top face are untouched.
+UNDERSIDE_AIM_EPSILON_M = 0.02
+
+
+def interaction_aim_point(c, eye):
+    """Interaction aim point for `eye` looking at collider `c`: normally the closest bounds
+    point, but re-aimed at the bounds CENTRE for a resting-on-a-surface object whose closest
+    point is its occluded underside. Mirror of SimpleNavPlanner.InteractionAimPoint."""
+    aim = closest_point_on_bounds(c, eye)
+    center_y = (c.aabb_lo[1] + c.aabb_hi[1]) / 2.0
+    # Only re-aim when the nearest point is the BOTTOM face and the body sits above it — i.e.
+    # we'd be looking up into the base through whatever the object rests on.
+    if aim[1] - c.aabb_lo[1] <= UNDERSIDE_AIM_EPSILON_M and center_y > aim[1]:
+        return (
+            (c.aabb_lo[0] + c.aabb_hi[0]) / 2.0,
+            center_y,
+            (c.aabb_lo[2] + c.aabb_hi[2]) / 2.0,
+        )
+    return aim
+
+
 def build_collider(b, allow_trigger=False):
     """Build one Collider from a blocker-export record, or None if it can't occlude
     (trigger / disabled / inactive / no bounds). Shared by load_colliders and target
@@ -556,7 +584,7 @@ def cell_has_los_to_target(eye_xz, floor_y, target_collider, radius_m, occluders
     if target_collider is None:
         return False
     eye = (eye_xz[0], floor_y + INTERACTION_EYE_HEIGHT_M, eye_xz[1])
-    aim = closest_point_on_bounds(target_collider, eye)
+    aim = interaction_aim_point(target_collider, eye)
     dir3 = vsub(aim, eye)
     dist = vlen(dir3)
     if dist <= 0.0001:
@@ -673,7 +701,7 @@ def goal_view_quality(eye_xz, floor_y, target_collider):
     if target_collider is None:
         return 0.0
     eye = (eye_xz[0], floor_y + INTERACTION_EYE_HEIGHT_M, eye_xz[1])
-    aim = closest_point_on_bounds(target_collider, eye)
+    aim = interaction_aim_point(target_collider, eye)
     rise = aim[1] - eye[1]
     if rise <= HIGH_MOUNT_EYE_RISE_M:
         return 0.0  # not high-mounted — no diagonal preference
