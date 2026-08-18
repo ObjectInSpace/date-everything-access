@@ -260,9 +260,9 @@ function ToEulerDegrees([System.Numerics.Quaternion]$q) {
     }
 }
 
-# Load the blocker export and index physical-collider Bounds3D by GameObject
-# path. Each interactable's world dimensions are the union of all blocker bounds
-# at-or-under its path (its own collider plus descendant *_MODEL_UPDATE nodes).
+# Load the blocker export. Each interactable's world dimensions are the union of
+# its own collider (matched by GameObjectId) and its descendants' (matched by
+# path prefix) -- see Get-DatableBounds for why the self match must be by id.
 $blockerRecordsByPath = $null
 if (-not [string]::IsNullOrWhiteSpace($BlockersPath) -and (Test-Path -LiteralPath $BlockersPath)) {
     $blockerJson = Get-Content -LiteralPath $BlockersPath -Raw | ConvertFrom-Json
@@ -280,12 +280,27 @@ if (-not [string]::IsNullOrWhiteSpace($BlockersPath) -and (Test-Path -LiteralPat
 
 function Get-DatableBounds {
     <#
-    Unions the world AABBs (Bounds3D) of every physical blocker record whose
-    GameObject is $Path itself or a descendant of it. Returns @{ Bounds3D;
-    Bounds2D } or $null when the datable has no physical collider (e.g. a
-    look-only interactable with no blocking geometry).
+    Unions the world AABBs (Bounds3D) of every physical blocker record belonging
+    to this interactable: its OWN collider (matched by GameObjectId) plus every
+    descendant collider (matched by path prefix). Returns @{ Bounds3D; Bounds2D }
+    or $null when the datable has no physical collider (e.g. a look-only
+    interactable with no blocking geometry).
+
+    IDENTITY, NOT NAME, for the object's own record. A hierarchy path is a name,
+    so two same-named SIBLINGS under one parent share a single path string
+    (SmokeAlarms_InPlace/SmokeAlarm_Kitchen holds two `SM_SmokeAlarm_1` children,
+    12.7m apart on different kitchen walls). Matching the self record by path
+    therefore matched BOTH siblings and unioned their two tight 0.98m colliders
+    into one 8.4 x 4.7 x 10.0m phantom box centred in mid-air between them —
+    which downstream became a single merged fixture at a point on no wall, with
+    no reachable target and meaningless line-of-sight. Keying the self record on
+    GameObjectId keeps each sibling's bounds its own; the descendant scan stays
+    path-based, which is correct (a true child's path is strictly longer).
     #>
-    param([Parameter(Mandatory = $true)] [string]$Path)
+    param(
+        [Parameter(Mandatory = $true)] [string]$Path,
+        [Parameter(Mandatory = $true)] $GameObjectId
+    )
     if ($null -eq $script:blockerRecordsByPath) { return $null }
 
     $descPrefix = $Path + "/"
@@ -294,7 +309,9 @@ function Get-DatableBounds {
     $found = $false
     foreach ($b in $script:blockerRecordsByPath) {
         $bp = [string]$b.Path
-        if ($bp -ne $Path -and -not $bp.StartsWith($descPrefix, [System.StringComparison]::Ordinal)) { continue }
+        $isSelf = ($b.GameObjectId -eq $GameObjectId)
+        $isDescendant = $bp.StartsWith($descPrefix, [System.StringComparison]::Ordinal)
+        if (-not $isSelf -and -not $isDescendant) { continue }
         $bn = $b.Bounds3D
         $minX = [Math]::Min($minX, [double]$bn.Min.x); $minY = [Math]::Min($minY, [double]$bn.Min.y); $minZ = [Math]::Min($minZ, [double]$bn.Min.z)
         $maxX = [Math]::Max($maxX, [double]$bn.Max.x); $maxY = [Math]::Max($maxY, [double]$bn.Max.y); $maxZ = [Math]::Max($maxZ, [double]$bn.Max.z)
@@ -333,7 +350,7 @@ foreach ($c in $interactableComponents) {
 
     $isDatable = -not [string]::IsNullOrWhiteSpace($c.InkFileName)
     $path = Get-GameObjectPath $go.Id
-    $bounds = Get-DatableBounds -Path $path
+    $bounds = Get-DatableBounds -Path $path -GameObjectId $go.Id
     if ($null -ne $bounds) { $withBounds++ }
     $uniqueId = if ($uniqueIdByGameObject.ContainsKey($go.Id)) { $uniqueIdByGameObject[$go.Id] } else { $null }
     if (-not [string]::IsNullOrWhiteSpace($uniqueId)) { $withUniqueId++ }

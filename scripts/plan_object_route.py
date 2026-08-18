@@ -354,7 +354,23 @@ class Planner:
             if up_cell is None:
                 continue
             up_node = (up_floor, up_cell[0], up_cell[1])
-            down_node = ("@teleporter_down", t["source_name"], 0)
+            # DOWN endpoint: land on the real cell when its floor is baked, so everything
+            # in the destination region is reachable through this edge. The crawlspace is
+            # entered ONLY via the trap door + ladder (this teleporter), so if the down
+            # endpoint dead-ends at a virtual node nothing down there routes at all --
+            # every crawlspace fixture (the Key, rat trap, time capsule, smoke alarms)
+            # returns no_path. The virtual node remains the fallback for a teleporter whose
+            # destination genuinely has no baked floor.
+            down_node = None
+            down_xyz = (t.get("down") or {}).get("world_xyz")
+            if down_xyz:
+                down_floor = self._floor_for_y(down_xyz[1])
+                if down_floor is not None:
+                    down_cell = self.floors[down_floor].nearest_navigable(down_xyz[0], down_xyz[2])
+                    if down_cell is not None:
+                        down_node = (down_floor, down_cell[0], down_cell[1])
+            if down_node is None:
+                down_node = ("@teleporter_down", t["source_name"], 0)
             meta = {"kind": "teleporter", "name": t["source_name"]}
             self.edges_from.setdefault(up_node, []).append((down_node, t["cost_m"], meta))
             self.edges_from.setdefault(down_node, []).append((up_node, t["cost_m"], meta))

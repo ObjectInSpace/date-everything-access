@@ -981,9 +981,18 @@ namespace DateEverythingAccess
                 }
             }
 
-            // Teleporter: down endpoint is off-bake (no walkable in crawlspace yet); model as
-            // virtual node "@teleporter:<name>" connected to the nearest navigable cell at the
-            // up endpoint, with cost 0 (teleport, not walked).
+            // Teleporter: connects the up endpoint's nearest navigable cell to the DOWN
+            // endpoint's, at cost 0 (teleported, not walked).
+            //
+            // The down endpoint lands on a REAL cell whenever its floor is baked. The
+            // crawlspace is entered only through the trap door and ladder — this teleporter is
+            // its sole connection to the rest of the house — so terminating the edge at a
+            // virtual node (as this did while the crawlspace had no walkable bake) left every
+            // crawlspace fixture unreachable: the Key, the rat trap, the time capsule and the
+            // four crawlspace smoke alarms all returned no_path, and the Ctrl+F6 crawlspace
+            // context default steered at targets the planner could not route to.
+            // The virtual node stays as the fallback for a teleporter whose destination
+            // genuinely has no baked floor. Mirrors plan_object_route.Planner.__init__.
             if (ife != null && ife.teleporter != null)
             {
                 for (int i = 0; i < ife.teleporter.Length; i++)
@@ -995,7 +1004,19 @@ namespace DateEverythingAccess
                     int ix, iz;
                     if (!upFloor.NearestNavigable(t.up.world_xyz[0], t.up.world_xyz[2], 3.0f, out ix, out iz)) continue;
                     NodeKey upNode = new NodeKey(upFloor.Label, ix, iz);
+
                     NodeKey downNode = new NodeKey("@teleporter:" + (t.source_name ?? "?"), 0, 0);
+                    if (t.down != null && t.down.world_xyz != null && t.down.world_xyz.Length >= 3)
+                    {
+                        Floor downFloor = FloorForY(t.down.world_xyz[1], FloorMatchToleranceM);
+                        int dix, diz;
+                        if (downFloor != null &&
+                            downFloor.NearestNavigable(t.down.world_xyz[0], t.down.world_xyz[2], 3.0f, out dix, out diz))
+                        {
+                            downNode = new NodeKey(downFloor.Label, dix, diz);
+                        }
+                    }
+
                     AddInterFloor(upNode, downNode, t.cost_m, "teleporter");
                     AddInterFloor(downNode, upNode, t.cost_m, "teleporter");
                 }

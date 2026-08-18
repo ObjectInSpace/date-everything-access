@@ -9001,21 +9001,20 @@
     {
       "name": "SmokeAlarm_1",
       "position": [
-        -16.9087,
-        10.0611,
-        23.033
+        -13.2199,
+        8.2222,
+        27.8901
       ],
       "floor": "ground",
       "object_ids": [
-        15034,
         20593
       ],
       "interaction_radius": 7.5,
       "is_datable": true,
       "ink": "arma_alarm",
-      "unique_id": "8a9e4a56-e300-4961-88a8-aa1a8b8ac34a",
+      "unique_id": "9ce19b93-e2b2-477c-91d2-058d25b74492",
       "unique_ids": [
-        "8a9e4a56-e300-4961-88a8-aa1a8b8ac34a"
+        "9ce19b93-e2b2-477c-91d2-058d25b74492"
       ],
       "path": "===SCENE===/House/MovableObjects/Unsorted/SmokeAlarms/SmokeAlarms_InPlace/SmokeAlarm_Kitchen/SmokeAlarm_TRS_MODEL_UPDATE_ORIGIN/SM_SmokeAlarm_1"
     },
@@ -17016,6 +17015,26 @@
         "0b2ab592-6f9d-4542-a6fd-9fd86b7e4f13"
       ],
       "path": "===SCENE===/House/Bathroom2/towel1_2_sink_bathroom2_normal_wiggle_MODEL_UPDATE_ORIGIN/SM_Sink_Bathroom_2_MODEL_UPDATE_ORIGIN/towel3_sink_bathroom2_normal_wiggle_MODEL_UPDATE_ORIGIN/Towel3_TRS/SM_Sink_Towel3_Bathroom_2_MODEL_UPDATE"
+    },
+    {
+      "name": "SmokeAlarm_1",
+      "position": [
+        -20.5975,
+        12.2241,
+        18.4998
+      ],
+      "floor": "upper",
+      "object_ids": [
+        15034
+      ],
+      "interaction_radius": 7.5,
+      "is_datable": true,
+      "ink": "arma_alarm",
+      "unique_id": "8a9e4a56-e300-4961-88a8-aa1a8b8ac34a",
+      "unique_ids": [
+        "8a9e4a56-e300-4961-88a8-aa1a8b8ac34a"
+      ],
+      "path": "===SCENE===/House/MovableObjects/Unsorted/SmokeAlarms/SmokeAlarms_InPlace/SmokeAlarm_Kitchen/SmokeAlarm_TRS_MODEL_UPDATE_ORIGIN/SM_SmokeAlarm_1"
     },
     {
       "name": "SmokeAlarm_1",
