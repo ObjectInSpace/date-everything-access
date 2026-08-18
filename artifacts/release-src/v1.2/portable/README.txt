@@ -1,5 +1,5 @@
 Date Everything Access Portable Package
-Version: 1.1.4
+Version: 1.2
 Repository: https://github.com/ObjectInSpace/date-everything-access
 
 THIS PACKAGE ALREADY INCLUDES THE MOD LOADER
@@ -49,8 +49,8 @@ Current coverage includes:
   Love / Hate / Friend / Realized endings), read after the card stinger plays
 - English and Japanese, following the game's own text-language setting
 
-WHAT'S NEW IN 1.1.4
-===================
+WHAT'S NEW IN 1.2
+=================
 - Everything in the crawlspace can now be reached with auto-walk. The Key,
   the rat trap, the time capsule, the dead rat and the smoke alarms down there
   all reported "no path" before, because the mod did not know that climbing
