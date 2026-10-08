@@ -20,7 +20,24 @@ namespace DateEverythingAccess
         [HarmonyPostfix]
         private static void Postfix(int saveSlotID)
         {
-            AccessibilityWatcher.SetActiveHistorySlot(saveSlotID);
+            AccessibilityWatcher.SetActiveHistorySlotFromLoad(saveSlotID);
+        }
+    }
+
+    // A NEW GAME must start with an empty known-object history. Without this hook the history of
+    // whatever save last used this slot (often a finished playthrough) was merged into the new
+    // game, so the known-objects list opened full of things the new game had never encountered.
+    // Save.NewGame bails out early while a load is in progress (it checks isLoading), so the
+    // postfix does the same: loads keep their own history.
+    [HarmonyPatch(typeof(Save), nameof(Save.NewGame))]
+    internal static class SaveNewGameHistoryPatch
+    {
+        [HarmonyPostfix]
+        private static void Postfix(Save __instance)
+        {
+            if (__instance != null && __instance.isLoading)
+                return;
+            AccessibilityWatcher.ResetHistoryForNewGame();
         }
     }
 
@@ -177,10 +194,44 @@ namespace DateEverythingAccess
         // SWITCH replaces the in-memory sets with that slot's persisted keys so evidence never
         // leaks across saves; the FIRST slot of a session instead MERGES (keeps whatever already
         // accumulated in memory, e.g. a new game's pre-first-save examines) and flushes.
+        // Set by ResetHistoryForNewGame: the next slot the game saves into belongs to the NEW game,
+        // so its file is overwritten with the (fresh) in-memory history instead of merged.
+        private static bool _newGameHistoryPending;
+
+        internal static void ResetHistoryForNewGame()
+        {
+            foreach (PersistedKeySet set in HistorySets)
+                set.Keys.Clear();
+            _activeHistorySlot = -1;
+            _newGameHistoryPending = true;
+            Main.Log?.LogInfo("Known-object history reset for a new game");
+        }
+
+        // A load always means "this slot's own history": replace memory with the slot's file.
+        internal static void SetActiveHistorySlotFromLoad(int slot)
+        {
+            if (slot < 0)
+                return;
+            _newGameHistoryPending = false;
+            _activeHistorySlot = slot;
+            foreach (PersistedKeySet set in HistorySets)
+                set.Load(slot, clearFirst: true);
+        }
+
         internal static void SetActiveHistorySlot(int slot)
         {
             if (slot < 0)
                 return;
+
+            if (_newGameHistoryPending)
+            {
+                // First save of a new game: this slot now belongs to it. Overwrite the old file.
+                _newGameHistoryPending = false;
+                _activeHistorySlot = slot;
+                foreach (PersistedKeySet set in HistorySets)
+                    set.Persist(slot);
+                return;
+            }
 
             if (_activeHistorySlot == slot)
             {

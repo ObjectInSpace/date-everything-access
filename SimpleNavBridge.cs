@@ -182,11 +182,29 @@ namespace DateEverythingAccess
                     if (segLen <= 1e-4f) return segEnd;
                     return cur + toEnd.normalized * remaining;
                 }
+                // CORNER HOLD. Don't let the lookahead slide around a SHARP corner: steering at a
+                // point past the vertex makes the player cut the corner along a chord, and with the
+                // player's real 0.8m body radius (the bake only reserves 0.4m) that chord drags a
+                // shoulder into the door jamb or furniture edge the route was bending around. For a
+                // sharp turn, aim at the vertex itself; once the player reaches it the projection
+                // moves onto the next segment and the lookahead resumes there.
+                if (seg + 2 < _waypoints.Count && IsSharpCornerXZ(cur, segEnd, _waypoints[seg + 2]))
+                    return segEnd;
                 remaining -= segLen;
                 seg++;
                 cur = _waypoints[seg];
             }
             return _waypoints[_waypoints.Count - 1];
+        }
+
+        private const float CornerHoldDeg = 35f;
+
+        private static bool IsSharpCornerXZ(Vector3 a, Vector3 b, Vector3 c)
+        {
+            Vector2 v1 = new Vector2(b.x - a.x, b.z - a.z);
+            Vector2 v2 = new Vector2(c.x - b.x, c.z - b.z);
+            if (v1.sqrMagnitude < 0.0025f || v2.sqrMagnitude < 0.0025f) return false;
+            return Vector2.Angle(v1, v2) > CornerHoldDeg;
         }
 
         // Clamped projection parameter of p onto segment [a,b], XZ only.
@@ -446,6 +464,7 @@ namespace DateEverythingAccess
         // open=true is treated as a stuck-mid-swing desync (the game's changeDoorRot broke on
         // collidedWithPlayer).
         private const float DoorFullyOpenRotationFraction = 0.95f;
+        private const float DoorStuckRotationFraction = 0.7f;
 
         // Reflected access to Door.startRot (private Vector3 set in Initialize() to the
         // closed orientation).
@@ -671,6 +690,22 @@ namespace DateEverythingAccess
         // Returns the angular distance (deg) between a swinging door's live rotation and its
         // authored startRot (closed orientation). Returns -1 if reflection failed OR the portal
         // is a SLIDER (sliders translate, not rotate — no swing delta concept).
+        // The shut orientation the game recorded for this swing door (Door.startRot, Euler).
+        public static bool TryGetDoorShutRotation(DoorPortal portal, out Quaternion shut)
+        {
+            shut = Quaternion.identity;
+            if (portal == null || !portal.IsSwing || portal.SwingDoor == null) return false;
+            FieldInfo fi = GetDoorStartRotField();
+            if (fi == null) return false;
+            try
+            {
+                if (!(fi.GetValue(portal.SwingDoor) is Vector3 startRot)) return false;
+                shut = Quaternion.Euler(startRot);
+                return true;
+            }
+            catch { return false; }
+        }
+
         private static float ReadDoorVisualRotationDelta(DoorPortal portal)
         {
             if (portal == null || !portal.IsSwing) return -1f;
@@ -682,13 +717,54 @@ namespace DateEverythingAccess
             {
                 object v = fi.GetValue(door);
                 if (!(v is Vector3 startRot)) return -1f;
-                return Vector3.Distance(door.transform.eulerAngles, startRot);
+                // The true angle between the two orientations: comparing raw Euler numbers read a
+                // door swung to -65 degrees as 295 degrees open.
+                return Quaternion.Angle(Quaternion.Euler(door.transform.eulerAngles), Quaternion.Euler(startRot));
             }
             catch (Exception ex)
             {
                 if (Main.Log != null) Main.Log.LogWarning("SimpleNav read Door.startRot threw: " + ex.Message);
                 return -1f;
             }
+        }
+
+        // The last door whose Interact left it closed and still (the game refused: the player was
+        // touching it or standing in its swing), and when.
+        private static GameObject _lastRefusedDoor;
+        private static float _lastRefusedTime = -100f;
+
+        /// <summary>
+        /// True when the game has just refused to open this closed door, or the door reports the
+        /// player touching it — either way it will not open until she steps back.
+        /// </summary>
+        public static bool IsDoorRefusingToOpen(DoorPortal door, float withinSeconds)
+        {
+            if (door == null || door.gameObject == null || door.open || IsDoorMoving(door)) return false;
+            if (_lastRefusedDoor == door.gameObject && Time.unscaledTime - _lastRefusedTime <= withinSeconds)
+                return true;
+            if (door.IsSwing && door.SwingDoor != null)
+            {
+                FieldInfo fi = GetDoorCollidedField();
+                if (fi != null)
+                {
+                    try { if (fi.GetValue(door.SwingDoor) is bool b && b) return true; }
+                    catch { }
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// True when a swing door says it is open but stopped part way, having hit the player.
+        /// </summary>
+        public static bool IsDoorStuckPartOpen(DoorPortal door)
+        {
+            if (door == null || !door.IsSwing || !door.open || IsDoorMoving(door)) return false;
+            float delta = ReadDoorVisualRotationDelta(door);
+            // Clearly short only: a door at rest a few degrees shy of its full swing (the gym
+            // bathroom door settles at 81 of 85) is open, and treating it as stuck made autowalk
+            // shut and reopen it over and over.
+            return delta >= 0f && delta < Mathf.Abs(door.range) * DoorStuckRotationFraction;
         }
 
         public static bool TryOpenActiveDoorIfNeeded(Vector3 playerPos)
@@ -754,7 +830,9 @@ namespace DateEverythingAccess
                     // Sliders translate and have no such partial-pose desync, so this is skipped
                     // for them — open=true + not moving is simply open.
                     visualRotDelta = ReadDoorVisualRotationDelta(door);
-                    float openThreshold = door.range * DoorFullyOpenRotationFraction;
+                    // range is negative for doors that swing the other way (the laundry closet's is
+                    // -65); compare magnitudes or a stuck door never counts as stuck.
+                    float openThreshold = Mathf.Abs(door.range) * DoorFullyOpenRotationFraction;
                     if (visualRotDelta >= 0f && visualRotDelta < openThreshold)
                         skipReason = "door-stuck-player-blocking";
                     else
@@ -797,6 +875,11 @@ namespace DateEverythingAccess
             {
                 door.Interact();
                 _nextDoorInteractTime = Time.unscaledTime + DoorInteractCooldownSeconds;
+                if (!door.open && !IsDoorMoving(door))
+                {
+                    _lastRefusedDoor = door.gameObject;
+                    _lastRefusedTime = Time.unscaledTime;
+                }
                 if (Main.Log != null)
                     Main.Log.LogInfo("SimpleNav fired Interact on door=" + firingDoorName + " dist=" + dist.ToString("0.00") + " openAfter=" + door.open);
                 return true;

@@ -49,6 +49,8 @@ namespace DateEverythingAccess
         // [[project-navigation-clearance-cost-rejected-2026-05-29]] (reconciled: bounded, not flat).
         private const int ClearanceTargetCells = 4;
         private const float ClearancePenaltyPerCellM = 0.15f;
+        // Extra metres per step onto a cell with this many cells of clearance (index = clearance).
+        private static readonly float[] ClearancePenaltyByCells = { 0f, 1.0f, 0.35f, 0.1f };
         // Player-capsule + safety margin from the target's collider face. Goal cells whose
         // player-capsule center is closer than this become invalid (overlap), and cells further
         // than ColliderBandOuterM become invalid (too far to interact reliably). The result is
@@ -159,6 +161,8 @@ namespace DateEverythingAccess
                 LastFailure = PlanFailure.NotReady;
                 return null;
             }
+
+            PruneRuntimeBlockers();
 
             // Reflect live Door.open states into per-floor freed-cell overlays so A* can route
             // through doors that are already open. Closed doors fall back to the bake's
@@ -354,7 +358,39 @@ namespace DateEverythingAccess
                     LastFailure = PlanFailure.DoorMissingOperableCells;
                     return null;
                 }
-                goals = opGoals;
+                // The bake worked out the operable cells for a 0.4 m body; the real one is 0.8 m, so
+                // a cell on the edge of that set has the player's shoulder inside the door's swing
+                // (the game then won't open it — the office closet). Keep cells with a full 0.4 m of
+                // operable (or solid) ground around them when there are any.
+                List<NodeKey> deepGoals = new List<NodeKey>(opGoals.Count);
+                for (int gi = 0; gi < opGoals.Count; gi++)
+                {
+                    NodeKey og = opGoals[gi];
+                    bool deep = true;
+                    for (int ddx = -OperableMarginCells; ddx <= OperableMarginCells && deep; ddx++)
+                        for (int ddz = -OperableMarginCells; ddz <= OperableMarginCells && deep; ddz++)
+                        {
+                            int nx = og.Ix + ddx, nz = og.Iz + ddz;
+                            if (goalFloor.Navigable(nx, nz) && !operable.Contains(Floor.PackCell(nx, nz)))
+                                deep = false;
+                        }
+                    if (deep) deepGoals.Add(og);
+                }
+                goals = deepGoals.Count > 0 ? deepGoals : opGoals;
+                if (Main.Log != null)
+                    Main.Log.LogInfo("SimpleNavPlanner.Plan: door operable goals " + opGoals.Count +
+                        ", clear of the swing for the real body " + deepGoals.Count + " (door=" + targetDoor.gameObject.name + ")");
+                // A walk to a door stops on the player's side of it: never plan through the door to
+                // a spot in the room beyond (after a stall blocked the spots in front of the laundry
+                // closet, the re-plan picked ones inside the closet and walked her into the door).
+                List<NodeKey> nearSide = GoalsOnPlayerSide(goalFloor, targetDoor.gameObject.name, startPos, goals);
+                if (nearSide != null && nearSide.Count > 0 && nearSide.Count < goals.Count)
+                {
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNavPlanner.Plan: door target kept " + nearSide.Count + "/" + goals.Count +
+                            " goals on the player's side of " + targetDoor.gameObject.name);
+                    goals = nearSide;
+                }
             }
             // Non-door collider target: the game's interaction gate is radius + LINE OF SIGHT, and
             // nothing else — interaction needs the camera ray to HIT the object within
@@ -390,6 +426,14 @@ namespace DateEverythingAccess
                 // stand-back cell gives a clean diagonal up-look. See
                 // [[project_navigation_los_camera_origin_mismatch_2026_06_14]].
                 goalQuality = new Dictionary<NodeKey, float>(goals.Count);
+
+                // Use the game-exact selection test for this target (see GameWouldSelectTarget).
+                _strictLosCollider = targetCollider;
+                _strictLosTarget = ResolveTargetInteractable(targetGameObjectId);
+                bool usedStrictLos = _strictLosTarget != null;
+
+                for (int pass = 0; pass < 2; pass++)
+                {
                 for (int i = 0; i < goals.Count; i++)
                 {
                     NodeKey g = goals[i];
@@ -412,13 +456,114 @@ namespace DateEverythingAccess
                         goalQuality[g] = GoalViewQuality(goalFloor, g, targetCollider, margin);
                     }
                 }
+                if (losClear.Count > 0 || _strictLosTarget == null)
+                    break;
+                // SAFETY NET: the strict test found no standpoint anywhere. Rather than turn this
+                // into a hard "no path", fall back to the older lenient test for this one target and
+                // say so loudly in the log, so objects where the strict model is wrong can be found
+                // and fixed instead of silently disappearing from auto-walk.
+                if (Main.Log != null)
+                    Main.Log.LogWarning("SimpleNavPlanner.Plan: strict game-ray LOS found no standpoint for target=" +
+                        (targetName ?? "<null>") + "#" + targetGameObjectId +
+                        " — falling back to lenient LOS (the game may not select it on arrival).");
+                LogStrictLosDiagnostics(goalFloor, goals, targetCollider, _strictLosTarget, targetName);
+                _strictLosTarget = null;
+                usedStrictLos = false;
+                losClear.Clear(); passedOf.Clear(); clearanceOf.Clear(); goalQuality.Clear();
+                bestClearance = 0f;
+                }
+                _strictLosCollider = null;
+                _strictLosTarget = null;
+                if (usedStrictLos && Main.Log != null)
+                    Main.Log.LogInfo("SimpleNavPlanner.Plan: strict game-ray LOS kept " + losClear.Count +
+                        " standpoint(s) for target=" + (targetName ?? "<null>") + "#" + targetGameObjectId);
+
+                // NOTHING SEEN FROM 1.6 m. The sightline test looks from a 1.6 m eye, but the real
+                // camera sits far higher (the player is scaled 2x). The rose-stem inanimal on the
+                // laundry room windowsill is hidden behind the window from 1.6 m. Try again from the
+                // real camera height; if even that finds nothing, walk to the nearest spots beside it
+                // anyway, and the aim help takes over on arrival, rather than refusing to go at all.
+                if (losClear.Count == 0)
+                {
+                    float liveEye = LiveEyeHeightM();
+                    InteractableObj retryIo = ResolveTargetInteractable(targetGameObjectId);
+                    if (liveEye > InteractionEyeHeightM + 0.5f)
+                    {
+                        _losEyeHeightOverride = liveEye;
+                        _strictLosCollider = targetCollider;
+                        _strictLosTarget = retryIo;
+                        try
+                        {
+                            for (int i = 0; i < goals.Count; i++)
+                            {
+                                NodeKey g = goals[i];
+                                Vector2 rxz = goalFloor.CellToWorld(g.Ix, g.Iz);
+                                Vector3 rCell = new Vector3(rxz.x, goalFloor.FloorY + 1.0f, rxz.y);
+                                Vector3 rNear = targetCollider.ClosestPointOnBounds(rCell);
+                                float rdx = rNear.x - rCell.x, rdz = rNear.z - rCell.z;
+                                if (rdx * rdx + rdz * rdz < innerSq) continue;
+                                HashSet<string> rPassed = new HashSet<string>(StringComparer.Ordinal);
+                                float rMargin = CellLineOfSightClearanceM(goalFloor, g, targetCollider, radius, rPassed);
+                                if (rMargin < 0f) continue;
+                                losClear.Add(g);
+                                passedOf.Add(rPassed);
+                                clearanceOf.Add(rMargin);
+                                if (rMargin > bestClearance) bestClearance = rMargin;
+                                goalQuality[g] = rMargin;
+                            }
+                        }
+                        finally
+                        {
+                            _losEyeHeightOverride = 0f;
+                            _strictLosCollider = null;
+                            _strictLosTarget = null;
+                        }
+                        // These passed the game-exact test, so the lenient-mode front/back guess below
+                        // must not second-guess them (it kept only the rose stem's outdoor side).
+                        if (losClear.Count > 0 && retryIo != null)
+                            usedStrictLos = true;
+                        if (Main.Log != null)
+                            Main.Log.LogInfo("SimpleNavPlanner.Plan: sightline retry from the real camera height (" +
+                                liveEye.ToString("F2") + " m) kept " + losClear.Count + " standpoint(s) for target=" +
+                                (targetName ?? "<null>"));
+                    }
+                    if (losClear.Count == 0)
+                    {
+                        for (int pass = 0; pass < 2 && losClear.Count == 0; pass++)
+                        {
+                            for (int i = 0; i < goals.Count; i++)
+                            {
+                                NodeKey g = goals[i];
+                                Vector2 axz = goalFloor.CellToWorld(g.Ix, g.Iz);
+                                Vector3 aCell = new Vector3(axz.x, goalFloor.FloorY + 1.0f, axz.y);
+                                Vector3 aNear = targetCollider.ClosestPointOnBounds(aCell);
+                                float adx = aNear.x - aCell.x, adz = aNear.z - aCell.z;
+                                float ad2 = adx * adx + adz * adz;
+                                if (ad2 < innerSq) continue;
+                                if (pass == 0 && ad2 > ApproachOnlyWithinM * ApproachOnlyWithinM) continue;
+                                losClear.Add(g);
+                                passedOf.Add(new HashSet<string>(StringComparer.Ordinal));
+                                clearanceOf.Add(0f);
+                                goalQuality[g] = 0f;
+                            }
+                        }
+                        if (losClear.Count > 0 && Main.Log != null)
+                            Main.Log.LogWarning("SimpleNavPlanner.Plan: no sightline to target=" + (targetName ?? "<null>") +
+                                " from anywhere; walking to the nearest of " + losClear.Count +
+                                " spots beside it instead (the aim help takes over there)");
+                    }
+                }
 
                 // FRONT-APPROACH: if this object faces one way and has LOS-clear cells on BOTH its
                 // front and back, keep only the front cells — a standpoint behind a monitor/TV/painting
                 // passes the offline ray (it hits the box's back face) but the game won't let the player
                 // interact from back there. Filters losClear + its parallel bookkeeping in lockstep;
                 // returns null (no change) for omnidirectional or one-sided objects. See the constant.
-                List<NodeKey> frontGoals = FrontApproachGoals(
+                // Only needed for the lenient test: the strict game-ray test already rejects standpoints
+                // behind a monitor/TV/painting, and it does so from real geometry rather than trusting
+                // the model's forward axis (the office Monitor's forward points out of its BACK, which
+                // made this heuristic keep exactly the wrong side).
+                List<NodeKey> frontGoals = usedStrictLos ? null : FrontApproachGoals(
                     goalFloor, losClear, targetPos, TargetForwardXZ(targetGameObjectId), passedOf, clearanceOf);
                 if (frontGoals != null)
                 {
@@ -433,6 +578,45 @@ namespace DateEverythingAccess
                             losClear.Count + " front-of-object goal cell(s) for target=" +
                             (targetName ?? "<null>") + "#" + targetGameObjectId +
                             " (discarded back-of-object standpoints).");
+                }
+
+                // LOOK-ANGLE LIMIT: the game won't tilt the camera more than about 70 degrees up or
+                // down. From a spot right next to something on the floor (the dust bunny, the Key)
+                // the look needed is steeper than that, so the player can never aim at it however
+                // long she holds the down arrow. Drop standpoints that need too steep a look when
+                // others remain.
+                if (losClear.Count > 0)
+                {
+                    float eyeH = LiveEyeHeightM();
+                    float maxPitch = LiveMaxCameraPitchDeg() - LookPitchMarginDeg;
+                    var okGoals = new List<NodeKey>(losClear.Count);
+                    var okPassed = new List<HashSet<string>>(losClear.Count);
+                    var okClear = new List<float>(losClear.Count);
+                    for (int i = 0; i < losClear.Count; i++)
+                    {
+                        Vector2 cw = goalFloor.CellToWorld(losClear[i].Ix, losClear[i].Iz);
+                        Vector3 eyePos = new Vector3(cw.x, goalFloor.FloorY + eyeH, cw.y);
+                        Vector3 aimAt = targetCollider.ClosestPointOnBounds(eyePos);
+                        float horiz = new Vector2(aimAt.x - eyePos.x, aimAt.z - eyePos.z).magnitude;
+                        float pitch = Mathf.Atan2(Mathf.Abs(aimAt.y - eyePos.y), Mathf.Max(0.01f, horiz)) * Mathf.Rad2Deg;
+                        if (pitch > maxPitch) continue;
+                        okGoals.Add(losClear[i]);
+                        okPassed.Add(passedOf[i]);
+                        okClear.Add(clearanceOf[i]);
+                    }
+                    if (okGoals.Count > 0 && okGoals.Count < losClear.Count)
+                    {
+                        if (Main.Log != null)
+                            Main.Log.LogInfo("SimpleNavPlanner.Plan: look-angle limit kept " + okGoals.Count + "/" +
+                                losClear.Count + " standpoints for target=" + (targetName ?? "<null>") +
+                                " (eye " + eyeH.ToString("F2") + " m, max " + maxPitch.ToString("F0") + " deg)");
+                        losClear = okGoals;
+                        passedOf = okPassed;
+                        clearanceOf = okClear;
+                        bestClearance = 0f;
+                        for (int i = 0; i < clearanceOf.Count; i++)
+                            if (clearanceOf[i] > bestClearance) bestClearance = clearanceOf[i];
+                    }
                 }
 
                 if (losClear.Count > 0)
@@ -489,9 +673,70 @@ namespace DateEverythingAccess
                 }
             }
 
-            List<NodeKey> path;
-            float totalCost;
-            if (!AStar(startNode, goals, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost, goalQuality))
+            List<NodeKey> path = null;
+            float totalCost = 0f;
+            // BODY-ROOM GOALS: the bake grid is dilated for a 0.4 m capsule but the player's real
+            // capsule is 0.8 m, so a goal cell hard against a counter, wall or table leaves her
+            // pressing into it at the end of the walk (the kitchen-cupboard stall). Prefer goal cells
+            // with room for the real body; fall back to tighter tiers, then to the full set.
+            bool roomyPlanned = false;
+
+            // DOOR TARGET: finish squarely in front of the doorway, on the player's side, so walking
+            // straight forward afterwards goes through it. Falls back to the normal goals below.
+            string frontDoorName = targetDoor != null && targetDoor.gameObject != null
+                ? targetDoor.gameObject.name : targetName;
+            // With the door already OPEN, any walkable cell squarely in front will do (the leaf has
+            // swung aside and its cells are blocked). While it is CLOSED the player must also be able
+            // to open it from there, so only the operable cells count; for a door that swings
+            // toward the player those all sit in the swing, and the normal goals are used instead
+            // (the executor then waits for the swing and re-plans once it is open).
+            bool frontDoorOpen = targetDoor != null && targetDoor.open;
+            List<NodeKey> doorFrontGoals = FrontOfDoorwayGoals(goalFloor, frontDoorName, startPos,
+                frontDoorOpen ? null : goals);
+            if (doorFrontGoals != null)
+            {
+                for (int need = BodyGoalClearanceCells; need >= 0 && !roomyPlanned; need--)
+                {
+                    List<NodeKey> set = need > 0 ? GoalsWithClearance(doorFrontGoals, need) : doorFrontGoals;
+                    if (need > 0 && set == null)
+                    {
+                        // GoalsWithClearance returns null for "all qualify" too; check which.
+                        bool all = true;
+                        for (int i = 0; i < doorFrontGoals.Count && all; i++)
+                        {
+                            NodeKey g = doorFrontGoals[i];
+                            Floor gf = FloorByLabel(g.Floor);
+                            if (gf == null || gf.Clearance(g.Ix, g.Iz) < need) all = false;
+                        }
+                        if (!all) continue;
+                        set = doorFrontGoals;
+                    }
+                    if (AStar(startNode, set, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost, goalQuality))
+                    {
+                        roomyPlanned = true;
+                        if (Main.Log != null)
+                            Main.Log.LogInfo("SimpleNavPlanner.Plan: door-front goals kept " + set.Count + "/" + goals.Count +
+                                " (clearance>=" + need + ") for door=" + frontDoorName);
+                        goals = set;
+                    }
+                }
+            }
+
+            for (int need = BodyGoalClearanceCells; need >= 2 && !roomyPlanned; need--)
+            {
+                List<NodeKey> roomy = GoalsWithClearance(goals, need);
+                if (roomy == null) continue;
+                if (AStar(startNode, roomy, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost, goalQuality))
+                {
+                    roomyPlanned = true;
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNavPlanner.Plan: body-room goals clearance>=" + need +
+                            " kept " + roomy.Count + "/" + goals.Count + " for target=" + (targetName ?? "<null>"));
+                    goals = roomy;
+                }
+            }
+            if (!roomyPlanned &&
+                !AStar(startNode, goals, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost, goalQuality))
             {
                 // The closed-state plan to the LOS goal cells failed. Retry only with DOORS
                 // RELAXED (every door assumed openable, state-walls released) on the SAME goal
@@ -753,6 +998,13 @@ namespace DateEverythingAccess
         /// <summary>Returns true if the bake is loaded and the planner is ready.</summary>
         public static bool IsReady => EnsureLoaded();
 
+        // True for doors the bake records as operability-only CONTAINER doors (cupboards, fridge,
+        // cabinets) rather than passage doors.
+        public static bool IsContainerDoorName(string name)
+        {
+            return !string.IsNullOrEmpty(name) && EnsureLoaded() && _containerDoorNames.Contains(name);
+        }
+
         // Resolve the floor a player STANDING at world Y belongs to (start-floor rule), as a
         // stable string label (e.g. "ground"/"upper"). Used by the object picker to bucket
         // candidates by floor before sorting by XZ distance, so cross-floor items don't read
@@ -936,6 +1188,7 @@ namespace DateEverythingAccess
 
             BuildInterFloorEdges();
             IndexDoorFreedCells();
+            WidenPassageDoorLeaves();
             _loadOk = true;
             if (Main.Log != null)
                 Main.Log.LogInfo("SimpleNavPlanner: bake loaded floors=" + _floors.Count +
@@ -1029,12 +1282,70 @@ namespace DateEverythingAccess
         // name→cells maps. The planner does not enable any overlay at load time;
         // ApplyLiveWorldState() (called at the top of every Plan()) installs the current set
         // based on live Door.open / SlidingDoor.open / DresserWall.collider.enabled values.
+        // DOOR-LEAF MARGIN. Every unlocked passage door is planned as OPEN, and its swung leaf
+        // (open_blocked_cells) is removed from the navigable set. The bake sized that footprint for a
+        // 0.4m capsule, but the player's real capsule is 0.8m (0.4 local x 2.0 scale), so routes that
+        // skim an open leaf catch the player's shoulder on it (observed: stuck on Doors_Office's leaf
+        // ~1m inside the office). Grow each PASSAGE door's leaf footprint by LeafExtraMarginCells,
+        // never into any door's doorway (freed) cells, so the opening itself is not narrowed.
+        // Container doors (cupboards, fridge) are left alone so standpoints in front of them survive.
+        // Offline check against the shipped bake: with every unlocked door open, this removes ~685
+        // ground and ~377 upper cells and disconnects no area on either floor.
+        private const int LeafExtraMarginCells = 2;
+        // Pad around a live open sliding panel's collider bounds (the bake's own capsule margin).
+        private const float SliderPanelPadM = 0.4f;
+        // Set while re-planning without the open slider panels' footprints (see ToggleAutoWalk).
+        public static bool IgnoreOpenSliderPanels;
+        // True when the last door-state pass blocked at least one open slider panel.
+        public static bool AnyOpenSliderPanelsBlocked;
+
+        private static void WidenPassageDoorLeaves()
+        {
+            if (_floors == null) return;
+            int grown = 0;
+            for (int fi = 0; fi < _floors.Count; fi++)
+            {
+                Floor f = _floors[fi];
+                var allFreed = new HashSet<long>();
+                foreach (var kv in f.DoorFreedByName) allFreed.UnionWith(kv.Value);
+                var names = new List<string>(f.DoorBlockedByName.Keys);
+                for (int n = 0; n < names.Count; n++)
+                {
+                    string name = names[n];
+                    if (!_bakedDoorNames.Contains(name) || _containerDoorNames.Contains(name)) continue;
+                    HashSet<long> leaf = f.DoorBlockedByName[name];
+                    var widened = new HashSet<long>(leaf);
+                    foreach (long packed in leaf)
+                    {
+                        int ix = (int)(packed >> 32);
+                        int iz = (int)(uint)packed;
+                        for (int dx = -LeafExtraMarginCells; dx <= LeafExtraMarginCells; dx++)
+                        {
+                            for (int dz = -LeafExtraMarginCells; dz <= LeafExtraMarginCells; dz++)
+                            {
+                                if (!f.InBounds(ix + dx, iz + dz)) continue;
+                                long k = Floor.PackCell(ix + dx, iz + dz);
+                                if (allFreed.Contains(k)) continue;
+                                widened.Add(k);
+                            }
+                        }
+                    }
+                    grown += widened.Count - leaf.Count;
+                    f.DoorBlockedByName[name] = widened;
+                }
+            }
+            if (Main.Log != null)
+                Main.Log.LogInfo("SimpleNavPlanner: widened passage-door leaf footprints by " +
+                    LeafExtraMarginCells + " cells (+" + grown + " cells total)");
+        }
+
         private static void IndexDoorFreedCells()
         {
             if (_bake?.floors == null) return;
             _lockedDoorNames.Clear();
             _bakedDoorNames.Clear();
             _containerDoorNames.Clear();
+            _swingPassageDoorNames.Clear();
             for (int fi = 0; fi < _bake.floors.Length; fi++)
             {
                 BakeFloor raw = _bake.floors[fi];
@@ -1055,6 +1366,9 @@ namespace DateEverythingAccess
                             _containerDoorNames.Add(d.name);
                         else
                             _bakedDoorNames.Add(d.name);
+                        if (!d.container_operable_only &&
+                            string.Equals(d.kind, "Door", StringComparison.Ordinal))
+                            _swingPassageDoorNames.Add(d.name);
                         // Locked is authoritative regardless of record ordering.
                         if (d.locked) _lockedDoorNames.Add(d.name);
                         if (d.freed_cells != null)
@@ -1165,8 +1479,40 @@ namespace DateEverythingAccess
         // (DresserWall) expose `collider.enabled`. Anything currently open / released
         // contributes its bake record's freed cells. Unknown names (components without a
         // matching bake record) are silently ignored.
+        // Live locked flag per door name, refreshed by every ApplyLiveDoorState. Several components
+        // can share a name (duplicate cupboard doors); any locked-and-closed one marks it locked.
+        private static readonly Dictionary<string, bool> _liveLockedByName =
+            new Dictionary<string, bool>(StringComparer.Ordinal);
+
+        private static void RecordLiveLock(string name, bool lockedNow)
+        {
+            if (string.IsNullOrEmpty(name)) return;
+            bool prev;
+            _liveLockedByName[name] = _liveLockedByName.TryGetValue(name, out prev) ? (prev || lockedNow) : lockedNow;
+        }
+
+        private static string CountLiveLocked()
+        {
+            var names = new List<string>();
+            foreach (var kv in _liveLockedByName) if (kv.Value) names.Add(kv.Key);
+            return names.Count + (names.Count > 0 ? "[" + string.Join(",", names.ToArray()) + "]" : "");
+        }
+
+        // Live state when the door exists in the scene; otherwise the bake's record.
+        private static bool IsDoorLockedNow(string name)
+        {
+            bool live;
+            if (_liveLockedByName.TryGetValue(name, out live)) return live;
+            return _lockedDoorNames.Contains(name);
+        }
+
+        // Bumped whenever the live door state is re-applied; per-door caches built from the live
+        // grid (the doorway frame) are thrown away when it changes.
+        private static int _doorStateGeneration;
+
         private static void ApplyLiveDoorState()
         {
+            _doorStateGeneration++;
             for (int i = 0; i < _floors.Count; i++)
             {
                 _floors[i].ExtraNavigable.Clear();
@@ -1181,12 +1527,18 @@ namespace DateEverythingAccess
             int totalDoorsUnmatched = 0;
             int totalFreed = 0;
 
+            // LIVE LOCK STATE. The bake records `locked` once, but locks change during play (the attic
+            // door starts locked and is unlocked by the story; the back door may open up later). Record
+            // each door's live locked flag so the openable pass below uses it instead of the bake's.
+            _liveLockedByName.Clear();
+
             Door[] hinges = UnityEngine.Object.FindObjectsOfType<Door>();
             for (int i = 0; i < hinges.Length; i++)
             {
                 Door door = hinges[i];
                 if (door == null || door.gameObject == null) continue;
                 totalDoorsFound++;
+                RecordLiveLock(door.gameObject.name, door.locked && !door.open);
                 if (!door.open) continue;
                 totalDoorsOpen++;
                 _lastOpenDoorNames.Add(door.gameObject.name);
@@ -1200,6 +1552,7 @@ namespace DateEverythingAccess
                 SlidingDoor door = sliders[i];
                 if (door == null || door.gameObject == null) continue;
                 totalDoorsFound++;
+                RecordLiveLock(door.gameObject.name, door.locked && !door.open);
                 if (!door.open) continue;
                 totalDoorsOpen++;
                 _lastOpenDoorNames.Add(door.gameObject.name);
@@ -1249,7 +1602,7 @@ namespace DateEverythingAccess
                 Floor f = _floors[fi];
                 foreach (var kvp in f.DoorFreedByName)
                 {
-                    if (_lockedDoorNames.Contains(kvp.Key)) continue;
+                    if (IsDoorLockedNow(kvp.Key)) continue;
                     int before = f.ExtraNavigable.Count;
                     f.ExtraNavigable.UnionWith(kvp.Value);
                     openableFreed += f.ExtraNavigable.Count - before;
@@ -1259,11 +1612,49 @@ namespace DateEverythingAccess
                 // as the freed union above, opposite sign.
                 foreach (var kvp in f.DoorBlockedByName)
                 {
-                    if (_lockedDoorNames.Contains(kvp.Key)) continue;
+                    if (IsDoorLockedNow(kvp.Key)) continue;
                     f.ExtraBlocked.UnionWith(kvp.Value);
                 }
             }
             totalFreed += openableFreed;
+
+            // OPEN SLIDING PANELS. A sliding door does not vanish when opened: its panel slides over
+            // the other half of the opening. The bake has no open-panel footprint for sliders
+            // (open_blocked_cells is empty for every slider), so routes went straight through the
+            // slid panel and the player stalled against it (Doors_Gym_ClosetInner). Block the LIVE
+            // footprint of every open slider panel so the route takes the half that is actually open.
+            int sliderPanelCells = 0;
+            AnyOpenSliderPanelsBlocked = false;
+            for (int i = 0; i < sliders.Length && !IgnoreOpenSliderPanels; i++)
+            {
+                SlidingDoor door = sliders[i];
+                if (door == null || !door.open) continue;
+                AnyOpenSliderPanelsBlocked = true;
+                Collider[] cols = door.GetComponentsInChildren<Collider>();
+                for (int c = 0; c < cols.Length; c++)
+                {
+                    Collider col = cols[c];
+                    if (col == null || !col.enabled || col.isTrigger) continue;
+                    Bounds b = col.bounds;
+                    Floor f = FloorForY(b.min.y, FloorMatchToleranceM + 1.0f);
+                    if (f == null) continue;
+                    bool stuckAcross = IsSliderStillAcrossItsOpening(door.gameObject.name, b);
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNavPlanner open slider panel " + door.gameObject.name + "/" + col.gameObject.name +
+                            " x " + b.min.x.ToString("F2") + ".." + b.max.x.ToString("F2") +
+                            " z " + b.min.z.ToString("F2") + ".." + b.max.z.ToString("F2") +
+                            (stuckAcross ? " (stuck across its doorway: planned as a door to re-open)" : ""));
+                    // A panel that hit the player and stopped still covers its doorway; plan through
+                    // it as a door, and autowalk shuts and re-opens it from a clear spot on the way.
+                    if (stuckAcross) continue;
+                    f.WorldToCell(b.min.x - SliderPanelPadM, b.min.z - SliderPanelPadM, out int ix0, out int iz0);
+                    f.WorldToCell(b.max.x + SliderPanelPadM, b.max.z + SliderPanelPadM, out int ix1, out int iz1);
+                    for (int ix = ix0; ix <= ix1; ix++)
+                        for (int iz = iz0; iz <= iz1; iz++)
+                            if (f.InBounds(ix, iz) && f.ExtraBlocked.Add(Floor.PackCell(ix, iz)))
+                                sliderPanelCells++;
+                }
+            }
 
             // Navigability just changed (overlay rebuilt) — the clearance map is stale.
             // Mirror plan_object_route.py _rebuild_extra_navigable nulling floor._clearance.
@@ -1274,7 +1665,7 @@ namespace DateEverythingAccess
                 Main.Log.LogInfo("SimpleNavPlanner.ApplyLiveDoorState: doors=" + totalDoorsFound +
                     " (hinges=" + hinges.Length + " sliders=" + sliders.Length + ")" +
                     " open=" + totalDoorsOpen + " matched=" + totalDoorsMatched + " unmatched=" + totalDoorsUnmatched +
-                    " | openableFreed=" + openableFreed + " lockedDoors=" + _lockedDoorNames.Count +
+                    " | openableFreed=" + openableFreed + " sliderPanelCells=" + sliderPanelCells + " lockedDoors=" + _lockedDoorNames.Count + " liveLocked=" + CountLiveLocked() +
                     " | stateWalls=" + totalWallsFound + " released=" + totalWallsReleased +
                     " matched=" + totalWallsMatched + " unmatched=" + totalWallsUnmatched +
                     " | freedCells=" + totalFreed);
@@ -1364,6 +1755,129 @@ namespace DateEverythingAccess
         // regardless of which floor the mid-stair player snaps to.
         // See [[project-navigation-executor-corner-stall]].
         private const float StartFloorMatchToleranceM = 7.0f;
+
+        // ---- runtime-learned blockers ----
+
+        // How long a learned blocker stays in the overlay. Long enough to cover the rest of the
+        // errand; short enough that a chair that gets moved back does not wall off a room forever.
+        private const float RuntimeBlockerLifetimeSeconds = 600f;
+        // Colliders larger than this (in both X and Z) are room shells / wall meshes: marking their
+        // whole bounds would black out a room, so only a disc around the contact point is marked.
+        private const float RuntimeBlockerMaxFootprintM = 3.0f;
+        private const float RuntimeBlockerContactDiscM = 0.6f;
+        private const float RuntimeBlockerPadM = 0.2f;
+        // Never mark cells this close to the player: they must stay a valid route start.
+        private const float RuntimeBlockerKeepClearAroundPlayerM = 0.35f;
+        private const float RuntimeBlockerMaxFloorOffsetM = 0.6f;
+
+        // Drop every learned blocker (all floors). Returns how many cells were cleared. Used as a
+        // safety valve when a plan fails: learned blockers are guesses from past stalls, and a
+        // cluster of them around a doorway can box the player in (observed: laundry closet).
+        public static int ClearRuntimeBlockers()
+        {
+            if (_floors == null) return 0;
+            int cleared = 0;
+            for (int i = 0; i < _floors.Count; i++)
+            {
+                Floor f = _floors[i];
+                if (f.RuntimeBlockedUntil.Count == 0) continue;
+                cleared += f.RuntimeBlockedUntil.Count;
+                f.RuntimeBlockedUntil.Clear();
+                f.InvalidateClearance();
+            }
+            if (cleared > 0 && Main.Log != null)
+                Main.Log.LogInfo("SimpleNavPlanner.ClearRuntimeBlockers: cleared " + cleared + " learned blocker cells");
+            return cleared;
+        }
+
+        private static void PruneRuntimeBlockers()
+        {
+            if (_floors == null) return;
+            float now = Time.unscaledTime;
+            for (int i = 0; i < _floors.Count; i++)
+            {
+                Floor f = _floors[i];
+                if (f.RuntimeBlockedUntil.Count == 0) continue;
+                var expired = new List<long>();
+                foreach (var kv in f.RuntimeBlockedUntil)
+                    if (kv.Value <= now) expired.Add(kv.Key);
+                if (expired.Count == 0) continue;
+                for (int e = 0; e < expired.Count; e++) f.RuntimeBlockedUntil.Remove(expired[e]);
+                f.InvalidateClearance();
+            }
+        }
+
+        // Record a physical blocker the follower ran into so the next Plan() routes around it.
+        // `blocker` may be null (stuck with nothing detected): then a disc at `contactPoint` is
+        // marked. Returns the number of newly blocked cells.
+        public static int MarkRuntimeBlocker(Vector3 playerPos, Collider blocker, Vector3 contactPoint)
+        {
+            if (!EnsureLoaded()) return 0;
+            Floor f = FloorForY(playerPos.y, FloorMatchToleranceM);
+            if (f == null) return 0;
+            // Only learn blockers on flat floor. Mid-staircase the player is well above/below the
+            // floor plane, and marking cells there could sever the stair crossing itself.
+            if (Mathf.Abs(playerPos.y - f.FloorY) > RuntimeBlockerMaxFloorOffsetM)
+            {
+                if (Main.Log != null)
+                    Main.Log.LogInfo("SimpleNavPlanner.MarkRuntimeBlocker: skipped, player y=" + playerPos.y +
+                        " is off the " + f.Label + " floor plane (y=" + f.FloorY + ") — on stairs?");
+                return 0;
+            }
+
+            float minX, maxX, minZ, maxZ;
+            string how;
+            if (blocker != null &&
+                blocker.bounds.size.x <= RuntimeBlockerMaxFootprintM && blocker.bounds.size.z <= RuntimeBlockerMaxFootprintM)
+            {
+                Bounds b = blocker.bounds;
+                minX = b.min.x - RuntimeBlockerPadM; maxX = b.max.x + RuntimeBlockerPadM;
+                minZ = b.min.z - RuntimeBlockerPadM; maxZ = b.max.z + RuntimeBlockerPadM;
+                how = "bounds";
+            }
+            else
+            {
+                minX = contactPoint.x - RuntimeBlockerContactDiscM; maxX = contactPoint.x + RuntimeBlockerContactDiscM;
+                minZ = contactPoint.z - RuntimeBlockerContactDiscM; maxZ = contactPoint.z + RuntimeBlockerContactDiscM;
+                how = blocker != null ? "contact-disc(large collider)" : "contact-disc(no collider)";
+            }
+
+            f.WorldToCell(minX, minZ, out int ix0, out int iz0);
+            f.WorldToCell(maxX, maxZ, out int ix1, out int iz1);
+            float until = Time.unscaledTime + RuntimeBlockerLifetimeSeconds;
+            bool disc = how.StartsWith("contact", StringComparison.Ordinal);
+            float keep2 = RuntimeBlockerKeepClearAroundPlayerM * RuntimeBlockerKeepClearAroundPlayerM;
+            int added = 0;
+            for (int ix = ix0; ix <= ix1; ix++)
+            {
+                for (int iz = iz0; iz <= iz1; iz++)
+                {
+                    if (!f.InBounds(ix, iz)) continue;
+                    Vector2 w = f.CellToWorld(ix, iz);
+                    if (disc)
+                    {
+                        float dx = w.x - contactPoint.x, dz = w.y - contactPoint.z;
+                        if (dx * dx + dz * dz > RuntimeBlockerContactDiscM * RuntimeBlockerContactDiscM) continue;
+                    }
+                    float px = w.x - playerPos.x, pz = w.y - playerPos.z;
+                    if (px * px + pz * pz < keep2) continue;
+                    long key = Floor.PackCell(ix, iz);
+                    // Never learn a doorway itself as blocked. A stall at a door is the leaf or the
+                    // jamb, not the gap; marking the gap walled the room off (after stalling at the
+                    // bedroom's bathroom door, the re-plan went the long way round through the gym).
+                    if (f.DoorByFreedCell.TryGetValue(key, out string doorwayOf) && _bakedDoorNames.Contains(doorwayOf))
+                        continue;
+                    if (!f.RuntimeBlockedUntil.ContainsKey(key)) added++;
+                    f.RuntimeBlockedUntil[key] = until;
+                }
+            }
+            if (added > 0) f.InvalidateClearance();
+            if (Main.Log != null)
+                Main.Log.LogInfo("SimpleNavPlanner.MarkRuntimeBlocker: floor=" + f.Label + " blocker=" +
+                    (blocker != null ? blocker.name : "<none>") + " mode=" + how + " cellsAdded=" + added +
+                    " totalRuntimeBlocked=" + f.RuntimeBlockedUntil.Count);
+            return added;
+        }
 
         private static Floor FloorForY(float y, float toleranceM)
         {
@@ -1781,8 +2295,12 @@ namespace DateEverythingAccess
                         // than ClearanceTargetCells to a wall cost extra metres, so A*
                         // prefers the wide lane. Penalty only raises g (heuristic stays
                         // admissible). Mirrors plan_object_route.py Planner.neighbors.
-                        int deficit = ClearanceTargetCells - f.Clearance(nx, nz);
-                        float penalty = deficit > 0 ? deficit * ClearancePenaltyPerCellM : 0f;
+                        // Weighted toward the real 0.8 m body: the grid only allows for 0.4 m, so a
+                        // cell 1 away from a blocked one has her shoulder in the table / door frame
+                        // (the kitchen-table and doorway stalls). Those cost a lot; 2 away (just
+                        // clear) a little; 3 away barely anything.
+                        int clr = f.Clearance(nx, nz);
+                        float penalty = clr < ClearancePenaltyByCells.Length ? ClearancePenaltyByCells[clr] : 0f;
                         yield return (new NodeKey(f.Label, nx, nz), step * f.CellSize + penalty);
                     }
                 }
@@ -2054,6 +2572,53 @@ namespace DateEverythingAccess
         // interaction ray originates at the player camera; ~1.6m is a standing eye height and
         // matches where the camera sits on the player capsule.
         private const float InteractionEyeHeightM = 1.6f;
+        // When set (> 0), the sightline test looks from this height instead (the retry from the real
+        // camera height for things hidden from 1.6 m).
+        [ThreadStatic] private static float _losEyeHeightOverride;
+        private static float SightlineEyeHeightM => _losEyeHeightOverride > 0f ? _losEyeHeightOverride : InteractionEyeHeightM;
+        // With no sightline from anywhere, walk to spots within this distance of the target.
+        private const float ApproachOnlyWithinM = 3.0f;
+        private const float LookPitchMarginDeg = 8f;
+        private static System.Reflection.FieldInfo _maxRotField;
+        private static bool _maxRotFieldLooked;
+
+        // The live camera height above the player's feet (the capsule is scaled 2x, so the
+        // bake-era 1.6 m guess is well short), falling back to that guess.
+        public static float LiveEyeHeightM()
+        {
+            BetterPlayerControl bpc = BetterPlayerControl.Instance;
+            Camera cam = Camera.main;
+            if (bpc != null && cam != null)
+            {
+                float h = cam.transform.position.y - bpc.transform.position.y;
+                if (h > 0.5f && h < 8f) return h;
+            }
+            return InteractionEyeHeightM;
+        }
+
+        // How far the game lets the camera tilt up or down (BetterPlayerControl.maxrot, 70 by
+        // default), read live so a tuned value is respected.
+        public static float LiveMaxCameraPitchDeg()
+        {
+            if (!_maxRotFieldLooked)
+            {
+                _maxRotFieldLooked = true;
+                _maxRotField = typeof(BetterPlayerControl).GetField("maxrot",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.NonPublic);
+            }
+            BetterPlayerControl bpc = BetterPlayerControl.Instance;
+            if (_maxRotField != null && bpc != null)
+            {
+                try
+                {
+                    object v = _maxRotField.GetValue(bpc);
+                    if (v is float f && f > 10f && f < 90f) return f;
+                }
+                catch { }
+            }
+            return 70f;
+        }
 
         // A cell is only a valid standpoint if its sightline to the target is comfortably inside the
         // interaction radius, not grazing the rim. The outer edge of the radius is where the line is
@@ -2182,64 +2747,31 @@ namespace DateEverythingAccess
             try
             {
                 Vector2 xz = floor.CellToWorld(g.Ix, g.Iz);
-                Vector3 eye = new Vector3(xz.x, floor.FloorY + InteractionEyeHeightM, xz.y);
-                Vector3 aimPoint = InteractionAimPoint(targetCollider, eye);
-                Vector3 dir = aimPoint - eye;
-                float dist = dir.magnitude;
-                if (dist <= 0.0001f)
-                    return LosProbeSideOffsetsM[LosProbeSideOffsetsM.Length - 1]; // on the target — max clearance
-
-                // Reject edge-grazing standpoints: the sightline must be comfortably inside the
-                // radius, not out at the rim where the view is marginal. Measured HORIZONTALLY
-                // (XZ only): the rim is about not standing too far ACROSS the floor from the
-                // object. A ceiling light / high-mounted prop has a large UNAVOIDABLE vertical
-                // gap (recessed lights sit ~11m up in the ground-floor ceiling); counting that
-                // gap in the rim distance rejected every cell and made the object un-interactable
-                // offline, even though the player legitimately stands under it and looks up
-                // (look + dateviator beam count as interaction — [[feedback-interaction-includes-look-and-glasses]]).
-                // The full-3D sightline is still used for the occlusion raycast below.
-                float horizDist = new Vector2(aimPoint.x - eye.x, aimPoint.z - eye.z).magnitude;
-                if (radiusM > 0f && horizDist > radiusM * InteractionRimFractionM)
-                    return NoLineOfSight;
-
-                dir /= dist;
+                Vector3 eye = new Vector3(xz.x, floor.FloorY + SightlineEyeHeightM, xz.y);
                 BetterPlayerControl bpc = BetterPlayerControl.Instance;
                 int mask = bpc != null ? ~(int)bpc.dateviatorIgnores : ~0;
-
-                // CAMERA-POSE MODEL (not an idealized eye point). The game does NOT cast from the
-                // standpoint toward the target — it casts from the THIRD-PERSON camera, pulled back
-                // 0.25m along the look direction: origin = camera.pos - camera.forward*0.25,
-                // dir = camera.forward (BetterPlayerControl.cs:493). When the player stands to
-                // interact they face the target, so camera.forward ≈ dir. The dominant, wall-
-                // independent piece of the rig that the old eye-point ray ignored is that 0.25m
-                // BACKWARD pullback: it moves the origin AWAY from the target, which near a wall
-                // lands the origin INSIDE the wall and self-collides at dist≈0 — the exact failure
-                // that made the planner mark wall-adjacent items (light switches, mirrors, towel
-                // rails, built-in cupboards) interactable while the game's own ray rejected them.
-                // We model that backward shift and reject any cell whose pulled-back origin starts
-                // embedded in a non-target collider. See
-                // [[project_navigation_los_camera_origin_mismatch_2026_06_14]].
+                // See the CAMERA-POSE MODEL note in TryAimFromCell: the game casts from the camera
+                // pulled back 0.25m along the look direction.
                 const float CameraBackPullM = 0.25f;
-                Vector3 origin = eye - dir * CameraBackPullM;
 
-                // If the pulled-back origin is itself inside an occluder, the game's ray self-
-                // collides immediately (hit_dist≈0) and the object is not interactable from here.
-                Collider[] embedded = Physics.OverlapSphere(origin, 0.001f, mask, QueryTriggerInteraction.Ignore);
-                for (int e = 0; e < embedded.Length; e++)
+                // Try each candidate aim point; the first one the game's ray would accept decides the
+                // sightline for this cell. (A single fixed aim point rejected cells from which the
+                // player CAN select the object by looking at a different part of it, and in lenient
+                // mode accepted cells whose one ray merely grazed the object's bounds.)
+                Vector3 dir = Vector3.zero, origin = Vector3.zero;
+                float dist = 0f;
+                bool anyAim = false;
+                List<Vector3> aims = AimCandidates(targetCollider, eye);
+                for (int a = 0; a < aims.Count && !anyAim; a++)
                 {
-                    Collider c = embedded[e];
-                    if (c == null) continue;
-                    if (IsStructuralSlab(c)) continue; // standing on/under the floor/ceiling shell is normal
-                    if (IsTargetCollider(c, targetCollider)) continue;
-                    // In container-rescue mode a closed cupboard panel the camera origin grazes is
-                    // not a hard reject — it opens on arrival. Otherwise origin-in-occluder is fatal.
-                    if (passedContainerDoors != null && OperableContainerDoorName(c) != null) continue;
-                    return NoLineOfSight; // origin embedded in a wall/prop → game ray self-collides
+                    int r = TryAimFromCell(eye, aims[a], radiusM, mask, CameraBackPullM, targetCollider,
+                        passedContainerDoors, out dir, out origin, out dist);
+                    if (r == AimOnTarget)
+                        return LosProbeSideOffsetsM[LosProbeSideOffsetsM.Length - 1]; // standing on the target
+                    if (r == AimClear)
+                        anyAim = true;
                 }
-
-                // The CENTER ray must reach the target first (mirrors the game's single cast). If it's
-                // occluded, the cell is not a standpoint at all.
-                if (!CenterRayReachesTarget(origin, dir, dist + CameraBackPullM + 0.05f, mask, targetCollider, passedContainerDoors))
+                if (!anyAim)
                     return NoLineOfSight;
 
                 // GRADED CLEARANCE: the center ray clears, but HOW MUCH room does the line have?
@@ -2272,6 +2804,121 @@ namespace DateEverythingAccess
             {
                 return NoLineOfSight;
             }
+        }
+
+        // When the strict test finds no standpoint, record WHY: how the target is built (which
+        // transforms carry colliders / the InteractableObj / a Rigidbody) and what the game's ray
+        // actually hits first from the few goal cells nearest the object. One log block per plan.
+        private static void LogStrictLosDiagnostics(Floor floor, List<NodeKey> goals, Collider targetCollider,
+            InteractableObj target, string targetName)
+        {
+            if (Main.Log == null || target == null || targetCollider == null || goals == null) return;
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.Append("[strict-los-diag] target=").Append(targetName ?? "<null>")
+                  .Append(" io=").Append(target.name)
+                  .Append(" ioHasCollider=").Append(target.GetComponent<Collider>() != null)
+                  .Append(" ioRigidbody=").Append(target.GetComponent<Rigidbody>() != null)
+                  .Append(" parentRigidbody=").Append(target.GetComponentInParent<Rigidbody>() != null)
+                  .Append(" chosenCollider=").Append(targetCollider.name)
+                  .Append(" bounds=").Append(targetCollider.bounds.center).Append("/").Append(targetCollider.bounds.size);
+                Collider[] cols = target.GetComponentsInChildren<Collider>(true);
+                sb.Append(" colliders=[");
+                for (int i = 0; i < cols.Length && i < 8; i++)
+                {
+                    Collider c = cols[i];
+                    if (i > 0) sb.Append(", ");
+                    sb.Append(c.name).Append(c.enabled ? "" : "(off)").Append(c.isTrigger ? "(trigger)" : "")
+                      .Append(" layer=").Append(c.gameObject.layer);
+                }
+                sb.Append("]");
+                Main.Log.LogInfo(sb.ToString());
+
+                // The 3 goal cells nearest the target.
+                var nearest = new List<KeyValuePair<float, NodeKey>>();
+                Vector3 tc = targetCollider.bounds.center;
+                for (int i = 0; i < goals.Count; i++)
+                {
+                    Vector2 xz = floor.CellToWorld(goals[i].Ix, goals[i].Iz);
+                    float d = new Vector2(xz.x - tc.x, xz.y - tc.z).sqrMagnitude;
+                    nearest.Add(new KeyValuePair<float, NodeKey>(d, goals[i]));
+                }
+                nearest.Sort((a, b) => a.Key.CompareTo(b.Key));
+                BetterPlayerControl bpc = BetterPlayerControl.Instance;
+                int mask = bpc != null ? ~(int)bpc.dateviatorIgnores : ~0;
+                for (int n = 0; n < nearest.Count && n < 3; n++)
+                {
+                    Vector2 xz = floor.CellToWorld(nearest[n].Value.Ix, nearest[n].Value.Iz);
+                    Vector3 eye = new Vector3(xz.x, floor.FloorY + InteractionEyeHeightM, xz.y);
+                    Vector3 dir = (tc - eye).normalized;
+                    Vector3 origin = eye - dir * 0.25f;
+                    RaycastHit[] hits = Physics.RaycastAll(new Ray(origin, dir), Vector3.Distance(origin, tc) + 2f, mask);
+                    Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+                    var line = new System.Text.StringBuilder();
+                    line.Append("[strict-los-diag]   cell eye=").Append(eye).Append(" hits:");
+                    for (int h = 0; h < hits.Length && h < 4; h++)
+                    {
+                        Transform ht = hits[h].transform;
+                        InteractableObj hio = ht != null ? ht.GetComponent<InteractableObj>() : null;
+                        InteractableObj pio = hits[h].collider != null ? hits[h].collider.GetComponentInParent<InteractableObj>() : null;
+                        line.Append(" [").Append(hits[h].distance.ToString("0.00")).Append("m ")
+                            .Append(hits[h].collider != null ? hits[h].collider.name : "?")
+                            .Append(" transform=").Append(ht != null ? ht.name : "?")
+                            .Append(" io=").Append(hio != null ? hio.name : "-")
+                            .Append(" parentIo=").Append(pio != null ? pio.name : "-")
+                            .Append(hits[h].collider != null && hits[h].collider.isTrigger ? " trigger" : "")
+                            .Append("]");
+                    }
+                    Main.Log.LogInfo(line.ToString());
+                }
+            }
+            catch (Exception e)
+            {
+                Main.Log.LogWarning("[strict-los-diag] failed: " + e.Message);
+            }
+        }
+
+        private const int AimBlocked = 0, AimClear = 1, AimOnTarget = 2;
+
+        // One sightline attempt from `eye` toward `aimPoint`, modelling the game's camera ray. Returns
+        // AimClear with the ray's origin/dir/dist when the game would select the target along it.
+        private static int TryAimFromCell(Vector3 eye, Vector3 aimPoint, float radiusM, int mask,
+            float cameraBackPullM, Collider targetCollider, HashSet<string> passedContainerDoors,
+            out Vector3 dir, out Vector3 origin, out float dist)
+        {
+            dir = aimPoint - eye;
+            dist = dir.magnitude;
+            origin = eye;
+            if (dist <= 0.0001f)
+                return AimOnTarget;
+
+            // Reject edge-grazing standpoints: the sightline must be comfortably inside the radius,
+            // measured HORIZONTALLY (a ceiling fixture's unavoidable vertical gap must not count).
+            float horizDist = new Vector2(aimPoint.x - eye.x, aimPoint.z - eye.z).magnitude;
+            if (radiusM > 0f && horizDist > radiusM * InteractionRimFractionM)
+                return AimBlocked;
+
+            dir /= dist;
+
+            // CAMERA-POSE MODEL: the game casts from the camera pulled back 0.25m along forward
+            // (BetterPlayerControl.Update). Near a wall that origin lands INSIDE the wall and the
+            // ray self-collides, so reject origins embedded in a non-target collider.
+            origin = eye - dir * cameraBackPullM;
+            Collider[] embedded = Physics.OverlapSphere(origin, 0.001f, mask, QueryTriggerInteraction.Ignore);
+            for (int e = 0; e < embedded.Length; e++)
+            {
+                Collider c = embedded[e];
+                if (c == null) continue;
+                if (IsStructuralSlab(c)) continue;
+                if (IsTargetCollider(c, targetCollider)) continue;
+                if (passedContainerDoors != null && OperableContainerDoorName(c) != null) continue;
+                return AimBlocked;
+            }
+
+            if (!CenterRayReachesTarget(origin, dir, dist + cameraBackPullM + 0.05f, mask, targetCollider, passedContainerDoors))
+                return AimBlocked;
+            return AimClear;
         }
 
         // Perpendicular side-probe offsets (m) for the graded LOS clearance margin. Two steps keep
@@ -2411,6 +3058,92 @@ namespace DateEverythingAccess
             return ua == ub || a.IsChildOf(ub) || b.IsChildOf(ua) || ua.IsChildOf(ub) || ub.IsChildOf(ua);
         }
 
+        // GAME-EXACT SELECTION. The game decides what the player is pointing at with ONE camera ray
+        // (BetterPlayerControl.Update): Physics.Raycast from camera.pos - camera.forward*0.25 along
+        // camera.forward, infinite length, mask ~dateviatorIgnores. It takes the FIRST hit, calls
+        // TryGetComponent<InteractableObj> on hit.transform (the Rigidbody's transform when there is
+        // one, else the collider's), and only that exact InteractableObj can be selected. A hit on the
+        // object's casing, stand, a sibling part, or the desk/counter it sits on selects NOTHING.
+        //
+        // The older IsTargetCollider test also accepted parents, children and anything sharing the
+        // target's furniture unit. That passed standpoints behind a monitor (ray hits the housing)
+        // and beside small props on counters (ray hits the counter), so auto-walk delivered the
+        // player to spots where the game never selects the target. When the planner knows the
+        // target's InteractableObj it now uses this strict test instead.
+        [ThreadStatic] private static Collider _strictLosCollider;
+        [ThreadStatic] private static InteractableObj _strictLosTarget;
+
+        // True if a camera ray whose first real hit is `hit` would make the game select `target`.
+        public static bool GameWouldSelectTarget(RaycastHit hit, InteractableObj target)
+        {
+            if (target == null) return false;
+            Transform t = hit.transform; // Rigidbody-aware, exactly like the game's RaycastHit.transform
+            if (t == null) return false;
+            InteractableObj io = t.GetComponent<InteractableObj>();
+            return io != null && io == target;
+        }
+
+        // The game's own ray, cast from a given camera origin along `dir` (unit), with the game's mask.
+        // True when the game would select `target`. Used by the arrival/facing step, where the real
+        // camera pose is known.
+        public static bool GameRayWouldSelect(Vector3 cameraPos, Vector3 dir, InteractableObj target)
+        {
+            if (target == null) return false;
+            BetterPlayerControl bpc = BetterPlayerControl.Instance;
+            int mask = bpc != null ? ~(int)bpc.dateviatorIgnores : ~0;
+            Vector3 origin = cameraPos - dir * 0.25f;
+            RaycastHit[] hits = Physics.RaycastAll(new Ray(origin, dir), 200f, mask);
+            if (hits == null || hits.Length == 0) return false;
+            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            for (int i = 0; i < hits.Length; i++)
+            {
+                if (hits[i].collider != null && IsTransparentTrigger(hits[i].collider)) continue;
+                return GameWouldSelectTarget(hits[i], target);
+            }
+            return false;
+        }
+
+        // A trigger collider that carries no InteractableObj (on itself or via its Rigidbody):
+        // an invisible event volume, not something the player can look at or be blocked by.
+        private static bool IsTransparentTrigger(Collider c)
+        {
+            if (c == null || !c.isTrigger) return false;
+            Transform t = c.attachedRigidbody != null ? c.attachedRigidbody.transform : c.transform;
+            return t.GetComponent<InteractableObj>() == null;
+        }
+
+        public static InteractableObj ResolveTargetInteractable(int targetGameObjectId)
+        {
+            if (targetGameObjectId == 0) return null;
+            InteractableObj[] all = UnityEngine.Object.FindObjectsOfType<InteractableObj>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                InteractableObj io = all[i];
+                if (io != null && io.gameObject != null && io.gameObject.GetInstanceID() == targetGameObjectId)
+                    return io;
+            }
+            return null;
+        }
+
+        // Candidate points to aim the camera at. One point is not enough: the closest point on an
+        // axis-aligned bounds box can sit in empty air beside a rotated or oddly-shaped mesh, and a
+        // small prop on a counter is often only hittable at its TOP (a level ray hits the counter
+        // edge first). Ordered by preference; callers take the first that works.
+        public static List<Vector3> AimCandidates(Collider targetCollider, Vector3 eye)
+        {
+            var list = new List<Vector3>(4);
+            if (targetCollider == null) return list;
+            Bounds b = targetCollider.bounds;
+            list.Add(InteractionAimPoint(targetCollider, eye));
+            list.Add(b.center);
+            float inset = Mathf.Min(0.1f, b.extents.y * 0.5f);
+            list.Add(new Vector3(b.center.x, b.max.y - inset, b.center.z));
+            // Midway between the centre and the face nearest the viewer (thin objects like screens).
+            Vector3 near = targetCollider.ClosestPointOnBounds(eye);
+            list.Add(Vector3.Lerp(b.center, near, 0.5f));
+            return list;
+        }
+
         // True if a ray from `origin` along `dir` reaches the target collider first (no occluder) or
         // hits nothing within `maxDist` (clear line to the surface). Mirrors the game's first-hit rule,
         // with ONE deliberate leniency: a structural FLOOR/CEILING slab between the eye and a
@@ -2439,9 +3172,16 @@ namespace DateEverythingAccess
         private static bool CenterRayReachesTarget(Vector3 origin, Vector3 dir, float maxDist, int mask,
             Collider targetCollider, HashSet<string> passedContainerDoors)
         {
+            bool strict = _strictLosTarget != null && targetCollider != null && targetCollider == _strictLosCollider;
+            if (strict)
+            {
+                // The game's ray is infinite; the target must be the FIRST thing it meets. Extend the
+                // cast past the aim point by the target's size so we actually reach its surface.
+                maxDist += targetCollider.bounds.extents.magnitude * 2f + 0.5f;
+            }
             RaycastHit[] hits = Physics.RaycastAll(new Ray(origin, dir), maxDist, mask);
             if (hits == null || hits.Length == 0)
-                return true; // nothing between camera and target surface — clear line
+                return !strict; // lenient: nothing in the way. strict: the ray never touched the target.
 
             RaycastHit firstReal = default;
             float bestDist = float.PositiveInfinity;
@@ -2451,6 +3191,11 @@ namespace DateEverythingAccess
                 Collider c = hits[i].collider;
                 if (c == null) continue;
                 if (IsStructuralSlab(c)) continue; // floor/ceiling of the player's storey — look up/down past it
+                // Invisible trigger volumes (event tripwires such as TutorialDroneThreshold at the front
+                // door) are not solid and are not interactables. The player demonstrably selects the gift
+                // lid straight through TutorialDroneThreshold, so the game's ray passes through such
+                // volumes; treat them as transparent too.
+                if (strict && IsTransparentTrigger(c)) continue;
                 if (passedContainerDoors != null)
                 {
                     string containerDoor = OperableContainerDoorName(c);
@@ -2468,7 +3213,9 @@ namespace DateEverythingAccess
                 }
             }
             if (!found)
-                return true; // only structural slabs (and any pass-through container doors) in the way
+                return !strict; // only structural slabs / pass-through doors; strict needs a real target hit
+            if (strict)
+                return GameWouldSelectTarget(firstReal, _strictLosTarget);
             return IsTargetCollider(firstReal.collider, targetCollider);
         }
 
@@ -2718,6 +3465,40 @@ namespace DateEverythingAccess
                 // when the opening lies ahead between a and b, so we never steer backward.
                 // The destination door (final segment, door==target) is excluded — its
                 // approach is governed by operable_from_cells goal selection.
+                // TWO DOORS ON ONE STRETCH. A straight run can pass through two doorways (the
+                // shared upstairs bathroom: in by the gym door, out by the bedroom door). Only one
+                // door per stretch is ever opened, so the second stayed shut and she walked into
+                // it. Split the stretch at each doorway so each door gets its own turn.
+                if (doors.Count >= 2)
+                {
+                    var splitDoors = new List<string>();
+                    var splitAt = new List<Vector3>();
+                    var splitT = new List<float>();
+                    for (int di = 0; di < doors.Count; di++)
+                    {
+                        if (!TryGetDoorOpeningCenter(new List<string>(1) { doors[di] }, a, b, out Vector3 dc))
+                            continue;
+                        float dt = ProjectParamXZ(a, b, dc);
+                        int at = 0;
+                        while (at < splitT.Count && splitT[at] <= dt) at++;
+                        splitT.Insert(at, dt);
+                        splitAt.Insert(at, dc);
+                        splitDoors.Insert(at, doors[di]);
+                    }
+                    if (splitDoors.Count >= 2)
+                    {
+                        for (int k = 0; k < splitDoors.Count; k++)
+                            AddSemanticDoorWaypoint(route, new List<string>(1) { splitDoors[k] }, splitAt[k],
+                                SimpleNavWaypointKind.DoorOpening, null);
+                        var rest = new List<string>(doors.Count) { splitDoors[splitDoors.Count - 1] };
+                        for (int di = 0; di < doors.Count; di++)
+                            if (!splitDoors.Contains(doors[di])) rest.Add(doors[di]);
+                        SimpleNavWaypointKind splitEndKind = KindFor(i + 1, isFinalSegment ? SimpleNavWaypointKind.Target : SimpleNavWaypointKind.Navigation);
+                        AddSemanticDoorWaypoint(route, rest, b, splitEndKind, null);
+                        continue;
+                    }
+                }
+
                 if (!isFinalSegment && doors.Count > 0)
                 {
                     Vector3 opening;
@@ -2746,11 +3527,619 @@ namespace DateEverythingAccess
             for (int i = 0; i < doors.Count; i++)
             {
                 if (!floor.DoorCrossingByName.TryGetValue(doors[i], out Vector3 c)) continue;
+                if (TryGetSwingDoorwayCentre(floor, doors[i], c, out Vector3 centred))
+                {
+                    Main.Log?.LogInfo($"SimpleNavPlanner doorway centre door={doors[i]} baked=({c.x:F2}, {c.z:F2}) centred=({centred.x:F2}, {centred.z:F2})");
+                    c = centred;
+                }
                 float t = ProjectParamXZ(a, b, c);
                 if (t <= 0.05f || t >= 0.95f) continue;          // must be genuinely between a and b
                 if (t > bestT) { bestT = t; opening = new Vector3(c.x, a.y, c.z); found = true; }
             }
             return found;
+        }
+
+        // Names of hinged (swinging) passage doors, from the bake's doors[*].kind.
+        private static readonly HashSet<string> _swingPassageDoorNames = new HashSet<string>(StringComparer.Ordinal);
+        private const int DoorwayCentreCapCells = 4;
+
+        // The middle of a swinging door's walkable gap, from the LIVE grid. The baked crossing
+        // centroid mixes in the threshold cells, which sit on the hinge side, so it lands up to a
+        // metre off-centre, right against the jamb and the open leaf (the bedroom door snag: the
+        // waypoint sat 0.4 m from the hinge edge of the gap and the 0.8 m capsule caught it).
+        // Take the door's freed cells that are walkable now, keep the largest connected piece,
+        // and average the cells farthest from anything blocked (capped at 0.8 m, so a wide gap
+        // averages to its middle line). Sliding doors keep the baked point.
+        // DOORWAY FRAME. For a passage door: the middle of its gap and the direction straight
+        // through it, pointing away from `nearPos` (the side the player is on). The through
+        // direction comes from the door's closed-leaf footprint (its freed cells): the leaf is wide
+        // and thin, so its long axis is the doorway's width and the through direction is square to
+        // it. The house is axis-aligned, so the result snaps to the nearest world axis.
+        public static bool TryGetDoorwayFrame(string doorName, Vector3 nearPos, out Vector3 centre, out Vector3 through)
+        {
+            centre = default; through = default;
+            if (string.IsNullOrEmpty(doorName) || !EnsureLoaded()) return false;
+            return TryGetDoorwayFrame(NearestFloorByY(nearPos.y), doorName, nearPos, out centre, out through);
+        }
+
+        // The doorway frame is asked for several times every frame while walking to a door; the
+        // work behind it (the doorway's shape and the middle of its walkable gap) only changes
+        // when the door state does, so it is worked out once per door per door-state change.
+        private sealed class DoorwayFrameCache
+        {
+            public int Generation;
+            public bool Ok;
+            public Vector3 Centre;
+            public Vector3 Dir;
+        }
+        private static readonly Dictionary<string, DoorwayFrameCache> _doorwayFrameCache =
+            new Dictionary<string, DoorwayFrameCache>(StringComparer.Ordinal);
+
+        private static bool TryGetDoorwayFrame(Floor floor, string doorName, Vector3 nearPos, out Vector3 centre, out Vector3 through)
+        {
+            centre = default; through = default;
+            if (floor == null || string.IsNullOrEmpty(doorName)) return false;
+            string key = floor.Label + "|" + doorName;
+            if (!_doorwayFrameCache.TryGetValue(key, out DoorwayFrameCache cached) || cached.Generation != _doorStateGeneration)
+            {
+                cached = new DoorwayFrameCache { Generation = _doorStateGeneration };
+                cached.Ok = ComputeDoorwayFrame(floor, doorName, out cached.Centre, out cached.Dir);
+                _doorwayFrameCache[key] = cached;
+            }
+            if (!cached.Ok) return false;
+            Vector3 dir = cached.Dir;
+            float side = (cached.Centre.x - nearPos.x) * dir.x + (cached.Centre.z - nearPos.z) * dir.z;
+            if (side < 0f) dir = -dir;
+            centre = cached.Centre;
+            through = dir;
+            return true;
+        }
+
+        private static bool ComputeDoorwayFrame(Floor floor, string doorName, out Vector3 centre, out Vector3 through)
+        {
+            centre = default; through = default;
+            if (floor == null || string.IsNullOrEmpty(doorName) || _containerDoorNames.Contains(doorName))
+                return false;
+            // Room and closet doors only: cupboards, cabinets, the fridge and the shower door are
+            // things you open in place, not doorways you walk through.
+            string lower = doorName.ToLowerInvariant();
+            if (lower.Contains("cupboard") || lower.Contains("cabinet") || lower.Contains("fridge") ||
+                lower.Contains("shower") || lower.Contains("breaker") || lower.Contains("kithcen"))
+                return false;
+            if (!floor.DoorFreedByName.TryGetValue(doorName, out HashSet<long> freed) || freed.Count < 6)
+                return false;
+
+            // Largest 4-connected piece of the footprint (a few doors carry a stray wedge).
+            var seen = new HashSet<long>();
+            List<long> main = null;
+            foreach (long start in freed)
+            {
+                if (seen.Contains(start)) continue;
+                var comp = new List<long>();
+                var stack = new Stack<long>();
+                stack.Push(start); seen.Add(start);
+                while (stack.Count > 0)
+                {
+                    long c = stack.Pop(); comp.Add(c);
+                    int cx = (int)(c >> 32), cz = (int)(uint)c;
+                    long[] ns = { Floor.PackCell(cx + 1, cz), Floor.PackCell(cx - 1, cz), Floor.PackCell(cx, cz + 1), Floor.PackCell(cx, cz - 1) };
+                    for (int k = 0; k < ns.Length; k++)
+                        if (freed.Contains(ns[k]) && seen.Add(ns[k])) stack.Push(ns[k]);
+                }
+                if (main == null || comp.Count > main.Count) main = comp;
+            }
+            if (main == null || main.Count < 6) return false;
+
+            double mx = 0, mz = 0;
+            foreach (long c in main) { mx += (int)(c >> 32); mz += (int)(uint)c; }
+            mx /= main.Count; mz /= main.Count;
+            double sxx = 0, szz = 0, sxz = 0;
+            foreach (long c in main)
+            {
+                double dx = (int)(c >> 32) - mx, dz = (int)(uint)c - mz;
+                sxx += dx * dx; szz += dz * dz; sxz += dx * dz;
+            }
+            double widthAngle = 0.5 * Math.Atan2(2 * sxz, sxx - szz);
+            bool widthAlongX = Math.Abs(Math.Cos(widthAngle)) >= Math.Abs(Math.Sin(widthAngle));
+            Vector3 dir = widthAlongX ? new Vector3(0f, 0f, 1f) : new Vector3(1f, 0f, 0f);
+
+            Vector3 c0;
+            if (floor.DoorCrossingByName.TryGetValue(doorName, out Vector3 baked) &&
+                TryGetSwingDoorwayCentre(floor, doorName, baked, out Vector3 centred))
+            {
+                c0 = centred;
+            }
+            else
+            {
+                Vector2 w = floor.CellToWorld((int)Math.Round(mx), (int)Math.Round(mz));
+                c0 = new Vector3(w.x, floor.FloorY, w.y);
+            }
+            c0.y = floor.FloorY;
+            centre = c0;
+            through = dir;
+            return true;
+        }
+
+        // Door-target goals in front of the doorway on the player's side, so that when the walk
+        // ends, walking straight forward goes through. Null when none qualify.
+        //  * Door CLOSED (`goals` = the door's operable cells): cells squarely in front, far enough
+        //    back that the real 0.8 m body clears the frame (the bake grid only allows for 0.4 m).
+        //  * Door OPEN (`goals` null): any walkable cell in front from which a straight line
+        //    through the middle of the doorway into the room beyond is clear. A door that swings
+        //    toward the player can lie across the square-on approach once open (the office
+        //    closet), so the best line may be a slight angle; the executor then faces along it.
+        private const int OperableMarginCells = 2;
+        private const float DoorFrontLateralM = 0.35f;
+        private const float DoorFrontMinDepthM = 1.2f;
+        private const float DoorFrontMaxDepthM = 3.0f;
+
+        // Doors whose doorway is too tight for a planned "stand in front" spot: the office closet
+        // is narrow and its open door partly covers the approach, and every spot the grid offered
+        // in front turned out to be physically out of reach. For these the player stays where she
+        // opened the door and just turns to face into the doorway.
+        private static readonly HashSet<string> _noFrontStandDoors =
+            new HashSet<string>(StringComparer.Ordinal) { "Doors_Office_Closet" };
+
+        public static bool HasFrontStandpoint(string doorName)
+        {
+            return !string.IsNullOrEmpty(doorName) && !_noFrontStandDoors.Contains(doorName);
+        }
+
+        private static List<NodeKey> FrontOfDoorwayGoals(Floor floor, string doorName, Vector3 startPos, List<NodeKey> goals)
+        {
+            if (!HasFrontStandpoint(doorName)) return null;
+            if (goals != null && goals.Count == 0) return null;
+            if (!TryGetDoorwayFrame(floor, doorName, startPos, out Vector3 c, out Vector3 through))
+                return null;
+            Vector3 across = new Vector3(through.z, 0f, -through.x);
+
+            if (goals != null)
+            {
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    float lateral = pass == 0 ? DoorFrontLateralM : DoorFrontLateralM * 2f;
+                    var keep = new List<NodeKey>();
+                    for (int i = 0; i < goals.Count; i++)
+                    {
+                        NodeKey g = goals[i];
+                        if (IsVirtual(g) || g.Floor != floor.Label) continue;
+                        Vector2 w = floor.CellToWorld(g.Ix, g.Iz);
+                        float dx = w.x - c.x, dz = w.y - c.z;
+                        float depth = dx * through.x + dz * through.z;      // negative = player's side
+                        float lat = dx * across.x + dz * across.z;
+                        if (depth <= -DoorFrontMinDepthM && Mathf.Abs(lat) <= lateral)
+                            keep.Add(g);
+                    }
+                    if (keep.Count > 0) return keep;
+                }
+                return null;
+            }
+
+            // Door open: straight, clear lines through the doorway.
+            if (!TryGetDoorwayFarCell(floor, c, through, out NodeKey far))
+                return null;
+            float r = DoorFrontMaxDepthM;
+            floor.WorldToCell(c.x - r, c.z - r, out int x0, out int z0);
+            floor.WorldToCell(c.x + r, c.z + r, out int x1, out int z1);
+            // Tiers: square-ish and well back first; closer and at a steeper angle only when the
+            // open door leaves nothing better (the office closet's door lies across its front).
+            float[] minDepths = { DoorFrontMinDepthM, 0.8f };
+            float[] maxAngles = { 40f, 60f };
+            for (int tier = 0; tier < minDepths.Length; tier++)
+            for (int need = 2; need >= 0; need--)
+            {
+                var keep = new List<NodeKey>();
+                var angleOf = new List<float>();
+                float bestAngle = float.MaxValue;
+                for (int ix = x0; ix <= x1; ix++)
+                    for (int iz = z0; iz <= z1; iz++)
+                    {
+                        if (!floor.Navigable(ix, iz)) continue;
+                        Vector2 w = floor.CellToWorld(ix, iz);
+                        float dx = w.x - c.x, dz = w.y - c.z;
+                        float depth = dx * through.x + dz * through.z;
+                        if (depth > -minDepths[tier] || depth < -DoorFrontMaxDepthM) continue;
+                        float lat = dx * across.x + dz * across.z;
+                        float angle = Mathf.Atan2(Mathf.Abs(lat), -depth) * Mathf.Rad2Deg;
+                        if (angle > maxAngles[tier]) continue;
+                        var cell = new NodeKey(floor.Label, ix, iz);
+                        if (need > 0 && floor.Clearance(ix, iz) < need) continue;
+                        if (!SegmentIsClear(cell, far, need)) continue;
+                        keep.Add(cell);
+                        angleOf.Add(angle);
+                        if (angle < bestAngle) bestAngle = angle;
+                    }
+                if (keep.Count == 0) continue;
+                // The squarest lines win; A* then picks the nearest of them.
+                var best = new List<NodeKey>();
+                for (int i = 0; i < keep.Count; i++)
+                    if (angleOf[i] <= bestAngle + 8f) best.Add(keep[i]);
+                return best;
+            }
+            return null;
+        }
+
+        // The goals on the same side of a doorway as startPos. Null when the door has no frame.
+        private static List<NodeKey> GoalsOnPlayerSide(Floor floor, string doorName, Vector3 startPos, List<NodeKey> goals)
+        {
+            if (goals == null || goals.Count == 0) return null;
+            if (!TryGetDoorwayFrame(floor, doorName, startPos, out Vector3 c, out Vector3 through))
+                return null;
+            var keep = new List<NodeKey>(goals.Count);
+            for (int i = 0; i < goals.Count; i++)
+            {
+                NodeKey g = goals[i];
+                if (IsVirtual(g) || g.Floor != floor.Label) continue;
+                Vector2 w = floor.CellToWorld(g.Ix, g.Iz);
+                float depth = (w.x - c.x) * through.x + (w.y - c.z) * through.z;
+                if (depth < 0f) keep.Add(g);
+            }
+            return keep;
+        }
+
+        // Where to stand to open a closed door on the way: a spot on the player's side, a little
+        // back from the shut leaf and clear of where it swings, that the player can walk to in a
+        // straight line. The game won't open a door the player is touching (walking to Hoove, she
+        // was pressed against the laundry closet door and it never opened), so she steps back to
+        // here first. Cells are 0.2 m and already allow 0.4 m for the body; the real one is 0.8 m.
+        private const int DoorShutLeafClearCells = 4;   // ~0.3 m gap to the shut door for the real body
+        private const int DoorSwingClearCells = 3;      // ~0.2 m gap to where it swings
+        private const float DoorStandMaxDistM = 4.0f;
+        // Room for a stand clear of the whole swing of a big door (the office door's leaf is about
+        // three metres long, so the clear spots are further away than for an ordinary door).
+        private const float DoorStandMaxDistWithSweepM = 6.0f;
+        // Body allowance around the swept area: the player's capsule plus a little air.
+        public const float DoorSweepBodyM = 0.55f;
+        // Furthest from the hinge a stand may be: comfortably inside the game's interaction radius
+        // for doors (7.5 m for the office door) measured to the nearest part of the leaf.
+        private const float DoorSweepReachM = 6.0f;
+
+        // The whole area a swing door's leaf passes through while it opens: a pie slice around
+        // the hinge from where the leaf lies shut to where it lies open. The bake only knows the
+        // shut and fully-open leaf positions, not the ground in between; a spot clear of both can
+        // still be in the leaf's way. Leaving the office in the tutorial she stepped back to such
+        // a spot, the leaf hit her a quarter of the way open and stopped, so the mod shut it to
+        // try again, and it hit her again. Built from the live door by the caller.
+        public struct DoorSweep
+        {
+            public bool Valid;
+            public Vector3 Hinge;      // y ignored
+            public float Radius;       // leaf length, hinge to tip
+            public Vector3 ShutDir;    // flat, normalised: hinge toward the shut leaf
+            public float SweepDeg;     // signed angle (about +Y) from ShutDir to the open leaf
+        }
+
+        public static bool InSweep(DoorSweep sw, float x, float z, float bodyM)
+        {
+            if (!sw.Valid) return false;
+            Vector3 v = new Vector3(x - sw.Hinge.x, 0f, z - sw.Hinge.z);
+            float r = v.magnitude;
+            if (r > sw.Radius + bodyM) return false;
+            if (r <= bodyM + 0.1f) return true;
+            float a = Vector3.SignedAngle(sw.ShutDir, v, Vector3.up);
+            float margin = Mathf.Asin(Mathf.Clamp01(bodyM / r)) * Mathf.Rad2Deg;
+            float sweep = Mathf.Abs(sw.SweepDeg);
+            if (sw.SweepDeg < 0f) a = -a;
+            return a >= -margin && a <= sweep + margin;
+        }
+
+        // Centre of where this door's leaf lies when fully open, from the bake.
+        public static bool TryGetDoorOpenLeafCentroid(string doorName, float y, out Vector3 centroid)
+        {
+            centroid = default;
+            if (string.IsNullOrEmpty(doorName) || !EnsureLoaded()) return false;
+            Floor floor = NearestFloorByY(y);
+            if (floor == null || !floor.DoorBlockedByName.TryGetValue(doorName, out HashSet<long> cells) ||
+                cells == null || cells.Count == 0)
+                return false;
+            double sx = 0, sz = 0;
+            foreach (long p in cells)
+            {
+                Vector2 w = floor.CellToWorld((int)(p >> 32), (int)(uint)p);
+                sx += w.x; sz += w.y;
+            }
+            centroid = new Vector3((float)(sx / cells.Count), y, (float)(sz / cells.Count));
+            return true;
+        }
+
+        public static bool TryGetDoorOpeningStandpoint(string doorName, Vector3 playerPos, out Vector3 stand)
+        {
+            return TryGetDoorOpeningStandpoint(doorName, playerPos, default(DoorSweep), out stand);
+        }
+
+        public static bool TryGetDoorOpeningStandpoint(string doorName, Vector3 playerPos, DoorSweep sweep, out Vector3 stand)
+        {
+            // Clear of the whole swing first; if no such spot is in reach, the old rule (clear of
+            // the shut and open leaf only) still beats having nowhere to stand.
+            if (sweep.Valid && TryGetDoorOpeningStandpointCore(doorName, playerPos, sweep, out stand))
+                return true;
+            return TryGetDoorOpeningStandpointCore(doorName, playerPos, default(DoorSweep), out stand);
+        }
+
+        private static bool TryGetDoorOpeningStandpointCore(string doorName, Vector3 playerPos, DoorSweep sweep, out Vector3 stand)
+        {
+            stand = default;
+            if (string.IsNullOrEmpty(doorName) || !EnsureLoaded()) return false;
+            Floor floor = NearestFloorByY(playerPos.y);
+            if (floor == null || !floor.OperableFromByName.TryGetValue(doorName, out HashSet<long> operable) ||
+                operable.Count == 0)
+                return false;
+            bool haveFrame = TryGetDoorwayFrame(floor, doorName, playerPos, out Vector3 c, out Vector3 through);
+            floor.DoorBlockedByName.TryGetValue(doorName, out HashSet<long> swing);
+            floor.DoorFreedByName.TryGetValue(doorName, out HashSet<long> shut);
+            floor.WorldToCell(playerPos.x, playerPos.z, out int px, out int pz);
+            var fromCell = new NodeKey(floor.Label, px, pz);
+            bool fromOk = floor.Navigable(px, pz);
+
+            // With the swing known, any floor near enough to reach the door will do: the mod opens
+            // it directly, so the bake's "operable from" area (spots where the game's own aim
+            // would pick the door) doesn't limit it, and in a small room like the office every
+            // such spot was inside the swing. Without it, the operable area as before.
+            IEnumerable<long> candidates = operable;
+            if (sweep.Valid)
+            {
+                var near = new List<long>();
+                int reach = Mathf.CeilToInt(DoorStandMaxDistWithSweepM / floor.CellSize);
+                for (int ix = px - reach; ix <= px + reach; ix++)
+                    for (int iz = pz - reach; iz <= pz + reach; iz++)
+                    {
+                        if (!floor.InBounds(ix, iz)) continue;
+                        Vector2 cw = floor.CellToWorld(ix, iz);
+                        if (new Vector2(cw.x - sweep.Hinge.x, cw.y - sweep.Hinge.z).magnitude > DoorSweepReachM) continue;
+                        near.Add(Floor.PackCell(ix, iz));
+                    }
+                candidates = near;
+            }
+
+            // Tiers: with room all round inside the operable area first, then any operable cell.
+            for (int tier = sweep.Valid ? 1 : 0; tier < 2; tier++)
+            {
+                float bestD = float.MaxValue;
+                bool found = false;
+                foreach (long packed in candidates)
+                {
+                    int ix = (int)(packed >> 32), iz = (int)(uint)packed;
+                    if (!floor.Navigable(ix, iz)) continue;
+                    Vector2 w = floor.CellToWorld(ix, iz);
+                    float d = Vector2.Distance(w, new Vector2(playerPos.x, playerPos.z));
+                    if (d > (sweep.Valid ? DoorStandMaxDistWithSweepM : DoorStandMaxDistM) || d >= bestD) continue;
+                    if (haveFrame)
+                    {
+                        float depth = (w.x - c.x) * through.x + (w.y - c.z) * through.z;
+                        if (depth > -0.6f) continue;
+                    }
+                    if (CellNearAny(ix, iz, shut, DoorShutLeafClearCells)) continue;
+                    if (CellNearAny(ix, iz, swing, DoorSwingClearCells)) continue;
+                    if (sweep.Valid && InSweep(sweep, w.x, w.y, DoorSweepBodyM)) continue;
+                    if (tier == 0)
+                    {
+                        bool deep = true;
+                        for (int ddx = -OperableMarginCells; ddx <= OperableMarginCells && deep; ddx++)
+                            for (int ddz = -OperableMarginCells; ddz <= OperableMarginCells && deep; ddz++)
+                            {
+                                int nx = ix + ddx, nz = iz + ddz;
+                                if (floor.Navigable(nx, nz) && !operable.Contains(Floor.PackCell(nx, nz)))
+                                    deep = false;
+                            }
+                        if (!deep) continue;
+                    }
+                    if (fromOk && !SegmentIsClear(fromCell, new NodeKey(floor.Label, ix, iz)))
+                        continue;
+                    bestD = d;
+                    stand = new Vector3(w.x, floor.FloorY, w.y);
+                    found = true;
+                }
+                if (found)
+                {
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNavPlanner door stand-to-open door=" + doorName +
+                            " at (" + stand.x.ToString("F2") + ", " + stand.z.ToString("F2") + ") dist=" +
+                            bestD.ToString("F2") + " tier=" + tier + " clearOfSwing=" + sweep.Valid);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // True when the player stands where this door's leaf swings (so opening it now would swing
+        // it into her). For a sliding door: when she stands right up against its track, where the
+        // moving panel catches her and stops (the gym closet panels, each stuck a few tenths of a
+        // metre open with her pressed against them).
+        public static bool IsInDoorSwing(string doorName, Vector3 playerPos)
+        {
+            if (string.IsNullOrEmpty(doorName) || !EnsureLoaded()) return false;
+            Floor floor = NearestFloorByY(playerPos.y);
+            if (floor == null) return false;
+            floor.WorldToCell(playerPos.x, playerPos.z, out int px, out int pz);
+            if (floor.DoorBlockedByName.TryGetValue(doorName, out HashSet<long> swing) && swing.Count > 0)
+                return CellNearAny(px, pz, swing, DoorSwingClearCells);
+            if (!_swingPassageDoorNames.Contains(doorName) &&
+                floor.DoorFreedByName.TryGetValue(doorName, out HashSet<long> track) && track.Count > 0)
+                return CellNearAny(px, pz, track, SliderTrackClearCells);
+            return false;
+        }
+
+        private const int SliderTrackClearCells = 4;
+        private const float SliderStuckOverlapFraction = 0.6f;
+
+        // True when an "open" sliding panel still lies across most of its own doorway: it hit the
+        // player and stopped instead of sliding aside. Measured along the doorway's long axis.
+        public static bool IsSliderStillAcrossItsOpening(string doorName, Bounds panel)
+        {
+            if (string.IsNullOrEmpty(doorName) || !EnsureLoaded()) return false;
+            Floor f = FloorForY(panel.min.y, FloorMatchToleranceM + 1.0f);
+            if (f == null || !f.DoorFreedByName.TryGetValue(doorName, out HashSet<long> freed) || freed.Count == 0)
+                return false;
+            float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
+            foreach (long p in freed)
+            {
+                Vector2 w = f.CellToWorld((int)(p >> 32), (int)(uint)p);
+                if (w.x < x0) x0 = w.x; if (w.x > x1) x1 = w.x;
+                if (w.y < z0) z0 = w.y; if (w.y > z1) z1 = w.y;
+            }
+            bool alongX = (x1 - x0) >= (z1 - z0);
+            // The footprint is padded by the bake's 0.4 m body allowance at each end.
+            float lo = (alongX ? x0 : z0) + 0.4f, hi = (alongX ? x1 : z1) - 0.4f;
+            if (hi - lo < 0.2f) return false;
+            float plo = alongX ? panel.min.x : panel.min.z, phi = alongX ? panel.max.x : panel.max.z;
+            float overlap = Mathf.Max(0f, Mathf.Min(hi, phi) - Mathf.Max(lo, plo));
+            return overlap / (hi - lo) >= SliderStuckOverlapFraction;
+        }
+
+        private static bool CellNearAny(int ix, int iz, HashSet<long> cells, int within)
+        {
+            if (cells == null || cells.Count == 0) return false;
+            for (int ddx = -within; ddx <= within; ddx++)
+                for (int ddz = -within; ddz <= within; ddz++)
+                    if (cells.Contains(Floor.PackCell(ix + ddx, iz + ddz)))
+                        return true;
+            return false;
+        }
+
+        // A walkable cell just beyond the doorway on the far side: the point the player faces and
+        // walks toward to go through.
+        private static bool TryGetDoorwayFarCell(Floor floor, Vector3 c, Vector3 through, out NodeKey far)
+        {
+            far = default;
+            float[] depths = { 1.4f, 1.0f, 0.6f, 0.3f };
+            for (int i = 0; i < depths.Length; i++)
+            {
+                floor.WorldToCell(c.x + through.x * depths[i], c.z + through.z * depths[i], out int ix, out int iz);
+                if (floor.Navigable(ix, iz))
+                {
+                    far = new NodeKey(floor.Label, ix, iz);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // The point just beyond a doorway (see TryGetDoorwayFarCell), in world space, for the
+        // executor to face when the walk to a door ends.
+        public static bool TryGetDoorwayFarPoint(string doorName, Vector3 nearPos, out Vector3 farPoint)
+        {
+            farPoint = default;
+            if (string.IsNullOrEmpty(doorName) || !EnsureLoaded()) return false;
+            Floor floor = NearestFloorByY(nearPos.y);
+            if (!TryGetDoorwayFrame(floor, doorName, nearPos, out Vector3 c, out Vector3 through))
+                return false;
+            if (TryGetDoorwayFarCell(floor, c, through, out NodeKey far))
+            {
+                Vector2 w = floor.CellToWorld(far.Ix, far.Iz);
+                farPoint = new Vector3(w.x, floor.FloorY, w.y);
+            }
+            else
+            {
+                farPoint = c + through * 1.0f;
+            }
+            return true;
+        }
+
+        // Goal cells need this many cells (0.2 m each) of clearance for the real 0.8 m capsule to
+        // stand without touching anything the 0.4 m bake dilation already accounts for.
+        private const int BodyGoalClearanceCells = 3;
+
+        // The subset of goals with at least `need` clearance, or null when that subset is empty or
+        // is the whole set (nothing to prefer).
+        private static List<NodeKey> GoalsWithClearance(List<NodeKey> goals, int need)
+        {
+            if (goals == null || goals.Count == 0) return null;
+            var keep = new List<NodeKey>();
+            for (int i = 0; i < goals.Count; i++)
+            {
+                NodeKey g = goals[i];
+                if (IsVirtual(g)) { keep.Add(g); continue; }
+                Floor f = FloorByLabel(g.Floor);
+                if (f != null && f.Clearance(g.Ix, g.Iz) >= need) keep.Add(g);
+            }
+            if (keep.Count == 0 || keep.Count == goals.Count) return null;
+            return keep;
+        }
+
+        private static bool TryGetSwingDoorwayCentre(Floor floor, string door, Vector3 baked, out Vector3 centre)
+        {
+            centre = baked;
+            if (floor == null || string.IsNullOrEmpty(door) || !_swingPassageDoorNames.Contains(door))
+                return false;
+            if (!floor.DoorFreedByName.TryGetValue(door, out HashSet<long> freed) || freed.Count == 0)
+                return false;
+
+            var cand = new HashSet<long>();
+            int x0 = int.MaxValue, x1 = int.MinValue, z0 = int.MaxValue, z1 = int.MinValue;
+            foreach (long p in freed)
+            {
+                int ix = (int)(p >> 32), iz = (int)(uint)p;
+                if (!floor.Navigable(ix, iz)) continue;
+                cand.Add(p);
+                if (ix < x0) x0 = ix; if (ix > x1) x1 = ix;
+                if (iz < z0) z0 = iz; if (iz > z1) z1 = iz;
+            }
+            if (cand.Count == 0) return false;
+
+            // Largest 4-connected piece of the walkable freed cells.
+            var seen = new HashSet<long>();
+            List<long> main = null;
+            foreach (long start in cand)
+            {
+                if (seen.Contains(start)) continue;
+                var comp = new List<long>();
+                var stack = new Stack<long>();
+                stack.Push(start); seen.Add(start);
+                while (stack.Count > 0)
+                {
+                    long c = stack.Pop(); comp.Add(c);
+                    int cx = (int)(c >> 32), cz = (int)(uint)c;
+                    long[] ns = { Floor.PackCell(cx + 1, cz), Floor.PackCell(cx - 1, cz), Floor.PackCell(cx, cz + 1), Floor.PackCell(cx, cz - 1) };
+                    for (int k = 0; k < ns.Length; k++)
+                        if (cand.Contains(ns[k]) && seen.Add(ns[k])) stack.Push(ns[k]);
+                }
+                if (main == null || comp.Count > main.Count) main = comp;
+            }
+
+            // Distance to the nearest blocked cell (4-connected, capped) over a window around it.
+            int cap = DoorwayCentreCapCells;
+            int wx0 = x0 - cap - 1, wz0 = z0 - cap - 1;
+            int w = (x1 - x0) + 2 * cap + 3, h = (z1 - z0) + 2 * cap + 3;
+            int[,] dist = new int[w, h];
+            var q = new Queue<int>();
+            for (int i = 0; i < w; i++)
+                for (int j = 0; j < h; j++)
+                {
+                    if (!floor.Navigable(wx0 + i, wz0 + j)) { dist[i, j] = 0; q.Enqueue(i * h + j); }
+                    else dist[i, j] = cap;
+                }
+            while (q.Count > 0)
+            {
+                int cell = q.Dequeue(); int i = cell / h, j = cell % h; int dd = dist[i, j];
+                if (dd >= cap) continue;
+                if (i + 1 < w && dist[i + 1, j] > dd + 1) { dist[i + 1, j] = dd + 1; q.Enqueue((i + 1) * h + j); }
+                if (i - 1 >= 0 && dist[i - 1, j] > dd + 1) { dist[i - 1, j] = dd + 1; q.Enqueue((i - 1) * h + j); }
+                if (j + 1 < h && dist[i, j + 1] > dd + 1) { dist[i, j + 1] = dd + 1; q.Enqueue(i * h + j + 1); }
+                if (j - 1 >= 0 && dist[i, j - 1] > dd + 1) { dist[i, j - 1] = dd + 1; q.Enqueue(i * h + j - 1); }
+            }
+
+            int best = -1;
+            double sx = 0, sz = 0; int n = 0;
+            foreach (long c in main)
+            {
+                int cx = (int)(c >> 32), cz = (int)(uint)c;
+                int d = dist[cx - wx0, cz - wz0];
+                if (d > best) { best = d; sx = 0; sz = 0; n = 0; }
+                if (d == best)
+                {
+                    Vector2 wp = floor.CellToWorld(cx, cz);
+                    sx += wp.x; sz += wp.y; n++;
+                }
+            }
+            if (n == 0 || best <= 0) return false;
+            var result = new Vector3((float)(sx / n), baked.y, (float)(sz / n));
+            // Sanity: stay near the baked crossing (the same doorway), and on a walkable cell.
+            float ddx = result.x - baked.x, ddz = result.z - baked.z;
+            if (ddx * ddx + ddz * ddz > 2.0f * 2.0f) return false;
+            floor.WorldToCell(result.x, result.z, out int rix, out int riz);
+            if (!floor.Navigable(rix, riz)) return false;
+            centre = result;
+            return true;
         }
 
         private static float ProjectParamXZ(Vector3 a, Vector3 b, Vector3 p)
@@ -2901,6 +4290,10 @@ namespace DateEverythingAccess
             // Cells BLOCKED by currently-open doors (the swung-leaf footprint). Mirror of
             // ExtraNavigable, opposite sign: set per-Plan() from the same live Door.open state.
             public readonly HashSet<long> ExtraBlocked = new HashSet<long>();
+            // Cells the auto-walk follower found PHYSICALLY blocked at runtime (furniture the bake
+            // does not know about, moved props), with the unscaled time each entry expires. Kept
+            // separate from ExtraBlocked because ApplyLiveDoorState clears and rebuilds that one.
+            public readonly Dictionary<long, float> RuntimeBlockedUntil = new Dictionary<long, float>();
             // Per-door freed-cells indexed from the bake's doors[*].freed_cells. Multiple
             // door records may share a GameObject name (different cupboards with identical
             // names) — the indexer unions their cells.
@@ -3030,6 +4423,8 @@ namespace DateEverythingAccess
                 // leaf swings into is walkable closed, blocked open. See
                 // [[project-navigation-doorway-capsule-clearance-2026-06-18]].
                 if (ExtraBlocked.Count > 0 && ExtraBlocked.Contains(key))
+                    return false;
+                if (RuntimeBlockedUntil.Count > 0 && RuntimeBlockedUntil.ContainsKey(key))
                     return false;
                 if (ExtraNavigable.Count > 0 && ExtraNavigable.Contains(key))
                     return true;
@@ -3185,6 +4580,8 @@ namespace DateEverythingAccess
             // TagDoors's destination rule (target IS this door), like any object you open in
             // range. See [[project_navigation_container_open_on_interact]].
             [DataMember] public bool container_operable_only;
+            // "Door" (hinged leaf) or "SlidingDoor". Optional.
+            [DataMember] public string kind;
         }
 
         [DataContract]

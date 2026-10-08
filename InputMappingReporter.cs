@@ -93,6 +93,82 @@ namespace DateEverythingAccess
             }
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetKeyboardLayout(uint idThread);
+
+        // One compact line set at startup describing the keyboard as the game sees it: the Windows
+        // keyboard layout, which Rewired layout the keyboard maps loaded (the game swaps in different
+        // maps for AZERTY, Dvorak and Colemak keyboards, which moves keys like Z and X), and which
+        // keys are bound to every non-movement action. Written for remote testers (CrossOver/Wine
+        // in particular) whose keys don't do what the Controls screen says, so their log answers it.
+        public static void LogKeyboardSummary()
+        {
+            try
+            {
+                string hkl = "?";
+                try { hkl = "0x" + GetKeyboardLayout(0).ToInt64().ToString("X8"); } catch { }
+
+                if (!ReInput.isReady)
+                    return;
+                Player player = ReInput.players.GetPlayer(0);
+                if (player == null || !player.controllers.hasKeyboard)
+                    return;
+
+                Keyboard keyboard = player.controllers.Keyboard;
+                IList<ControllerMap> maps = player.controllers.maps.GetMaps(keyboard.type, keyboard.id);
+                StringBuilder sb = new StringBuilder();
+                sb.Append("[INPUTMAP] Keyboard summary: windowsLayout=").Append(hkl)
+                  .Append(" keyboard=").Append(Safe(keyboard.name))
+                  .Append(" maps=").Append(maps != null ? maps.Count : 0);
+                if (maps != null)
+                {
+                    for (int i = 0; i < maps.Count; i++)
+                    {
+                        ControllerMap map = maps[i];
+                        if (map == null) continue;
+                        sb.AppendLine();
+                        sb.Append("[INPUTMAP]   map category=").Append(GetCategoryName(map.categoryId))
+                          .Append(" layout=").Append(GetLayoutName(map.layoutId))
+                          .Append(" enabled=").Append(map.enabled).Append(" :");
+                        for (int j = 0; j < map.AllMaps.Count; j++)
+                        {
+                            ActionElementMap m = map.AllMaps[j];
+                            if (m == null) continue;
+                            string action = GetActionName(m.actionId, m.actionDescriptiveName);
+                            if (action.StartsWith("Move", StringComparison.OrdinalIgnoreCase)) continue;
+                            sb.Append(' ').Append(action).Append('=').Append(Safe(m.elementIdentifierName));
+                        }
+                    }
+                }
+                if (Main.Log != null)
+                    Main.Log.LogInfo(sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                if (Main.Log != null)
+                    Main.Log.LogWarning("[INPUTMAP] Keyboard summary failed: " + ex.Message);
+            }
+        }
+
+        private static string GetLayoutName(int layoutId)
+        {
+            try
+            {
+                // Looked up by reflection so a Rewired version without this helper can't break the build.
+                object mapping = ReInput.mapping;
+                System.Reflection.MethodInfo getLayout = mapping != null
+                    ? mapping.GetType().GetMethod("GetLayout", new[] { typeof(ControllerType), typeof(int) })
+                    : null;
+                object layout = getLayout != null ? getLayout.Invoke(mapping, new object[] { ControllerType.Keyboard, layoutId }) : null;
+                System.Reflection.PropertyInfo nameProp = layout != null ? layout.GetType().GetProperty("name") : null;
+                string name = nameProp != null ? nameProp.GetValue(layout, null) as string : null;
+                if (!string.IsNullOrEmpty(name))
+                    return name + "(" + layoutId + ")";
+            }
+            catch { }
+            return layoutId.ToString();
+        }
+
         public static bool TryDumpCurrentMappings(out int dumpedControllerCount)
         {
             dumpedControllerCount = 0;
