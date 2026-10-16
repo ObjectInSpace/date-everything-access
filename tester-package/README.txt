@@ -1,4 +1,4 @@
-Narrate Everything
+Date Everything Access
 Based on Date Everything Access 1.2
 Original mod: https://github.com/ObjectInSpace/date-everything-access
 
