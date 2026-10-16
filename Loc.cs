@@ -300,8 +300,6 @@ namespace DateEverythingAccess
             Add("aim_far", "far {0}");
             Add("aim_and", "{0} and {1}");
             Add("aim_step_back", "step back");
-            Add("aim_tone_start", "{0} is within reach. Aim at it with the tone.");
-            Add("aim_tone_start_after_walk", "Arrived near {0}, but not aimed at it. Aim at it with the tone.");
             Add("navigation_no_path", "No path found to {0}.");
             Add("navigation_tutorial_gift_delivery_trigger", "Gift delivery trigger");
             Add("navigation_planner_not_ready", "Navigation data not ready yet.");
@@ -542,8 +540,6 @@ namespace DateEverythingAccess
             AddJa("aim_far", "大きく{0}");
             AddJa("aim_and", "{0}、{1}");
             AddJa("aim_step_back", "少し下がって");
-            AddJa("aim_tone_start", "{0}に手が届きます。トーンで狙いを合わせてください。");
-            AddJa("aim_tone_start_after_walk", "{0}の近くに着きましたが、狙いが合っていません。トーンで狙いを合わせてください。");
             AddJa("navigation_no_path", "{0} への経路が見つかりません。");
             AddJa("navigation_tutorial_gift_delivery_trigger", "ギフト配達トリガー");
             AddJa("navigation_planner_not_ready", "ナビゲーションデータの準備がまだできていません。");

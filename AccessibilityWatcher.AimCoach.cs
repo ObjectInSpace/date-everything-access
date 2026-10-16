@@ -163,14 +163,11 @@ namespace DateEverythingAccess
                 return;
             }
 
-            // Settings: Aiming help. Tone = the original tracker's aim tone (UpdateAimCoach drives it).
+            // Settings: Aiming help. Tone = the original tracker's aim tone (UpdateAimCoach drives it),
+            // which starts without a spoken line.
             _aimCoachTone = ModConfig.AimingHelp == ModConfig.AimingHelpStyle.Tone;
             if (_aimCoachTone)
-            {
-                _aimCoachLastSpokeAt = Time.unscaledTime;
-                ScreenReader.Say(Loc.Get(afterWalk ? "aim_tone_start_after_walk" : "aim_tone_start", label));
                 return;
-            }
 
             string cue = BuildAimCue(target, out _);
             _aimCoachLastCue = cue;
