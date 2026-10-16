@@ -21,6 +21,10 @@ namespace DateEverythingAccess
         private float _aimCoachLastSpokeAt;
         private float _aimCoachStartedAt;
         private float _aimCoachNoAimSince;
+        // This coaching session uses the original aim tone instead of spoken cues.
+        private bool _aimCoachTone;
+        // When the coach last announced the target selected (manual navigation then stops quietly).
+        private float _aimCoachOnTargetAt = -10f;
 
         private const float AimCoachMinGapSeconds = 0.35f;   // don't talk over the player's turning
         private const float AimCoachRepeatSeconds = 4f;      // remind if nothing has changed
@@ -135,6 +139,8 @@ namespace DateEverythingAccess
         // aim itself (the player hears why the coach is talking).
         private void StartAimCoach(InteractableObj target, bool afterWalk)
         {
+            if (_aimCoachActive)
+                StopAimCoach();
             _aimCoachActive = true;
             _aimCoachTarget = target;
             _aimCoachLastCue = null;
@@ -152,7 +158,17 @@ namespace DateEverythingAccess
             {
                 StopAimCoach();
                 ObjectTracker.NotifyAimLocked();
+                _aimCoachOnTargetAt = Time.unscaledTime;
                 ScreenReader.Say(Loc.Get("aim_coach_already_on", label));
+                return;
+            }
+
+            // Settings: Aiming help. Tone = the original tracker's aim tone (UpdateAimCoach drives it).
+            _aimCoachTone = ModConfig.AimingHelp == ModConfig.AimingHelpStyle.Tone;
+            if (_aimCoachTone)
+            {
+                _aimCoachLastSpokeAt = Time.unscaledTime;
+                ScreenReader.Say(Loc.Get(afterWalk ? "aim_tone_start_after_walk" : "aim_tone_start", label));
                 return;
             }
 
@@ -167,6 +183,9 @@ namespace DateEverythingAccess
         {
             if (_aimCoachActive && Main.Log != null)
                 Main.Log.LogInfo("AimCoach: stop");
+            if (_aimCoachActive && _aimCoachTone)
+                ObjectTracker.StopTracking();
+            _aimCoachTone = false;
             _aimCoachActive = false;
             _aimCoachTarget = null;
             _aimCoachLastCue = null;
@@ -227,9 +246,13 @@ namespace DateEverythingAccess
 
             if (IsAimCoachTargetSelected(target))
             {
+                // The tone version ends the way the original did: the chirp alone.
+                bool tone = _aimCoachTone;
                 StopAimCoach();
                 ObjectTracker.NotifyAimLocked();
-                ScreenReader.Say(Loc.Get("aim_coach_on_target"));
+                _aimCoachOnTargetAt = Time.unscaledTime;
+                if (!tone)
+                    ScreenReader.Say(Loc.Get("aim_coach_on_target"));
                 return;
             }
 
@@ -258,7 +281,8 @@ namespace DateEverythingAccess
             Vector3 aimPoint = _aimCuePoint;
             bool tooSteep = _aimCueTooSteep;
             _aimCueUnconfirmed = _aimCueCachedUnconfirmed;
-            bool fine = aimable && !tooSteep && !_aimCueUnconfirmed &&
+            // The tone version leaves the aiming entirely to the player, as the original did.
+            bool fine = !_aimCoachTone && aimable && !tooSteep && !_aimCueUnconfirmed &&
                 Mathf.Max(Mathf.Abs(yawErr), Mathf.Abs(pitchErr)) <= AimCoachFineAssistDeg;
             _aimCoachKeepPoint = aimable ? aimPoint : (Vector3?)null;
             if (fine && !_aimFineGaveUp)
@@ -289,6 +313,11 @@ namespace DateEverythingAccess
                 _aimFineGaveUp = false;
             }
 
+            // Tone: steady tone on the aim point; pan says left/right, pitch says up/down
+            // (ObjectTracker aim mode). It holds its last point while no spot can be aimed at.
+            if (_aimCoachTone && aimable)
+                ObjectTracker.StartAimTracking(aimPoint);
+
             if (Time.unscaledTime - _aimCoachLastSpokeAt < AimCoachMinGapSeconds)
                 return;
 
@@ -304,8 +333,10 @@ namespace DateEverythingAccess
                 return;
             }
             _aimCoachNoAimSince = 0f;
+            if (_aimCoachTone)
+                return;
 
-            bool changed = !string.Equals(cue, _aimCoachLastCue, StringComparison.Ordinal);
+            bool changed =!string.Equals(cue, _aimCoachLastCue, StringComparison.Ordinal);
             bool stale = Time.unscaledTime - _aimCoachLastSpokeAt >= AimCoachRepeatSeconds;
             if (string.IsNullOrEmpty(cue) || (!changed && !stale))
                 return;

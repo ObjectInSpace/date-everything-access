@@ -169,6 +169,8 @@ namespace DateEverythingAccess
         // camera aim at the OBJECT), and the phase completes when the game's raycast selects the
         // target. See ObjectTracker's channel map.
         private bool _manualAimPhase;
+        // This arrival was handed to the spoken aiming help (settings: Aiming help = Spoken).
+        private bool _manualAimCoachStarted;
         private const float TrackedInteractableApproachClearanceDistance = 0.9f;
         private const float TrackedInteractableApproachRetargetDistance = 0.75f;
         private const float TrackedInteractableApproachMinimumExtent = 0.35f;
@@ -1508,7 +1510,8 @@ namespace DateEverythingAccess
         {
             if (!_isNavigationActive)
             {
-                if (ObjectTracker.IsTracking)
+                // The aiming help's tone version (settings: Aiming help) uses the tracker on its own.
+                if (ObjectTracker.IsTracking && !(_aimCoachActive && _aimCoachTone))
                     ObjectTracker.StopTracking();
                 return;
             }
@@ -1571,23 +1574,47 @@ namespace DateEverythingAccess
                         return;
                     }
 
+                    // Settings: Aiming help. Spoken hands the aim over to the spoken aiming help;
+                    // Tone keeps the original steady aim tone below.
+                    bool spokenAim = ModConfig.AimingHelp == ModConfig.AimingHelpStyle.Speech;
                     if (!_manualAimPhase)
                     {
                         _manualAimPhase = true;
-                        ScreenReader.Say(Loc.Get("navigation_arrived"));
+                        InteractableObj coachTarget = spokenAim && FindSimpleRouteTargetObject(route) != null
+                            ? FindSimpleRouteTargetObject(route).GetComponent<InteractableObj>()
+                            : null;
+                        _manualAimCoachStarted = coachTarget != null;
+                        if (coachTarget != null)
+                        {
+                            // Its opening line says the player has arrived.
+                            ObjectTracker.StopTracking();
+                            StartAimCoach(coachTarget, afterWalk: true);
+                        }
+                        else
+                        {
+                            ScreenReader.Say(Loc.Get("navigation_arrived"));
+                        }
                     }
 
                     if (IsSimpleRouteTargetSelected(route))
                     {
-                        ObjectTracker.NotifyAimLocked();
+                        // The spoken aiming help may have just announced it (and chirped).
+                        if (Time.unscaledTime - _aimCoachOnTargetAt > 1f)
+                            ObjectTracker.NotifyAimLocked();
                         StopNavigationRuntime();
                         return;
                     }
 
-                    ObjectTracker.StartAimTracking(ResolveSimpleRouteTargetLookPoint(route));
+                    // The original aim tone, unless the spoken aiming help took this arrival (if it
+                    // gives up, it has said so; the tone doesn't start up in its place).
+                    if (!_manualAimCoachStarted)
+                        ObjectTracker.StartAimTracking(ResolveSimpleRouteTargetLookPoint(route));
                     return;
                 }
+                if (_manualAimPhase)
+                    StopAimCoach();   // walked back out of the arrival area: the walking tone resumes
                 _manualAimPhase = false;
+                _manualAimCoachStarted = false;
 
                 // The tone tracks the pure-pursuit CARROT — a point sliding continuously along the
                 // route ahead of the player — not the raw waypoint vertex. Centred pan = on the
@@ -3016,6 +3043,7 @@ namespace DateEverythingAccess
             _isNavigationActive = false;
             _isAutoWalking = false;
             _manualAimPhase = false;
+            _manualAimCoachStarted = false;
             StopAimCoach();
             _hasAutoWalkInput = false;  // stop re-asserting input in FixedUpdate
             _steerMode = SteerNone;
@@ -6072,6 +6100,9 @@ namespace DateEverythingAccess
                 (nearTarget = AdoptSelectablePart(nearTarget)) != null &&
                 IsTargetAimableFromHere(nearTarget, AimCoachStartWithinM, out _))
             {
+                // A Ctrl+O walking tone still running would play over the aiming help.
+                if (_isNavigationActive)
+                    StopNavigationRuntime();
                 StartAimCoach(nearTarget, afterWalk: false);
                 return;
             }

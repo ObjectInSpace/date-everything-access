@@ -151,6 +151,9 @@ namespace DateEverythingAccess
             Add("config_tracker_tone_pitch_low", "Low");
             Add("config_tracker_tone_pitch_mid", "Mid");
             Add("config_tracker_tone_pitch_high", "High");
+            Add("config_aiming_help", "Aiming help");
+            Add("config_aiming_help_speech", "Spoken directions");
+            Add("config_aiming_help_tone", "Tone");
             Add("room_announcement", "Room: {0}");
             Add("nearby_announcement_without_prompt", "{0}");
             Add("nearby_announcement_closed_door", "{0}, closed.");
@@ -297,6 +300,8 @@ namespace DateEverythingAccess
             Add("aim_far", "far {0}");
             Add("aim_and", "{0} and {1}");
             Add("aim_step_back", "step back");
+            Add("aim_tone_start", "{0} is within reach. Aim at it with the tone.");
+            Add("aim_tone_start_after_walk", "Arrived near {0}, but not aimed at it. Aim at it with the tone.");
             Add("navigation_no_path", "No path found to {0}.");
             Add("navigation_tutorial_gift_delivery_trigger", "Gift delivery trigger");
             Add("navigation_planner_not_ready", "Navigation data not ready yet.");
@@ -416,6 +421,9 @@ namespace DateEverythingAccess
             AddJa("config_tracker_tone_pitch_low", "低");
             AddJa("config_tracker_tone_pitch_mid", "中");
             AddJa("config_tracker_tone_pitch_high", "高");
+            AddJa("config_aiming_help", "狙いの案内");
+            AddJa("config_aiming_help_speech", "音声の指示");
+            AddJa("config_aiming_help_tone", "トーン");
             AddJa("room_announcement", "部屋: {0}");
             AddJa("nearby_announcement_closed_door", "{0}、閉まっています。");
             AddJa("dateviators_equipped", "装着");
@@ -534,6 +542,8 @@ namespace DateEverythingAccess
             AddJa("aim_far", "大きく{0}");
             AddJa("aim_and", "{0}、{1}");
             AddJa("aim_step_back", "少し下がって");
+            AddJa("aim_tone_start", "{0}に手が届きます。トーンで狙いを合わせてください。");
+            AddJa("aim_tone_start_after_walk", "{0}の近くに着きましたが、狙いが合っていません。トーンで狙いを合わせてください。");
             AddJa("navigation_no_path", "{0} への経路が見つかりません。");
             AddJa("navigation_tutorial_gift_delivery_trigger", "ギフト配達トリガー");
             AddJa("navigation_planner_not_ready", "ナビゲーションデータの準備がまだできていません。");

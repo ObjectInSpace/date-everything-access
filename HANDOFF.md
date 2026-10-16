@@ -46,6 +46,10 @@ for the project rules.
   `ChatMaster.CanopyChats`). The bed tip follows meeting Betty; the morning tip a change of day.
 - Aim coach (`AccessibilityWatcher.AimCoach.cs`): Alt+O next to an object, or autowalk arriving
   without landing the aim, talks the player onto it ("a little up", "far left and down").
+  Settings menu (Ctrl+F1) "Aiming help": Spoken directions (default) or Tone. Spoken also takes
+  over when the player walks to a target by the tone and arrives; Tone uses the original
+  tracker's aim tone everywhere (pan for left/right, pitch for up/down, chirp when selected,
+  no automatic final nudge).
 - Doors: stand-back-and-open keeps clear of the door's whole swing (live hinge and leaf from the
   door's collider), which fixed leaving the office in the tutorial.
 - Turning: the auto-walk turn gain adapts when the game turns slower than expected (CrossOver).

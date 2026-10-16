@@ -25,6 +25,17 @@ namespace DateEverythingAccess
             High
         }
 
+        /// <summary>
+        /// How the player is helped to aim at an object once they are near it: spoken directions
+        /// ("a little up", "far left") or the original tracker tone (pan for left/right, pitch for
+        /// up/down, a chirp when the game selects it).
+        /// </summary>
+        public enum AimingHelpStyle
+        {
+            Speech,
+            Tone
+        }
+
         // Fundamental frequencies (Hz) for each register. Low favours listeners with high-frequency
         // loss; Mid (~1 kHz) is the broad-spectrum default; High sits near peak sensitivity for
         // listeners with low/mid loss. The carrier adds harmonics on top of whichever is chosen.
@@ -48,6 +59,7 @@ namespace DateEverythingAccess
         private const int NearbyObjectsIndex = 6;
         private const int StatusChangesIndex = 7;
         private const int TrackerTonePitchIndex = 8;
+        private const int AimingHelpIndex = 9;
 
         private static readonly string[] SettingNameKeys =
         {
@@ -59,7 +71,8 @@ namespace DateEverythingAccess
             "config_room_changes",
             "config_nearby_objects",
             "config_status_changes",
-            "config_tracker_tone_pitch"
+            "config_tracker_tone_pitch",
+            "config_aiming_help"
         };
 
         private static ConfigFile _config;
@@ -72,6 +85,7 @@ namespace DateEverythingAccess
         private static ConfigEntry<bool> _readNearbyObjects;
         private static ConfigEntry<bool> _readStatusChanges;
         private static ConfigEntry<TonePitchRegister> _trackerTonePitch;
+        private static ConfigEntry<AimingHelpStyle> _aimingHelp;
         private static ConfigEntry<bool> _captureNavRoutes;
         private static ConfigEntry<string> _coverageSweepRunId;
         private static InputModeHandle _inputModeHandle;
@@ -155,6 +169,12 @@ namespace DateEverythingAccess
         }
 
         /// <summary>
+        /// Gets how the player is helped to aim at a nearby object: spoken directions or the tone.
+        /// </summary>
+        public static AimingHelpStyle AimingHelp =>
+            _aimingHelp != null ? _aimingHelp.Value : AimingHelpStyle.Speech;
+
+        /// <summary>
         /// Gets a value indicating whether the spoken settings menu is currently open.
         /// </summary>
         public static bool IsMenuOpen => _menuOpen;
@@ -181,6 +201,10 @@ namespace DateEverythingAccess
                 "(age-related) hearing loss; Mid (~1 kHz) is the broad-spectrum default on the ISO 226 " +
                 "sensitivity plateau; High (~2 kHz) suits low/mid hearing loss. The tone is a harmonic " +
                 "stack over this fundamental so a notch at any single frequency is covered by the others.");
+            _aimingHelp = config.Bind("Accessibility", "AimingHelp", AimingHelpStyle.Speech,
+                "How you are helped to aim at an object once you are near it. Speech: spoken directions " +
+                "such as \"a little up\" and \"far left\". Tone: the original tracker tone, panned left or " +
+                "right toward the object, pitch for looking up or down, and a chirp when it is selected.");
             _captureNavRoutes = config.Bind("Diagnostics", "CaptureNavRoutes", false,
                 "When true, every successful SimpleNavPlanner.Plan output is written to " +
                 "BepInEx/plugins/c_sharp_routes/route_<unix>_<idx>.json. Used by " +
@@ -335,6 +359,10 @@ namespace DateEverythingAccess
         {
             if (_currentSettingIndex == TrackerTonePitchIndex)
                 return GetTonePitchValueLabel();
+            if (_currentSettingIndex == AimingHelpIndex)
+                return AimingHelp == AimingHelpStyle.Tone
+                    ? Loc.Get("config_aiming_help_tone")
+                    : Loc.Get("config_aiming_help_speech");
 
             return IsCurrentSettingEnabled() ? Loc.Get("settings_value_on") : Loc.Get("settings_value_off");
         }
@@ -409,6 +437,11 @@ namespace DateEverythingAccess
                     break;
                 case TrackerTonePitchIndex:
                     CycleTonePitch(forward);
+                    break;
+                case AimingHelpIndex:
+                    _aimingHelp.Value = _aimingHelp.Value == AimingHelpStyle.Speech
+                        ? AimingHelpStyle.Tone
+                        : AimingHelpStyle.Speech;
                     break;
                 default:
                     throw new InvalidOperationException("Unknown accessibility setting index: " + _currentSettingIndex);
