@@ -21,8 +21,8 @@ so nothing else needs to be installed. Your existing mod settings are kept.
 Changes
 =======
 - Improved autowalk's handling of furniture, doors, the staircase and overall navigation.
-- Added a toggle for verbal cues when aiming at nearby datables. This can be toggled in accessibility settings. Turning this off will utilize the sound cues from the original mod.
-- When tracking objectives with control+O,A situational datable close by
+- Added a toggle for verbal cues when aiming at nearby datables. This can be toggled in accessibility settings. Switching it to Tone uses the sound cues from the original mod.
+- When tracking objectives with control+O, a situational datable close by
   comes first.
 - Then undiscovered datables in the room you're in, then the nearest room with an undiscovered datable.
 - Doors are automatically trackable when a new game starts, examining or interacting with other items will add them to the list.
@@ -57,7 +57,7 @@ section filter, and D toggles doors only.
 Situational Datables List
 =========================
 The following datables can be tracked with control+O, provided you're in the same room as them and have worked out their puzzles.
-1. Keith, )This will switch to Vaughn once you've interacted with Keith).
+1. Keith, (This will switch to Vaughn once you've interacted with Keith).
 2. Zoey
 3. Airyn
 4. Dolly
