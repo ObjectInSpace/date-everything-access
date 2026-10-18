@@ -4892,6 +4892,11 @@ namespace DateEverythingAccess
                 // landmarks, and a door you have not opened yet (the office closet) is exactly the
                 // thing you need to be able to walk to. Everything else appears only once
                 // encountered. Container doors (cupboards, fridge) count as objects, not doors.
+                // The trapdoor and ladder under the closet rug: not until the rug has been moved,
+                // in the list or the room scan, whatever else the player has done.
+                if (IsCrawlspacePassageObject(liveObj) && !IsCrawlspacePassageRevealed())
+                    continue;
+
                 if (!includeUnencountered &&
                     !IsStartupOfficeDoorObject(liveObj, fixture.name) &&
                     !IsAlwaysListedDoor(liveObj) &&
@@ -5104,6 +5109,17 @@ namespace DateEverythingAccess
             return table;
         }
 
+        // Objects under a catch-all container whose room the spatial fallback gets wrong, pinned to
+        // their room by a container's exact name. The room boxes overlap a lot: the key box on
+        // the upstairs hall table lies inside Bathroom 2's box too, which won. Only the key box:
+        // Keith starts as the key in the crawlspace (SkeletonKey, in the same Keith_Key folder).
+        private static readonly Dictionary<string, string> _pinnedObjectRooms =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "KeyBox", "UpstairsHall" },
+                { "KeyBox Empty", "UpstairsHall" },
+            };
+
         // Spoken room name for a room container. "Hallway" is the downstairs hall; say so, so it
         // is never confused with the upstairs hall.
         private static string RoomSpokenName(string container)
@@ -5153,6 +5169,11 @@ namespace DateEverythingAccess
             Transform house = null;
             while (current != null && depth < 16)
             {
+                if (_pinnedObjectRooms.TryGetValue(current.name ?? string.Empty, out string pinned))
+                {
+                    roomName = RoomSpokenName(pinned);
+                    return true;
+                }
                 if (_hierarchyRoomNames.TryGetValue(BuildComparisonKey(current.name), out string named))
                 {
                     roomName = named;
@@ -5984,6 +6005,69 @@ namespace DateEverythingAccess
         }
 
         private static readonly string[] HiddenPassageWords = { "trapdoor", "ladder", "crawlspace" };
+
+        // THE CLOSET RUG PUZZLE. The trapdoor to the crawlspace (and the ladder below it) lies
+        // under the rug in the office closet, and the player finds it by moving the rug. Both are
+        // part of Dorian, the door datable met in the tutorial, so "met" alone would list them
+        // straight away; they stay out of the object list and the room scan until the rug has
+        // been moved. The rug's move is its first alternate interaction; its interactedWithState
+        // is what the game saves for it (InteractableObj.StoreSaveData).
+        private static readonly string[] CrawlspacePassageWords = { "trapdoor", "crawlspaceladder" };
+        private const string ClosetRugName = "Rug_Closet_NEW_MODEL_UPDATE_ORIGIN";
+        private static InteractableObj _closetRug;
+        private static bool _loggedClosetRugMissing;
+
+        // The trapdoor, its handle, or the ladder (by its own or a parent's name).
+        private static bool IsCrawlspacePassageObject(InteractableObj interactable)
+        {
+            if (interactable == null || interactable.gameObject == null)
+                return false;
+            for (Transform t = interactable.transform; t != null; t = t.parent)
+            {
+                string n = t.name ?? string.Empty;
+                for (int i = 0; i < CrawlspacePassageWords.Length; i++)
+                    if (n.IndexOf(CrawlspacePassageWords[i], StringComparison.OrdinalIgnoreCase) >= 0)
+                        return true;
+            }
+            return false;
+        }
+
+        // True once the closet rug has been moved off the trapdoor, or the player is down in the
+        // crawlspace (only reachable through it).
+        private static bool IsCrawlspacePassageRevealed()
+        {
+            if (BetterPlayerControl.Instance != null &&
+                BetterPlayerControl.Instance.transform.position.y < CrawlspaceCeilingY)
+            {
+                return true;
+            }
+
+            if (_closetRug == null)
+            {
+                InteractableObj[] all = FindObjectsOfType<InteractableObj>();
+                for (int i = 0; i < all.Length; i++)
+                {
+                    if (all[i] != null && string.Equals(all[i].gameObject.name, ClosetRugName, StringComparison.Ordinal))
+                    {
+                        _closetRug = all[i];
+                        break;
+                    }
+                }
+            }
+
+            if (_closetRug == null || _closetRug.AlternateInteractions == null ||
+                _closetRug.AlternateInteractions.Count == 0 || _closetRug.AlternateInteractions[0] == null)
+            {
+                // Can't tell (the game has changed): don't hide the passage for good.
+                if (!_loggedClosetRugMissing && Main.Log != null)
+                {
+                    _loggedClosetRugMissing = true;
+                    Main.Log.LogWarning("Closet rug (" + ClosetRugName + ") or its move interaction not found; trapdoor and ladder listed regardless");
+                }
+                return true;
+            }
+            return _closetRug.AlternateInteractions[0].interactedWithState;
+        }
 
         // The cupboards and cabinets character. Matching on the character, not on names, keeps
         // out things that merely have "cabinet" or "cupboard" in their name (record sleeves,
