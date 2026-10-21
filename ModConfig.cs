@@ -86,7 +86,6 @@ namespace DateEverythingAccess
         private static ConfigEntry<bool> _readStatusChanges;
         private static ConfigEntry<TonePitchRegister> _trackerTonePitch;
         private static ConfigEntry<AimingHelpStyle> _aimingHelp;
-        private static ConfigEntry<bool> _captureNavRoutes;
         private static ConfigEntry<bool> _replanAfterStall;
         private static ConfigEntry<string> _coverageSweepRunId;
         private static InputModeHandle _inputModeHandle;
@@ -206,26 +205,16 @@ namespace DateEverythingAccess
                 "How you are helped to aim at an object once you are near it. Speech: spoken directions " +
                 "such as \"a little up\" and \"far left\". Tone: the original tracker tone, panned left or " +
                 "right toward the object, pitch for looking up or down, and a chirp when it is selected.");
-            _captureNavRoutes = config.Bind("Diagnostics", "CaptureNavRoutes", false,
-                "When true, every successful SimpleNavPlanner.Plan output is written to " +
-                "BepInEx/plugins/c_sharp_routes/route_<unix>_<idx>.json. Used by " +
-                "scripts/check_planner_parity.py to compare runtime planning against the " +
-                "Python planner. Off by default — turn on briefly to gather captures, then off.");
             _replanAfterStall = config.Bind("Diagnostics", "ReplanAfterStall", true,
                 "When true (the default), an auto-walk that stalls learns what it ran into, marks it " +
                 "blocked and plans a fresh route, up to three times. Set false to stop and report the " +
                 "stall at once instead, which keeps the original stall in the log for debugging.");
-            _coverageSweepRunId = config.Bind("Diagnostics", "CoverageSweepRunId", "default",
-                "Which artifacts/navigation/sweep/<run-id>/ manifest the coverage-sweep hotkey " +
-                "(Ctrl+Alt+Shift+F8) drives. 'default' = the walk-mode cell sweep; 'objects' = the " +
-                "object-reachability sweep (walk-chain: start where you are, walk to the nearest " +
-                "object, then the next; relocate-teleport only after several failures in a row).");
+            _coverageSweepRunId = config.Bind("Diagnostics", "CoverageSweepRunId", "objects",
+                "Run folder for the coverage-sweep hotkey (Ctrl+Alt+Shift+F8), under coverage_sweep next " +
+                "to the mod DLL (or COVERAGE_SWEEP_DIR). Results go to <folder>/sweep_results.json. With no " +
+                "sweep_manifest.json in the folder, it runs the object-reachability sweep over the bake's " +
+                "object list (walk-chain: start where you are, walk to the nearest object, then the next).");
         }
-
-        /// <summary>
-        /// When true, SimpleNavPlanner writes each plan output to disk for the offline parity check.
-        /// </summary>
-        public static bool CaptureNavRoutes => _captureNavRoutes != null && _captureNavRoutes.Value;
 
         /// <summary>
         /// Gets a value indicating whether a stalled auto-walk re-plans around what it ran into
@@ -234,14 +223,13 @@ namespace DateEverythingAccess
         public static bool ReplanAfterStall => _replanAfterStall == null || _replanAfterStall.Value;
 
         /// <summary>
-        /// The sweep run-id (subdirectory under artifacts/navigation/sweep/) the coverage-sweep
-        /// hotkey drives. Defaults to "default" when unset. Set to "objects" for the
-        /// object-reachability sweep.
+        /// The coverage-sweep run folder name (under coverage_sweep next to the mod DLL). Without a
+        /// manifest in it, the sweep visits every object in the bake's roster.
         /// </summary>
         public static string CoverageSweepRunId =>
             _coverageSweepRunId != null && !string.IsNullOrWhiteSpace(_coverageSweepRunId.Value)
                 ? _coverageSweepRunId.Value
-                : "default";
+                : "objects";
 
         /// <summary>
         /// Opens or closes the spoken settings menu.

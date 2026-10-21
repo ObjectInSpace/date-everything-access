@@ -11,8 +11,11 @@ namespace DateEverythingAccess
     /// <summary>
     /// O6.5 runtime planner: A* over per-floor navigable bitmaps (from
     /// <c>navigable_region.bake.json</c>) plus inter-floor edges, producing a
-    /// <see cref="SimpleNavRoute"/> directly. C# port of <c>scripts/plan_object_route.py</c>.
+    /// <see cref="SimpleNavRoute"/> directly.
     /// </summary>
+    // Originally a port of scripts/plan_object_route.py. That offline planner was retired on
+    // 2026-10-21 (it had drifted from this one); comments below that say "mirrors
+    // plan_object_route" refer to it as it stands in git history.
     internal static class SimpleNavPlanner
     {
         private const string BakeFileName = "navigable_region.bake.json";
@@ -105,8 +108,6 @@ namespace DateEverythingAccess
         // through them and tags them to be opened, routing to their baked operable cells.
         // Kept separate from _bakedDoorNames so the passage-vs-container distinction holds.
         private static readonly HashSet<string> _containerDoorNames = new HashSet<string>();
-        // Monotonic counter for capture filenames. Restarted at process start.
-        private static int _captureSeq;
 
         // Failure reasons surfaced by the most recent Plan() call. Read by the watcher to
         // announce *why* a route couldn't be built instead of silently dropping. Cleared at
@@ -833,9 +834,6 @@ namespace DateEverythingAccess
             while (route.SegmentDoorNames.Count < route.Waypoints.Count - 1)
                 route.SegmentDoorNames.Add(new List<string>(0));
 
-            if (ModConfig.CaptureNavRoutes)
-                TryCaptureRoute(startPos, targetPos, radius, targetName, startFloor.Label, route, totalCost);
-
             if (Main.Log != null)
             {
                 int doorSegs = 0;
@@ -860,101 +858,6 @@ namespace DateEverythingAccess
                 }
             }
             return route;
-        }
-
-        // ---- runtime capture for offline planner-parity check ----
-        //
-        // Writes each successful Plan() output to BepInEx/plugins/c_sharp_routes/
-        // route_<unix>_<seq>.json when ModConfig.CaptureNavRoutes is true. The
-        // file shape matches what scripts/check_planner_parity.py expects:
-        // target name/position/radius, start position/floor, the live overlay
-        // door+wall name sets, and the final waypoint sequence. Failures here
-        // are swallowed — capture is diagnostic and must never break gameplay.
-        private static void TryCaptureRoute(
-            Vector3 startPos, Vector3 targetPos, float radius, string targetName,
-            string startFloorLabel, SimpleNavRoute route, float totalCost)
-        {
-            try
-            {
-                string dir = Path.Combine(Paths.PluginPath, "c_sharp_routes");
-                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-                long unix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                int seq = System.Threading.Interlocked.Increment(ref _captureSeq);
-                string path = Path.Combine(dir, "route_" + unix + "_" + seq + ".json");
-
-                var sb = new System.Text.StringBuilder(512);
-                sb.Append("{\n");
-                sb.Append("  \"target_name\": ").Append(JsonString(targetName)).Append(",\n");
-                sb.Append("  \"target_position\": [")
-                    .Append(targetPos.x.ToString("F4")).Append(", ")
-                    .Append(targetPos.y.ToString("F4")).Append(", ")
-                    .Append(targetPos.z.ToString("F4")).Append("],\n");
-                sb.Append("  \"target_interaction_radius\": ").Append(radius.ToString("F4")).Append(",\n");
-                sb.Append("  \"start_position\": [")
-                    .Append(startPos.x.ToString("F4")).Append(", ")
-                    .Append(startPos.y.ToString("F4")).Append(", ")
-                    .Append(startPos.z.ToString("F4")).Append("],\n");
-                sb.Append("  \"start_floor\": ").Append(JsonString(startFloorLabel)).Append(",\n");
-                // The planner routes through every unlocked door (the executor
-                // opens path-doors en route), so the offline parity re-plan must
-                // do the same — emit the "unlocked" mode string, not just the
-                // live-open names. The Python Planner accepts doors_open="unlocked".
-                sb.Append("  \"doors_open\": \"unlocked\",\n");
-                sb.Append("  \"state_walls_open\": ").Append(JsonStringArray(_lastOpenStateWallNames)).Append(",\n");
-                sb.Append("  \"cost_m\": ").Append(totalCost.ToString("F4")).Append(",\n");
-                sb.Append("  \"waypoints\": [\n");
-                for (int i = 0; i < route.Waypoints.Count; i++)
-                {
-                    Vector3 w = route.Waypoints[i];
-                    sb.Append("    [")
-                        .Append(w.x.ToString("F4")).Append(", ")
-                        .Append(w.y.ToString("F4")).Append(", ")
-                        .Append(w.z.ToString("F4")).Append("]");
-                    if (i < route.Waypoints.Count - 1) sb.Append(",");
-                    sb.Append("\n");
-                }
-                sb.Append("  ]\n");
-                sb.Append("}\n");
-                File.WriteAllText(path, sb.ToString());
-            }
-            catch (Exception ex)
-            {
-                if (Main.Log != null)
-                    Main.Log.LogWarning("SimpleNavPlanner.TryCaptureRoute failed: " + ex.Message);
-            }
-        }
-
-        private static string JsonString(string s)
-        {
-            if (s == null) return "null";
-            var sb = new System.Text.StringBuilder(s.Length + 2);
-            sb.Append('"');
-            for (int i = 0; i < s.Length; i++)
-            {
-                char c = s[i];
-                if (c == '"' || c == '\\') { sb.Append('\\').Append(c); }
-                else if (c == '\n') sb.Append("\\n");
-                else if (c == '\r') sb.Append("\\r");
-                else if (c == '\t') sb.Append("\\t");
-                else if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("X4"));
-                else sb.Append(c);
-            }
-            sb.Append('"');
-            return sb.ToString();
-        }
-
-        private static string JsonStringArray(List<string> items)
-        {
-            if (items == null || items.Count == 0) return "[]";
-            var sb = new System.Text.StringBuilder();
-            sb.Append("[");
-            for (int i = 0; i < items.Count; i++)
-            {
-                if (i > 0) sb.Append(", ");
-                sb.Append(JsonString(items[i]));
-            }
-            sb.Append("]");
-            return sb.ToString();
         }
 
         /// <summary>Returns true if the bake is loaded and the planner is ready.</summary>
@@ -1008,6 +911,22 @@ namespace DateEverythingAccess
             if (!EnsureLoaded() || _bake == null || _bake.fixtures == null)
                 return System.Array.Empty<Fixture>();
             return _bake.fixtures;
+        }
+
+        /// <summary>
+        /// The grid frame of a baked floor ("ground", "upper"), for tools that map world positions
+        /// onto the bake's cells (the coverage sweep's coverage bitmaps).
+        /// </summary>
+        public static bool TryGetFloorFrame(string label, out float originX, out float originZ,
+            out float cellSize, out int nx, out int nz, out float floorY)
+        {
+            originX = originZ = cellSize = floorY = 0f;
+            nx = nz = 0;
+            Floor f = EnsureLoaded() ? FloorByLabel(label) : null;
+            if (f == null) return false;
+            originX = f.OriginX; originZ = f.OriginZ; cellSize = f.CellSize;
+            nx = f.Nx; nz = f.Nz; floorY = f.FloorY;
+            return true;
         }
 
         // Classify the navmesh state at a WORLD position, for the coverage sweep's stall triage.

@@ -40,11 +40,11 @@ namespace DateEverythingAccess
     // collapses to one outcome per object (arrival wins over an earlier failure).
     internal static class SimpleNavCoverageSweep
     {
-        // Sweep artifacts live in the project source tree, not in BepInEx/plugins, because the
-        // route catalogue is many thousands of files (~100 MB) we don't want to duplicate on
-        // every build. The harness reads them directly from the source path. If the project
-        // moves, override this via the COVERAGE_SWEEP_DIR env var.
-        private const string DefaultSweepSourceDir = @"C:\Users\amock\mod template\artifacts\navigation\sweep";
+        // Where run folders (<run-id>/sweep_results.json, optional sweep_manifest.json) live:
+        // the COVERAGE_SWEEP_DIR env var, else a coverage_sweep folder next to the mod DLL. No
+        // install or project location is assumed.
+        private static string DefaultSweepSourceDir =>
+            Path.Combine(Path.GetDirectoryName(typeof(SimpleNavCoverageSweep).Assembly.Location) ?? ".", "coverage_sweep");
         // Walk-mode only: settle wait after the single start teleport (objects-mode no longer
         // teleports per leg, so it doesn't use this).
         private const float WaitAfterTeleportSeconds = 0.25f;
@@ -259,12 +259,25 @@ namespace DateEverythingAccess
             string manifestPath = Path.Combine(_runDir, "sweep_manifest.json");
             if (!File.Exists(manifestPath))
             {
-                if (Main.Log != null) Main.Log.LogError("SimpleNavCoverageSweep: manifest missing at " + manifestPath);
-                ScreenReader.Say("Coverage sweep manifest not found", remember: false);
-                return;
+                // No manifest: an objects sweep over the bake's own fixture roster, the same list
+                // the object picker uses. (Manifests used to come from the offline Python planner,
+                // which has been retired; a hand-made manifest in the run folder still wins.)
+                _manifest = BuildRosterManifest(runId);
+                if (_manifest == null)
+                {
+                    if (Main.Log != null) Main.Log.LogError("SimpleNavCoverageSweep: no manifest at " + manifestPath + " and no fixture roster in the bake");
+                    ScreenReader.Say("Coverage sweep has no objects to visit", remember: false);
+                    return;
+                }
+                Directory.CreateDirectory(_runDir);
+                if (Main.Log != null)
+                    Main.Log.LogInfo("SimpleNavCoverageSweep: objects sweep from the bake roster, entries=" +
+                        _manifest.entries.Length + " offFloor=" + _manifest.excluded_exterior_count + " results in " + _runDir);
             }
-
-            _manifest = LoadManifest(manifestPath);
+            else
+            {
+                _manifest = LoadManifest(manifestPath);
+            }
             if (_manifest == null)
             {
                 ScreenReader.Say("Coverage sweep manifest unreadable", remember: false);
@@ -2312,6 +2325,51 @@ namespace DateEverythingAccess
             public string back_path;
             public float back_distance;
             public bool all_horizontal_clear;
+        }
+
+        // An objects-mode manifest built from the bake's fixture roster: one entry per fixture on a
+        // baked floor (off-floor ones, such as exterior decor, are only counted). The live planner
+        // decides reachability for every entry, as it already does for the legs it drives.
+        private static SweepManifest BuildRosterManifest(string runId)
+        {
+            IReadOnlyList<SimpleNavPlanner.Fixture> roster = SimpleNavPlanner.GetFixtureRoster();
+            if (roster == null || roster.Count == 0)
+                return null;
+            var entries = new List<ManifestEntry>(roster.Count);
+            int offFloor = 0;
+            for (int i = 0; i < roster.Count; i++)
+            {
+                SimpleNavPlanner.Fixture fx = roster[i];
+                if (fx == null || fx.position == null || fx.position.Length < 3) continue;
+                if (string.IsNullOrEmpty(fx.floor)) { offFloor++; continue; }
+                entries.Add(new ManifestEntry
+                {
+                    floor = fx.floor,
+                    status = "ok",
+                    name = fx.name,
+                    object_id = fx.object_ids != null && fx.object_ids.Length > 0 ? fx.object_ids[0] : 0,
+                    unique_id = fx.unique_id,
+                    unique_ids = fx.unique_ids,
+                    object_xyz = new[] { fx.position[0], fx.position[1], fx.position[2] },
+                    interaction_radius = fx.interaction_radius,
+                });
+            }
+            return new SweepManifest
+            {
+                run_id = runId,
+                mode = "objects",
+                floor_frames = new ManifestFloorFrames { ground = RosterFloorFrame("ground"), upper = RosterFloorFrame("upper") },
+                entries = entries.ToArray(),
+                excluded_exterior_count = offFloor,
+            };
+        }
+
+        private static FloorFrame RosterFloorFrame(string label)
+        {
+            if (!SimpleNavPlanner.TryGetFloorFrame(label, out float ox, out float oz, out float cs,
+                    out int nx, out int nz, out float fy))
+                return null;
+            return new FloorFrame { origin_x = ox, origin_z = oz, cell_size = cs, nx = nx, nz = nz, floor_y = fy };
         }
 
         private static SweepManifest LoadManifest(string path)

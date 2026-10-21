@@ -135,11 +135,6 @@
          with its license texts in a Prism-Licenses folder beside it. -->
     <Copy SourceFiles="$(ProjectDir)lib\prism\prism.dll" DestinationFolder="$(GameDir)\" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(PrismLicenseFiles)" DestinationFiles="@(PrismLicenseFiles->'$(GameDir)\Prism-Licenses\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-    <!-- Wipe captured C# routes on every deploy: a new DLL or bake invalidates
-         them for parity diffing (they were planned against the old planner /
-         bake). Keeps c_sharp_routes/ self-limited and the parity check honest. -->
-    <RemoveDir Directories="$(GameDir)\BepInEx\plugins\c_sharp_routes" Condition="Exists('$(GameDir)\BepInEx\plugins\c_sharp_routes')" />
-    <Message Text="Cleared stale c_sharp_routes captures" Importance="High" />
   </Target>
 
 </Project>

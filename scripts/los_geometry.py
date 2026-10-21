@@ -4,9 +4,9 @@ LOS test.
 
 This is the parity-proven raycaster (validate_los.py reached 71/71 against the
 in-game LOS_PROBE rays — see [[project_navigation_offline_los_validator_2026_06_13]]).
-Both validate_los.py (the in-game-ray parity gate) and plan_object_route.py (the
-planner's synthetic-eye goal filter) import from here so there is ONE collider set
-and ONE raycaster, never two that can drift.
+validate_los.py (the in-game-ray parity gate) imports from here. The offline planner
+(plan_object_route.py) that also used it, through the synthetic-eye goal filter
+below, was retired on 2026-10-21; that filter is kept only as reference.
 
 Two consumers, two DIFFERENT rays — intentional, don't conflate:
   - validate_los.py replays the GAME's live-camera interaction ray (origin = camera

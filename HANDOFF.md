@@ -56,6 +56,14 @@ for the project rules.
 - At startup the log gets an `[INPUTMAP] Keyboard summary` of the key bindings, for
   remote testers whose keys misbehave.
 
+## Offline tools
+
+- Retired 2026-10-21: the offline planner, follower simulator, offline sweep planner and parity
+  check (they had drifted from the game). Test navigation in game. The coverage sweep
+  (Ctrl+Alt+Shift+F8) visits every object in the bake's roster; results go to
+  `BepInEx\plugins\coverage_sweep\<run-id>\sweep_results.json`. Kept: the bake scripts, the
+  scene exporters and `validate_los.py`.
+
 ## Open items
 
 - Open, from PR #1 (not merged yet; waiting on the author's evidence in the PR discussion):
