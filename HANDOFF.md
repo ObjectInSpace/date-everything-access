@@ -56,26 +56,20 @@ for the project rules.
 - At startup the log gets an `[INPUTMAP] Keyboard summary` of the key bindings, for
   remote testers whose keys misbehave.
 
-## Sight lines
-
-- The planner judges standing spots from the live camera height (about 5.7 m above the floor;
-  the player and house are built at 2x scale), read once per plan. It used to use 1.6 m.
-
 ## Offline tools
 
 - Retired 2026-10-21: the offline planner, follower simulator, offline sweep planner and parity
-  check (they had drifted from the game), and the sweep's cell-by-cell walk mode. Test
-  navigation in game. The coverage sweep
+  check (they had drifted from the game). Test navigation in game. The coverage sweep
   (Ctrl+Alt+Shift+F8) visits every object in the bake's roster; results go to
   `BepInEx\plugins\coverage_sweep\<run-id>\sweep_results.json`. Kept: the bake scripts, the
   scene exporters and `validate_los.py`.
 
 ## Open items
 
-- From PR #1, merged untested on 2026-10-21 for testing all together: the 35-degree corner
-  hold, the clearance-3 standpoint tiers for ordinary targets, and the "deep" operable-cell
-  filter for door targets. Look at these first if routes end badly or corners snag.
-- Still open (needs the author's CrossOver tester): PR #1's adaptive turn speed-up.
+- Open, from PR #1 (not merged yet; waiting on the author's evidence in the PR discussion):
+  the adaptive turn speed-up for CrossOver, the 35-degree corner hold, the 4.5 m limit on
+  stand-in parts, the clearance-3 standpoint tiers for ordinary targets, and the "deep"
+  operable-cell filter for door targets. Their code is still on the PR branch.
 - Decided against: PR #1's steeper clearance-penalty table (replaying 64 baseline routes showed
   no change in wall clearance or route length).
 

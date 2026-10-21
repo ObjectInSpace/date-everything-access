@@ -162,7 +162,6 @@ namespace DateEverythingAccess
             }
 
             PruneRuntimeBlockers();
-            _planEyeHeightM = LiveEyeHeightM();
 
             // Reflect live Door.open states into per-floor freed-cell overlays so A* can route
             // through doors that are already open. Closed doors fall back to the bake's
@@ -358,28 +357,7 @@ namespace DateEverythingAccess
                     LastFailure = PlanFailure.DoorMissingOperableCells;
                     return null;
                 }
-                // The bake worked out the operable cells for a 0.4 m body; the real one is 0.8 m, so
-                // a cell on the edge of that set has the player's shoulder inside the door's swing
-                // (the game then won't open it — the office closet). Keep cells with a full 0.4 m of
-                // operable (or solid) ground around them when there are any.
-                List<NodeKey> deepGoals = new List<NodeKey>(opGoals.Count);
-                for (int gi = 0; gi < opGoals.Count; gi++)
-                {
-                    NodeKey og = opGoals[gi];
-                    bool deep = true;
-                    for (int ddx = -OperableMarginCells; ddx <= OperableMarginCells && deep; ddx++)
-                        for (int ddz = -OperableMarginCells; ddz <= OperableMarginCells && deep; ddz++)
-                        {
-                            int nx = og.Ix + ddx, nz = og.Iz + ddz;
-                            if (goalFloor.Navigable(nx, nz) && !operable.Contains(Floor.PackCell(nx, nz)))
-                                deep = false;
-                        }
-                    if (deep) deepGoals.Add(og);
-                }
-                goals = deepGoals.Count > 0 ? deepGoals : opGoals;
-                if (Main.Log != null)
-                    Main.Log.LogInfo("SimpleNavPlanner.Plan: door operable goals " + opGoals.Count +
-                        ", clear of the swing for the real body " + deepGoals.Count + " (door=" + targetDoor.gameObject.name + ")");
+                goals = opGoals;
                 // A walk to a door stops on the player's side of it: never plan through the door to
                 // a spot in the room beyond (after a stall blocked the spots in front of the laundry
                 // closet, the re-plan picked ones inside the closet and walked her into the door).
@@ -478,32 +456,80 @@ namespace DateEverythingAccess
                     Main.Log.LogInfo("SimpleNavPlanner.Plan: strict game-ray LOS kept " + losClear.Count +
                         " standpoint(s) for target=" + (targetName ?? "<null>") + "#" + targetGameObjectId);
 
-                // NO SIGHTLINE FROM ANYWHERE: walk to the nearest spots beside it anyway, and the aim
-                // help takes over on arrival, rather than refusing to go at all.
+                // NOTHING SEEN FROM 1.6 m. The sightline test looks from a 1.6 m eye, but the real
+                // camera sits far higher (the player is scaled 2x). The rose-stem inanimal on the
+                // laundry room windowsill is hidden behind the window from 1.6 m. Try again from the
+                // real camera height; if even that finds nothing, walk to the nearest spots beside it
+                // anyway, and the aim help takes over on arrival, rather than refusing to go at all.
                 if (losClear.Count == 0)
                 {
-                    for (int pass = 0; pass < 2 && losClear.Count == 0; pass++)
+                    float liveEye = LiveEyeHeightM();
+                    InteractableObj retryIo = ResolveTargetInteractable(targetGameObjectId);
+                    if (liveEye > InteractionEyeHeightM + 0.5f)
                     {
-                        for (int i = 0; i < goals.Count; i++)
+                        _losEyeHeightOverride = liveEye;
+                        _strictLosCollider = targetCollider;
+                        _strictLosTarget = retryIo;
+                        try
                         {
-                            NodeKey g = goals[i];
-                            Vector2 axz = goalFloor.CellToWorld(g.Ix, g.Iz);
-                            Vector3 aCell = new Vector3(axz.x, goalFloor.FloorY + 1.0f, axz.y);
-                            Vector3 aNear = targetCollider.ClosestPointOnBounds(aCell);
-                            float adx = aNear.x - aCell.x, adz = aNear.z - aCell.z;
-                            float ad2 = adx * adx + adz * adz;
-                            if (ad2 < innerSq) continue;
-                            if (pass == 0 && ad2 > ApproachOnlyWithinM * ApproachOnlyWithinM) continue;
-                            losClear.Add(g);
-                            passedOf.Add(new HashSet<string>(StringComparer.Ordinal));
-                            clearanceOf.Add(0f);
-                            goalQuality[g] = 0f;
+                            for (int i = 0; i < goals.Count; i++)
+                            {
+                                NodeKey g = goals[i];
+                                Vector2 rxz = goalFloor.CellToWorld(g.Ix, g.Iz);
+                                Vector3 rCell = new Vector3(rxz.x, goalFloor.FloorY + 1.0f, rxz.y);
+                                Vector3 rNear = targetCollider.ClosestPointOnBounds(rCell);
+                                float rdx = rNear.x - rCell.x, rdz = rNear.z - rCell.z;
+                                if (rdx * rdx + rdz * rdz < innerSq) continue;
+                                HashSet<string> rPassed = new HashSet<string>(StringComparer.Ordinal);
+                                float rMargin = CellLineOfSightClearanceM(goalFloor, g, targetCollider, radius, rPassed);
+                                if (rMargin < 0f) continue;
+                                losClear.Add(g);
+                                passedOf.Add(rPassed);
+                                clearanceOf.Add(rMargin);
+                                if (rMargin > bestClearance) bestClearance = rMargin;
+                                goalQuality[g] = rMargin;
+                            }
                         }
+                        finally
+                        {
+                            _losEyeHeightOverride = 0f;
+                            _strictLosCollider = null;
+                            _strictLosTarget = null;
+                        }
+                        // These passed the game-exact test, so the lenient-mode front/back guess below
+                        // must not second-guess them (it kept only the rose stem's outdoor side).
+                        if (losClear.Count > 0 && retryIo != null)
+                            usedStrictLos = true;
+                        if (Main.Log != null)
+                            Main.Log.LogInfo("SimpleNavPlanner.Plan: sightline retry from the real camera height (" +
+                                liveEye.ToString("F2") + " m) kept " + losClear.Count + " standpoint(s) for target=" +
+                                (targetName ?? "<null>"));
                     }
-                    if (losClear.Count > 0 && Main.Log != null)
-                        Main.Log.LogWarning("SimpleNavPlanner.Plan: no sightline to target=" + (targetName ?? "<null>") +
-                            " from anywhere; walking to the nearest of " + losClear.Count +
-                            " spots beside it instead (the aim help takes over there)");
+                    if (losClear.Count == 0)
+                    {
+                        for (int pass = 0; pass < 2 && losClear.Count == 0; pass++)
+                        {
+                            for (int i = 0; i < goals.Count; i++)
+                            {
+                                NodeKey g = goals[i];
+                                Vector2 axz = goalFloor.CellToWorld(g.Ix, g.Iz);
+                                Vector3 aCell = new Vector3(axz.x, goalFloor.FloorY + 1.0f, axz.y);
+                                Vector3 aNear = targetCollider.ClosestPointOnBounds(aCell);
+                                float adx = aNear.x - aCell.x, adz = aNear.z - aCell.z;
+                                float ad2 = adx * adx + adz * adz;
+                                if (ad2 < innerSq) continue;
+                                if (pass == 0 && ad2 > ApproachOnlyWithinM * ApproachOnlyWithinM) continue;
+                                losClear.Add(g);
+                                passedOf.Add(new HashSet<string>(StringComparer.Ordinal));
+                                clearanceOf.Add(0f);
+                                goalQuality[g] = 0f;
+                            }
+                        }
+                        if (losClear.Count > 0 && Main.Log != null)
+                            Main.Log.LogWarning("SimpleNavPlanner.Plan: no sightline to target=" + (targetName ?? "<null>") +
+                                " from anywhere; walking to the nearest of " + losClear.Count +
+                                " spots beside it instead (the aim help takes over there)");
+                    }
                 }
 
                 // FRONT-APPROACH: if this object faces one way and has LOS-clear cells on BOTH its
@@ -588,7 +614,7 @@ namespace DateEverythingAccess
                     // and let GoalViewQuality's diagonal-angle term rank them. See
                     // [[project_navigation_los_camera_origin_mismatch_2026_06_14]].
                     bool targetHighMounted =
-                        (targetCollider.bounds.center.y - (goalFloor.FloorY + SightlineEyeHeightM)) > HighMountEyeRiseM;
+                        (targetCollider.bounds.center.y - (goalFloor.FloorY + InteractionEyeHeightM)) > HighMountEyeRiseM;
                     HashSet<string> containerDoorsSeen = new HashSet<string>(StringComparer.Ordinal);
                     if (bestClearance > 0f && !targetHighMounted)
                     {
@@ -627,10 +653,8 @@ namespace DateEverythingAccess
 
             List<NodeKey> path = null;
             float totalCost = 0f;
-            // BODY-ROOM GOALS: the bake grid is dilated for a 0.4 m capsule but the player's real
-            // capsule is 0.8 m, so a goal cell hard against a counter, wall or table leaves her
-            // pressing into it at the end of the walk (the kitchen-cupboard stall). Prefer goal cells
-            // with room for the real body; fall back to tighter tiers, then to the full set.
+            // Set when the door-front pass below already planned the route. (PR #1's general
+            // "body-room" goal tiers for non-door targets are held back pending evidence.)
             bool roomyPlanned = false;
 
             // DOOR TARGET: finish squarely in front of the doorway, on the player's side, so walking
@@ -674,19 +698,6 @@ namespace DateEverythingAccess
                 }
             }
 
-            for (int need = BodyGoalClearanceCells; need >= 2 && !roomyPlanned; need--)
-            {
-                List<NodeKey> roomy = GoalsWithClearance(goals, need);
-                if (roomy == null) continue;
-                if (AStar(startNode, roomy, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost, goalQuality))
-                {
-                    roomyPlanned = true;
-                    if (Main.Log != null)
-                        Main.Log.LogInfo("SimpleNavPlanner.Plan: body-room goals clearance>=" + need +
-                            " kept " + roomy.Count + "/" + goals.Count + " for target=" + (targetName ?? "<null>"));
-                    goals = roomy;
-                }
-            }
             if (!roomyPlanned &&
                 !AStar(startNode, goals, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost, goalQuality))
             {
@@ -2436,22 +2447,22 @@ namespace DateEverythingAccess
             return null;
         }
 
-        // Camera height above the floor when the live camera can't be read. The player and house are
-        // built at 2x scale: the game's interaction ray starts ~5.7 m up (median of the in-game
-        // LOS_PROBE origins, 5.66 m ground floor / 6.07 m upper). The old 1.6 m standing-eye guess
-        // judged sightlines from far below where the game actually looks.
-        private const float InteractionEyeHeightM = 5.7f;
-        // The camera height used by every sightline test in the current Plan(), read once from the
-        // live camera at the start of the plan (see Plan).
-        [ThreadStatic] private static float _planEyeHeightM;
-        private static float SightlineEyeHeightM => _planEyeHeightM > 0f ? _planEyeHeightM : InteractionEyeHeightM;
+        // Eye height (m above the floor) for the interaction line-of-sight test. The game's
+        // interaction ray originates at the player camera; ~1.6m is a standing eye height and
+        // matches where the camera sits on the player capsule.
+        private const float InteractionEyeHeightM = 1.6f;
+        // When set (> 0), the sightline test looks from this height instead (the retry from the real
+        // camera height for things hidden from 1.6 m).
+        [ThreadStatic] private static float _losEyeHeightOverride;
+        private static float SightlineEyeHeightM => _losEyeHeightOverride > 0f ? _losEyeHeightOverride : InteractionEyeHeightM;
         // With no sightline from anywhere, walk to spots within this distance of the target.
         private const float ApproachOnlyWithinM = 3.0f;
         private const float LookPitchMarginDeg = 8f;
         private static System.Reflection.FieldInfo _maxRotField;
         private static bool _maxRotFieldLooked;
 
-        // The live camera height above the player's feet, falling back to the measured height.
+        // The live camera height above the player's feet (the capsule is scaled 2x, so the
+        // bake-era 1.6 m guess is well short), falling back to that guess.
         public static float LiveEyeHeightM()
         {
             BetterPlayerControl bpc = BetterPlayerControl.Instance;
@@ -2572,7 +2583,7 @@ namespace DateEverythingAccess
                 return quality;
 
             Vector2 xz = floor.CellToWorld(g.Ix, g.Iz);
-            Vector3 eye = new Vector3(xz.x, floor.FloorY + SightlineEyeHeightM, xz.y);
+            Vector3 eye = new Vector3(xz.x, floor.FloorY + InteractionEyeHeightM, xz.y);
             Vector3 aim = InteractionAimPoint(targetCollider, eye);
             float rise = aim.y - eye.y;                 // how far the target sits above eye level
             if (rise <= HighMountEyeRiseM)
@@ -2718,7 +2729,7 @@ namespace DateEverythingAccess
                 for (int n = 0; n < nearest.Count && n < 3; n++)
                 {
                     Vector2 xz = floor.CellToWorld(nearest[n].Value.Ix, nearest[n].Value.Iz);
-                    Vector3 eye = new Vector3(xz.x, floor.FloorY + SightlineEyeHeightM, xz.y);
+                    Vector3 eye = new Vector3(xz.x, floor.FloorY + InteractionEyeHeightM, xz.y);
                     Vector3 dir = (tc - eye).normalized;
                     Vector3 origin = eye - dir * 0.25f;
                     RaycastHit[] hits = Physics.RaycastAll(new Ray(origin, dir), Vector3.Distance(origin, tc) + 2f, mask);
