@@ -182,11 +182,29 @@ namespace DateEverythingAccess
                     if (segLen <= 1e-4f) return segEnd;
                     return cur + toEnd.normalized * remaining;
                 }
+                // CORNER HOLD. Don't let the lookahead slide around a SHARP corner: steering at a
+                // point past the vertex makes the player cut the corner along a chord, and with the
+                // player's real 0.8m body radius (the bake only reserves 0.4m) that chord drags a
+                // shoulder into the door jamb or furniture edge the route was bending around. For a
+                // sharp turn, aim at the vertex itself; once the player reaches it the projection
+                // moves onto the next segment and the lookahead resumes there.
+                if (seg + 2 < _waypoints.Count && IsSharpCornerXZ(cur, segEnd, _waypoints[seg + 2]))
+                    return segEnd;
                 remaining -= segLen;
                 seg++;
                 cur = _waypoints[seg];
             }
             return _waypoints[_waypoints.Count - 1];
+        }
+
+        private const float CornerHoldDeg = 35f;
+
+        private static bool IsSharpCornerXZ(Vector3 a, Vector3 b, Vector3 c)
+        {
+            Vector2 v1 = new Vector2(b.x - a.x, b.z - a.z);
+            Vector2 v2 = new Vector2(c.x - b.x, c.z - b.z);
+            if (v1.sqrMagnitude < 0.0025f || v2.sqrMagnitude < 0.0025f) return false;
+            return Vector2.Angle(v1, v2) > CornerHoldDeg;
         }
 
         // Clamped projection parameter of p onto segment [a,b], XZ only.
