@@ -667,6 +667,12 @@ namespace DateEverythingAccess
             {
                 ApplyNavigationInput(Vector3.zero, Vector3.zero);
                 _instance._isAutoWalking = false;
+                // Also stop FixedUpdate's per-physics-step steering, or it keeps turning toward the
+                // last route point and overwrites the sweep probe's look (it froze the camera's pitch
+                // and left it pointing at the ceiling for most of a sweep).
+                _instance._hasAutoWalkInput = false;
+                _instance._steerMode = SteerNone;
+                _instance._probeSteerActive = false;
                 _instance.ClearNavigationBlockedDetail();
             }
 
@@ -716,8 +722,8 @@ namespace DateEverythingAccess
 
             if (reset)
                 _instance._sweepProbeStartTime = Time.unscaledTime;
-
-            Transform playerTransform = BetterPlayerControl.Instance.transform;
+            // Steering runs only while this keeps reporting Turning (set again below each frame).
+            _instance._probeSteerActive = false;
 
             // Aim at the object so the game's targeting raycast can pick it up. World-targets
             // (no object id) have nothing to select — treat reaching the goal cell as the only
@@ -754,11 +760,10 @@ namespace DateEverythingAccess
             }
 
             // Keep turning toward the object's camera-facing point (yaw + pitch), no movement.
+            // FixedUpdate does the turning (see ApplyProbeSteerStep); this only sets the point.
             Vector3 lookPoint = ResolveSimpleRouteTargetLookPoint(route);
-            Vector3 lookInput = GetLookInputTowardRouteTarget(playerTransform, lookPoint);
-            if (lookInput.sqrMagnitude <= 0.0001f)
-                lookInput = new Vector3(0.2f, 0f, 0f); // nudge so a nominally-aligned-but-unselected target keeps searching
-            ApplyNavigationInput(Vector3.zero, lookInput);
+            _instance._probeSteerPoint = lookPoint;
+            _instance._probeSteerActive = true;
             return SweepProbeState.Turning;
         }
 
@@ -1025,6 +1030,11 @@ namespace DateEverythingAccess
                 return;
             if (_aimFineActive)
                 ApplyAimFineStep();
+            if (_probeSteerActive && !_isAutoWalking)
+            {
+                ApplyProbeSteerStep();
+                return;
+            }
             if (!_isAutoWalking || !_hasAutoWalkInput)
                 return;
             if (BetterPlayerControl.Instance == null)
@@ -1039,6 +1049,29 @@ namespace DateEverythingAccess
                 look = _steerMode == SteerFace ? fresh : new Vector3(fresh.x, 0f, 0f);
             }
             ApplyNavigationInput(_lastAutoWalkMove, look);
+        }
+
+        // SWEEP PROBE STEERING. The game overwrites its look field from the player's keys every
+        // frame, so a look command written once per frame (as the sweep's interaction probe used to)
+        // never reaches the camera; only writes made in FixedUpdate do (the same race autowalk
+        // wins by re-steering every physics step). While the probe is turning, FixedUpdate turns
+        // toward its look point; when the point is centred but not selected, a slow sweep to the
+        // side keeps it searching.
+        private bool _probeSteerActive;
+        private Vector3 _probeSteerPoint;
+        private const float ProbeSearchDegPerStep = 0.5f;
+
+        private void ApplyProbeSteerStep()
+        {
+            if (BetterPlayerControl.Instance == null || !SimpleNavCoverageSweep.IsActive)
+            {
+                _probeSteerActive = false;
+                return;
+            }
+            Vector3 look = GetLookInputTowardRouteTarget(BetterPlayerControl.Instance.transform, _probeSteerPoint, FinalAimDeadzoneDeg);
+            if (look.sqrMagnitude <= 1e-8f)
+                look = new Vector3(ProbeSearchDegPerStep / CameraRotDegPerStep(), 0f, 0f);
+            ApplyNavigationInput(Vector3.zero, look);
         }
 
         private const int SteerNone = 0, SteerTraverse = 1, SteerFace = 2;

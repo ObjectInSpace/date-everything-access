@@ -679,8 +679,10 @@ namespace DateEverythingAccess
         {
             _verifyGeometricallyAtCell = geometricallyAtCell;
             // Tear the autowalk drive down but keep the route installed — the probe needs the
-            // route's target to resolve the look point and the in-range match.
-            try { SimpleNavBridge.EndStep(); } catch { }
+            // route's target to resolve the look point and the in-range match. The watcher's
+            // autowalk must stop too: its per-physics-step steering otherwise keeps overwriting the
+            // probe's look (the probe holds its own reference to the route).
+            try { AccessibilityWatcher.StopCoverageSweepRoute(); } catch { }
             AccessibilityWatcher.ProbeSweepInteraction(_currentRoute, reset: true);
             _phase = Phase.Verifying;
         }
