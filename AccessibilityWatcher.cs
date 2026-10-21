@@ -2031,7 +2031,8 @@ namespace DateEverythingAccess
                 // the navigation bake does not know about, a moved prop, a corner the route shaved),
                 // mark it blocked, and plan a fresh route from here. Only for the user's own
                 // auto-walk, not the coverage sweep, which classifies stalls itself.
-                if (!SimpleNavCoverageSweep.IsActive && !turningToAlign && _stallReplans < MaxStallReplansPerRoute &&
+                if (ModConfig.ReplanAfterStall &&
+                    !SimpleNavCoverageSweep.IsActive && !turningToAlign && _stallReplans < MaxStallReplansPerRoute &&
                     TryLearnBlockerAndReplan(playerTransform, playerPos, walkDir))
                 {
                     _stallReplans++;

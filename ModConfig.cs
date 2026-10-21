@@ -87,6 +87,7 @@ namespace DateEverythingAccess
         private static ConfigEntry<TonePitchRegister> _trackerTonePitch;
         private static ConfigEntry<AimingHelpStyle> _aimingHelp;
         private static ConfigEntry<bool> _captureNavRoutes;
+        private static ConfigEntry<bool> _replanAfterStall;
         private static ConfigEntry<string> _coverageSweepRunId;
         private static InputModeHandle _inputModeHandle;
         private static volatile bool _menuOpen;
@@ -210,6 +211,10 @@ namespace DateEverythingAccess
                 "BepInEx/plugins/c_sharp_routes/route_<unix>_<idx>.json. Used by " +
                 "scripts/check_planner_parity.py to compare runtime planning against the " +
                 "Python planner. Off by default — turn on briefly to gather captures, then off.");
+            _replanAfterStall = config.Bind("Diagnostics", "ReplanAfterStall", true,
+                "When true (the default), an auto-walk that stalls learns what it ran into, marks it " +
+                "blocked and plans a fresh route, up to three times. Set false to stop and report the " +
+                "stall at once instead, which keeps the original stall in the log for debugging.");
             _coverageSweepRunId = config.Bind("Diagnostics", "CoverageSweepRunId", "default",
                 "Which artifacts/navigation/sweep/<run-id>/ manifest the coverage-sweep hotkey " +
                 "(Ctrl+Alt+Shift+F8) drives. 'default' = the walk-mode cell sweep; 'objects' = the " +
@@ -221,6 +226,12 @@ namespace DateEverythingAccess
         /// When true, SimpleNavPlanner writes each plan output to disk for the offline parity check.
         /// </summary>
         public static bool CaptureNavRoutes => _captureNavRoutes != null && _captureNavRoutes.Value;
+
+        /// <summary>
+        /// Gets a value indicating whether a stalled auto-walk re-plans around what it ran into
+        /// (default) or stops and reports the stall immediately (for debugging).
+        /// </summary>
+        public static bool ReplanAfterStall => _replanAfterStall == null || _replanAfterStall.Value;
 
         /// <summary>
         /// The sweep run-id (subdirectory under artifacts/navigation/sweep/) the coverage-sweep
