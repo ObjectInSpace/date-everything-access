@@ -1,8 +1,17 @@
 param(
     [string]$Configuration = "Release",
     [string]$ProjectPath = (Join-Path $PSScriptRoot "..\DateEverythingAccess.csproj"),
-    [string]$GamePath = "D:\SteamLibrary\steamapps\Common\Date Everything"
+    # Game folder. Found automatically (DATE_EVERYTHING_DIR, then every Steam library) when omitted.
+    [string]$GamePath
 )
+
+if (-not $GamePath) {
+    $GamePath = & (Join-Path $PSScriptRoot "Find-GameDir.ps1")
+    if (-not $GamePath) {
+        Write-Error "Date Everything not found. Pass -GamePath or set DATE_EVERYTHING_DIR."
+        exit 1
+    }
+}
 
 $resolvedProject = (Resolve-Path $ProjectPath).Path
 $projectDir = Split-Path -Parent $resolvedProject
@@ -34,10 +43,16 @@ $outputDllPath = Join-Path $projectDir "bin\$Configuration\net472\DateEverything
 $requiredGameFiles = @(
     ".doorstop_version",
     "doorstop_config.ini",
-    "winhttp.dll",
-    "Tolk.dll",
-    "nvdaControllerClient64.dll"
+    "winhttp.dll"
 )
+
+# Speech output: Prism ships from the repository (lib\prism), not from the game folder.
+$prismRoot = Join-Path $projectDir "lib\prism"
+$prismDll = Join-Path $prismRoot "prism.dll"
+if (-not (Test-Path -LiteralPath $prismDll)) {
+    Write-Error "prism.dll not found: $prismDll"
+    exit 1
+}
 
 foreach ($requiredFile in $requiredGameFiles) {
     $requiredPath = Join-Path $GamePath $requiredFile
@@ -60,7 +75,7 @@ if (-not (Test-Path -LiteralPath $releaseSourceRoot)) {
 
 Write-Host "Building portable release for $releaseTag..."
 $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "1"
-dotnet build $resolvedProject -c $Configuration --no-restore -p:SkipCopyToPlugins=true
+dotnet build $resolvedProject -c $Configuration --no-restore -p:SkipCopyToPlugins=true "-p:GameDir=$GamePath"
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Build failed."
     exit $LASTEXITCODE
@@ -102,6 +117,12 @@ Copy-Item -LiteralPath $coreSourcePath -Destination (Join-Path $packageRoot "Bep
 foreach ($requiredFile in $requiredGameFiles) {
     Copy-Item -LiteralPath (Join-Path $GamePath $requiredFile) -Destination (Join-Path $packageRoot $requiredFile) -Force
 }
+
+Copy-Item -LiteralPath $prismDll -Destination (Join-Path $packageRoot "prism.dll") -Force
+$prismLicenses = Join-Path $packageRoot "Prism-Licenses"
+New-Item -ItemType Directory -Path $prismLicenses -Force | Out-Null
+Copy-Item -Path (Join-Path $prismRoot "LICENSES\*") -Destination $prismLicenses -Recurse -Force
+Copy-Item -LiteralPath (Join-Path $prismRoot "NOTICE.txt"), (Join-Path $prismRoot "VERSION.txt") -Destination $prismLicenses -Force
 
 Copy-Item -LiteralPath (Join-Path $releaseSourceRoot "README.txt") -Destination (Join-Path $packageRoot "README.txt") -Force
 Copy-Item -LiteralPath (Join-Path $releaseSourceRoot "Install-DateEverythingAccess.ps1") -Destination (Join-Path $packageRoot "Install-DateEverythingAccess.ps1") -Force

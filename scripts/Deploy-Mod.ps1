@@ -1,7 +1,8 @@
 param(
     [string]$Configuration = "Debug",
     [string]$ProjectPath = (Join-Path $PSScriptRoot "..\DateEverythingAccess.csproj"),
-    [string]$GamePath = "D:\SteamLibrary\steamapps\Common\Date Everything",
+    # Game folder. Found automatically (DATE_EVERYTHING_DIR, then every Steam library) when omitted.
+    [string]$GamePath,
     # Legacy no-op switch kept for backward compatibility with older calls.
     [switch]$SkipNavigationLoopInspection,
     [switch]$RestorePackages
@@ -9,6 +10,13 @@ param(
 
 $resolvedProject = (Resolve-Path $ProjectPath).Path
 $projectDir = Split-Path -Parent $resolvedProject
+if (-not $GamePath) {
+    $GamePath = & (Join-Path $PSScriptRoot "Find-GameDir.ps1")
+    if (-not $GamePath) {
+        Write-Error "Date Everything not found. Pass -GamePath or set DATE_EVERYTHING_DIR."
+        exit 1
+    }
+}
 $targetDir = Join-Path $GamePath "BepInEx\plugins"
 
 if (-not (Test-Path -LiteralPath $targetDir)) {
@@ -19,7 +27,8 @@ if (-not (Test-Path -LiteralPath $targetDir)) {
 & (Join-Path $PSScriptRoot "Build-Mod.ps1") `
     -Configuration $Configuration `
     -ProjectPath $resolvedProject `
-    -RestorePackages:$RestorePackages
+    -RestorePackages:$RestorePackages `
+    -GamePath $GamePath
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }

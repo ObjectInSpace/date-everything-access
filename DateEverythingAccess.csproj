@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Where Date Everything is installed. Override with: dotnet build -p:GameDir="X:\path\to\Date Everything",
-         or set the DATE_EVERYTHING_DIR environment variable; otherwise the default Steam folder on C:. -->
+    <!-- Where Date Everything is installed. Pass -p:GameDir="X:\path\to\Date Everything" or set the
+         DATE_EVERYTHING_DIR environment variable. scripts\Build-Mod.ps1 finds it for you
+         (scripts\Find-GameDir.ps1 searches every Steam library). No install location is assumed. -->
     <GameDir Condition="'$(GameDir)' == '' and '$(DATE_EVERYTHING_DIR)' != ''">$(DATE_EVERYTHING_DIR)</GameDir>
-    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Date Everything</GameDir>
     <TargetFramework>net472</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
@@ -20,6 +20,11 @@
     <!-- Unrelated ASP.NET scratch project that lives in the repo root; not part of the mod. -->
     <Compile Remove="Accessibility before the storm\**" />
   </ItemGroup>
+
+  <Target Name="CheckGameDir" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="'$(GameDir)' == '' or !Exists('$(GameDir)\Date Everything.exe')"
+           Text="Date Everything not found (GameDir='$(GameDir)'). Build with scripts\Build-Mod.ps1, which finds the game, or pass -p:GameDir=&quot;X:\path\to\Date Everything&quot;, or set DATE_EVERYTHING_DIR." />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />

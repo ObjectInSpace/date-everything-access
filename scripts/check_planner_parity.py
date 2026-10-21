@@ -48,6 +48,7 @@ CLI:
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import sys
 from pathlib import Path
@@ -56,10 +57,11 @@ ROOT = Path(__file__).resolve().parents[1]
 # Default capture locations, in priority order:
 # 1. BepInEx plugins dir (where the live mod writes when CaptureNavRoutes=true)
 # 2. artifacts/navigation/c_sharp_routes (manual copies for CI / archiving)
-DEFAULT_CAPTURE_DIRS = [
-    Path("D:/SteamLibrary/steamapps/Common/Date Everything/BepInEx/plugins/c_sharp_routes"),
-    ROOT / "artifacts" / "navigation" / "c_sharp_routes",
-]
+#    (the game folder comes from DATE_EVERYTHING_DIR; pass --captures otherwise)
+_GAME_DIR = os.environ.get("DATE_EVERYTHING_DIR")
+DEFAULT_CAPTURE_DIRS = (
+    [Path(_GAME_DIR) / "BepInEx" / "plugins" / "c_sharp_routes"] if _GAME_DIR else []
+) + [ROOT / "artifacts" / "navigation" / "c_sharp_routes"]
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import plan_object_route as planner_mod  # noqa: E402
