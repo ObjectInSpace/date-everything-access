@@ -162,7 +162,7 @@ namespace DateEverythingAccess
             }
 
             PruneRuntimeBlockers();
-            _planEyeHeightM = LiveCameraHeightAboveFloorM();
+            ReadLiveEyeData();
             var planWatch = System.Diagnostics.Stopwatch.StartNew();
 
             // Reflect live Door.open states into per-floor freed-cell overlays so A* can route
@@ -540,7 +540,7 @@ namespace DateEverythingAccess
                 // others remain.
                 if (losClear.Count > 0)
                 {
-                    float eyeH = LiveEyeHeightM();
+                    float eyeY = EyeYOnFloor(goalFloor);
                     float maxPitch = LiveMaxCameraPitchDeg() - LookPitchMarginDeg;
                     var okGoals = new List<NodeKey>(losClear.Count);
                     var okPassed = new List<HashSet<string>>(losClear.Count);
@@ -548,7 +548,7 @@ namespace DateEverythingAccess
                     for (int i = 0; i < losClear.Count; i++)
                     {
                         Vector2 cw = goalFloor.CellToWorld(losClear[i].Ix, losClear[i].Iz);
-                        Vector3 eyePos = new Vector3(cw.x, goalFloor.FloorY + eyeH, cw.y);
+                        Vector3 eyePos = new Vector3(cw.x, eyeY, cw.y);
                         Vector3 aimAt = targetCollider.ClosestPointOnBounds(eyePos);
                         float horiz = new Vector2(aimAt.x - eyePos.x, aimAt.z - eyePos.z).magnitude;
                         float pitch = Mathf.Atan2(Mathf.Abs(aimAt.y - eyePos.y), Mathf.Max(0.01f, horiz)) * Mathf.Rad2Deg;
@@ -562,7 +562,7 @@ namespace DateEverythingAccess
                         if (Main.Log != null)
                             Main.Log.LogInfo("SimpleNavPlanner.Plan: look-angle limit kept " + okGoals.Count + "/" +
                                 losClear.Count + " standpoints for target=" + (targetName ?? "<null>") +
-                                " (eye " + eyeH.ToString("F2") + " m, max " + maxPitch.ToString("F0") + " deg)");
+                                " (eyeY " + eyeY.ToString("F2") + ", max " + maxPitch.ToString("F0") + " deg)");
                         losClear = okGoals;
                         passedOf = okPassed;
                         clearanceOf = okClear;
@@ -589,7 +589,7 @@ namespace DateEverythingAccess
                     // and let GoalViewQuality's diagonal-angle term rank them. See
                     // [[project_navigation_los_camera_origin_mismatch_2026_06_14]].
                     bool targetHighMounted =
-                        (targetCollider.bounds.center.y - (goalFloor.FloorY + SightlineEyeHeightM)) > HighMountEyeRiseM;
+                        (targetCollider.bounds.center.y - EyeYOnFloor(goalFloor)) > HighMountEyeRiseM;
                     HashSet<string> containerDoorsSeen = new HashSet<string>(StringComparer.Ordinal);
                     if (bestClearance > 0f && !targetHighMounted)
                     {
@@ -833,7 +833,7 @@ namespace DateEverythingAccess
                     " waypoints=" + route.Waypoints.Count +
                     " segmentsWithDoor=" + doorSegs +
                     " cost_m=" + totalCost.ToString("F2") + " planMs=" + planWatch.ElapsedMilliseconds +
-                    " eyeH=" + SightlineEyeHeightM.ToString("F2"));
+                    " eyeY=" + EyeYOnFloor(goalFloor).ToString("F2") + " camAboveFeet=" + CameraAboveFeetM().ToString("F2"));
                 // Diagnostic: log every waypoint XYZ so we can compare against the bake PPM
                 // when the executor reports a wall-clipping route failure.
                 for (int i = 0; i < route.Waypoints.Count; i++)
@@ -2438,53 +2438,74 @@ namespace DateEverythingAccess
             return null;
         }
 
-        // WHERE THE GAME'S RAY STARTS. Measured from the game's own interaction rays (LOS_PROBE
-        // origins paired with the player's position, 2,868 samples, 2026-10-21): the camera sits
-        // DIRECTLY above the player's feet, with no horizontal offset at any pitch (first-person),
-        // 4.86 m above the feet, about 4.76 m above the ground-floor plane. The player and house are
-        // built at 2x scale; the old 1.6 m "standing eye" was a guess, kept only so the sight audit
-        // can compare against it.
+        // WHERE THE GAME'S RAY STARTS. Measured from the game itself (2026-10-22): the camera sits
+        // DIRECTLY above the player's feet, with no horizontal offset at any pitch (2,868 interaction
+        // rays paired with the player's position), 4.86 m above the feet on the ground floor (8,444
+        // samples) and 4.85 m upstairs (949). The feet do NOT rest on the bake's floor plane: -0.60 on
+        // the ground floor (plane -0.50) and 12.82 upstairs (plane 12.50). So the eye at a standpoint
+        // is that floor's feet level plus the camera's height above the feet, both read live from the
+        // game; the old 1.6 m "standing eye" was a guess, kept only for the sight audit to compare.
         private const float LegacyEyeHeightM = 1.6f;
-        private const float MeasuredCameraHeightAboveFloorM = 4.76f;
-        // The camera height above the floor plane used by every sightline test in the current
-        // Plan(), read once from the live camera at the start of the plan (see Plan).
-        [ThreadStatic] private static float _planEyeHeightM;
-        private static float SightlineEyeHeightM => _planEyeHeightM > 0f ? _planEyeHeightM : MeasuredCameraHeightAboveFloorM;
+        // Camera above the feet, read live at the start of every plan (the last good reading is kept).
+        private static float _cameraAboveFeetM = -1f;
+        // Where the feet rest on each floor: updated from the player whenever they stand on that floor,
+        // seeded with the values measured from the logs above until they do.
+        private static readonly Dictionary<string, float> _feetLevelByFloor =
+            new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase) { { "ground", -0.60f }, { "upper", 12.82f } };
+        private static readonly HashSet<string> _feetLevelMissingLogged = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // With no sightline from anywhere, walk to spots within this distance of the target.
         private const float ApproachOnlyWithinM = 3.0f;
         private const float LookPitchMarginDeg = 8f;
         private static System.Reflection.FieldInfo _maxRotField;
         private static bool _maxRotFieldLooked;
 
-        // The live camera height above the floor plane the player stands on (the planner places the
-        // eye at FloorY + this), falling back to the measured height.
-        public static float LiveCameraHeightAboveFloorM()
+        // Read the camera's height above the feet, and the feet level of the floor the player is
+        // standing on (only when actually standing on it, not mid-stairs).
+        private static void ReadLiveEyeData()
         {
             BetterPlayerControl bpc = BetterPlayerControl.Instance;
             Camera cam = Camera.main;
-            if (bpc != null && cam != null && EnsureLoaded())
+            if (bpc == null || cam == null)
             {
-                Floor f = FloorForY(bpc.transform.position.y, StartFloorMatchToleranceM);
-                if (f != null)
-                {
-                    float h = cam.transform.position.y - f.FloorY;
-                    if (h > 0.5f && h < 10f) return h;
-                }
+                if (Main.Log != null)
+                    Main.Log.LogError("SimpleNavPlanner: cannot read the camera or player for sightlines (camera=" +
+                        (cam != null) + " player=" + (bpc != null) + "); using the last reading " + _cameraAboveFeetM.ToString("F2"));
+                return;
             }
-            return MeasuredCameraHeightAboveFloorM;
+            float feetY = bpc.transform.position.y;
+            _cameraAboveFeetM = cam.transform.position.y - feetY;
+            Floor f = FloorForY(feetY, StartFloorMatchToleranceM);
+            if (f != null && Mathf.Abs(feetY - f.FloorY) <= RuntimeBlockerMaxFloorOffsetM)
+                _feetLevelByFloor[f.Label] = feetY;
         }
 
-        // The live camera height above the player's feet, falling back to the measured height.
+        // The game's camera height at a standpoint on `floor`.
+        private static float EyeYOnFloor(Floor floor)
+        {
+            float feet;
+            if (!_feetLevelByFloor.TryGetValue(floor.Label, out feet))
+            {
+                // Never stood on this floor this session and no measurement for it (the crawlspace):
+                // the floor plane is the only reference there is. Said once in the log.
+                feet = floor.FloorY;
+                if (_feetLevelMissingLogged.Add(floor.Label) && Main.Log != null)
+                    Main.Log.LogWarning("SimpleNavPlanner: no measured feet level for floor " + floor.Label +
+                        " yet; using its floor plane until the player stands on it");
+            }
+            return feet + CameraAboveFeetM();
+        }
+
+        private static float CameraAboveFeetM()
+        {
+            if (_cameraAboveFeetM < 0f)
+                ReadLiveEyeData();
+            return _cameraAboveFeetM;
+        }
+
+        // The live camera height above the player's feet.
         public static float LiveEyeHeightM()
         {
-            BetterPlayerControl bpc = BetterPlayerControl.Instance;
-            Camera cam = Camera.main;
-            if (bpc != null && cam != null)
-            {
-                float h = cam.transform.position.y - bpc.transform.position.y;
-                if (h > 0.5f && h < 8f) return h;
-            }
-            return MeasuredCameraHeightAboveFloorM + 0.1f;
+            return CameraAboveFeetM();
         }
 
         // How far the game lets the camera tilt up or down (BetterPlayerControl.maxrot, 70 by
@@ -2595,7 +2616,7 @@ namespace DateEverythingAccess
                 return quality;
 
             Vector2 xz = floor.CellToWorld(g.Ix, g.Iz);
-            Vector3 eye = new Vector3(xz.x, floor.FloorY + SightlineEyeHeightM, xz.y);
+            Vector3 eye = new Vector3(xz.x, EyeYOnFloor(floor), xz.y);
             Vector3 aim = InteractionAimPoint(targetCollider, eye);
             float rise = aim.y - eye.y;                 // how far the target sits above eye level
             if (rise <= HighMountEyeRiseM)
@@ -2638,7 +2659,7 @@ namespace DateEverythingAccess
             try
             {
                 Vector2 xz = floor.CellToWorld(g.Ix, g.Iz);
-                Vector3 eye = new Vector3(xz.x, floor.FloorY + SightlineEyeHeightM, xz.y);
+                Vector3 eye = new Vector3(xz.x, EyeYOnFloor(floor), xz.y);
                 BetterPlayerControl bpc = BetterPlayerControl.Instance;
                 int mask = bpc != null ? ~(int)bpc.dateviatorIgnores : ~0;
                 // See the CAMERA-POSE MODEL note in TryAimFromCell: the game casts from the camera
@@ -2741,7 +2762,7 @@ namespace DateEverythingAccess
                 for (int n = 0; n < nearest.Count && n < 3; n++)
                 {
                     Vector2 xz = floor.CellToWorld(nearest[n].Value.Ix, nearest[n].Value.Iz);
-                    Vector3 eye = new Vector3(xz.x, floor.FloorY + SightlineEyeHeightM, xz.y);
+                    Vector3 eye = new Vector3(xz.x, EyeYOnFloor(floor), xz.y);
                     Vector3 dir = (tc - eye).normalized;
                     Vector3 origin = eye - dir * 0.25f;
                     RaycastHit[] hits = Physics.RaycastAll(new Ray(origin, dir), Vector3.Distance(origin, tc) + 2f, mask);
@@ -3058,9 +3079,8 @@ namespace DateEverythingAccess
                 Collider col = ResolveTargetCollider(targetGameObjectId);
                 if (floor == null || col == null) return "no floor or collider";
                 InteractableObj io = ResolveTargetInteractable(targetGameObjectId);
-                float liveH = LiveCameraHeightAboveFloorM();
                 Vector3 oldEye = new Vector3(feet.x, floor.FloorY + LegacyEyeHeightM, feet.z);
-                Vector3 newEye = new Vector3(feet.x, floor.FloorY + liveH, feet.z);
+                Vector3 newEye = new Vector3(feet.x, EyeYOnFloor(floor), feet.z);
                 Camera cam = Camera.main;
                 string camNote = cam != null
                     ? " realCam=(" + cam.transform.position.x.ToString("F2") + ", " + cam.transform.position.y.ToString("F2") + ", " +
@@ -3068,7 +3088,7 @@ namespace DateEverythingAccess
                       newEye.z.ToString("F2") + ")"
                     : "";
                 return "old(eye " + LegacyEyeHeightM.ToString("F2") + "): " + AuditVisible(oldEye, false, col, io, radiusM) +
-                    " | new(eye " + liveH.ToString("F2") + "): " + AuditVisible(newEye, true, col, io, radiusM) + camNote;
+                    " | new(eyeY " + newEye.y.ToString("F2") + "): " + AuditVisible(newEye, true, col, io, radiusM) + camNote;
             }
             catch (Exception ex)
             {
