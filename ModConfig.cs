@@ -210,7 +210,7 @@ namespace DateEverythingAccess
                 "blocked and plans a fresh route, up to three times. Set false to stop and report the " +
                 "stall at once instead, which keeps the original stall in the log for debugging.");
             _coverageSweepRunId = config.Bind("Diagnostics", "CoverageSweepRunId", "objects",
-                "Run folder for the coverage-sweep hotkey (Ctrl+Alt+Shift+F8), under coverage_sweep next " +
+                "Run folder for the coverage-sweep hotkey (Ctrl+Alt+F8), under coverage_sweep next " +
                 "to the mod DLL (or COVERAGE_SWEEP_DIR). Results go to <folder>/sweep_results.json. With no " +
                 "sweep_manifest.json in the folder, it runs the object-reachability sweep over the bake's " +
                 "object list (walk-chain: start where you are, walk to the nearest object, then the next).");

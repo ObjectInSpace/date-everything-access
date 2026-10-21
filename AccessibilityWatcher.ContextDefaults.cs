@@ -3,11 +3,11 @@ using UnityEngine;
 
 namespace DateEverythingAccess
 {
-    // Context-sensitive Ctrl+F6 defaults. When the player presses Ctrl+F6 (navigate to
+    // Context-sensitive Ctrl+O defaults. When the player presses Ctrl+O (navigate to
     // objective) and there is NO active tutorial objective, these steer to a specific datable.
     // The tutorial objective takes precedence — the caller (StartNavigationToCurrentTarget) only
-    // reaches here after both objective resolvers have failed. They are Ctrl+F6's own logic and
-    // are deliberately independent of the Ctrl+Shift+F6 known-objects picker.
+    // reaches here after both objective resolvers have failed. They are Ctrl+O's own logic and
+    // are deliberately independent of the O known-objects list.
     //
     // Each target is gated on the datable's OWN in-game appearance condition, read live, so we
     // only steer to something the game is currently showing (and that the player hasn't met yet):
@@ -30,7 +30,7 @@ namespace DateEverythingAccess
         private const string ContextGhostInternalName = "zoey";
 
         /// <summary>
-        /// Resolves a context-sensitive Ctrl+F6 default. On a match, sets it as the tracked
+        /// Resolves a context-sensitive Ctrl+O default. On a match, sets it as the tracked
         /// interactable (zone + label resolved) and returns true; the caller then navigates to it
         /// exactly as it would any objective target.
         /// </summary>
@@ -45,12 +45,11 @@ namespace DateEverythingAccess
 
             Vector3 playerPosition = BetterPlayerControl.Instance.transform.position;
 
-            // 1. Crawlspace: same Y gate the picker/room-scan use for the crawlspace band. Below
-            // the ceiling line you can only have gotten there via the ladder, so this is a clean
-            // "you are in the crawlspace" test. Target the Key, falling back to the rat trap once
+            // 1. Crawlspace: the bake's floor bands say the player is on the crawlspace floor, which
+            // is only reachable by the ladder. Target the Key, falling back to the rat trap once
             // the Key is no longer present (e.g. after the player dates it — the object goes
             // inactive, so TrySetContextDatableTarget skips it and we steer to the rat trap).
-            if (playerPosition.y < CrawlspaceCeilingY)
+            if (IsPlayerInCrawlspace(playerPosition.y))
             {
                 if (TrySetContextDatableTarget(ContextKeyInternalName, out interactable, out targetZone, out targetLabel))
                     return true;

@@ -1,17 +1,17 @@
 """Step O2 of [[project-navigation-object-first-plan]]: rasterize per-floor navigable region.
 
-For each named floor band (ground, upper):
-  1. Pick representative floor Y from the walkable export (area-weighted flat/step-up peaks).
+For each named floor band (crawlspace, ground, upper):
+  1. Group walkable surfaces into the floor bands in FLOORS (band centres set by hand from the
+     walkable export's surface tops; see FLOORS).
   2. Rasterize at 0.2m cells across XZ extent of the floor's walkable footprint.
   3. Cell is walkable iff a walkable surface (VExt <= 1m slab) within the floor band covers it.
-  4. Cell is blocked iff the player capsule cannot stand there:
-     primitive colliders use their 2D bounds; mesh colliders use exported
-     player-height triangle-slice segments when available.
-  5. Dilate blocked region by capsule radius (0.4m / 2 cells at 0.2m).
+  4. Cell is blocked iff a collider there stands in the player's way: mesh colliders through
+     their exported per-cell vertical spans (columns), primitive colliders through their 2D
+     bounds, both subject to the step-over rule.
+  5. Dilate the blocked region by the player's body radius (0.8 m, 4 cells).
   6. Navigable = walkable AND NOT dilated-blocked.
-Emits one bitmap per floor + debug PNG.
+Emits one bitmap per floor + a debug PPM image.
 
-Crawlspace floor is missing from the walkable export (no slab at Y≈-9.6); skipped here, follow-up.
 
 Run from repo root:
   python scripts/bake_navigable_region.py
@@ -34,39 +34,27 @@ NAVDATA = REPO / "artifacts/navigation/thirdpersongreybox-navigation-data.json"
 OUT_JSON = REPO / "artifacts/navigation/navigable_region.bake.json"
 OUT_PNG_DIR = REPO / "artifacts/navigation"
 
-# Player CapsuleCollider radius is 0.4m (Player.prefab; the exported value of
-# 0.2 is multiplied by the 2x world scale). The earlier 0.50m setting was a
-# safety margin in response to a runtime graze against the fireplace at
-# ~0.44m, but it over-sealed narrow corridors — notably the hallway between
-# z=5.7 and z=6.9 (1.2m wide), where 0.5m dilation leaves <1 cell of clearance
-# and breaks the office→front-door route entirely. 0.4m leaves 0.4m / 2 cells
-# of clearance — passable by the actual player capsule. If fireplace-style
-# grazes return, address them with per-mesh inflation rather than a global
-# bump that closes legitimate doorways.
-CAPSULE_R = 0.40
-# Player STANDING collider height = 2.5m (BetterPlayerControl.colliderHeightNormal).
-# This is the real height the walking capsule occupies; geometry above it does NOT
-# obstruct a standing player.
-#
-# History: this was bumped to 3.20 to catch open cupboard/fridge door PANELS at head
-# height (world Y ~2.3-2.7) that the 2.5m band let slip through. That reason is now
-# OBSOLETE -- those panels are handled independently as container door_records (see
-# repair_door_fixture_positions / the container-door operability bake), so they block
-# regardless of capsule height. The inflated 3.2m only caused collateral OVER-BLOCKING:
-# it marked ~3,300 ground floor cells blocked under furniture/prop TOPS at head height
-# (shelves, hamper lid, fruit bowl, globe, desk paper, the magic-piano overhang) and the
-# upper-floor slab/ceiling ~12m up -- all of which a 2.5m player clears. Measured with
-# scripts/measure_crouch_clearance.py. Reverted to the true 2.5m collider; the panel
-# regression cannot recur because cupboard/fridge doors are door_records, not band hits.
-# See [[project_navigation_capsule_height_overblock_2026_06_30]].
-CAPSULE_H = 2.50
+# THE PLAYER'S BODY, from Player.prefab (AssetRipper) and confirmed live by the mod's
+# [capsule-probe] log line: one CapsuleCollider on the player root, local radius 0.4, height 2.5,
+# centre y 1.849827, and the root is scaled 2x. In the world that is a radius of 0.8 m, spanning
+# 1.2 m to 6.2 m above the feet while standing (crouched: height 1.6 local, 1.2 m to 4.4 m).
+# Checked against 4,957 logged player positions: the body slides along walls with its centre about
+# 0.8 m from the collider faces, and the exported wall geometry matches the game's own raycast hits
+# to within 3 cm. (Until 2026-10-21 this was 0.40, justified as "0.2 x 2"; there is no 0.2 in the
+# prefab, and routes planned for a 0.4 m body kept putting the real one against walls and jambs.)
+CAPSULE_R = 0.80
+# Top of the standing capsule above the feet: (1.849827 + 2.5 / 2) x 2 = 6.2 m. Anything in
+# [floor, floor + CAPSULE_H] that clears the step-over rule blocks. Physically the capsule starts
+# 1.2 m above the feet and the game's ground raycast lets the player ride up onto lower things (the
+# logs show her standing on the open dishwasher door); counting obstacles from the floor up is our
+# choice, so autowalk keeps to the floor instead of climbing furniture.
+CAPSULE_H = 6.20
 STEP_UP_TOL = 0.25
-# A column whose top clears the floor by less than this is a sill/threshold/lip
-# the capsule's FOOT steps over — the one honest physical rule that survives the
-# slice-artifact-gate deletion. Calibrated in
-# [[project-navigation-bake-percell-vertical-span]]: SM_Walls_* tops poke ~0.05m
-# proud of the upper floor (step over), while SM_Ceiling_Hall pokes 0.45m and
-# CeilingStairsFix spans floor-to-ceiling (both correctly keep blocking).
+# A collider whose top clears the walkable surface by less than this (a sill, threshold, rug or
+# mat) is walked over; anything taller counts as an obstacle (see CAPSULE_H for why that is our
+# rule rather than the physics). Calibrated in [[project-navigation-bake-percell-vertical-span]]:
+# SM_Walls_* tops poke ~0.05 m proud of the upper floor (step over), while SM_Ceiling_Hall pokes
+# 0.45 m and CeilingStairsFix spans floor-to-ceiling (both correctly keep blocking).
 STEP_OVER_HEIGHT_M = 0.30
 CELL = 0.20  # rasterization resolution
 # XZ cell size of the exporter's per-cell column raster. Columns index cells on
@@ -74,7 +62,7 @@ CELL = 0.20  # rasterization resolution
 # column's cell centre back through world space into its own padded grid. Equal
 # to CELL by design (1:1 mapping); validated against the export at load time.
 COL_CELL = 0.20
-DILATE_CELLS = int(math.ceil(CAPSULE_R / CELL))  # 2 cells
+DILATE_CELLS = int(math.ceil(CAPSULE_R / CELL))  # 4 cells
 # Surface vertical extent above which we treat the surface as a column/prop
 # (not a floor slab). Lets SM_Ceiling_* slabs through while keeping lightbulbs,
 # daemons, and plant pots out. Tall props that pass blocker selection re-block
@@ -84,9 +72,8 @@ MAX_FLOOR_SLAB_EXTENT = 1.0
 # doorway cuts -- the opening is only modeled on one face of the wall, so
 # dilation re-seals the opening. Doors are first-class passages in the planner
 # model; carve a disc at each Doors_* interactable position to guarantee the
-# bake reflects that. 0.4m matches the capsule radius -- minimum needed to let
-# the capsule through. Smallest authored doorway clearance is ~1.14m, so a
-# 0.8m-diameter disc fits even the narrowest door.
+# bake reflects that. This is a repair of the wall raster at the door position, not a body
+# size; the real doorways are ~3.7 m wide (OcclusionPortals in the navigation-data export).
 DOOR_CARVE_RADIUS = 0.40
 # Wider carve for real Door components exported from scene navigation data. This
 # repairs doorway component splits caused by wall/doorframe dilation without
@@ -105,21 +92,21 @@ CLOSET_INTERIOR_CELL_CAP = 120
 # local to this door's opening.
 CLOSET_INTERIOR_SEARCH_PAD = 12
 
-# Reach radius for the door-operability standpoint (meters). Door.cs opens via
-# InteractableObj.Interact, gated by InteractionRadius (7.5m default). The
-# planner already caps door-target approach to ~3.0m so the player stops near
-# the door rather than across the room; we use the same cap as the radius of the
-# operable-from disc. The runtime still confirms the live gates
-# (blockInteraction, collidedWithPlayer, moving) before acting — this is the
-# static candidate set of cells the player could stand in to operate the door.
-# Single home for the door-approach distance: the C# runtime no longer has its own
-# door radius (it routes to these operable_from_cells directly), so there is no
-# cross-runtime value to keep in sync.
-# See [[project-navigation-door-tag-radius]], [[project-navigation-door-pose-exporter]].
+# Reach radius for the door-operability standpoint (meters). A DESIGN CHOICE, not a game
+# limit: the game opens a door from anywhere its camera ray hits the door with the camera within
+# the door's InteractionRadius (7.5 m by default) of the door's nearest point, which a standing
+# camera 5.76 m above the feet satisfies much farther out. 3 m keeps the stand close to and in
+# front of the door rather than across the room. The runtime still checks the live gates
+# (blockInteraction, collidedWithPlayer, moving) before acting; this is the static candidate set.
+# The C# runtime has no door radius of its own (it routes to these operable_from_cells).
 DOOR_OPERABLE_RADIUS_M = 3.0
 
 # Floor bands: (label, target_Y, Y_tolerance_for_walkable_inclusion)
 # Tolerance is ± around target_Y for which walkable TopY values count as "on this floor".
+# The centres are hand-set from the walkable export's surface tops (bounding-box tops: ground
+# -0.57 / -0.54, upstairs 12.37..12.95, SM_Floor_Crawlspace -9.89). They are grouping bands, not
+# where the feet rest: the game's ground ray puts the feet at -0.60 downstairs and 12.82 upstairs
+# (logged player positions).
 #
 # crawlspace (Y≈-9.89): a real sub-storey reached by OPERATING THE LADDER in the OfficeCloset
 # (a teleport down, NOT a walk-in — confirmed by the user; objects there are not reachable from
@@ -533,10 +520,9 @@ def build_fixture_roster(interactables):
                 "ink": datable_member["ink"],
                 "unique_id": datable_member.get("unique_id"),
                 "unique_ids": unit_uids,
-                # Scene path of the unit's identity-defining member, so the offline planner can
-                # resolve this fixture's own collider and run the SAME interaction-LOS goal filter
-                # the in-game planner does (resolve_target_collider_for_path). Without it the
-                # objects sweep skipped LOS entirely and under-tested reachability.
+                # Scene path of the unit's identity-defining member. Written for the retired
+                # offline planner (it resolved the fixture's own collider from it); nothing in the
+                # mod reads it now, but it is accurate and useful for offline analysis.
                 "path": datable_member.get("path"),
             })
     return sorted(roster, key=lambda e: (e["floor"] or "~", e["name"], e["position"]))
@@ -799,11 +785,11 @@ def _dilate_disc(bm, nx, nz, d):
 
 def _door_operable_cells(navigable_bm, panel_closed_dil, panel_open_dil,
                          anchor_x, anchor_z, minx, minz, nx, nz):
-    """Cells where the player can stand to open/close a door, derived offline
-    from the Door.cs rule. A cell qualifies when it is:
+    """Cells where the player can stand to open/close a door. Rules (3) and (4)
+    are the Door.cs gates; (2) is our choice. A cell qualifies when it is:
       (1) NAVIGABLE — the player can actually stand on it;
-      (2) within DOOR_OPERABLE_RADIUS_M of the door anchor (the
-          InteractionRadius reach, capped to the planner's door-approach cap);
+      (2) within DOOR_OPERABLE_RADIUS_M of the door anchor (a design choice
+          well inside the game's InteractionRadius reach);
       (3) NOT within a capsule radius of the CLOSED panel — Door.OpenDoor is
           gated on !collidedWithPlayer, so a cell touching the panel can't
           trigger it (panel_closed_dil is the panel rasterized + dilated by R);
@@ -1093,15 +1079,24 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         if b.get("ColliderType") == "MeshCollider":
             continue
 
+        # The same step-over rule the mesh columns get (_column_blocks_floor): a box whose top
+        # clears the walkable surface under it by less than STEP_OVER_HEIGHT_M (a rug, a mat)
+        # is walked over. Measured against the surface at the box centre (the band floor where
+        # there is none). The exporter used to drop every collider with TopY < 0.35 instead,
+        # which hid rugs downstairs only; upstairs rugs blocked their whole footprint.
+        cix = int(math.floor(((bb["MinX"] + bb["MaxX"]) / 2 - minx) / CELL))
+        ciz = int(math.floor(((bb["MinZ"] + bb["MaxZ"]) / 2 - minz) / CELL))
+        surface_y = floor_y_bm[cix][ciz] if 0 <= cix < nx and 0 <= ciz < nz else fy
+        if b["TopY"] - surface_y < STEP_OVER_HEIGHT_M:
+            continue
+
         if _rasterize_bounds(blocked_bm, bb, minx, minz, nx, nz, CELL):
             blocker_hits += 1
             primitive_blocker_hits += 1
 
-    # Dilate blocked by capsule radius. Use Euclidean disc instead of
-    # Chebyshev box: a 2-cell box gives 0.57m corner reach (sqrt(2)*0.4m)
-    # and overshrinks doorway gaps for wall-segment rasterizations; the
-    # Euclidean disc respects the actual capsule radius (0.4m) in all
-    # directions, freeing diagonal corners and recovering 0.8m doorways.
+    # Dilate blocked by the body radius. Use a Euclidean disc instead of a Chebyshev box: a
+    # square box reaches sqrt(2) times the radius at its corners and over-shrinks doorway gaps;
+    # the disc respects the radius in all directions.
     if DILATE_CELLS > 0:
         dilated = [[False] * nz for _ in range(nx)]
         d = DILATE_CELLS
@@ -1261,7 +1256,7 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
                             # Spread through walkable floor, stopping only at a RAW blocker (an
                             # actual wall-mesh cell), NOT at mere dilation. The doorway THROAT is
                             # walkable floor the surrounding wall jambs DILATE shut; a dilation-stop
-                            # gate collapsed the threshold to a 1-wide diagonal the 0.4m capsule
+                            # gate collapsed the threshold to a 1-wide diagonal the body
                             # can't follow (follower jams at the wall corner). Blocking on raw
                             # blockers lets the BFS fill the throat's full width while a real wall
                             # still stops it; the disc bound + raw-wall stop prevent leaking into a
@@ -1369,16 +1364,12 @@ def bake_floor(floor, walkables, blockers, mesh_colliders, doors, door_records, 
         # adjacency-to-panel_closed_dil constraint above keeps them legitimate.
         threshold_cells_list = sorted([list(c) for c in threshold_cells])
 
-        # CLOSET INTERIOR RECOVERY (the capsule-width walk-in channel). A closet is a
-        # NARROW walk-in space (~0.6-1.0m deep) that the radius-2 capsule dilation
-        # (DILATE_CELLS = CAPSULE_R/CELL = 2, i.e. 0.8m total width) erodes to ZERO
-        # navigable cells — every interior cell is within 0.4m of a wall. But the player
-        # physically walks INTO these closets and the objects inside (shelves, hangers,
-        # boxes) occupy navigable interior space: the game's EFFECTIVE navigation radius
-        # is ~0.4m (velocity-driven rigidbody wall-SLIDING lets the player squeeze gaps
-        # narrower than the 0.8m geometric capsule — same reason the player uses the 1.0m
-        # house doors). So a narrow-passage interior is passable at the effective radius
-        # even though radius-2 dilation says otherwise. See
+        # CLOSET INTERIOR RECOVERY. A closet is a narrow walk-in space that the body-radius
+        # dilation can erode to zero navigable cells, yet the real body does go in: logged player
+        # positions sit inside the right bedroom closet's recovered cells (20 samples), and the
+        # objects inside (shelves, hangers, boxes) are interacted with from there. These spaces are
+        # within a cell or so of the body's width, and a 0.2 m raster dilated by whole cells rounds
+        # them shut, so they are recovered here with a reduced erosion. See
         # [[project_navigation_closet_interior_eroded_2026_06_30]] and
         # [[project-navigation-capsule-radius-groundtruth-2026-05-29]].
         #
@@ -1833,9 +1824,9 @@ def _verify_bake_invariants(report, mesh_colliders):
             # the carve adjacency constraint keeps them inside the door's
             # actual opening rather than in an unrelated wall.
             thresholds = {(c[0], c[1]) for c in door.get("threshold_cells_list", [])}
-            # Closet interior cells are radius-2 dilation-blocked BY DESIGN — they're the
-            # narrow walk-in floor the capsule clears at the game's effective radius, not
-            # the geometric one. Exempt them like threshold cells. See
+            # Closet interior cells are dilation-blocked BY DESIGN — they're the narrow
+            # walk-in floor the body does enter although the whole-cell dilation rounds it
+            # shut (see the recovery in bake_floor). Exempt them like threshold cells. See
             # [[project_navigation_closet_interior_eroded_2026_06_30]].
             interior_rec = {(c[0], c[1]) for c in door.get("interior_recovered_cells", [])}
             violating = [(c[0], c[1]) for c in door.get("freed_cells", [])
@@ -1865,18 +1856,15 @@ def _verify_bake_invariants(report, mesh_colliders):
     # the borrow-from-other-band fallback in _segments_in_floor_band. Both the
     # fallback and the IsWallLikeFatVictim flag it keyed on are gone: the bake
     # rasterizes only real collision-slice segments and the 12.5 slice plane
-    # already covers the ground-wall top-lip case. A wall-slice-gap regression
-    # now surfaces as item isolation in scripts/reachability_matrix.py, which is
-    # the authoritative coverage check. See
-    # [[project-navigation-iswalllikefatvictim-followup]].
+    # already covers the ground-wall top-lip case. Object reachability is checked
+    # in game by the coverage sweep (Ctrl+Alt+F8), not here.
 
     # 4. Interactable coverage smoke check intentionally omitted here. The
     # raw interactables list contains many sub-mesh entries (book pages,
     # monitor sub-parts, lighting variants) whose Position is buried inside
     # the parent's collider footprint, so a naive nearest-navigable check
-    # produces hundreds of false positives every bake. scripts/reachability_matrix.py
-    # already does the per-interactable check correctly (snapping by Path
-    # and interaction radius); use that as the authoritative coverage tool.
+    # produces hundreds of false positives every bake. Per-object reachability is
+    # measured in game by the coverage sweep (Ctrl+Alt+F8).
 
     # 5. Every inter_floor_edge endpoint must land on a navigable cell.
     # If a stair/teleporter terminus falls into a sealed cell, the planner
@@ -2165,7 +2153,7 @@ def _verify_bake_invariants(report, mesh_colliders):
 
     # 8. DOORWAY CAPSULE-WIDTH CLEARANCE. Every PASSAGE door must open a throat the
     # follower's capsule can actually thread. The planner's A* threads single cells,
-    # but the follower drives a 0.4m-radius capsule whose CENTRE can only occupy cells
+    # but the follower drives the 0.8 m-radius body, whose CENTRE can only occupy cells
     # that are navigable along with their whole capsule-radius neighbourhood. A door
     # whose open throat is a single-file diagonal (navigable cells but no cell with a
     # full capsule-radius clear disc) lets A* plan a route the follower then FREEZES
@@ -2212,11 +2200,11 @@ def _verify_bake_invariants(report, mesh_colliders):
                 continue
             # Passage doors that recovered an interior pocket (the narrow-passage recovery
             # in bake_floor; see [[project_navigation_closet_interior_eroded_2026_06_30]])
-            # are enterable at the game's EFFECTIVE navigation radius. A narrow passage
-            # (closet, wardrobe corridor, tight nook) is a walk-in the radius-2 capsule disc
+            # are enterable although the dilated grid seals them. A narrow passage
+            # (closet, wardrobe corridor, tight nook) is a walk-in the body-radius disc
             # never fits — the geometric disc test would always (correctly) report
-            # "pinched", but the player physically walks in (wall-slide squeeze, effective
-            # radius ~0.4m), so the recovered pocket is the passing condition, not a
+            # "pinched", but the player physically walks in (logged positions inside the
+            # recovered cells), so the recovered pocket is the passing condition, not a
             # radius-2 clear disc. BUT a recovered interior is only useful if it is
             # CONNECTED to the house: the bridge across the doorway seal must actually join
             # it to the throat (which is itself connected to the navigable house), else the

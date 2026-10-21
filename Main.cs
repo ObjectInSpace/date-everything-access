@@ -230,7 +230,7 @@ namespace DateEverythingAccess
                 registered += TryRegisterHotkey(HelpHotkeyId, VkF1, "F1") ? 1 : 0;
                 registered += TryRegisterHotkey(DebugHotkeyId, VkF9, "F9") ? 1 : 0;
                 registered += TryRegisterHotkey(SettingsHotkeyId, ModControl | ModNoRepeat, VkF1, "Ctrl+F1") ? 1 : 0;
-                registered += TryRegisterHotkey(CoverageSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF8, "Ctrl+Alt+Shift+F8") ? 1 : 0;
+                registered += TryRegisterHotkey(CoverageSweepHotkeyId, ModControl | ModAlt | ModNoRepeat, VkF8, "Ctrl+Alt+F8") ? 1 : 0;
                 Logger.LogInfo("Background hotkey message loop active (" + registered + " hotkey(s) registered)");
 
                 NativeMessage message;

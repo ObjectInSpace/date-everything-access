@@ -12,22 +12,27 @@ param(
     [Parameter()]
     [string]$OutputPath = ".\artifacts\navigation\thirdpersongreybox-blockers.json",
 
+    # Record-level height filter: a collider is kept only if its top is above the lowest floor
+    # and its bottom is below the top of the highest standing capsule. These are the outer
+    # edges of CapsuleBandPairs (crawlspace floor -9.89 minus a margin; upstairs feet 12.82 plus
+    # the 6.2 m capsule). (They were 0.35 and 15.0, which dropped every crawlspace collider and
+    # everything upstairs whose bottom is more than 2.2 m above the floor.)
     [Parameter()]
-    [double]$MinimumBlockingTopY = 0.35,
+    [double]$MinimumBlockingTopY = -10.1,
 
     [Parameter()]
-    [double]$MaximumBlockingBottomY = 15.0,
+    [double]$MaximumBlockingBottomY = 19.4,
 
     [Parameter()]
     [double]$MinimumFootprintRadius = 0.15,
 
     # Emit per-mesh 3D geometry (convex hull or world triangles) for the offline LOS
-    # raycaster, so it can ray-test mesh colliders EXACTLY instead of as their AABB
-    # (los_geometry.py over-blocks mesh occluders today). Only meshes whose true shape
+    # raycaster (los_geometry.py), so it can ray-test mesh colliders exactly instead of as
+    # their AABB. Only meshes whose true shape
     # diverges enough from their AABB to matter get geometry (see
     # MeshLosFootprintFillThreshold); flat walls/slabs whose AABB already IS their shape
     # emit nothing, keeping the export small. Convex meshes emit a hull (small, exact);
-    # concave meshes emit world triangles. See docs/los-mesh-triangle-export-scope.md.
+    # concave meshes emit world triangles.
     [Parameter()]
     [bool]$EmitMeshLosGeometry = $true,
 
@@ -67,20 +72,18 @@ param(
     [Parameter()]
     [double]$ColumnCellSize = 0.2,
 
-    # Capsule bands (world Y intervals the player capsule occupies, one per floor)
-    # used to PRUNE columns at export: a column whose [minY,maxY] overlaps NO band
-    # can never block any floor, so it's dropped (exterior trees, between-floor
-    # geometry, above-ceiling clutter — ~the bulk of the raster). Pruning here is
-    # exact, not a heuristic: the bake would ignore these columns anyway. Each band
-    # is floor_y .. floor_y + capsule_height. Ground floor_y=-0.5, upper=12.5,
-    # capsule height=3.2m (live-measured). A small margin is folded in so a column
-    # grazing a band edge is kept.
-    # See [[project-navigation-bake-percell-vertical-span]].
-    # Flat [lo0,hi0,lo1,hi1] pairs: ground band [-0.7,2.9], upper band [12.3,15.9]
-    # (floor_y .. floor_y+capsule_height 3.2m, with a small edge margin). Flat (not
-    # jagged [double[][]]) because PowerShell flattens jagged arrays across calls.
+    # Capsule bands (world Y intervals the player capsule can occupy, one per floor) used to
+    # PRUNE columns at export: a column whose [minY,maxY] overlaps NO band can never block any
+    # floor, so it's dropped (exterior trees, between-floor geometry, above-ceiling clutter).
+    # Each band runs from the floor up to the top of the standing capsule: Player.prefab's
+    # CapsuleCollider (centre y 1.85, height 2.5, on a root scaled 2x) reaches 6.2 m above the
+    # feet. Floors: crawlspace -9.89 (SM_Floor_Crawlspace), ground (feet -0.60), upstairs (feet
+    # 12.82). A small margin is folded in so a column grazing a band edge is kept. (The bands
+    # used to stop 3.2 m up, the crouched height, and left out the crawlspace altogether, so the
+    # crawlspace was baked with no obstacles.)
+    # Flat [lo0,hi0,lo1,hi1,...] pairs (not jagged [double[][]], which PowerShell flattens).
     [Parameter()]
-    [double[]]$CapsuleBandPairs = @(-0.7, 2.9, 12.3, 15.9),
+    [double[]]$CapsuleBandPairs = @(-10.1, -3.4, -0.7, 6.4, 12.3, 19.4),
 
     # NOTE: the former MaxMeshFootprintAreaSqM / Wall* (wall-FAT bypass) and
     # ThinFrame* (doorframe AABB-suppression) parameters are retired. They tuned
@@ -125,6 +128,90 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName System.Numerics
+
+# Column rasterizer (Get-ColumnSpans), compiled: it is the hot loop of the export (millions of
+# triangle/cell tests), far too slow as PowerShell.
+Add-Type -ReferencedAssemblies System.Numerics, System.Numerics.Vectors, System.Collections -TypeDefinition @"
+using System;
+using System.Collections.Generic;
+using System.Numerics;
+
+public static class ColumnRaster
+{
+    // Separating-axis test between a triangle's XZ projection (possibly a degenerate segment,
+    // as for a vertical wall) and one cell's square. Axes: X, Z and each edge's normal. Merely
+    // touching counts as separate, so a face lying exactly on a cell boundary does not also
+    // claim the neighbouring cell.
+    public static bool TriangleOverlapsCellXZ(Vector3 a, Vector3 b, Vector3 c, double cellMinX, double cellMinZ, double cellSize)
+    {
+        const double eps = 1e-6;
+        double cellMaxX = cellMinX + cellSize, cellMaxZ = cellMinZ + cellSize;
+        if (Math.Max(a.X, Math.Max(b.X, c.X)) <= cellMinX + eps) return false;
+        if (Math.Min(a.X, Math.Min(b.X, c.X)) >= cellMaxX - eps) return false;
+        if (Math.Max(a.Z, Math.Max(b.Z, c.Z)) <= cellMinZ + eps) return false;
+        if (Math.Min(a.Z, Math.Min(b.Z, c.Z)) >= cellMaxZ - eps) return false;
+        double h = cellSize * 0.5, cx = cellMinX + h, cz = cellMinZ + h;
+        Vector3[] v = { a, b, c };
+        for (int e = 0; e < 3; e++)
+        {
+            Vector3 p = v[e], q = v[(e + 1) % 3];
+            double nx = -(q.Z - p.Z), nz = q.X - p.X;
+            double len = Math.Sqrt(nx * nx + nz * nz);
+            if (len < 1e-9) continue;
+            nx /= len; nz /= len;
+            double pa = nx * a.X + nz * a.Z, pb = nx * b.X + nz * b.Z, pc = nx * c.X + nz * c.Z;
+            double tMin = Math.Min(pa, Math.Min(pb, pc)), tMax = Math.Max(pa, Math.Max(pb, pc));
+            double center = nx * cx + nz * cz;
+            double r = h * (Math.Abs(nx) + Math.Abs(nz));
+            if (tMax <= center - r + eps || tMin >= center + r - eps) return false;
+        }
+        return true;
+    }
+
+    // Returns [ix, iz, minY, maxY] per covered cell (fixed global origin: ix = floor(x / cellSize)),
+    // keeping only columns that overlap at least one [lo, hi] pair of bandPairs (empty = keep all).
+    public static object[] GetColumnSpans(Vector3[] verts, int[] tris, double cellSize, double[] bandPairs)
+    {
+        var cols = new Dictionary<long, double[]>();
+        double inv = 1.0 / cellSize;
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            Vector3 a = verts[tris[t]], b = verts[tris[t + 1]], c = verts[tris[t + 2]];
+            double triMinY = Math.Min(a.Y, Math.Min(b.Y, c.Y)), triMaxY = Math.Max(a.Y, Math.Max(b.Y, c.Y));
+            int ix0 = (int)Math.Floor(Math.Min(a.X, Math.Min(b.X, c.X)) * inv);
+            int ix1 = (int)Math.Floor(Math.Max(a.X, Math.Max(b.X, c.X)) * inv);
+            int iz0 = (int)Math.Floor(Math.Min(a.Z, Math.Min(b.Z, c.Z)) * inv);
+            int iz1 = (int)Math.Floor(Math.Max(a.Z, Math.Max(b.Z, c.Z)) * inv);
+            for (int ix = ix0; ix <= ix1; ix++)
+                for (int iz = iz0; iz <= iz1; iz++)
+                {
+                    if (!TriangleOverlapsCellXZ(a, b, c, ix * cellSize, iz * cellSize, cellSize)) continue;
+                    long key = ((long)(ix + 100000)) * 1000000L + (iz + 100000);
+                    double[] ex;
+                    if (!cols.TryGetValue(key, out ex)) cols[key] = new[] { triMinY, triMaxY };
+                    else { if (triMinY < ex[0]) ex[0] = triMinY; if (triMaxY > ex[1]) ex[1] = triMaxY; }
+                }
+        }
+        var outList = new List<object>(cols.Count);
+        foreach (var kv in cols)
+        {
+            double cMin = kv.Value[0], cMax = kv.Value[1];
+            if (bandPairs != null && bandPairs.Length >= 2)
+            {
+                bool keep = false;
+                for (int p = 0; p + 1 < bandPairs.Length; p += 2)
+                    if (!(cMax < bandPairs[p] || cMin > bandPairs[p + 1])) { keep = true; break; }
+                if (!keep) continue;
+            }
+            long biasedIx = (long)Math.Floor(kv.Key / 1000000.0);
+            int ixo = (int)(biasedIx - 100000);
+            int izo = (int)(kv.Key - biasedIx * 1000000L - 100000);
+            outList.Add(new object[] { ixo, izo, Math.Round(cMin, 4), Math.Round(cMax, 4) });
+        }
+        return outList.ToArray();
+    }
+}
+"@
 
 # Dot-source the mesh parser so Read-UnityMeshAsset is in-scope.
 . (Join-Path $PSScriptRoot "Read-UnityMeshAsset.ps1")
@@ -906,109 +993,12 @@ function Get-ColumnSpans {
         [Parameter(Mandatory = $false)][double[]]$CapsuleBandPairs = @()
     )
 
-    # cellKey (packed IX,IZ as long) -> [double]@(minY, maxY)
-    $cols = @{}
-    $inv = 1.0 / $CellSize
-    $triCount = [int]($Triangles.Length / 3)
-    for ($t = 0; $t -lt $triCount; $t++) {
-        $a = $WorldVerts[$Triangles[$t * 3]]
-        $b = $WorldVerts[$Triangles[$t * 3 + 1]]
-        $c = $WorldVerts[$Triangles[$t * 3 + 2]]
-
-        $triMinY = [Math]::Min($a.Y, [Math]::Min($b.Y, $c.Y))
-        $triMaxY = [Math]::Max($a.Y, [Math]::Max($b.Y, $c.Y))
-
-        # XZ bounding cells of this triangle.
-        $minX = [Math]::Min($a.X, [Math]::Min($b.X, $c.X))
-        $maxX = [Math]::Max($a.X, [Math]::Max($b.X, $c.X))
-        $minZ = [Math]::Min($a.Z, [Math]::Min($b.Z, $c.Z))
-        $maxZ = [Math]::Max($a.Z, [Math]::Max($b.Z, $c.Z))
-        $ix0 = [int][Math]::Floor($minX * $inv)
-        $ix1 = [int][Math]::Floor($maxX * $inv)
-        $iz0 = [int][Math]::Floor($minZ * $inv)
-        $iz1 = [int][Math]::Floor($maxZ * $inv)
-
-        for ($ix = $ix0; $ix -le $ix1; $ix++) {
-            for ($iz = $iz0; $iz -le $iz1; $iz++) {
-                # Cover the cell if the triangle's XZ projection overlaps it. Test
-                # the cell-center against the triangle (catches area fills) OR the
-                # triangle's bbox spanning a single cell (catches thin slivers a
-                # center test would miss between sample points). For thin walls the
-                # bbox is sub-cell on one axis, so the bbox-overlap branch keeps the
-                # wall line continuous even when no center lands inside.
-                $cx = ($ix + 0.5) * $CellSize
-                $cz = ($iz + 0.5) * $CellSize
-                $inside = Test-PointInTriangleXZ -PX $cx -PZ $cz -A $a -B $b -C $c
-                if (-not $inside) {
-                    # bbox-overlap fallback for sub-cell-thin triangles: the
-                    # triangle's XZ bbox intersects this cell's square.
-                    $cellMinX = $ix * $CellSize; $cellMaxX = $cellMinX + $CellSize
-                    $cellMinZ = $iz * $CellSize; $cellMaxZ = $cellMinZ + $CellSize
-                    if ($maxX -lt $cellMinX -or $minX -gt $cellMaxX -or `
-                        $maxZ -lt $cellMinZ -or $minZ -gt $cellMaxZ) { continue }
-                }
-                # Pack (ix,iz) into one long key. Both indices are biased by
-                # COL_KEY_OFFSET first so NEGATIVE cell coordinates pack and
-                # unpack correctly — without the bias, floor-division and the
-                # modulo recovered the wrong (ix,iz) for any cell at world X<0
-                # or Z<0 (half the scene), corrupting e.g. the dining table and
-                # every stair/ceiling column. World coords are within ±200m
-                # (±1000 cells); offset 100000 keeps biased indices in
-                # [99000,101000] << the 1,000,000 multiplier, so no collision.
-                $key = ([long]($ix + 100000)) * 1000000L + [long]($iz + 100000)
-                $existing = $cols[$key]
-                if ($null -eq $existing) {
-                    $cols[$key] = @($triMinY, $triMaxY)
-                } else {
-                    if ($triMinY -lt $existing[0]) { $existing[0] = $triMinY }
-                    if ($triMaxY -gt $existing[1]) { $existing[1] = $triMaxY }
-                }
-            }
-        }
-    }
-
-    $pairs = @($CapsuleBandPairs)
-    $havePrune = ($pairs.Count -ge 2)
-    $out = New-Object System.Collections.Generic.List[object]
-    foreach ($kv in $cols.GetEnumerator()) {
-        $cMin = [double]$kv.Value[0]
-        $cMax = [double]$kv.Value[1]
-        # Prune columns that overlap no capsule band — they can't block any floor.
-        if ($havePrune) {
-            $keep = $false
-            for ($p = 0; $p + 1 -lt $pairs.Count; $p += 2) {
-                if (-not ($cMax -lt $pairs[$p] -or $cMin -gt $pairs[$p + 1])) { $keep = $true; break }
-            }
-            if (-not $keep) { continue }
-        }
-        $biasedIx = [long][Math]::Floor($kv.Key / 1000000L)
-        $ix = [int]($biasedIx - 100000)
-        $iz = [int]($kv.Key - $biasedIx * 1000000L - 100000)
-        $out.Add(@(
-            $ix,
-            $iz,
-            [Math]::Round($cMin, 4),
-            [Math]::Round($cMax, 4)
-        ))
-    }
-    return $out.ToArray()
-}
-
-function Test-PointInTriangleXZ {
-    param(
-        [Parameter(Mandatory = $true)][double]$PX,
-        [Parameter(Mandatory = $true)][double]$PZ,
-        [Parameter(Mandatory = $true)][System.Numerics.Vector3]$A,
-        [Parameter(Mandatory = $true)][System.Numerics.Vector3]$B,
-        [Parameter(Mandatory = $true)][System.Numerics.Vector3]$C
-    )
-    # Barycentric sign test in the XZ plane.
-    $d1 = ($PX - $B.X) * ($A.Z - $B.Z) - ($A.X - $B.X) * ($PZ - $B.Z)
-    $d2 = ($PX - $C.X) * ($B.Z - $C.Z) - ($B.X - $C.X) * ($PZ - $C.Z)
-    $d3 = ($PX - $A.X) * ($C.Z - $A.Z) - ($C.X - $A.X) * ($PZ - $A.Z)
-    $hasNeg = ($d1 -lt 0) -or ($d2 -lt 0) -or ($d3 -lt 0)
-    $hasPos = ($d1 -gt 0) -or ($d2 -gt 0) -or ($d3 -gt 0)
-    return -not ($hasNeg -and $hasPos)
+    # Each cell is covered only if a triangle's XZ projection really overlaps its square. (An
+    # earlier version also covered every cell a triangle's BOUNDING BOX touched, for every
+    # triangle: diagonal faces covered their whole bounding square and axis-aligned walls gained
+    # the neighbouring cell, putting raster wall faces ~0.35 m in front of the real collider,
+    # measured against 4,957 logged player positions.) Implemented in ColumnRaster (top of file).
+    return [ColumnRaster]::GetColumnSpans($WorldVerts, $Triangles, $CellSize, [double[]]@($CapsuleBandPairs))
 }
 
 function Get-MeshColliderRecord {
@@ -1089,7 +1079,7 @@ function Get-MeshColliderRecord {
         return $null
     }
 
-    $hull = Get-ConvexHull2D -Points $pointBag.Points
+    $hull = @(Get-ConvexHull2D -Points $pointBag.Points)
     $area = Get-PolygonArea -Points $hull
 
     $hullArray = New-Object System.Collections.Generic.List[object]

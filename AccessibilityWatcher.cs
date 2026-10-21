@@ -22,8 +22,8 @@ using UnityEngine.UI;
 namespace DateEverythingAccess
 {
     // Run our FixedUpdate BEFORE BetterPlayerControl.FixedUpdate every physics tick. The game
-    // reads `move`/`look` at the START of its FixedUpdate (BetterPlayerControl.cs:912) and then
-    // OVERWRITES them from live axes at the END (L968-969, gated on TUTORIAL_STATE_0_ANIMATIONS,
+    // reads `move`/`look` at the START of its FixedUpdate and then
+    // OVERWRITES them from live axes at the END (gated on TUTORIAL_STATE_0_ANIMATIONS,
     // which is set in normal play). So our value survives for exactly ONE read and is then zeroed.
     // Re-asserting in our own FixedUpdate only works if we run FIRST; with the default (undefined)
     // order the game often runs first and reads the zeroed value → the follower freezes with a
@@ -190,7 +190,6 @@ namespace DateEverythingAccess
         //   - TransitionFacingAlignment* — a removed stair/floor-transition facing
         //     pre-align step.
         // See [[project-navigation-door-operability-cells]].
-        private const float TutorialGiftApproachRadius = 1.25f;
         // NOTE: the C#-side door-approach cap (SimpleNavDoorTargetRadius=3m) was retired.
         // Door goals now come exclusively from the bake's operable_from_cells, which
         // override the planner's goal disc entirely, so a C# door radius bounded only a
@@ -521,13 +520,23 @@ namespace DateEverythingAccess
         // Section filter, cycled with M.
         private enum PickerSectionFilter { All, MetOnly, EncounteredOnly }
 
-        // Y below this (world units) means "in the crawlspace". The crawlspace floor sits at
-        // y ~= -9.7 and its contents (ladder y=-5.24, rat trap / time capsule / key / smoke
-        // alarms y ~= -9.6..-9.9) all fall below this line, while the lowest normal-house
-        // interactables sit at ground level (y ~= 0). The only other below-band objects are far
-        // exterior secret-room cubes (z < -50) and bushes, none of which survive the picker's
-        // encountered/datable filter. So a flat Y gate cleanly separates crawlspace from house.
-        private const float CrawlspaceCeilingY = -3.5f;
+        // The bake's label for the sub-storey under the house (floor plane y -9.89), reached only by
+        // the ladder in the office closet. "In the crawlspace" is whatever the bake's floor bands
+        // say, for the player and for each roster object (the bake puts exactly 12 objects there:
+        // the ladder, rat traps, the key, the time capsule and the smoke alarms).
+        private const string CrawlspaceFloorLabel = "crawlspace";
+
+        private static bool IsPlayerInCrawlspace(float playerY)
+        {
+            return SimpleNavPlanner.TryGetPlayerFloorLabel(playerY, out string label) &&
+                string.Equals(label, CrawlspaceFloorLabel, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsCrawlspaceTargetY(float worldY)
+        {
+            return SimpleNavPlanner.TryGetTargetFloorLabel(worldY, out string label) &&
+                string.Equals(label, CrawlspaceFloorLabel, StringComparison.OrdinalIgnoreCase);
+        }
 
         // Identity keys of interactables the player has examined live in the _examinedObjects
         // PersistedKeySet (AccessibilityWatcher.KnownObjectHistory), persisted per save slot — the
@@ -834,7 +843,7 @@ namespace DateEverythingAccess
             }
 
             // ...AND the hit must be within the object's InteractionRadius (game's gate at
-            // BetterPlayerControl.cs:499). Use the same closest-bounds-to-camera distance.
+            // BetterPlayerControl.Update). Use the same closest-bounds-to-camera distance.
             float radius = route.TargetInteractionRadius > 0f ? route.TargetInteractionRadius : 0f;
             float dist = didHit
                 ? Vector3.Distance(hitInfo.collider.ClosestPointOnBounds(cam.transform.position), cam.transform.position)
@@ -1272,13 +1281,13 @@ namespace DateEverythingAccess
 
 
         // Radius (metres, flat XZ) within which a known object counts as "in this room" for the
-        // F6 scan. Generous enough to cover a whole room without spilling the entire house into
+        // look-around scan (L). Generous enough to cover a whole room without spilling the entire house into
         // one announcement. Cross-floor targets are excluded regardless of distance.
         private const float RoomScanRadiusM = 10f;
 
-        // F6: announce the current room and the objects near the player, grouped by their
+        // L (look around): announce the current room and the objects near the player, grouped by their
         // facing-relative direction (Ahead, Ahead right, Right, ...). Reuses the same fixture
-        // enumeration that backs the Ctrl+Shift+F6 picker, but passes includeUnencountered so it
+        // enumeration that backs the O objects list, but passes includeUnencountered so it
         // reports EVERYTHING perceivable — met or not — not just what this save knows. Unmet
         // datables surface by object name (no character name); the picker keeps the met/encountered
         // filter. The spatial gates (floor, radius, same-room-or-LOS) decide what's perceivable.
@@ -1304,7 +1313,7 @@ namespace DateEverythingAccess
             if (string.IsNullOrEmpty(roomName))
                 roomName = Loc.Get("room_scan_unknown_room");
 
-            // F6 describes what's physically around the player, so include unmet/un-encountered
+            // The look-around (L) describes what's physically around the player, so include unmet/un-encountered
             // fixtures too — the spatial gates below (floor, radius, same-room-or-LOS) decide what
             // is perceivable. Unmet datables come back with an object-name label (no character
             // name), so this reveals presence without spoiling identities.
@@ -1465,7 +1474,7 @@ namespace DateEverythingAccess
         }
 
         // True if the player has a clear line of sight to the object — no wall between them. Used by
-        // the F6 room scan to drop objects in adjacent rooms that the old flat-distance filter read
+        // the look-around (L) to drop objects in adjacent rooms that the old flat-distance filter read
         // straight through walls. Casts from the player's eye toward the object's closest collider
         // point; LOS is clear if the ray reaches that point (within a small slack) before hitting
         // anything. Uses the game's own ~dateviatorIgnores mask so non-occluding layers (the same
@@ -1684,13 +1693,12 @@ namespace DateEverythingAccess
             }
         }
 
-        // One-time diagnostic: log the player's REAL world-space capsule dimensions.
-        // The bake reserves CAPSULE_R=0.40m of clearance per wall (Player.prefab local
-        // radius 0.4), but the prefab root has localScale=2, so the literal world radius
-        // could be 0.8m (height 5.0m — absurd, hence likely counter-scaled to net ~1x).
-        // This reads the live CapsuleCollider * lossyScale to settle 0.4 vs 0.8 for real,
-        // which decides whether ~1.0m gaps (SM_Walls_Hall1) are passable as baked.
-        // See [[project-navigation-capsule-radius-groundtruth-2026-05-29]].
+        // One-time diagnostic: log the player's live body and movement values, read from the game
+        // rather than from the asset rip (the May 2026 rip predates the June game build, and e.g. its
+        // camerarotmultiplier does not match the live camerarotspeed). The capsule radius scales by
+        // the larger horizontal lossyScale axis (the root is scaled 2x: radius 0.4 local = 0.8 m), the
+        // height by the vertical one. docs/game-api.md "Player body, camera and movement" is built
+        // from these lines.
         private static void LogCapsuleDimensionsOnce()
         {
             if (_loggedCapsuleDimensions) return;
@@ -1716,9 +1724,51 @@ namespace DateEverythingAccess
                 " localHeight=" + cc.height.ToString("F3") +
                 " colliderLossyScale=(" + ls.x.ToString("F3") + "," + ls.y.ToString("F3") + "," + ls.z.ToString("F3") + ")" +
                 " rootLossyScale=(" + t.lossyScale.x.ToString("F3") + "," + t.lossyScale.y.ToString("F3") + "," + t.lossyScale.z.ToString("F3") + ")" +
+                " centerY=" + cc.center.y.ToString("F3") +
                 " => worldRadius=" + worldR.ToString("F3") + "m worldHeight=" + worldH.ToString("F3") + "m" +
-                " (bake CAPSULE_R=0.40)");
+                " crouched=" + BetterPlayerControl.Instance.crouched +
+                " (bake radius " + SimpleNavPlanner.BakeCapsuleRadiusM.ToString("F2") + "m)");
+            LogPlayerTuningOnce(BetterPlayerControl.Instance);
             _loggedCapsuleDimensions = true;
+        }
+
+        // The live serialized movement values of BetterPlayerControl ([player-probe]); private ones by
+        // reflection. Logged once, alongside the capsule line.
+        private static void LogPlayerTuningOnce(BetterPlayerControl bpc)
+        {
+            string Private(string field)
+            {
+                try
+                {
+                    FieldInfo f = typeof(BetterPlayerControl).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic);
+                    object v = f != null ? f.GetValue(bpc) : null;
+                    return v is float fl ? fl.ToString("0.###", CultureInfo.InvariantCulture) : (v != null ? v.ToString() : "<missing>");
+                }
+                catch (Exception ex)
+                {
+                    return "<error " + ex.Message + ">";
+                }
+            }
+            Camera cam = Camera.main;
+            string camAboveFeet = cam != null
+                ? (cam.transform.position.y - bpc.transform.position.y).ToString("F3", CultureInfo.InvariantCulture)
+                : "<no camera>";
+            Main.Log.LogInfo("[player-probe] speed=" + bpc.speed.ToString("0.###", CultureInfo.InvariantCulture) +
+                " speedReduction=" + Private("speedReduction") +
+                " heightdist=" + bpc.heightdist.ToString("0.###", CultureInfo.InvariantCulture) +
+                " shiftforce=" + bpc.shiftforce.ToString("0.###", CultureInfo.InvariantCulture) +
+                " camerarotmultiplier=" + bpc.camerarotmultiplier.ToString("0.###", CultureInfo.InvariantCulture) +
+                " camerarotspeed=" + bpc.camerarotspeed.ToString("0.###", CultureInfo.InvariantCulture) +
+                " easingTime=" + bpc.easingTime.ToString("0.###", CultureInfo.InvariantCulture) +
+                " maxrot=" + bpc.maxrot.ToString("0.#", CultureInfo.InvariantCulture) +
+                " minrot=" + bpc.minrot.ToString("0.#", CultureInfo.InvariantCulture) +
+                " colliderHeightNormal=" + Private("colliderHeightNormal") +
+                " colliderHeightCrouched=" + Private("colliderHeightCrouched") +
+                " displacementCoefficient=" + Private("displacementCoefficient") +
+                " crouchInputMode=" + Private("crouchInputMode") +
+                " dateviatorIgnores=" + bpc.dateviatorIgnores.value +
+                " fixedDeltaTime=" + Time.fixedDeltaTime.ToString("0.####", CultureInfo.InvariantCulture) +
+                " cameraAboveFeet=" + camAboveFeet);
         }
 
         // Auto-walk driver. Drives toward the active SimpleNavRoute installed by
@@ -2769,14 +2819,16 @@ namespace DateEverythingAccess
         }
 
         // TURN RESPONSE CHECK. The step model above assumes the game turns the body by
-        // look.x * camerarotspeed every physics step. On some machines it turns far less than that
-        // (seen under CrossOver on a Mac: a 0.04 look command held for four seconds barely moved
-        // her, so autowalk never lined up with the next waypoint, timed out and said "Navigation
-        // blocked or interrupted" over and over, and the final turn-to-face never landed either).
-        // So we watch what the turn actually does: every TurnCheckSeconds, if she was asked to turn
-        // a fair way and turned less than a quarter of it, the gain goes up 2.5x (up to TurnBoostMax);
-        // if a boosted turn overshoots to the other side, it backs off. On a machine where the
-        // model holds, she finishes each turn well inside the window and the boost stays at 1.
+        // look.x * camerarotspeed every physics step. That is an upper bound, not a measurement: the
+        // game applies each step's turn through a DOTween eased over easingTime (the [player-probe] log
+        // line has the live value; 0.045 s in the May 2026 asset rip, longer than the 0.02 s physics
+        // step), and the real turn can be far smaller. Seen under CrossOver on a
+        // Mac (a 0.04 look command held for four seconds barely moved her, so autowalk never lined up
+        // with the next waypoint and timed out), and on Windows too: all four checks logged on
+        // 2026-10-21 turned 5-20% of what was asked. The cause is not established. So we watch what
+        // the turn actually does: every TurnCheckSeconds, if she was asked to turn a fair way and
+        // turned less than a quarter of it, the gain goes up 2.5x (up to TurnBoostMax); if a boosted
+        // turn overshoots to the other side, it backs off.
         // Two safeguards: the game ignores all turning while the player is not in control (a
         // conversation, the phone, an animation), so those stretches are never counted; and every
         // autowalk or aiming session starts back at 1 (ResetTurnBoost), so a boost learned in one
@@ -3220,7 +3272,7 @@ namespace DateEverythingAccess
 
         // True when the current tutorial objective is the GENERIC "go find more datables" prompt
         // (AnyUnmetDatable), as opposed to a SPECIFIC objective (Maggie, Skylar, computer, gift
-        // box, front door, ...) or none at all. Ctrl+F6 lets its location-based context defaults
+        // box, front door, ...) or none at all. Ctrl+O lets its location-based context defaults
         // outrank this generic objective but still yield to specific ones. See
         // StartNavigationToCurrentTarget.
         private static bool IsGenericFindDatablesObjective()
@@ -3243,7 +3295,7 @@ namespace DateEverythingAccess
             // Rumor/DateADex lookups are RETIRED here: a Rumor names a datable (character), not an
             // object ID, and a clue may point at a specific location — so matching it to the
             // closest/best-named candidate can steer the player to the wrong object. Without a kind
-            // at all we give up (player can use the Ctrl+Shift+F6 picker); generic "awaken any
+            // at all we give up (player can use the O objects list); generic "awaken any
             // datable" objectives fall through to the floor-aware nearest-datable search below;
             // specific objectives (computer, gift box, Maggie, Skylar, ...) resolve exactly.
             if (!haveKind || objectiveKind == TutorialObjectiveKind.None)
@@ -3857,7 +3909,7 @@ namespace DateEverythingAccess
             if (save == null || BetterPlayerControl.Instance == null)
                 return false;
 
-            // The room-bounds spatial fallback is normally built when the picker opens; Ctrl+F6 can
+            // The room-bounds spatial fallback is normally built when the picker opens; Ctrl+O can
             // fire without ever opening it, so build it on demand if absent.
             if (_roomBoundsIndex == null)
                 _roomBoundsIndex = BuildRoomBoundsIndex();
@@ -3894,7 +3946,7 @@ namespace DateEverythingAccess
 
                 // "Find more" = discover datables the player DOESN'T KNOW ABOUT yet. Skip any the
                 // player has already interacted with or examined — those are known (they appear in
-                // the Ctrl+Shift+F6 picker) and aren't what "find more datables" should reveal.
+                // the O objects list) and aren't what "find more datables" should reveal.
                 // This is a different, narrower category than the game's "Unmet" date status. See
                 // IsEncounteredKnownObject.
                 if (IsEncounteredKnownObject(candidate))
@@ -4337,7 +4389,7 @@ namespace DateEverythingAccess
 
         // Shared selection tail: BeginNavigation, plan the route, and start the tracker tone at
         // the first waypoint so the player gets safe spatial feedback immediately. Used by both
-        // Ctrl+F6 (objective selection) and the Ctrl+Shift+F6 known-objects picker.
+        // Ctrl+O (objective selection) and the O known-objects list.
         private void BeginNavigationAndStartTrackerTone(string targetZone, string targetLabel)
         {
             if (!BeginNavigation(targetZone, targetLabel))
@@ -4367,11 +4419,11 @@ namespace DateEverythingAccess
             return SimpleNavBridge.LastResolvedTarget;
         }
 
-        // Ctrl+Shift+F6 known-objects picker. The office door is seeded at game start;
+        // O known-objects list. The office door is seeded at game start;
         // every other entry comes from save/runtime evidence that the player has met,
         // interacted with, or examined the object. Entries are grouped DateADex-style into a
         // Met section (by character name) and an Encountered section (object name only).
-        // Up/Down move selection; Enter selects (drives the same nav-tone flow as Ctrl+F6);
+        // Up/Down move selection; Enter selects (drives the same nav-tone flow as Ctrl+O);
         // Backspace backs out / closes. Left/Right cycle the sort, F toggles current-floor-only,
         // M cycles the section filter, D toggles doors-only.
         private void OpenKnownObjectPicker()
@@ -4878,9 +4930,9 @@ namespace DateEverythingAccess
         private enum KnownObjectBuildResult { Ok, RosterMissing, Empty }
 
         // includeUnencountered: when true, the encounter (met/interacted/examined) filter is
-        // skipped so EVERY live, active, on-floor fixture is returned — used by the F6 room scan,
+        // skipped so EVERY live, active, on-floor fixture is returned — used by the look-around (L),
         // which describes what the player can physically perceive, not just what this save knows.
-        // The Ctrl+Shift+F6 picker leaves it false so it stays a memory aid for known objects.
+        // The O objects list leaves it false so it stays a memory aid for known objects.
         private KnownObjectBuildResult BuildKnownObjectTargets(out List<KnownObjectTarget> targets, bool includeUnencountered = false)
         {
             targets = new List<KnownObjectTarget>();
@@ -4917,9 +4969,9 @@ namespace DateEverythingAccess
                 SimpleNavPlanner.TryGetPlayerFloorLabel(playerPosition.y, out playerFloorLabel);
 
             // In the crawlspace, the only reachable things are the crawlspace's own contents, so
-            // restrict to crawlspace-band fixtures; normal behaviour resumes once the player climbs
-            // back out (Y above the ceiling line).
-            bool playerInCrawlspace = playerTransform != null && playerPosition.y < CrawlspaceCeilingY;
+            // restrict to the bake's crawlspace fixtures; normal behaviour resumes once the player
+            // climbs back out.
+            bool playerInCrawlspace = playerTransform != null && IsPlayerInCrawlspace(playerPosition.y);
 
             // The kitchen cabinets are one character's set: finding any one of them reveals them
             // all. (The laundry-room and bathroom cabinets still have to be found one by one.)
@@ -4936,7 +4988,7 @@ namespace DateEverythingAccess
 
                 // Crawlspace band gate is a property of the fixture's own position (no live object
                 // required), so it applies before the live bridge.
-                if (playerInCrawlspace && fixturePos.y >= CrawlspaceCeilingY)
+                if (playerInCrawlspace && !string.Equals(fixture.floor, CrawlspaceFloorLabel, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 // Bridge to the live instance — required for the runtime second-order filters
@@ -4955,14 +5007,14 @@ namespace DateEverythingAccess
                 {
                     fixturePos = liveCentre;
                     rosterPositionBad = true;
-                    if (playerInCrawlspace && fixturePos.y >= CrawlspaceCeilingY)
+                    if (playerInCrawlspace && !IsCrawlspaceTargetY(fixturePos.y))
                         continue;
                 }
 
                 // SECOND-ORDER FILTER: only objects the player has encountered (met / interacted /
                 // examined) appear, plus the seeded startup office door. The roster defines what
                 // EXISTS; this narrows it to what THIS SAVE knows. Skipped when includeUnencountered
-                // is set (F6 room scan): the spatial gates there already model "what's perceivable."
+                // is set (look-around, L): the spatial gates there already model "what's perceivable."
                 // Doors (rooms, closets, the front door) are always listed: they are the house's
                 // landmarks, and a door you have not opened yet (the office closet) is exactly the
                 // thing you need to be able to walk to. Everything else appears only once
@@ -5525,13 +5577,14 @@ namespace DateEverythingAccess
         // instance whose cleaned name matches and whose transform is nearest the fixture's
         // best-available-location.
         // Max distance (squared, m²) between a roster fixture and a live object for the NAME-bucket
-        // bridge to be believed. Measured over the 58 multi-slot fixture names in the bake: genuine
-        // co-located duplicates (preset copies, hanger/glass stacks, clock tails) sit within ~1.9m of
-        // each other — tightest 0.01m, and 'ball' at 1.44m — while separate LOCATION slots of a
-        // moving datable start at 3.6m and run to 58m (the bobby pin's six slots are ≥4.58m apart).
-        // 2.5m sits in that empty band: close enough to keep every legitimate near-duplicate, far
-        // enough to reject a match that is really a different slot's object. Only the name fallback
-        // is bounded; the exact unique_id bridge is unaffected.
+        // bridge to be believed. Each fixture's own live object normally sits at its roster position,
+        // so the bound only matters when that object has gone or moved and the nearest same-name
+        // object is some other slot. Measured on the shipped bake: 56 names have several roster slots,
+        // from 0.01 m apart (preset copies) to 72 m (the glasses); the bobby pin, a moving datable, has
+        // six slots at least 4.58 m apart. 2.5 m rejects another slot of a moving datable. It can also
+        // reject a real neighbour in a dense stack (some closet hanger pairs are 2.5-3.5 m apart), which
+        // only happens when that fixture's own object is missing. Only the name fallback is bounded;
+        // the exact unique_id bridge is unaffected.
         private const float NameBridgeMaxDistanceSqM = 2.5f * 2.5f;
 
         private static InteractableObj ResolveLiveForFixture(
@@ -6112,7 +6165,7 @@ namespace DateEverythingAccess
         private static bool IsCrawlspacePassageRevealed()
         {
             if (BetterPlayerControl.Instance != null &&
-                BetterPlayerControl.Instance.transform.position.y < CrawlspaceCeilingY)
+                IsPlayerInCrawlspace(BetterPlayerControl.Instance.transform.position.y))
             {
                 return true;
             }
