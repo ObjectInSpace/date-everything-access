@@ -52,7 +52,8 @@ def plan_route(planner, start_node, target):
     if tfloor is None:
         return None, math.inf
     radius = target.get("InteractionRadius", 1.0) or 1.0
-    radius = max(P.MIN_INTERACTION_RADIUS_M, min(radius, P.MAX_INTERACTION_RADIUS_M))
+    # Same clamp the planner used when these baseline routes were recorded.
+    radius = max(0.5, min(radius, 7.5))
     goals = P.goal_cells_around(planner.floors[tfloor], tx, tz, radius)
     if not goals:
         n = planner.floors[tfloor].nearest_navigable(

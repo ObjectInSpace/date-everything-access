@@ -50,6 +50,8 @@ NAVIGABLE_CHAR = "N"
 # [[project-navigation-corner-dilation-severance-2026-05-29]].
 CLEARANCE_TARGET_CELLS = 4       # >= this many cells to nearest wall (0.8m) ⇒ no penalty
 CLEARANCE_PENALTY_PER_CELL_M = 0.15  # added per missing clearance-cell below target, in metres
+# Extra cells around each passage door's open-leaf footprint (C# LeafExtraMarginCells).
+LEAF_EXTRA_MARGIN_CELLS = 2
 # NOTE (2026-06-13): a steep flat surcharge for clearance<=2 was TRIED to reroute the
 # tight-gap follower stalls and REVERTED — only 29→24 stalls, +1.8% length, and the
 # dominant upper-bedroom cluster was UNCHANGED because that furniture-dense area has
@@ -323,6 +325,7 @@ class Planner:
         # Locked is authoritative regardless of record ordering: if any record
         # for a name is locked, that door is not player-openable.
         self._unlocked_doors -= self._locked_doors
+        self._widen_passage_door_leaves()
         if doors_open:
             self.apply_doors_open(doors_open)
         if state_walls_open:
@@ -410,6 +413,28 @@ class Planner:
         else:
             self._open_state_walls = set(state_walls_open)
         self._rebuild_extra_navigable()
+
+    def _widen_passage_door_leaves(self):
+        """Mirror of C# SimpleNavPlanner.WidenPassageDoorLeaves: grow each PASSAGE door's open-leaf
+        footprint by LEAF_EXTRA_MARGIN_CELLS (the bake sizes it for a 0.4m capsule; the player's
+        is 0.8m), never into any door's doorway (freed) cells. Container doors are left alone."""
+        for floor in self.floors.values():
+            all_freed = set()
+            for cells in floor.doors_freed_by_name.values():
+                all_freed |= cells
+            m = LEAF_EXTRA_MARGIN_CELLS
+            for name in list(floor.doors_blocked_by_name):
+                if name in self._container_door_names:
+                    continue
+                leaf = floor.doors_blocked_by_name[name]
+                widened = set(leaf)
+                for ix, iz in leaf:
+                    for dx in range(-m, m + 1):
+                        for dz in range(-m, m + 1):
+                            c = (ix + dx, iz + dz)
+                            if floor.in_bounds(*c) and c not in all_freed:
+                                widened.add(c)
+                floor.doors_blocked_by_name[name] = widened
 
     def _rebuild_extra_navigable(self):
         # _open_doors / _open_state_walls semantics:
