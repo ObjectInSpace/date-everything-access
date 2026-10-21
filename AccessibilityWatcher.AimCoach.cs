@@ -141,6 +141,7 @@ namespace DateEverythingAccess
         {
             if (_aimCoachActive)
                 StopAimCoach();
+            ResetTurnBoost();
             _aimCoachActive = true;
             _aimCoachTarget = target;
             _aimCoachLastCue = null;

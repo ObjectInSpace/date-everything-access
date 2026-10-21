@@ -70,7 +70,10 @@ for the project rules.
   488 reached): PR #1's 35-degree corner hold, clearance-3 standpoint tiers and deep operable-cell
   filter. Still on branch `test/nav-open-items`: sightlines from the live camera height, which
   BROKE the kitchen cutlery drawer and cookie cupboard (3 standpoints, all unreachable, vs 593 on
-  main) and needs fixing or dropping. Only on the PR branch: the adaptive turn speed-up.
+  main) and needs fixing or dropping.
+- Merged 2026-10-22: PR #1's adaptive turn speed-up (for CrossOver), with two safeguards: turns are
+  only measured while the player is in control, and every autowalk / aiming session starts at
+  normal strength. Not tested on CrossOver by us.
 - Known, not caused by these: the gym closet's outer sliding panel can stop part-way across its
   doorway and walks stall against it (seen in the 2026-10-21 test sweep).
 - PR #1's 4.5 m limit on stand-in parts was replaced on main by a same-room rule (the 4.5 m limit

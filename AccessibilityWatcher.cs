@@ -651,6 +651,7 @@ namespace DateEverythingAccess
             SimpleNavBridge.EndStep();
             SimpleNavBridge.BeginRoute(route);
             LastSweepDriveArrived = false;
+            _instance.ResetTurnBoost();
             _instance._isAutoWalking = true;
             LogCapsuleDimensionsOnce();
             _instance._lastAutoWalkPosition = BetterPlayerControl.Instance != null
@@ -945,6 +946,7 @@ namespace DateEverythingAccess
             }
 
             HandleRepeatLastSpeechRequest();
+            MonitorTurnResponse();
             SimpleNavBridge.Tick();
             HandleNavigationRequests();
             HandleCoverageSweepRequest();
@@ -2739,7 +2741,91 @@ namespace DateEverythingAccess
         private static float LookAxisForError(float errorDeg, float deadzoneDeg)
         {
             if (Mathf.Abs(errorDeg) < deadzoneDeg) return 0f;
-            return Mathf.Clamp(errorDeg * TurnGainPerStep / CameraRotDegPerStep(), -1f, 1f);
+            return Mathf.Clamp(errorDeg * TurnGainPerStep * _turnBoost / CameraRotDegPerStep(), -1f, 1f);
+        }
+
+        // TURN RESPONSE CHECK. The step model above assumes the game turns the body by
+        // look.x * camerarotspeed every physics step. On some machines it turns far less than that
+        // (seen under CrossOver on a Mac: a 0.04 look command held for four seconds barely moved
+        // her, so autowalk never lined up with the next waypoint, timed out and said "Navigation
+        // blocked or interrupted" over and over, and the final turn-to-face never landed either).
+        // So we watch what the turn actually does: every TurnCheckSeconds, if she was asked to turn
+        // a fair way and turned less than a quarter of it, the gain goes up 2.5x (up to TurnBoostMax);
+        // if a boosted turn overshoots to the other side, it backs off. On a machine where the
+        // model holds, she finishes each turn well inside the window and the boost stays at 1.
+        // Two safeguards: the game ignores all turning while the player is not in control (a
+        // conversation, the phone, an animation), so those stretches are never counted; and every
+        // autowalk or aiming session starts back at 1 (ResetTurnBoost), so a boost learned in one
+        // can't leave the next one turning far too hard.
+        private static float _turnBoost = 1f;
+        private const float TurnBoostMax = 64f;
+        private const float TurnCheckSeconds = 0.4f;
+        private const float TurnCheckMinErrorDeg = 10f;
+        private bool _turnCheckActive;
+        private float _turnCheckStart;
+        private float _turnCheckErr;
+        private float _turnCheckYaw;
+        private Vector3 _turnCheckPoint;
+
+        private void ResetTurnBoost()
+        {
+            _turnBoost = 1f;
+            _turnCheckActive = false;
+        }
+
+        private void MonitorTurnResponse()
+        {
+            BetterPlayerControl bpc = BetterPlayerControl.Instance;
+            Vector3 point;
+            if (_isAutoWalking && _hasAutoWalkInput && _steerMode != SteerNone) point = _steerPoint;
+            else if (_aimFineActive) point = _aimFinePoint;
+            else { _turnCheckActive = false; return; }
+            if (bpc == null || bpc.STATE != BetterPlayerControl.PlayerState.CanControl)
+            {
+                // Not in control: the game is not turning her at all, which says nothing about
+                // how fast it turns. Start a fresh window once control returns.
+                _turnCheckActive = false;
+                return;
+            }
+
+            Transform body = bpc.transform;
+            Vector3 flat = point - body.position;
+            flat.y = 0f;
+            if (flat.sqrMagnitude < 0.04f) { _turnCheckActive = false; return; }
+            float err = Vector3.SignedAngle(body.forward, flat.normalized, Vector3.up);
+            float yaw = body.eulerAngles.y;
+            float now = Time.unscaledTime;
+
+            if (!_turnCheckActive || (point - _turnCheckPoint).sqrMagnitude > 0.25f)
+            {
+                _turnCheckActive = true;
+                _turnCheckStart = now;
+                _turnCheckErr = err;
+                _turnCheckYaw = yaw;
+                _turnCheckPoint = point;
+                return;
+            }
+            if (now - _turnCheckStart < TurnCheckSeconds)
+                return;
+
+            float startErr = Mathf.Abs(_turnCheckErr);
+            if (startErr >= TurnCheckMinErrorDeg)
+            {
+                float turned = Mathf.Abs(Mathf.DeltaAngle(_turnCheckYaw, yaw));
+                float old = _turnBoost;
+                if (Mathf.Sign(err) != Mathf.Sign(_turnCheckErr) && Mathf.Abs(err) > 6f)
+                    _turnBoost = Mathf.Max(1f, _turnBoost * 0.6f);
+                else if (turned < 0.25f * startErr)
+                    _turnBoost = Mathf.Min(TurnBoostMax, _turnBoost * 2.5f);
+                if (!Mathf.Approximately(old, _turnBoost) && Main.Log != null)
+                    Main.Log.LogInfo("Turn response: asked " + startErr.ToString("0") + " deg, turned " +
+                        turned.ToString("0.0") + " deg in " + (now - _turnCheckStart).ToString("0.00") +
+                        "s, camerarotspeed=" + CameraRotDegPerStep().ToString("0.##") +
+                        " boost " + old.ToString("0.##") + " -> " + _turnBoost.ToString("0.##"));
+            }
+            _turnCheckStart = now;
+            _turnCheckErr = err;
+            _turnCheckYaw = yaw;
         }
 
         private static Vector3 GetLookInputTowardRouteTarget(Transform playerTransform, Vector3 targetPosition)
@@ -6174,6 +6260,7 @@ namespace DateEverythingAccess
 
             _isAutoWalking = true;
             _stallReplans = 0;
+            ResetTurnBoost();
             _doorTargetReplanPending = false;
             _progressWaypointSet = false;
             _doorStandPhase = DoorStandNone;
