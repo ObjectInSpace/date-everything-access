@@ -124,11 +124,10 @@ namespace DateEverythingAccess
         // the game's 0.2 translate dead-zone (player frozen) AND the watchdog's move test (so it
         // scores the freeze as "turning" and never times out). The gate keeps move firmly on/off.
         private const float AutoWalkFacingGateCosThreshold = 0.342f;
-        // Max seconds the post-arrival turn-to-face phase runs before we accept arrival
-        // regardless of whether the game's raycast selected the target. Generous enough to
-        // complete a full turn-and-pitch toward an overhead/odd object, short enough that a
-        // never-selectable target doesn't hang. Looking counts as interaction.
-        private const float AutoWalkFaceTimeoutSeconds = 3f;
+        // Max seconds the post-arrival turn-to-face phase runs. If the game's raycast still has
+        // not selected the target by then, auto-walk stops and says so honestly rather than
+        // announcing "Arrived". Generous enough for a full turn-and-pitch toward an odd object.
+        private const float AutoWalkFaceTimeoutSeconds = 4f;
         private const float AutoWalkProgressDistance = 0.35f;
         private const float AutoWalkBlockedTimeoutSeconds = 2f;
         // Within this distance of the FINAL waypoint, the follower drops the binary heading gate and
@@ -170,6 +169,8 @@ namespace DateEverythingAccess
         // camera aim at the OBJECT), and the phase completes when the game's raycast selects the
         // target. See ObjectTracker's channel map.
         private bool _manualAimPhase;
+        // This arrival was handed to the spoken aiming help (settings: Aiming help = Spoken).
+        private bool _manualAimCoachStarted;
         private const float TrackedInteractableApproachClearanceDistance = 0.9f;
         private const float TrackedInteractableApproachRetargetDistance = 0.75f;
         private const float TrackedInteractableApproachMinimumExtent = 0.35f;
@@ -490,7 +491,14 @@ namespace DateEverythingAccess
             public KnownObjectTarget Target;
             // Group only: the members this group drills into (subset of _knownObjectTargets).
             public List<KnownObjectTarget> Members;
+            // Group only: the key the Objects level filters on, when it isn't the members'
+            // DatableKey (the per-room cabinets group).
+            public string GroupKey;
         }
+
+        // Key of the per-room "cabinets" group: encountered cupboards and cabinets collected
+        // into one sublist so a room full of them doesn't crowd the room's list.
+        private const string CabinetGroupKey = "\u0001cabinets";
 
         // The drill level the picker is currently showing: Rooms -> InRoom -> Objects.
         private enum PickerLevel { Rooms, InRoom, Objects }
@@ -847,6 +855,7 @@ namespace DateEverythingAccess
         /// </summary>
         internal static void RequestCardPoseAnnouncement(string internalName, E_General_Poses pose, E_Facial_Expressions expression, bool allowNeutralFallback)
         {
+            NoteModTutorialMeeting(internalName);
             bool found = CardPoseDescriptions.TryGet(internalName, pose, expression, allowNeutralFallback, out string description);
             if (Main.Log != null)
             {
@@ -927,6 +936,7 @@ namespace DateEverythingAccess
                 InputMappingReporter.TryStripObjectTrackerMovementBinding())
             {
                 _strippedObjectTrackerMovementBinding = true;
+                InputMappingReporter.LogKeyboardSummary();
             }
 
             HandleRepeatLastSpeechRequest();
@@ -944,6 +954,8 @@ namespace DateEverythingAccess
             // while a text field or the settings menu is focused. Sampled every frame for the same
             // fast-tap reason as the section stepper.
             PollAccessibilityShortcutKeys();
+            UpdateModTutorial();
+            UpdateAimCoach();
 
             bool isSettingsMenuOpen = ModConfig.IsMenuOpen;
             if (isSettingsMenuOpen)
@@ -980,6 +992,7 @@ namespace DateEverythingAccess
             AnnounceEngagementIfNeeded();
             AnnounceLoadingIfNeeded();
             AnnounceExamineIfNeeded();
+            DiagnoseBulletinBoardIfNeeded();
             AnnounceUIDialogIfNeeded();
             AnnounceSpecsDetailIfNeeded();
             AnnounceCreditsIfNeeded();
@@ -1008,12 +1021,29 @@ namespace DateEverythingAccess
         // FixedUpdate so the value is always present when the game actually reads it.
         private void FixedUpdate()
         {
-            if (Main.IsShuttingDown || !_isAutoWalking || !_hasAutoWalkInput)
+            if (Main.IsShuttingDown)
+                return;
+            if (_aimFineActive)
+                ApplyAimFineStep();
+            if (!_isAutoWalking || !_hasAutoWalkInput)
                 return;
             if (BetterPlayerControl.Instance == null)
                 return;
-            ApplyNavigationInput(_lastAutoWalkMove, _lastAutoWalkLook);
+            Vector3 look = _lastAutoWalkLook;
+            if (_steerMode != SteerNone)
+            {
+                // Recompute the turn from the CURRENT heading each physics step (see TURN CONTROL).
+                Transform body = BetterPlayerControl.Instance.transform;
+                Vector3 fresh = GetLookInputTowardRouteTarget(body, _steerPoint,
+                    _steerMode == SteerFace ? FinalAimDeadzoneDeg : 0f);
+                look = _steerMode == SteerFace ? fresh : new Vector3(fresh.x, 0f, 0f);
+            }
+            ApplyNavigationInput(_lastAutoWalkMove, look);
         }
+
+        private const int SteerNone = 0, SteerTraverse = 1, SteerFace = 2;
+        private int _steerMode;
+        private Vector3 _steerPoint;
 
         private void LateUpdate()
         {
@@ -1262,6 +1292,12 @@ namespace DateEverythingAccess
                 if (!HasVisibleRenderer(target.Interactable))
                     continue;
 
+                // Belt and braces for the floor gate: nothing a whole storey above or below
+                // (floors are ~13 m apart; ceiling fixtures sit ~10 m up) is in view, whatever its roster entry says.
+                if (TryGetLiveBoundsCentre(target.Interactable, out Vector3 seen) &&
+                    Mathf.Abs(seen.y - playerPosition.y) > 11.5f)
+                    continue;
+
                 if (!HasRoomScanLineOfSight(playerPosition, target.Interactable))
                     continue;
 
@@ -1473,7 +1509,8 @@ namespace DateEverythingAccess
         {
             if (!_isNavigationActive)
             {
-                if (ObjectTracker.IsTracking)
+                // The aiming help's tone version (settings: Aiming help) uses the tracker on its own.
+                if (ObjectTracker.IsTracking && !(_aimCoachActive && _aimCoachTone))
                     ObjectTracker.StopTracking();
                 return;
             }
@@ -1536,23 +1573,47 @@ namespace DateEverythingAccess
                         return;
                     }
 
+                    // Settings: Aiming help. Spoken hands the aim over to the spoken aiming help;
+                    // Tone keeps the original steady aim tone below.
+                    bool spokenAim = ModConfig.AimingHelp == ModConfig.AimingHelpStyle.Speech;
                     if (!_manualAimPhase)
                     {
                         _manualAimPhase = true;
-                        ScreenReader.Say(Loc.Get("navigation_arrived"));
+                        InteractableObj coachTarget = spokenAim && FindSimpleRouteTargetObject(route) != null
+                            ? FindSimpleRouteTargetObject(route).GetComponent<InteractableObj>()
+                            : null;
+                        _manualAimCoachStarted = coachTarget != null;
+                        if (coachTarget != null)
+                        {
+                            // Its opening line says the player has arrived.
+                            ObjectTracker.StopTracking();
+                            StartAimCoach(coachTarget, afterWalk: true);
+                        }
+                        else
+                        {
+                            ScreenReader.Say(Loc.Get("navigation_arrived"));
+                        }
                     }
 
                     if (IsSimpleRouteTargetSelected(route))
                     {
-                        ObjectTracker.NotifyAimLocked();
+                        // The spoken aiming help may have just announced it (and chirped).
+                        if (Time.unscaledTime - _aimCoachOnTargetAt > 1f)
+                            ObjectTracker.NotifyAimLocked();
                         StopNavigationRuntime();
                         return;
                     }
 
-                    ObjectTracker.StartAimTracking(ResolveSimpleRouteTargetLookPoint(route));
+                    // The original aim tone, unless the spoken aiming help took this arrival (if it
+                    // gives up, it has said so; the tone doesn't start up in its place).
+                    if (!_manualAimCoachStarted)
+                        ObjectTracker.StartAimTracking(ResolveSimpleRouteTargetLookPoint(route));
                     return;
                 }
+                if (_manualAimPhase)
+                    StopAimCoach();   // walked back out of the arrival area: the walking tone resumes
                 _manualAimPhase = false;
+                _manualAimCoachStarted = false;
 
                 // The tone tracks the pure-pursuit CARROT — a point sliding continuously along the
                 // route ahead of the player — not the raw waypoint vertex. Centred pan = on the
@@ -1653,6 +1714,54 @@ namespace DateEverythingAccess
                 SimpleNavBridge.PursuitTarget(playerPos, AutoWalkPursuitLookahead),
                 requiresInteraction: false);
 
+            // DOOR TARGET DONE EARLY. When the target itself is a door, the errand is "get this door
+            // open". Doors open from a distance (Interact fires within the door's range), and a
+            // closet door that swings toward the player then occupies the standpoint the route was
+            // heading for, so the player pushed into the leaf until the stall watchdog gave up. Once
+            // the door is open, finished moving, and the player is near it, that is arrival.
+            if (IsDoorTargetOpenNearby(route, playerPos) &&
+                !TryGetRouteDoorFrame(route, playerPos, out _, out _, out _))
+            {
+                LastSweepDriveArrived = true;
+                ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                StopNavigationWithAnnouncement("navigation_arrived");
+                return;
+            }
+
+            // DOOR TARGET SWINGING: once the target door has been opened, stand still until it has
+            // finished moving — a door that swings toward the player (the office closet) otherwise
+            // swings straight into her — then re-plan, so the route to the spot squarely in front
+            // of the doorway is worked out with the door open and its leaf out of the way.
+            if (TryGetRouteDoorFrame(route, playerPos, out DoorPortal swingDoor, out _, out _))
+            {
+                if (SimpleNavBridge.IsDoorMoving(swingDoor))
+                {
+                    _doorTargetReplanPending = true;
+                    ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                    _lastAutoWalkMove = Vector3.zero;
+                    _lastAutoWalkLook = Vector3.zero;
+                    _steerMode = SteerNone;
+                    ResetAutoWalkProgress();   // waiting on the door is not a stall
+                    return;
+                }
+                if (_doorTargetReplanPending)
+                {
+                    _doorTargetReplanPending = false;
+                    if (swingDoor.open && SimpleNavPlanner.HasFrontStandpoint(swingDoor.gameObject.name))
+                    {
+                        if (Main.Log != null)
+                            Main.Log.LogInfo("SimpleNav door target open: re-planning to the front of " + swingDoor.gameObject.name);
+                        if (!TryPlanAndInstallSimpleNavRoute())
+                        {
+                            StopNavigationRuntime();
+                            return;
+                        }
+                        ResetAutoWalkProgress();
+                        return;
+                    }
+                }
+            }
+
             // Arrival: within target interaction radius (XZ). The planner already routes to a
             // goal cell inside this disc, so this matches the goal-cell expansion in O4.
             if (SimpleNavBridge.HasArrivedAtRouteTarget(playerPos))
@@ -1668,6 +1777,49 @@ namespace DateEverythingAccess
                     return;
                 }
 
+                // DOOR TARGET: the planner parked the player squarely in front of the doorway;
+                // turn to face straight through it, so walking forward from here goes through.
+                if (TryGetRouteDoorFrame(route, playerPos, out DoorPortal frameDoor, out _, out Vector3 through))
+                {
+                    // Face the point just beyond the doorway: square-on when the player stands
+                    // centred in front, along the clear line when she had to stand at an angle.
+                    if (SimpleNavPlanner.TryGetDoorwayFarPoint(frameDoor.gameObject.name, playerPos, out Vector3 farPoint))
+                    {
+                        Vector3 toFar = farPoint - playerPos;
+                        toFar.y = 0f;
+                        if (toFar.sqrMagnitude > 0.04f)
+                            through = toFar.normalized;
+                    }
+                    Vector3 flatFwd = playerTransform.forward;
+                    flatFwd.y = 0f;
+                    float yawErr = flatFwd.sqrMagnitude > 1e-6f
+                        ? Vector3.SignedAngle(flatFwd.normalized, through, Vector3.up) : 180f;
+                    if (_facingSince == 0f) _facingSince = Time.unscaledTime;
+                    bool faceTimedOut = Time.unscaledTime - _facingSince >= DoorFaceTimeoutSeconds;
+                    if (Mathf.Abs(yawErr) > DoorFaceToleranceDeg && !faceTimedOut)
+                    {
+                        Camera faceCam = Camera.main;
+                        float eyeY = faceCam != null ? faceCam.transform.position.y : playerPos.y + 1.5f;
+                        Vector3 aheadPoint = new Vector3(playerPos.x + through.x * 6f, eyeY, playerPos.z + through.z * 6f);
+                        Vector3 faceLook = GetLookInputTowardRouteTarget(playerTransform, aheadPoint, 0.5f);
+                        ApplyNavigationInput(Vector3.zero, faceLook);
+                        _lastAutoWalkMove = Vector3.zero;
+                        _lastAutoWalkLook = faceLook;
+                        _hasAutoWalkInput = true;
+                        _steerPoint = aheadPoint;
+                        _steerMode = SteerFace;
+                        return;
+                    }
+
+                    ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNav door arrival: door=" + frameDoor.gameObject.name +
+                            " facing through yawErr=" + yawErr.ToString("F1") + " open=" + frameDoor.open +
+                            " locked=" + frameDoor.locked + " player=" + FormatVector3(playerPos));
+                    StopNavigationWithAnnouncement("navigation_arrived");
+                    return;
+                }
+
                 if (IsSimpleRouteDoorTargetComplete(route))
                 {
                     ApplyNavigationInput(Vector3.zero, Vector3.zero);
@@ -1678,22 +1830,38 @@ namespace DateEverythingAccess
                 if (!IsSimpleRouteTargetSelected(route))
                 {
                     Vector3 lookPoint = ResolveSimpleRouteTargetLookPoint(route);
-                    Vector3 lookInput = GetLookInputTowardRouteTarget(playerTransform, lookPoint);
+                    // Fine deadzone for the final aim: the coarse traversal deadzone (~2 degrees) is
+                    // enough to leave the crosshair just off a small object.
+                    Vector3 lookInput = GetLookInputTowardRouteTarget(playerTransform, lookPoint, FinalAimDeadzoneDeg);
 
                     // Turn-to-face is the final phase: we're in range, now orient toward the
-                    // target so the game's first-person raycast selects it. Bound it so it
-                    // can't spin forever when the raycast never lands (small/odd colliders):
-                    // once we're pointed AT the target (look input ≈ 0, so we've finished
-                    // turning) OR we've been facing for AutoWalkFaceTimeoutSeconds, accept
-                    // arrival — looking IS the interaction for a blind player, who just needs
-                    // to be placed in range and oriented. See [[feedback-interaction-includes-look-and-glasses]].
+                    // target so the game's first-person raycast selects it. Bounded by
+                    // AutoWalkFaceTimeoutSeconds so it can't spin forever.
+                    // Arrival is only announced once the GAME has selected the target (checked at
+                    // the top of this branch via IsSimpleRouteTargetSelected). Pointing roughly at it
+                    // is not enough: previously "aimed" or a 3s timeout announced "Arrived" even when
+                    // the crosshair sat on the monitor's back panel or the counter under a small prop,
+                    // leaving the player told they had arrived at something they could not use.
                     if (_facingSince == 0f) _facingSince = Time.unscaledTime;
-                    bool aimedAtTarget = lookInput.sqrMagnitude <= 0.0001f;
                     bool facedLongEnough = Time.unscaledTime - _facingSince >= AutoWalkFaceTimeoutSeconds;
-                    if (aimedAtTarget || facedLongEnough)
+                    if (facedLongEnough)
                     {
                         ApplyNavigationInput(Vector3.zero, Vector3.zero);
-                        StopNavigationWithAnnouncement("navigation_arrived");
+                        Main.Log.LogInfo("SimpleNav arrival: in range but the game did not select target=" +
+                            (route.TargetName ?? "<null>") + " after " + AutoWalkFaceTimeoutSeconds +
+                            "s of facing player=" + FormatVector3(playerPos) + " lookPoint=" + FormatVector3(lookPoint));
+                        InteractableObj coachTarget = FindSimpleRouteTargetObject(route) != null
+                            ? FindSimpleRouteTargetObject(route).GetComponent<InteractableObj>()
+                            : null;
+                        if (coachTarget != null)
+                        {
+                            // Always hand over to the aiming help; it steers toward the target's
+                            // middle even when no spot on it is certain to be picked from here.
+                            StopNavigationRuntime();
+                            StartAimCoach(coachTarget, afterWalk: true);
+                            return;
+                        }
+                        StopNavigationWithAnnouncement("navigation_arrived_not_selected");
                         return;
                     }
 
@@ -1703,6 +1871,8 @@ namespace DateEverythingAccess
                     _lastAutoWalkMove = Vector3.zero;
                     _lastAutoWalkLook = lookInput;
                     _hasAutoWalkInput = true;
+                    _steerPoint = lookPoint;
+                    _steerMode = SteerFace;
                     LogSimpleRouteFrameDiagnostic(route, playerTransform, playerPos, lookPoint, Vector3.zero, lookInput, false);
                     return;
                 }
@@ -1714,8 +1884,26 @@ namespace DateEverythingAccess
 
             // Open the segment's tagged door if needed.
             bool segmentHasDoor = SimpleNavBridge.ActiveDoor != null;
-            if (segmentHasDoor)
+            // ...except the TARGET door of a door route: autowalk never opens the door it is taking
+            // the player to. She stops at the doorway facing it, and the player chooses: open it,
+            // walk through, or use the Dateviators on it (Dorian).
+            if (_doorStandPhase != DoorStandNone && _doorStandDoor != null)
+            {
+                // Handling a door already (possibly one the stall recovery handed over).
+                if (ApplyDoorStandToOpen(_doorStandDoor, playerTransform, playerPos))
+                    return;
+            }
+            else if (segmentHasDoor && !IsRouteTargetDoorWithFrame(route, SimpleNavBridge.ActiveDoor, playerPos))
+            {
+                if (ApplyDoorStandToOpen(SimpleNavBridge.ActiveDoor, playerTransform, playerPos))
+                    return;
                 SimpleNavBridge.TryOpenActiveDoorIfNeeded(playerPos);
+            }
+            else
+            {
+                _doorStandPhase = DoorStandNone;
+                _doorStandDoor = null;
+            }
 
             // Steer along the planned polyline with a short pure-pursuit lookahead so the
             // player tracks the corridor through corners instead of cutting toward
@@ -1730,6 +1918,7 @@ namespace DateEverythingAccess
                 ApplyNavigationInput(Vector3.zero, Vector3.zero);
                 _lastAutoWalkMove = Vector3.zero;
                 _lastAutoWalkLook = Vector3.zero;
+                _steerMode = SteerNone;
                 return;
             }
 
@@ -1773,7 +1962,7 @@ namespace DateEverythingAccess
                     Mathf.Clamp(localDirection.x, -1f, 1f), 0f,
                     Mathf.Clamp(localDirection.z, -1f, 1f)).normalized
                 : Vector3.zero;
-            Vector3 look = new Vector3(Mathf.Clamp(turnDeg / AutoWalkLookScaleDegrees, -1f, 1f), 0f, 0f);
+            Vector3 look = new Vector3(LookAxisForError(turnDeg, 0f), 0f, 0f);
 
             // Hold position while the segment's door is mid-swing — walking into a moving
             // door trips Door.OnCollisionEnter and pins the swing.
@@ -1790,6 +1979,8 @@ namespace DateEverythingAccess
             _lastAutoWalkMove = move;
             _lastAutoWalkLook = look;
             _hasAutoWalkInput = true;
+            _steerPoint = steerTarget;
+            _steerMode = SteerTraverse;
 
             LogSimpleRouteFrameDiagnostic(route, playerTransform, playerPos, target, move, look, waitingForDoorSwing);
             SimpleNavBridge.RecordFrameProgress(playerPos);
@@ -1805,8 +1996,20 @@ namespace DateEverythingAccess
             // indefinitely, so a stuck turn still trips the timeout.
             bool tryingToTranslate = !waitingForDoorSwing;
             bool turningToAlign = !headingAligned;
-            if (Vector3.Distance(playerPos, _lastAutoWalkPosition) >= AutoWalkProgressDistance)
+            // Progress means getting CLOSER to the waypoint, not just moving: sliding back and forth
+            // along something the bake doesn't know about (the open crawlspace trapdoor) covered
+            // plenty of ground without gaining any, so the stall recovery never kicked in.
+            float toWaypointDist = GetFlatDistance(playerPos, target);
+            bool newWaypoint = !_progressWaypointSet || (target - _progressWaypoint).sqrMagnitude > 0.01f;
+            if (newWaypoint)
             {
+                _progressWaypoint = target;
+                _progressWaypointSet = true;
+                _progressBestDist = toWaypointDist;
+            }
+            if (newWaypoint || toWaypointDist <= _progressBestDist - AutoWalkProgressDistance)
+            {
+                if (toWaypointDist < _progressBestDist) _progressBestDist = toWaypointDist;
                 _lastAutoWalkPosition = playerPos;
                 _lastAutoWalkProgressTime = Time.unscaledTime;
                 ClearNavigationBlockedDetail();
@@ -1824,6 +2027,18 @@ namespace DateEverythingAccess
             }
             else if (Time.unscaledTime - _lastAutoWalkProgressTime >= AutoWalkBlockedTimeoutSeconds)
             {
+                // STALL RECOVERY. Before giving up, learn what is physically in the way (furniture
+                // the navigation bake does not know about, a moved prop, a corner the route shaved),
+                // mark it blocked, and plan a fresh route from here. Only for the user's own
+                // auto-walk, not the coverage sweep, which classifies stalls itself.
+                if (!SimpleNavCoverageSweep.IsActive && !turningToAlign && _stallReplans < MaxStallReplansPerRoute &&
+                    TryLearnBlockerAndReplan(playerTransform, playerPos, walkDir))
+                {
+                    _stallReplans++;
+                    _lastAutoWalkPosition = playerPos;
+                    _lastAutoWalkProgressTime = Time.unscaledTime;
+                    return;
+                }
                 string runtimeBlocker = ProbeRuntimeBlocker(playerPos, target);
                 LogNavigationAutoWalkDebug(
                     "Simple-nav route progress timeout target=" + (route.TargetName ?? "<null>") +
@@ -1833,6 +2048,103 @@ namespace DateEverythingAccess
                 StopNavigationBlocked("simple-nav route progress timeout target=" + (route.TargetName ?? "<null>") +
                     " runtimeBlocker=" + (runtimeBlocker ?? "<none>"));
             }
+        }
+
+        // ---- stall recovery ----
+
+        private const int MaxStallReplansPerRoute = 3;
+        private int _stallReplans;
+
+        // Find the collider the player is pushing into (sphere casts at chest and head height along
+        // the travel direction, from inside the player's own capsule so it is not reported), mark it
+        // in the planner's runtime-blocked overlay, and re-plan to the same target. Returns true when
+        // a new route was installed (or when re-planning failed and navigation was stopped with the
+        // planner's own message).
+        private bool TryLearnBlockerAndReplan(Transform playerTransform, Vector3 playerPos, Vector3 walkDir)
+        {
+            Vector3 dir = walkDir;
+            dir.y = 0f;
+            if (dir.sqrMagnitude < 1e-4f) dir = playerTransform.forward;
+            dir.y = 0f;
+            dir.Normalize();
+
+            Collider blocker = null;
+            Vector3 contact = playerPos + dir * 1.0f;
+            float best = float.PositiveInfinity;
+            float[] heights = { 1.0f, 2.0f }; // chest and head: ankle height catches steps and thresholds
+            for (int h = 0; h < heights.Length; h++)
+            {
+                if (Physics.SphereCast(playerPos + Vector3.up * heights[h], 0.35f, dir, out RaycastHit hit, 1.6f,
+                        Physics.AllLayers, QueryTriggerInteraction.Ignore))
+                {
+                    if (BetterPlayerControl.Instance != null && hit.collider != null &&
+                        hit.collider.transform.IsChildOf(BetterPlayerControl.Instance.transform))
+                        continue; // our own capsule
+                    if (hit.distance < best)
+                    {
+                        best = hit.distance;
+                        blocker = hit.collider;
+                        contact = hit.point;
+                    }
+                }
+            }
+
+            // A CLOSED door in the way is not an obstacle to learn: open it and carry on along the
+            // same route. (Marking it would wall off the doorway for the blocker lifetime.) An OPEN
+            // door's swung leaf, by contrast, is a real obstacle and is learned below like furniture.
+            if (blocker != null)
+            {
+                Door swing = blocker.GetComponentInParent<Door>();
+                SlidingDoor slide = swing == null ? blocker.GetComponentInParent<SlidingDoor>() : null;
+                DoorPortal portal = swing != null ? DoorPortal.For(swing) : DoorPortal.For(slide);
+                // A swing door she is pressed against (shut, or stopped half open on her): step
+                // back clear of it and open it from there. Opening it where she stands just fails
+                // again, and learning it as an obstacle walls the doorway off.
+                if (portal != null && !portal.locked && _doorStandPhase == DoorStandNone &&
+                    !IsRouteTargetDoorWithFrame(SimpleNavBridge.ActiveRoute, portal, playerPos) &&
+                    (!portal.open || IsDoorStuck(portal)) &&
+                    BeginDoorStand(portal, playerTransform, playerPos,
+                        portal.open ? "stuck half open against her (stall)" : "shut in her way (stall)"))
+                    return true;
+                if (portal != null && !portal.open && !portal.locked &&
+                    !IsRouteTargetDoorWithFrame(SimpleNavBridge.ActiveRoute, portal, playerPos))
+                {
+                    Main.Log.LogInfo("SimpleNav stall recovery: closed door " + portal.gameObject.name +
+                        " in the way at player=" + FormatVector3(playerPos) + " — opening it instead of marking it blocked");
+                    portal.Interact();
+                    return true;
+                }
+            }
+
+            // Never learn a staircase as an obstacle: marking stair cells would cut off a floor.
+            SimpleNavWaypoint wp = SimpleNavBridge.ActiveWaypoint;
+            bool nearStairs = (wp != null && wp.Kind == SimpleNavWaypointKind.Stairs) ||
+                (blocker != null && blocker.name.IndexOf("stair", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (nearStairs)
+            {
+                Main.Log.LogInfo("SimpleNav stall recovery skipped near stairs player=" + FormatVector3(playerPos) +
+                    " blocker=" + (blocker != null ? blocker.name : "<none>"));
+                return false;
+            }
+
+            int added = SimpleNavPlanner.MarkRuntimeBlocker(playerPos, blocker, contact);
+            Main.Log.LogInfo("SimpleNav stall recovery #" + (_stallReplans + 1) + " player=" + FormatVector3(playerPos) +
+                " dir=" + FormatVector3(dir) + " blocker=" + (blocker != null ? RuntimeBlockerProbe.PathOf(blocker.gameObject) : "<none>") +
+                " cellsAdded=" + added);
+            if (added == 0)
+                return false; // nothing new learned; a replan would produce the same route
+
+            ScreenReader.Say(Loc.Get("navigation_rerouting"));
+            if (!TryPlanAndInstallSimpleNavRoute())
+            {
+                // The planner already announced why (e.g. no path). Stop quietly so the player
+                // does not also hear the generic "blocked" message.
+                ApplyNavigationInput(Vector3.zero, Vector3.zero);
+                StopNavigationRuntime();
+                return true;
+            }
+            ClearNavigationBlockedDetail();
+            return true;
         }
 
         private static bool IsSimpleRouteTargetSelected(SimpleNavRoute route)
@@ -1879,17 +2191,66 @@ namespace DateEverythingAccess
 
             Transform activeTransform = activeObject.transform;
             Transform targetTransform = targetObject.transform;
-            return activeTransform.IsChildOf(targetTransform) || targetTransform.IsChildOf(activeTransform);
+            if (!activeTransform.IsChildOf(targetTransform) && !targetTransform.IsChildOf(activeTransform))
+                return false;
+            // Parent and child are only the same target when they are the same character. The
+            // teddy bear sits inside the bed's hierarchy, so looking at the bed counted as having
+            // arrived at the teddy bear.
+            InteractableObj activeIo = activeObject.GetComponent<InteractableObj>();
+            InteractableObj targetIo = targetObject.GetComponent<InteractableObj>();
+            if (activeIo != null && targetIo != null &&
+                !string.IsNullOrWhiteSpace(activeIo.inkFileName) && !string.IsNullOrWhiteSpace(targetIo.inkFileName) &&
+                !string.Equals(activeIo.inkFileName, targetIo.inkFileName, StringComparison.OrdinalIgnoreCase))
+                return false;
+            return true;
         }
+
+        // Ray-heavy; recomputed a few times a second while turning to face the target.
+        private static SimpleNavRoute _lookPointCacheRoute;
+        private static Vector3 _lookPointCache;
+        private static float _lookPointCacheUntil;
 
         private static Vector3 ResolveSimpleRouteTargetLookPoint(SimpleNavRoute route)
         {
             if (route == null)
                 return Vector3.zero;
+            if (ReferenceEquals(route, _lookPointCacheRoute) && Time.unscaledTime < _lookPointCacheUntil)
+                return _lookPointCache;
+            _lookPointCache = ComputeSimpleRouteTargetLookPoint(route);
+            _lookPointCacheRoute = route;
+            _lookPointCacheUntil = Time.unscaledTime + 0.2f;
+            return _lookPointCache;
+        }
+
+        private static Vector3 ComputeSimpleRouteTargetLookPoint(SimpleNavRoute route)
+        {
 
             GameObject targetObject = FindSimpleRouteTargetObject(route);
             if (targetObject == null)
                 return route.TargetPosition;
+
+            // Prefer a point the game's own camera ray would SELECT from where the camera is now:
+            // try several aim points on each of the target's colliders and take the first one whose
+            // ray lands on the target itself (not its casing, stand, or the furniture under it).
+            Camera selCam = Camera.main;
+            InteractableObj targetIo = targetObject.GetComponent<InteractableObj>();
+            if (selCam != null && targetIo != null)
+            {
+                Vector3 camPos = selCam.transform.position;
+                Collider[] cols = targetObject.GetComponentsInChildren<Collider>();
+                for (int c = 0; c < cols.Length; c++)
+                {
+                    if (cols[c] == null || !cols[c].enabled) continue;
+                    List<Vector3> aims = SimpleNavPlanner.AimCandidates(cols[c], camPos);
+                    for (int a = 0; a < aims.Count; a++)
+                    {
+                        Vector3 d = aims[a] - camPos;
+                        if (d.sqrMagnitude < 1e-6f) continue;
+                        if (SimpleNavPlanner.GameRayWouldSelect(camPos, d.normalized, targetIo))
+                            return aims[a];
+                    }
+                }
+            }
 
             Collider collider = targetObject.GetComponent<Collider>();
             if (collider == null)
@@ -1909,6 +2270,21 @@ namespace DateEverythingAccess
         {
             if (route == null || route.TargetGameObjectId == 0)
                 return null;
+            if (ReferenceEquals(route, _targetObjectCacheRoute))
+            {
+                if (_targetObjectCache != null)
+                    return _targetObjectCache;
+                if (Time.unscaledTime < _targetObjectRetryAt)
+                    return null;
+            }
+            _targetObjectCacheRoute = route;
+            _targetObjectCache = ScanSimpleRouteTargetObject(route);
+            _targetObjectRetryAt = Time.unscaledTime + 1f;
+            return _targetObjectCache;
+        }
+
+        private static GameObject ScanSimpleRouteTargetObject(SimpleNavRoute route)
+        {
 
             InteractableObj[] interactables = FindObjectsOfType<InteractableObj>();
             for (int i = 0; i < interactables.Length; i++)
@@ -1922,6 +2298,325 @@ namespace DateEverythingAccess
             }
 
             return null;
+        }
+
+        // STAND BACK TO OPEN. The game won't open a door while the player is touching it or
+        // standing where it swings (Door.OpenDoor checks collidedWithPlayer). Walking to Hoove
+        // from right against the laundry closet door, the mod fired Interact again and again and
+        // the door never moved. When the game refuses, step (without turning) to a spot clear of
+        // the swing, open it from there, wait for it, and re-plan the rest of the walk, since the
+        // route was drawn with the door shut and its leaf now lies where it swung.
+        private const int DoorStandNone = 0, DoorStandWalking = 1, DoorStandOpening = 2;
+        private const float DoorRefusalWindowSeconds = 1.5f;
+        private const float DoorStandArriveM = 0.3f;
+        private const float DoorStandWalkTimeoutSeconds = 4f;
+        private const float DoorStandOpenTimeoutSeconds = 3f;
+        private const float DoorStandFallbackBackM = 1.5f;
+        private const int DoorStandMaxAttempts = 2;
+        private const float DoorStandSwingCheckM = 5f;
+        private int _doorStandPhase;
+        private int _doorStandAttempts;
+        private Vector3 _doorStandPoint;
+        private float _doorStandPhaseStart;
+
+        private void HoldForDoorStand()
+        {
+            ApplyNavigationInput(Vector3.zero, Vector3.zero);
+            _lastAutoWalkMove = Vector3.zero;
+            _lastAutoWalkLook = Vector3.zero;
+            _hasAutoWalkInput = true;
+            _steerMode = SteerNone;
+            ResetAutoWalkProgress();
+        }
+
+        // The door being handled by stand-back-and-open (it may not be the route's current door:
+        // the stall recovery can hand over one she walked into).
+        private DoorPortal _doorStandDoor;
+        private float _doorStandLastToggle;
+        private bool _doorStandToggled;
+        private const float DoorStandToggleGapSeconds = 0.9f;
+
+        // A door that says it is open but did not get out of the way: a swing door stopped part
+        // way, or a sliding panel that hit her and stayed across its doorway.
+        private static bool IsDoorStuck(DoorPortal door)
+        {
+            if (door == null || !door.open || SimpleNavBridge.IsDoorMoving(door)) return false;
+            if (door.IsSwing) return SimpleNavBridge.IsDoorStuckPartOpen(door);
+            Collider c = door.GetComponent();
+            return c != null && SimpleNavPlanner.IsSliderStillAcrossItsOpening(door.gameObject.name, c.bounds);
+        }
+
+        // The ground this swing door's leaf passes through as it opens, from the live door: the
+        // hinge is the door's own pivot, the leaf is its collider, and the open side comes from
+        // where the bake has the leaf lying fully open. Invalid for sliders or when anything is
+        // missing, which leaves the older shut-and-open-leaf checks in charge.
+        private static readonly HashSet<string> _doorSweepLogged = new HashSet<string>(StringComparer.Ordinal);
+
+        private static SimpleNavPlanner.DoorSweep GetDoorSweep(DoorPortal door)
+        {
+            var sw = default(SimpleNavPlanner.DoorSweep);
+            try
+            {
+                if (door == null || !door.IsSwing || door.SwingDoor == null) return sw;
+                Transform t = door.SwingDoor.transform;
+                Collider col = door.GetComponent();
+                if (t == null || col == null) return sw;
+                Vector3 hinge = t.position;
+
+                Vector3 mid;
+                float length;
+                BoxCollider box = col as BoxCollider;
+                if (box != null)
+                {
+                    mid = box.transform.TransformPoint(box.center);
+                    length = 0f;
+                    Vector3 half = box.size * 0.5f;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        Vector3 corner = box.center + new Vector3(
+                            (i & 1) == 0 ? -half.x : half.x,
+                            (i & 2) == 0 ? -half.y : half.y,
+                            (i & 4) == 0 ? -half.z : half.z);
+                        Vector3 w = box.transform.TransformPoint(corner);
+                        float d = new Vector2(w.x - hinge.x, w.z - hinge.z).magnitude;
+                        if (d > length) length = d;
+                    }
+                }
+                else
+                {
+                    mid = col.bounds.center;
+                    length = 2f * new Vector2(mid.x - hinge.x, mid.z - hinge.z).magnitude;
+                }
+                Vector3 leafNow = new Vector3(mid.x - hinge.x, 0f, mid.z - hinge.z);
+                if (length < 0.4f || length > 6f || leafNow.sqrMagnitude < 0.01f) return sw;
+
+                // Turn the leaf's current direction back to where it lies shut.
+                Vector3 shutDir = leafNow;
+                if (SimpleNavBridge.TryGetDoorShutRotation(door, out Quaternion shutRot))
+                {
+                    shutDir = (shutRot * Quaternion.Inverse(t.rotation)) * leafNow;
+                    shutDir.y = 0f;
+                }
+                if (shutDir.sqrMagnitude < 0.01f) return sw;
+                shutDir.Normalize();
+
+                if (!SimpleNavPlanner.TryGetDoorOpenLeafCentroid(door.gameObject.name, hinge.y, out Vector3 openC))
+                    return sw;
+                Vector3 openDir = new Vector3(openC.x - hinge.x, 0f, openC.z - hinge.z);
+                if (openDir.sqrMagnitude < 0.01f) return sw;
+                float sweepDeg = Vector3.SignedAngle(shutDir, openDir.normalized, Vector3.up);
+                if (Mathf.Abs(sweepDeg) < 20f || Mathf.Abs(sweepDeg) > 150f) return sw;
+
+                sw.Valid = true;
+                sw.Hinge = hinge;
+                sw.Radius = length;
+                sw.ShutDir = shutDir;
+                sw.SweepDeg = sweepDeg;
+                if (_doorSweepLogged.Add(door.gameObject.name) && Main.Log != null)
+                    Main.Log.LogInfo("SimpleNav door swing area door=" + door.gameObject.name +
+                        " hinge=(" + hinge.x.ToString("F2") + ", " + hinge.z.ToString("F2") + ")" +
+                        " leaf=" + length.ToString("F2") + "m shutDir=(" + shutDir.x.ToString("F2") + ", " +
+                        shutDir.z.ToString("F2") + ") sweep=" + sweepDeg.ToString("F0") + " deg");
+            }
+            catch (Exception ex)
+            {
+                if (Main.Log != null) Main.Log.LogWarning("SimpleNav door swing area failed: " + ex.Message);
+                sw.Valid = false;
+            }
+            return sw;
+        }
+
+        private static bool IsInDoorSweepOrSwing(DoorPortal door, Vector3 playerPos)
+        {
+            SimpleNavPlanner.DoorSweep sw = GetDoorSweep(door);
+            if (sw.Valid)
+                return SimpleNavPlanner.InSweep(sw, playerPos.x, playerPos.z, SimpleNavPlanner.DoorSweepBodyM);
+            return SimpleNavPlanner.IsInDoorSwing(door.gameObject.name, playerPos);
+        }
+
+        // Start stand-back-and-open for `door`. `why` is for the log.
+        private bool BeginDoorStand(DoorPortal door, Transform playerTransform, Vector3 playerPos, string why)
+        {
+            if (door == null || door.gameObject == null || door.locked ||
+                _doorStandAttempts >= DoorStandMaxAttempts)
+                return false;
+            string doorName = door.gameObject.name;
+            if (!SimpleNavPlanner.TryGetDoorOpeningStandpoint(doorName, playerPos, GetDoorSweep(door), out Vector3 stand))
+            {
+                Collider doorCol = door.GetComponent();
+                Vector3 onDoor = doorCol != null ? doorCol.ClosestPointOnBounds(playerPos) : door.gameObject.transform.position;
+                Vector3 away = playerPos - onDoor;
+                away.y = 0f;
+                if (away.sqrMagnitude < 1e-4f)
+                    away = -playerTransform.forward;
+                away.y = 0f;
+                stand = playerPos + away.normalized * DoorStandFallbackBackM;
+            }
+            _doorStandAttempts++;
+            _doorStandDoor = door;
+            _doorStandPoint = stand;
+            _doorStandPhase = DoorStandWalking;
+            _doorStandPhaseStart = Time.unscaledTime;
+            _doorStandLastToggle = 0f;
+            _doorStandToggled = false;
+            if (Main.Log != null)
+                Main.Log.LogInfo("SimpleNav door " + why + ": door=" + doorName + " player=" +
+                    FormatVector3(playerPos) + " stepping back to " + FormatVector3(stand) +
+                    " attempt=" + _doorStandAttempts);
+            return true;
+        }
+
+        // True while this has taken over the frame's movement.
+        private bool ApplyDoorStandToOpen(DoorPortal door, Transform playerTransform, Vector3 playerPos)
+        {
+            if (_doorStandPhase != DoorStandNone && _doorStandDoor != null)
+                door = _doorStandDoor;
+            if (door == null || door.gameObject == null)
+            {
+                _doorStandPhase = DoorStandNone;
+                return false;
+            }
+
+            if (_doorStandPhase == DoorStandNone)
+            {
+                if (_doorStandAttempts >= DoorStandMaxAttempts || door.locked)
+                    return false;
+                string doorName = door.gameObject.name;
+                // Before opening at all: a door that swings toward her while she stands in its
+                // path hits her and stops half open (leaving the shared upstairs bathroom for the
+                // bedroom, the door swung into her and she stalled against it).
+                bool inSwing = !door.open && !SimpleNavBridge.IsDoorMoving(door) &&
+                    GetFlatDistance(playerPos, door.gameObject.transform.position) <= DoorStandSwingCheckM &&
+                    IsInDoorSweepOrSwing(door, playerPos);
+                bool stuck = IsDoorStuck(door) &&
+                    GetFlatDistance(playerPos, door.gameObject.transform.position) <= DoorStandSwingCheckM;
+                string why = inSwing ? "would swing into her"
+                    : stuck ? "stuck half open against her"
+                    : SimpleNavBridge.IsDoorRefusingToOpen(door, DoorRefusalWindowSeconds) ? "refused to open"
+                    : null;
+                if (why == null || !BeginDoorStand(door, playerTransform, playerPos, why))
+                    return false;
+            }
+
+            bool stuckNow = IsDoorStuck(door);
+            if ((door.open && !stuckNow) || SimpleNavBridge.IsDoorMoving(door))
+            {
+                if (SimpleNavBridge.IsDoorMoving(door))
+                {
+                    HoldForDoorStand();
+                    return true;
+                }
+                if (_doorStandPhase == DoorStandOpening)
+                {
+                    _doorStandPhase = DoorStandNone;
+                    _doorStandDoor = null;
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNav door opened from standing back: door=" + door.gameObject.name + " — re-planning");
+                    if (!TryPlanAndInstallSimpleNavRoute())
+                    {
+                        StopNavigationRuntime();
+                        return true;
+                    }
+                    ResetAutoWalkProgress();
+                    return true;
+                }
+            }
+
+            float elapsed = Time.unscaledTime - _doorStandPhaseStart;
+            if (_doorStandPhase == DoorStandWalking)
+            {
+                Vector3 toStand = _doorStandPoint - playerPos;
+                toStand.y = 0f;
+                if (toStand.magnitude <= DoorStandArriveM || elapsed >= DoorStandWalkTimeoutSeconds)
+                {
+                    _doorStandPhase = DoorStandOpening;
+                    _doorStandPhaseStart = Time.unscaledTime;
+                    HoldForDoorStand();
+                    return true;
+                }
+                // Walk there without turning, so she still faces the door when it opens.
+                Vector3 local = playerTransform.InverseTransformDirection(toStand.normalized);
+                Vector3 standMove = new Vector3(local.x, 0f, local.z);
+                standMove = standMove.sqrMagnitude > 1e-6f ? standMove.normalized : Vector3.zero;
+                ApplyNavigationInput(standMove, Vector3.zero);
+                _lastAutoWalkMove = standMove;
+                _lastAutoWalkLook = Vector3.zero;
+                _hasAutoWalkInput = true;
+                _steerMode = SteerNone;
+                ResetAutoWalkProgress();
+                return true;
+            }
+
+            // DoorStandOpening: stand still and open it. A door stuck half open is shut first
+            // (the game's Interact toggles), then opened fully now that she is clear of it.
+            if (elapsed >= DoorStandOpenTimeoutSeconds)
+            {
+                _doorStandPhase = DoorStandNone;
+                _doorStandDoor = null;
+                if (Main.Log != null)
+                    Main.Log.LogInfo("SimpleNav door still not open after standing back: door=" + door.gameObject.name +
+                        " player=" + FormatVector3(playerPos));
+                return false;
+            }
+            HoldForDoorStand();
+            if (stuckNow && !_doorStandToggled)
+            {
+                if (Time.unscaledTime - _doorStandLastToggle >= DoorStandToggleGapSeconds)
+                {
+                    _doorStandToggled = true;   // shut it once; never keep flapping it
+                    _doorStandLastToggle = Time.unscaledTime;
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNav shutting door stuck half open to reopen it: door=" + door.gameObject.name);
+                    try { door.Interact(); } catch (Exception ex) { if (Main.Log != null) Main.Log.LogWarning("SimpleNav close stuck door threw: " + ex.Message); }
+                    _doorStandPhaseStart = Time.unscaledTime;   // give the close and reopen their time
+                }
+                return true;
+            }
+            SimpleNavBridge.TryOpenDoorIfNeeded(door, playerPos);
+            return true;
+        }
+
+        private const float DoorTargetDoneWithinM = 3.0f;
+        private const float DoorFaceToleranceDeg = 2f;
+        private bool _doorTargetReplanPending;
+        private Vector3 _progressWaypoint;
+        private bool _progressWaypointSet;
+        private float _progressBestDist = float.MaxValue;
+
+        private static bool IsRouteTargetDoorWithFrame(SimpleNavRoute route, DoorPortal door, Vector3 playerPos)
+        {
+            if (door == null || door.gameObject == null)
+                return false;
+            if (!TryGetRouteDoorFrame(route, playerPos, out DoorPortal target, out _, out _))
+                return false;
+            return target.gameObject == door.gameObject;
+        }
+        private const float DoorFaceTimeoutSeconds = 3f;
+
+        // The route's target door (hinged or sliding) and its doorway frame from the bake, when
+        // it is a room or closet door. Container doors and non-door targets return false.
+        private static bool TryGetRouteDoorFrame(SimpleNavRoute route, Vector3 playerPos,
+            out DoorPortal door, out Vector3 centre, out Vector3 through)
+        {
+            centre = default;
+            through = default;
+            door = FindSimpleRouteTargetDoor(route);
+            if (door == null || door.gameObject == null)
+                return false;
+            return SimpleNavPlanner.TryGetDoorwayFrame(door.gameObject.name, playerPos, out centre, out through);
+        }
+
+        private static bool IsDoorTargetOpenNearby(SimpleNavRoute route, Vector3 playerPos)
+        {
+            if (route == null || route.TargetGameObjectId == 0 || SimpleNavCoverageSweep.IsActive)
+                return false;
+            DoorPortal door = FindSimpleRouteTargetDoor(route);
+            if (door == null || !door.open || SimpleNavBridge.IsDoorMoving(door))
+                return false;
+            Collider col = door.GetComponent();
+            Vector3 nearest = col != null ? col.ClosestPointOnBounds(playerPos) : door.transform.position;
+            float dx = nearest.x - playerPos.x, dz = nearest.z - playerPos.z;
+            return dx * dx + dz * dz <= DoorTargetDoneWithinM * DoorTargetDoneWithinM;
         }
 
         private static bool IsSimpleRouteDoorTargetComplete(SimpleNavRoute route)
@@ -1939,10 +2634,28 @@ namespace DateEverythingAccess
         // Resolve the route's TARGET barrier (when the target itself is a door) across both
         // component types — Door and SlidingDoor — by GameObject instance id. Mirrors the
         // tag/open path's uniform treatment so a closet/cabinet door can be a direct nav target.
+        // Per-route caches: these lookups scan every door / interactable in the scene and were
+        // being run several times every frame of an autowalk (the lag that made it hard to stop).
+        private static SimpleNavRoute _targetDoorCacheRoute;
+        private static DoorPortal _targetDoorCache;
+        private static SimpleNavRoute _targetObjectCacheRoute;
+        private static GameObject _targetObjectCache;
+        private static float _targetObjectRetryAt;
+
         private static DoorPortal FindSimpleRouteTargetDoor(SimpleNavRoute route)
         {
             if (route == null || route.TargetGameObjectId == 0)
                 return null;
+            if (ReferenceEquals(route, _targetDoorCacheRoute) &&
+                (_targetDoorCache == null || _targetDoorCache.gameObject != null))
+                return _targetDoorCache;
+            _targetDoorCacheRoute = route;
+            _targetDoorCache = ScanSimpleRouteTargetDoor(route);
+            return _targetDoorCache;
+        }
+
+        private static DoorPortal ScanSimpleRouteTargetDoor(SimpleNavRoute route)
+        {
 
             Door[] doors = FindObjectsOfType<Door>();
             for (int i = 0; i < doors.Length; i++)
@@ -1967,7 +2680,40 @@ namespace DateEverythingAccess
             return null;
         }
 
+        // TURN CONTROL. The game turns the body in FixedUpdate by look.x * camerarotspeed DEGREES per
+        // physics step (and pitches the camera by look.z * camerarotspeed), eased by a DOTween, where
+        // camerarotspeed = the player's Camera Sensitivity setting * camerarotmultiplier. The old
+        // steering mapped error/45deg straight to look (full-speed for any error >= 45deg) and then
+        // re-sent that same command on every physics step until the next frame. That overshot, so the
+        // next command slammed the other way: the +1/-1 look flip-flop that left the player wobbling
+        // in place mid-route and swinging back and forth while facing the target. Now each physics
+        // step asks for only a FRACTION of the remaining error, converted through the live
+        // camerarotspeed, and FixedUpdate recomputes it from the current heading every step.
+        private const float TurnGainPerStep = 0.2f;        // fraction of the remaining error per physics step
+        private const float TravelAimDeadzoneDeg = 2f;      // good enough to walk toward a waypoint
+        private const float FinalAimDeadzoneDeg = 0.4f;     // tight enough to land the crosshair on a small prop
+
+        private static float CameraRotDegPerStep()
+        {
+            BetterPlayerControl bpc = BetterPlayerControl.Instance;
+            float s = bpc != null ? bpc.camerarotspeed : 0f;
+            // Unknown/zero speed: fall back to the old 45-degree scale expressed per step.
+            return s > 0.05f ? s : AutoWalkLookScaleDegrees * TurnGainPerStep;
+        }
+
+        // Convert an angular error (degrees) into a look-axis value for ONE physics step.
+        private static float LookAxisForError(float errorDeg, float deadzoneDeg)
+        {
+            if (Mathf.Abs(errorDeg) < deadzoneDeg) return 0f;
+            return Mathf.Clamp(errorDeg * TurnGainPerStep / CameraRotDegPerStep(), -1f, 1f);
+        }
+
         private static Vector3 GetLookInputTowardRouteTarget(Transform playerTransform, Vector3 targetPosition)
+        {
+            return GetLookInputTowardRouteTarget(playerTransform, targetPosition, TravelAimDeadzoneDeg);
+        }
+
+        private static Vector3 GetLookInputTowardRouteTarget(Transform playerTransform, Vector3 targetPosition, float deadzoneDeg)
         {
             Vector3 toTarget = targetPosition - playerTransform.position;
             Vector3 flatTarget = toTarget;
@@ -1975,13 +2721,8 @@ namespace DateEverythingAccess
 
             float yaw = 0f;
             if (flatTarget.sqrMagnitude > 0.0001f)
-            {
-                yaw = Mathf.Clamp(
-                    Vector3.SignedAngle(playerTransform.forward, flatTarget.normalized, Vector3.up) /
-                    AutoWalkLookScaleDegrees,
-                    -1f,
-                    1f);
-            }
+                yaw = LookAxisForError(
+                    Vector3.SignedAngle(playerTransform.forward, flatTarget.normalized, Vector3.up), deadzoneDeg);
 
             float pitch = 0f;
             Camera cam = Camera.main;
@@ -1992,12 +2733,10 @@ namespace DateEverythingAccess
                 {
                     float forward = Mathf.Max(0.001f, new Vector2(cameraLocalTarget.x, cameraLocalTarget.z).magnitude);
                     float pitchDegrees = Mathf.Atan2(cameraLocalTarget.y, forward) * Mathf.Rad2Deg;
-                    pitch = Mathf.Clamp(pitchDegrees / AutoWalkLookScaleDegrees, -1f, 1f);
+                    pitch = LookAxisForError(pitchDegrees, deadzoneDeg);
                 }
             }
 
-            if (Mathf.Abs(yaw) < 0.05f) yaw = 0f;
-            if (Mathf.Abs(pitch) < 0.05f) pitch = 0f;
             return new Vector3(yaw, 0f, pitch);
         }
 
@@ -2235,7 +2974,10 @@ namespace DateEverythingAccess
             _isNavigationActive = false;
             _isAutoWalking = false;
             _manualAimPhase = false;
+            _manualAimCoachStarted = false;
+            StopAimCoach();
             _hasAutoWalkInput = false;  // stop re-asserting input in FixedUpdate
+            _steerMode = SteerNone;
             _lastAutoWalkProgressTime = 0f;
             _nextSimpleRouteDiagnosticTime = 0f;
             _lastNavigationTargetDebugSnapshot = null;
@@ -3014,7 +3756,9 @@ namespace DateEverythingAccess
                 if (IsEncounteredKnownObject(candidate))
                     continue;
 
-                Vector3 candidatePos = candidate.transform.position;
+                // Rendered centre, not the transform: a few datables (the dust bunny, the armchair
+                // blanket) have transforms parked at the world origin.
+                Vector3 candidatePos = PartCentre(candidate);
                 // Room name from the data hierarchy, falling back to the spatial bounds — same room
                 // model the picker shows the player, so what they hear matches the room list.
                 if (!TryGetHierarchyRoomForInteractable(candidate, out string room))
@@ -3083,6 +3827,29 @@ namespace DateEverythingAccess
                         ? _tutorialFrontDoorField.GetValue(TutorialController.Instance) as GameObject
                         : null;
                     break;
+
+                case TutorialObjectiveKind.Dorian:
+                {
+                    // Every door in the house is Dorian (front door, back door, attic door, even the
+                    // crawlspace ladder), so "find Dorian" scored them all equally and could send the
+                    // player to the back door. The story means the FRONT door, and the game's own
+                    // TutorialController holds a reference to it: use that, as HouseExit does. Only
+                    // accept it if it really resolves to a Dorian interactable; otherwise fall back to
+                    // scoring (which also prefers the front door).
+                    EnsureReflectionCache();
+                    GameObject frontDoor = _tutorialFrontDoorField != null && TutorialController.Instance != null
+                        ? _tutorialFrontDoorField.GetValue(TutorialController.Instance) as GameObject
+                        : null;
+                    if (frontDoor != null &&
+                        TryResolveInteractableFromTutorialAnchor(frontDoor, out InteractableObj frontIo) &&
+                        frontIo != null &&
+                        string.Equals(NormalizeText(frontIo.InternalName()), "dorian", StringComparison.OrdinalIgnoreCase))
+                    {
+                        interactable = frontIo;
+                        return true;
+                    }
+                    return false;
+                }
             }
 
             if (anchorObject == null)
@@ -3228,6 +3995,9 @@ namespace DateEverythingAccess
                         score += 140f;
                     if (ContainsToken(objectLabel, "door"))
                         score += 40f;
+                    // All doors are Dorian; the objective means the front door. Break the tie.
+                    if (score > 0f && (ContainsToken(objectLabel, "front") || ContainsToken(sceneName, "front")))
+                        score += 100f;
                     break;
 
                 case TutorialObjectiveKind.Phone:
@@ -3308,15 +4078,44 @@ namespace DateEverythingAccess
             if (!genericObjective &&
                 TryResolveCurrentObjectiveInteractable(out InteractableObj interactable, out string targetZone, out string targetLabel))
             {
+                LogObjectivePick("specific", interactable, targetZone, targetLabel);
                 SetTrackedInteractable(interactable, targetZone, targetLabel);
                 BeginNavigationAndStartTrackerTone(targetZone, targetLabel);
                 return;
             }
 
-            // No specific objective — a context default takes priority over the generic
-            // "find more datables" objective.
-            if (TryResolveContextDefaultTarget(out InteractableObj contextInteractable, out string contextZone, out string contextLabel))
+            // Order after a specific objective:
+            //   1. a situational datable (Dolly after the couch moves, Zoey, Airyn, the Key) that is
+            //      close by on this floor: the player has just made it appear or is standing by it;
+            //   2. something undiscovered right here (standing in the laundry closet with Hoove
+            //      unmet, Ctrl+O went upstairs to the air vent);
+            //   3. a situational datable anywhere;
+            //   4. the "find more datables" nudge / nearest room with something undiscovered.
+            bool haveContext = TryResolveContextDefaultTarget(out InteractableObj contextInteractable,
+                out string contextZone, out string contextLabel);
+            bool contextNear = haveContext && IsNearOnPlayerFloor(contextInteractable, NearbySituationalM);
+            bool haveNudge = TryResolveUnexploredNudge(out InteractableObj nudgeTarget, out string nudgeZone,
+                out string nudgeLabel, out float nudgeDistance, out bool nudgeSameFloor);
+
+            if (contextNear)
             {
+                LogObjectivePick("context", contextInteractable, contextZone, contextLabel);
+                SetTrackedInteractable(contextInteractable, contextZone, contextLabel);
+                BeginNavigationAndStartTrackerTone(contextZone, contextLabel);
+                return;
+            }
+
+            if (haveNudge && nudgeSameFloor && nudgeDistance <= NearbyUndiscoveredM)
+            {
+                LogObjectivePick("nearby-undiscovered", nudgeTarget, nudgeZone, nudgeLabel);
+                SetTrackedInteractable(nudgeTarget, nudgeZone, nudgeLabel);
+                BeginNavigationAndStartTrackerTone(nudgeZone, nudgeLabel);
+                return;
+            }
+
+            if (haveContext)
+            {
+                LogObjectivePick("context", contextInteractable, contextZone, contextLabel);
                 SetTrackedInteractable(contextInteractable, contextZone, contextLabel);
                 BeginNavigationAndStartTrackerTone(contextZone, contextLabel);
                 return;
@@ -3326,12 +4125,70 @@ namespace DateEverythingAccess
             if (genericObjective &&
                 TryResolveCurrentObjectiveInteractable(out InteractableObj genericInteractable, out string genericZone, out string genericLabel))
             {
+                LogObjectivePick("generic", genericInteractable, genericZone, genericLabel);
                 SetTrackedInteractable(genericInteractable, genericZone, genericLabel);
                 BeginNavigationAndStartTrackerTone(genericZone, genericLabel);
                 return;
             }
 
+            // No objective the mod recognises (the mid-game gap between the early "find more
+            // datables" stage and the endgame): still offer the nearest room with something
+            // undiscovered, as long as there is one.
+            if (haveNudge)
+            {
+                LogObjectivePick("default-undiscovered", nudgeTarget, nudgeZone, nudgeLabel);
+                SetTrackedInteractable(nudgeTarget, nudgeZone, nudgeLabel);
+                BeginNavigationAndStartTrackerTone(nudgeZone, nudgeLabel);
+                return;
+            }
+
             ScreenReader.Say(Loc.Get("navigation_no_objective"));
+        }
+
+        private const float NearbyUndiscoveredM = 8f;
+        private const float NearbySituationalM = 15f;
+
+        private static bool IsNearOnPlayerFloor(InteractableObj target, float withinM)
+        {
+            if (target == null || BetterPlayerControl.Instance == null) return false;
+            Vector3 playerPos = BetterPlayerControl.Instance.transform.position;
+            Vector3 at = PartCentre(target);
+            bool sameFloor = !SimpleNavPlanner.TryGetPlayerFloorLabel(playerPos.y, out string pf) ||
+                !SimpleNavPlanner.TryGetTargetFloorLabel(at.y, out string tf) ||
+                string.Equals(pf, tf, StringComparison.OrdinalIgnoreCase);
+            return sameFloor && GetFlatDistance(playerPos, at) <= withinM;
+        }
+
+        // The nearest room holding an undiscovered datable, as a navigation target: the member to
+        // route to, its zone, the room name to announce, and how far away it is.
+        private bool TryResolveUnexploredNudge(out InteractableObj interactable, out string zone,
+            out string label, out float distance, out bool sameFloor)
+        {
+            interactable = null; zone = null; label = null; distance = float.MaxValue; sameFloor = false;
+            if (BetterPlayerControl.Instance == null)
+                return false;
+            if (!TryResolveNearestUnexploredRoomTarget(out InteractableObj member, out string roomLabel) || member == null)
+                return false;
+            if (!TryResolveNavigableInteractable(member, out InteractableObj resolved, out zone) || resolved == null)
+                return false;
+            interactable = resolved;
+            label = roomLabel;
+            Vector3 playerPos = BetterPlayerControl.Instance.transform.position;
+            Vector3 at = PartCentre(member);
+            distance = GetFlatDistance(playerPos, at);
+            sameFloor = !SimpleNavPlanner.TryGetPlayerFloorLabel(playerPos.y, out string pf) ||
+                !SimpleNavPlanner.TryGetTargetFloorLabel(at.y, out string tf) ||
+                string.Equals(pf, tf, StringComparison.OrdinalIgnoreCase);
+            return true;
+        }
+
+        private static void LogObjectivePick(string branch, InteractableObj target, string zone, string label)
+        {
+            if (Main.Log == null) return;
+            Main.Log.LogInfo("Ctrl+O objective branch=" + branch +
+                " target=" + (target != null ? target.gameObject.name + " internal=" + target.InternalName() : "<null>") +
+                " zone=" + (zone ?? "<null>") + " label=" + (label ?? "<null>") +
+                " | " + DescribeContextDefaultState());
         }
 
         // Shared selection tail: BeginNavigation, plan the route, and start the tracker tone at
@@ -3407,8 +4264,42 @@ namespace DateEverythingAccess
 
             _knownObjectSelectionIndex = 0;
             _isKnownObjectPickerOpen = true;
+            AcquirePickerInputBlock();
             SyncKnownObjectPickerKeyStates();
             AnnounceKnownObjectPickerTitleAndItem();
+        }
+
+        // While the tracking list is open, the game must not also take the arrow keys: they turned
+        // the camera, which moved the gaze onto other objects and the mod announced those over the
+        // list. Same input block the mod's settings menu uses.
+        private static InputModeHandle _pickerInputModeHandle;
+
+        private static void AcquirePickerInputBlock()
+        {
+            ReleasePickerInputBlock();
+            try
+            {
+                if (T17.Services.Services.InputService != null)
+                    _pickerInputModeHandle = T17.Services.Services.InputService.PushMode(IMirandaInputService.EInputMode.None,
+                        "DateEverythingAccess.ObjectPicker");
+            }
+            catch (Exception ex)
+            {
+                if (Main.Log != null) Main.Log.LogWarning("Object picker input block failed: " + ex.Message);
+            }
+            ApplyLookOnly(Vector3.zero);
+        }
+
+        private static void ReleasePickerInputBlock()
+        {
+            if (_pickerInputModeHandle == null)
+                return;
+            try { _pickerInputModeHandle.SafeDispose(); }
+            catch (Exception ex)
+            {
+                if (Main.Log != null) Main.Log.LogWarning("Object picker input release failed: " + ex.Message);
+            }
+            _pickerInputModeHandle = null;
         }
 
         private void CloseKnownObjectPicker(bool announceClosed)
@@ -3417,6 +4308,7 @@ namespace DateEverythingAccess
                 return;
 
             _isKnownObjectPickerOpen = false;
+            ReleasePickerInputBlock();
             _knownObjectTargets = null;
             _knownObjectView = null;
             _knownObjectSelectionIndex = -1;
@@ -3697,7 +4589,8 @@ namespace DateEverythingAccess
                 case PickerGroupKind.Datable:
                     // L2 -> L3: enter the datable (within the already-chosen room); its found
                     // objects in this room are next. _pickerRoomZone stays as the chosen room.
-                    _pickerDatableKey = group.Members != null && group.Members.Count > 0 ? group.Members[0].DatableKey : null;
+                    _pickerDatableKey = group.GroupKey ??
+                        (group.Members != null && group.Members.Count > 0 ? group.Members[0].DatableKey : null);
                     _pickerDatableLabel = group.Label;
                     _pickerLevel = PickerLevel.Objects;
                     break;
@@ -3884,6 +4777,11 @@ namespace DateEverythingAccess
             // back out (Y above the ceiling line).
             bool playerInCrawlspace = playerTransform != null && playerPosition.y < CrawlspaceCeilingY;
 
+            // The kitchen cabinets are one character's set: finding any one of them reveals them
+            // all. (The laundry-room and bathroom cabinets still have to be found one by one.)
+            bool kitchenCabinetsKnown = !includeUnencountered && AnyKitchenCabinetEncountered();
+            bool atticUnlocked = IsAtticUnlocked();
+
             for (int i = 0; i < roster.Count; i++)
             {
                 SimpleNavPlanner.Fixture fixture = roster[i];
@@ -3903,12 +4801,37 @@ namespace DateEverythingAccess
                 if (liveObj == null || liveObj.gameObject == null || !liveObj.gameObject.activeInHierarchy)
                     continue;
 
+                // A few roster entries were baked with a degenerate position (the gym's first
+                // trophy sits at the world origin, which is on the ground floor, so the look-around
+                // reported it from the kitchen below). When the live object is somewhere else
+                // entirely, trust where it really is and re-derive its floor from that.
+                bool rosterPositionBad = false;
+                if (TryGetLiveBoundsCentre(liveObj, out Vector3 liveCentre) &&
+                    (liveCentre - fixturePos).sqrMagnitude > 4f * 4f)
+                {
+                    fixturePos = liveCentre;
+                    rosterPositionBad = true;
+                    if (playerInCrawlspace && fixturePos.y >= CrawlspaceCeilingY)
+                        continue;
+                }
+
                 // SECOND-ORDER FILTER: only objects the player has encountered (met / interacted /
                 // examined) appear, plus the seeded startup office door. The roster defines what
                 // EXISTS; this narrows it to what THIS SAVE knows. Skipped when includeUnencountered
                 // is set (F6 room scan): the spatial gates there already model "what's perceivable."
+                // Doors (rooms, closets, the front door) are always listed: they are the house's
+                // landmarks, and a door you have not opened yet (the office closet) is exactly the
+                // thing you need to be able to walk to. Everything else appears only once
+                // encountered. Container doors (cupboards, fridge) count as objects, not doors.
+                // The trapdoor and ladder under the closet rug: not until the rug has been moved,
+                // in the list or the room scan, whatever else the player has done.
+                if (IsCrawlspacePassageObject(liveObj) && !IsCrawlspacePassageRevealed())
+                    continue;
+
                 if (!includeUnencountered &&
                     !IsStartupOfficeDoorObject(liveObj, fixture.name) &&
+                    !IsAlwaysListedDoor(liveObj) &&
+                    !(kitchenCabinetsKnown && IsKitchenCabinet(liveObj)) &&
                     !IsEncounteredKnownObject(liveObj))
                 {
                     continue;
@@ -3933,7 +4856,7 @@ namespace DateEverythingAccess
 
                 // Prefer the roster's own floor assignment (it owns the ceiling-light "belongs to
                 // the room below" rule); fall back to resolving from Y when the roster left it null.
-                string candidateFloor = fixture.floor;
+                string candidateFloor = rosterPositionBad ? null : fixture.floor;
                 if (string.IsNullOrEmpty(candidateFloor))
                     SimpleNavPlanner.TryGetTargetFloorLabel(fixturePos.y, out candidateFloor);
                 bool onPlayerFloor = playerFloorLabel == null || candidateFloor == null ||
@@ -3947,8 +4870,18 @@ namespace DateEverythingAccess
                 // Room from the DATA HIERARCHY (House/<Room> or the per-room lighting container),
                 // NOT camera zones. Falls back to the room whose hierarchy-derived bounds contain
                 // the object only when the hierarchy puts it in a catch-all container.
-                if (!TryGetHierarchyRoomForInteractable(liveObj, out string zone))
-                    zone = ResolveRoomByBounds(fixturePos);
+                if (!TryGetDoorRoom(liveObj.transform, out string zone) &&
+                    !TryGetHierarchyRoomForInteractable(liveObj, out zone))
+                    zone = ResolveRoomByBounds(fixturePos, candidateFloor);
+                // The attic stays a secret until its door is unlocked: nothing is listed in the
+                // attic, and its door in the upstairs hall is just "Door".
+                if (!atticUnlocked)
+                {
+                    if (string.Equals(zone, RoomSpokenName("Attic"), StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (IsUnderNamedAncestor(liveObj.transform, "AtticDoors"))
+                        label = Loc.Get("door_generic");
+                }
                 bool isDoor = IsDoorInteractable(liveObj);
 
                 // Datable grouping key for the collapsed top level — only for MET objects (the
@@ -3975,7 +4908,103 @@ namespace DateEverythingAccess
                 });
             }
 
+            if (!playerInCrawlspace)
+                AddUnrosteredPassageDoors(targets, playerTransform, playerPosition, playerFloorLabel);
+
             return targets.Count > 0 ? KnownObjectBuildResult.Ok : KnownObjectBuildResult.Empty;
+        }
+
+        // Centre of the live object's visible renderers (active ones only), if it has any.
+        private static bool TryGetLiveBoundsCentre(InteractableObj obj, out Vector3 centre)
+        {
+            centre = default;
+            if (obj == null) return false;
+            Renderer[] rends = obj.GetComponentsInChildren<Renderer>(includeInactive: false);
+            bool has = false;
+            Bounds b = default;
+            for (int i = 0; i < rends.Length; i++)
+            {
+                if (rends[i] == null || !rends[i].enabled) continue;
+                if (!has) { b = rends[i].bounds; has = true; }
+                else b.Encapsulate(rends[i].bounds);
+            }
+            if (!has) return false;
+            centre = b.center;
+            return true;
+        }
+
+        // Passage doors the bake roster doesn't carry. The office door and office closet door were
+        // baked in their locked tutorial state, so the roster only has the (now inactive) locked
+        // copies and the real doors never reached the list. List every live, active passage door
+        // not already represented by a roster entry.
+        private void AddUnrosteredPassageDoors(List<KnownObjectTarget> targets, Transform playerTransform,
+            Vector3 playerPosition, string playerFloorLabel)
+        {
+            var listed = new HashSet<Component>();
+            for (int i = 0; i < targets.Count; i++)
+            {
+                Component d = FindDoorComponent(targets[i].Interactable);
+                if (d != null)
+                    listed.Add(d);
+            }
+
+            var doors = new List<Component>();
+            doors.AddRange(FindObjectsOfType<Door>());
+            doors.AddRange(FindObjectsOfType<SlidingDoor>());
+            var added = new List<string>();
+            for (int i = 0; i < doors.Count; i++)
+            {
+                Component door = doors[i];
+                if (door == null || !door.gameObject.activeInHierarchy || listed.Contains(door))
+                    continue;
+                InteractableObj io = door.GetComponent<InteractableObj>() ??
+                    door.GetComponentInChildren<InteractableObj>() ?? door.GetComponentInParent<InteractableObj>();
+                if (io == null || !io.gameObject.activeInHierarchy || !IsAlwaysListedDoor(io))
+                    continue;
+                if (FindDoorComponent(io) != door)
+                    continue;
+                listed.Add(door);
+
+                Vector3 pos = door.transform.position;
+                Renderer[] rends = door.GetComponentsInChildren<Renderer>();
+                if (rends != null && rends.Length > 0)
+                {
+                    Bounds b = rends[0].bounds;
+                    for (int r = 1; r < rends.Length; r++)
+                        if (rends[r] != null) b.Encapsulate(rends[r].bounds);
+                    pos = b.center;
+                }
+
+                SimpleNavPlanner.TryGetTargetFloorLabel(pos.y, out string floor);
+                bool onPlayerFloor = playerFloorLabel == null || floor == null ||
+                    string.Equals(floor, playerFloorLabel, StringComparison.OrdinalIgnoreCase);
+                string label = GetObjectFacingDisplayName(io);
+                if (string.IsNullOrWhiteSpace(label) ||
+                    string.Equals(label, Loc.Get("unknown_object"), StringComparison.OrdinalIgnoreCase))
+                {
+                    label = door.gameObject.name;
+                }
+                if (!TryGetDoorRoom(io.transform, out string zone) &&
+                    !TryGetHierarchyRoomForInteractable(io, out zone))
+                    zone = ResolveRoomByBounds(pos, floor);
+
+                targets.Add(new KnownObjectTarget
+                {
+                    Interactable = io,
+                    Label = label,
+                    Distance = playerTransform != null ? GetFlatDistance(playerPosition, pos) : 0f,
+                    FloorLabel = floor,
+                    IsOnPlayerFloor = onPlayerFloor,
+                    Section = PickerSection.Encountered,
+                    Zone = zone,
+                    CharacterName = null,
+                    IsDoor = true,
+                    DatableKey = null,
+                });
+                added.Add(door.gameObject.name + "->" + zone);
+            }
+            if (added.Count > 0 && Main.Log != null)
+                Main.Log.LogInfo("KnownObjectPicker: added unrostered passage doors: " + string.Join(", ", added));
         }
 
         // The set of room-container names the data hierarchy uses, mapped to the spoken room name.
@@ -4002,13 +5031,38 @@ namespace DateEverythingAccess
             var table = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (string r in rooms)
             {
-                string spoken = FriendlyRoomName(r);
+                string spoken = RoomSpokenName(r);
                 table[BuildComparisonKey(r)] = spoken;            // "House/Bedroom"
                 table[BuildComparisonKey("Lights_" + r)] = spoken; // "Lights_Bedroom" (lighting group)
             }
             // Light switches live under a single non-room container; they belong to "light switches".
             table[BuildComparisonKey("LightSwitches")] = FriendlyRoomName("LightSwitches");
             return table;
+        }
+
+        // Objects under a catch-all container whose room the spatial fallback gets wrong, pinned to
+        // their room by a container's exact name. The room boxes overlap a lot: the key box on
+        // the upstairs hall table lies inside Bathroom 2's box too, which won. Only the key box:
+        // Keith starts as the key in the crawlspace (SkeletonKey, in the same Keith_Key folder).
+        private static readonly Dictionary<string, string> _pinnedObjectRooms =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "KeyBox", "UpstairsHall" },
+                { "KeyBox Empty", "UpstairsHall" },
+            };
+
+        // Spoken room name for a room container. "Hallway" is the downstairs hall; say so, so it
+        // is never confused with the upstairs hall.
+        private static string RoomSpokenName(string container)
+        {
+            if (string.Equals(container, "Hallway", StringComparison.OrdinalIgnoreCase))
+                return Loc.Get("room_downstairs_hall");
+            if (string.Equals(container, "UpstairsHall", StringComparison.OrdinalIgnoreCase))
+                return Loc.Get("room_upstairs_hall");
+            // The piano room is one end of the living room, not a room of its own.
+            if (string.Equals(container, "PianoRoom", StringComparison.OrdinalIgnoreCase))
+                container = "LivingRoom";
+            return FriendlyRoomName(container);
         }
 
         // "LivingRoom" -> "Living room", "Bathroom1" -> "Bathroom 1", "LightSwitches" -> "Light
@@ -4046,6 +5100,11 @@ namespace DateEverythingAccess
             Transform house = null;
             while (current != null && depth < 16)
             {
+                if (_pinnedObjectRooms.TryGetValue(current.name ?? string.Empty, out string pinned))
+                {
+                    roomName = RoomSpokenName(pinned);
+                    return true;
+                }
                 if (_hierarchyRoomNames.TryGetValue(BuildComparisonKey(current.name), out string named))
                 {
                     roomName = named;
@@ -4123,6 +5182,91 @@ namespace DateEverythingAccess
         // containers). Returns null when no room bounds exist.
         private string ResolveRoomByBounds(Vector3 position)
         {
+            SimpleNavPlanner.TryGetTargetFloorLabel(position.y, out string floor);
+            return ResolveRoomByBounds(position, floor);
+        }
+
+        // Which floor each room is on. Room bounds are unions of renderer bounds and can reach
+        // through the ceiling (the kitchen's volume contains the gym doors above it), so the
+        // spatial fallback only considers rooms on the object's own floor.
+        private static readonly Dictionary<string, string> _roomFloors = BuildRoomFloorTable();
+
+        private static Dictionary<string, string> BuildRoomFloorTable()
+        {
+            var t = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string r in new[] { "Kitchen", "Office", "LivingRoom", "LaundryRoom", "Bathroom1", "DiningRoom", "Hallway", "PianoRoom" })
+                t[RoomSpokenName(r)] = "ground";
+            foreach (string r in new[] { "Gym", "Bedroom", "Bathroom2", "Attic", "UpstairsHall" })
+                t[RoomSpokenName(r)] = "upper";
+            return t;
+        }
+
+        // Passage doors all live under House/MultiRoom/Doors, which names no room, so each is
+        // assigned explicitly to the room you reach it from (hallway doors in the hallway, closet
+        // doors in their room). Keyed by the door's container name; nearest ancestor wins.
+        private static readonly Dictionary<string, string> _doorRoomNames = BuildDoorRoomTable();
+
+        private static Dictionary<string, string> BuildDoorRoomTable()
+        {
+            var t = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            void Map(string room, params string[] doors)
+            {
+                foreach (string d in doors)
+                    t[BuildComparisonKey(d)] = RoomSpokenName(room);
+            }
+            Map("Office", "Doors_Office_Closet", "Doors_Office_ClosetLocked", "OfficeDoorsCloset");
+            Map("Hallway", "Doors_Office", "Doors_Office_Locked", "OfficeDoors", "FrontDoor",
+                "Doors_FrontDoor", "Doors_FrontDoor_Broken", "Doors_Bathroom1");
+            Map("Kitchen", "Doors_Laundry");
+            Map("LaundryRoom", "Doors_Laundry_Closet");
+            Map("PianoRoom", "SM_Door_Back_Frame", "BackDoorPivot");
+            Map("UpstairsHall", "Doors_Bedroom", "Doors_Gym_Hall", "Doors_UpperHall_Electric",
+                "AtticDoors", "Doors_Attic_Unlocked", "Doors_Attic_Locked");
+            Map("Bedroom", "Doors_Bedroom_Bathroom", "Doors_Bedroom_ClosetLeft_Inner",
+                "Doors_Bedroom_ClosetLeft_Outer", "Doors_Bedroom_ClosetRight_Inner",
+                "Doors_Bedroom_ClosetRight_Outer");
+            Map("Gym", "Doors_Gym_Bathroom", "Doors_Gym_ClosetInner", "Doors_Gym_ClosetOuter");
+            return t;
+        }
+
+        // The attic door has a locked and an unlocked version in the scene; the game shows the
+        // unlocked one once the player has opened the way up.
+        private static bool? _lastAtticUnlocked;
+
+        private static bool IsAtticUnlocked()
+        {
+            GameObject unlocked = GameObject.Find("Doors_Attic_Unlocked");
+            GameObject locked = GameObject.Find("Doors_Attic_Locked");
+            bool result = unlocked != null && unlocked.activeInHierarchy && (locked == null || !locked.activeInHierarchy);
+            if (result != _lastAtticUnlocked && Main.Log != null)
+                Main.Log.LogInfo("Attic door: unlocked=" + result + " (unlocked version " + (unlocked != null ? "active" : "absent") +
+                    ", locked version " + (locked != null ? "active" : "absent") + ")");
+            _lastAtticUnlocked = result;
+            return result;
+        }
+
+        private static bool IsUnderNamedAncestor(Transform t, string name)
+        {
+            for (int depth = 0; t != null && depth < 12; depth++, t = t.parent)
+                if (string.Equals(t.name, name, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        private static bool TryGetDoorRoom(Transform from, out string room)
+        {
+            room = null;
+            Transform current = from;
+            for (int depth = 0; current != null && depth < 12; depth++, current = current.parent)
+            {
+                if (_doorRoomNames.TryGetValue(BuildComparisonKey(current.name), out room))
+                    return true;
+            }
+            return false;
+        }
+
+        private string ResolveRoomByBounds(Vector3 position, string floor)
+        {
             if (_roomBoundsIndex == null || _roomBoundsIndex.Count == 0)
                 return null;
             string containing = null;
@@ -4130,6 +5274,12 @@ namespace DateEverythingAccess
             float nearestSqr = float.PositiveInfinity;
             foreach (KeyValuePair<string, Bounds> kv in _roomBoundsIndex)
             {
+                if (!string.IsNullOrEmpty(floor) &&
+                    _roomFloors.TryGetValue(kv.Key, out string roomFloor) &&
+                    !string.Equals(roomFloor, floor, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
                 if (kv.Value.Contains(position))
                 {
                     // A containing room wins outright; if several contain it (overlapping floors),
@@ -4400,6 +5550,7 @@ namespace DateEverythingAccess
             // Unmet objects route directly, but same-named ones collapse (deduped below) so a
             // multi-piece unmet object doesn't list once per piece.
             List<KnownObjectTarget> unmet = new List<KnownObjectTarget>();
+            List<KnownObjectTarget> cabinets = new List<KnownObjectTarget>();
             for (int i = 0; i < filtered.Count; i++)
             {
                 KnownObjectTarget t = filtered[i];
@@ -4423,17 +5574,77 @@ namespace DateEverythingAccess
                     }
                     AccumulateGroupMember(group, t);
                 }
+                else if (IsCabinetTarget(t))
+                {
+                    cabinets.Add(t);
+                }
                 else
                 {
                     unmet.Add(t);
                 }
             }
+            if (DistinctLabelCount(cabinets) >= 2)
+            {
+                PickerNode cabinetGroup = new PickerNode
+                {
+                    IsGroup = true,
+                    GroupKind = PickerGroupKind.Datable,
+                    GroupKey = CabinetGroupKey,
+                    Label = Loc.Get("navigation_object_picker_cabinets_group",
+                        string.IsNullOrWhiteSpace(cabinets[0].Zone) ? Loc.Get("navigation_object_picker_room_unknown") : cabinets[0].Zone),
+                    Section = PickerSection.Encountered,
+                    Distance = float.MaxValue,
+                    Members = new List<KnownObjectTarget>(),
+                };
+                for (int i = 0; i < cabinets.Count; i++)
+                    AccumulateGroupMember(cabinetGroup, cabinets[i]);
+                cabinetGroup.ChildCount = DistinctLabelCount(cabinets);
+                view.Add(cabinetGroup);
+            }
+            else
+            {
+                unmet.AddRange(cabinets);
+            }
             view.AddRange(DedupeLeavesByName(unmet));
             // The group count the player hears must match what drilling in reveals (deduped by
             // name), or "Sofa, 5 objects" leads to a single-object menu. Recount on distinct labels.
             foreach (PickerNode group in datables.Values)
+            {
                 group.ChildCount = DistinctLabelCount(group.Members);
+                group.Label = MainObjectLabelIfNamedAfterAPart(group);
+            }
             return view;
+        }
+
+        // The stove's group, with no character name to show, was named after whichever of its
+        // objects came first ("Oven mitt"); name it after the stove itself.
+        private static string MainObjectLabelIfNamedAfterAPart(PickerNode group)
+        {
+            if (group == null || group.Members == null || group.Members.Count == 0)
+                return group != null ? group.Label : null;
+            bool namedAfterPart = false;
+            for (int i = 0; i < group.Members.Count && !namedAfterPart; i++)
+                if (string.Equals(group.Members[i].Label, group.Label, StringComparison.OrdinalIgnoreCase))
+                    namedAfterPart = true;
+            if (!namedAfterPart)
+                return group.Label;
+            InteractableObj io = group.Members[0].Interactable;
+            string ink = io != null ? io.inkFileName : null;
+            // Only the stove's group is renamed; every other group keeps its usual name.
+            if (!string.Equals(ink, "stefan_stove", StringComparison.OrdinalIgnoreCase))
+                return group.Label;
+            string main = ink.Substring(ink.LastIndexOf('_') + 1).Trim();
+            if (main.Length < 3)
+                return group.Label;
+            for (int i = 0; i < group.Members.Count; i++)
+            {
+                string label = group.Members[i].Label;
+                if (!string.IsNullOrEmpty(label) &&
+                    label.Replace(" ", string.Empty).IndexOf(main, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return label;
+            }
+            // The main object itself isn't among the ones found yet: still name the group for it.
+            return FriendlyRoomName(main);
         }
 
         // Number of distinct spoken labels among a group's members (the count after same-name
@@ -4494,6 +5705,8 @@ namespace DateEverythingAccess
 
         private bool IsInChosenDatable(KnownObjectTarget t)
         {
+            if (string.Equals(_pickerDatableKey, CabinetGroupKey, StringComparison.Ordinal))
+                return t.Section != PickerSection.Met && IsCabinetTarget(t);
             return t.Section == PickerSection.Met &&
                 !string.IsNullOrEmpty(_pickerDatableKey) &&
                 string.Equals(t.DatableKey, _pickerDatableKey, StringComparison.OrdinalIgnoreCase);
@@ -4677,6 +5890,159 @@ namespace DateEverythingAccess
             }
         }
 
+        private static readonly string[] ContainerDoorWords =
+            { "cupboard", "kithcen_cupboard", "fridge", "cabinet", "drawer", "oven", "microwave", "dishwasher", "washer", "dryer", "locker", "shower", "breakerbox", "emptyreggie" };
+
+        // The Door/SlidingDoor behind an interactable (self, parent or children), or null.
+        private static Component FindDoorComponent(InteractableObj interactable)
+        {
+            if (interactable == null || interactable.gameObject == null)
+                return null;
+            GameObject go = interactable.gameObject;
+            return (Component)go.GetComponent<Door>() ?? go.GetComponentInParent<Door>() ??
+                (Component)go.GetComponentInChildren<Door>() ?? go.GetComponent<SlidingDoor>() ??
+                (Component)go.GetComponentInParent<SlidingDoor>() ?? go.GetComponentInChildren<SlidingDoor>();
+        }
+
+        // A passage door (room, closet, front/back door) — always shown in the known-objects list.
+        private static bool IsAlwaysListedDoor(InteractableObj interactable)
+        {
+            if (interactable == null || interactable.gameObject == null)
+                return false;
+            Component door = FindDoorComponent(interactable);
+            if (door == null)
+                return false;
+            string name = door.gameObject.name ?? string.Empty;
+            if (SimpleNavPlanner.IsContainerDoorName(name))
+                return false;
+            for (int i = 0; i < ContainerDoorWords.Length; i++)
+                if (name.IndexOf(ContainerDoorWords[i], StringComparison.OrdinalIgnoreCase) >= 0)
+                    return false;
+            // The crawlspace trapdoor and its ladder are a secret under the office closet rug:
+            // the player has to find them, so they only appear once encountered.
+            for (Transform t = interactable.transform; t != null; t = t.parent)
+            {
+                string n = t.name ?? string.Empty;
+                for (int i = 0; i < HiddenPassageWords.Length; i++)
+                    if (n.IndexOf(HiddenPassageWords[i], StringComparison.OrdinalIgnoreCase) >= 0)
+                        return false;
+                if (t == door.transform)
+                    break;
+            }
+            for (int i = 0; i < HiddenPassageWords.Length; i++)
+                if (name.IndexOf(HiddenPassageWords[i], StringComparison.OrdinalIgnoreCase) >= 0)
+                    return false;
+            return true;
+        }
+
+        private static readonly string[] HiddenPassageWords = { "trapdoor", "ladder", "crawlspace" };
+
+        // THE CLOSET RUG PUZZLE. The trapdoor to the crawlspace (and the ladder below it) lies
+        // under the rug in the office closet, and the player finds it by moving the rug. Both are
+        // part of Dorian, the door datable met in the tutorial, so "met" alone would list them
+        // straight away; they stay out of the object list and the room scan until the rug has
+        // been moved. The rug's move is its first alternate interaction; its interactedWithState
+        // is what the game saves for it (InteractableObj.StoreSaveData).
+        private static readonly string[] CrawlspacePassageWords = { "trapdoor", "crawlspaceladder" };
+        private const string ClosetRugName = "Rug_Closet_NEW_MODEL_UPDATE_ORIGIN";
+        private static InteractableObj _closetRug;
+        private static bool _loggedClosetRugMissing;
+
+        // The trapdoor, its handle, or the ladder (by its own or a parent's name).
+        private static bool IsCrawlspacePassageObject(InteractableObj interactable)
+        {
+            if (interactable == null || interactable.gameObject == null)
+                return false;
+            for (Transform t = interactable.transform; t != null; t = t.parent)
+            {
+                string n = t.name ?? string.Empty;
+                for (int i = 0; i < CrawlspacePassageWords.Length; i++)
+                    if (n.IndexOf(CrawlspacePassageWords[i], StringComparison.OrdinalIgnoreCase) >= 0)
+                        return true;
+            }
+            return false;
+        }
+
+        // True once the closet rug has been moved off the trapdoor, or the player is down in the
+        // crawlspace (only reachable through it).
+        private static bool IsCrawlspacePassageRevealed()
+        {
+            if (BetterPlayerControl.Instance != null &&
+                BetterPlayerControl.Instance.transform.position.y < CrawlspaceCeilingY)
+            {
+                return true;
+            }
+
+            if (_closetRug == null)
+            {
+                InteractableObj[] all = FindObjectsOfType<InteractableObj>();
+                for (int i = 0; i < all.Length; i++)
+                {
+                    if (all[i] != null && string.Equals(all[i].gameObject.name, ClosetRugName, StringComparison.Ordinal))
+                    {
+                        _closetRug = all[i];
+                        break;
+                    }
+                }
+            }
+
+            if (_closetRug == null || _closetRug.AlternateInteractions == null ||
+                _closetRug.AlternateInteractions.Count == 0 || _closetRug.AlternateInteractions[0] == null)
+            {
+                // Can't tell (the game has changed): don't hide the passage for good.
+                if (!_loggedClosetRugMissing && Main.Log != null)
+                {
+                    _loggedClosetRugMissing = true;
+                    Main.Log.LogWarning("Closet rug (" + ClosetRugName + ") or its move interaction not found; trapdoor and ladder listed regardless");
+                }
+                return true;
+            }
+            return _closetRug.AlternateInteractions[0].interactedWithState;
+        }
+
+        // The cupboards and cabinets character. Matching on the character, not on names, keeps
+        // out things that merely have "cabinet" or "cupboard" in their name (record sleeves,
+        // sponges, a pitcher, boxes in the upstairs hall).
+        private const string CabinetInk = "cabrizzio_cabinet";
+
+        private static bool IsCabinetObject(InteractableObj io)
+        {
+            if (io == null || io.gameObject == null) return false;
+            if (string.Equals(io.inkFileName, CabinetInk, StringComparison.OrdinalIgnoreCase))
+                return true;
+            string n = io.gameObject.name ?? string.Empty;
+            return n.StartsWith("Cabinet_Bathroom", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsKitchenCabinet(InteractableObj io)
+        {
+            if (!IsCabinetObject(io)) return false;
+            return TryGetHierarchyRoomForInteractable(io, out string room) &&
+                string.Equals(room, RoomSpokenName("Kitchen"), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool AnyKitchenCabinetEncountered()
+        {
+            InteractableObj[] all = FindObjectsOfType<InteractableObj>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                InteractableObj io = all[i];
+                if (io == null || io.gameObject == null || !io.gameObject.activeInHierarchy) continue;
+                if (IsKitchenCabinet(io) && IsEncounteredKnownObject(io)) return true;
+            }
+            return false;
+        }
+
+        // A cupboard or cabinet (door, case or body). Passage doors never match; food and things
+        // stored inside belong to other characters so stay out.
+        private static bool IsCabinetTarget(KnownObjectTarget t)
+        {
+            InteractableObj io = t != null ? t.Interactable : null;
+            if (io == null || io.gameObject == null || t.IsDoor && IsAlwaysListedDoor(io))
+                return false;
+            return IsCabinetObject(io);
+        }
+
         private static bool IsDoorInteractable(InteractableObj interactable)
         {
             if (interactable == null || interactable.gameObject == null)
@@ -4730,9 +6096,29 @@ namespace DateEverythingAccess
                 return;
             }
 
+            if (_aimCoachActive)
+            {
+                StopAimCoach();
+                ScreenReader.Say(Loc.Get("aim_coach_stopped"));
+                return;
+            }
+
             if (!TryEnsureNavigationTarget(out string targetZone, out string targetLabel))
             {
                 ScreenReader.Say(Loc.Get("navigation_no_objective"));
+                return;
+            }
+
+            // Already standing by it: no walk needed, just talk the player's aim onto it.
+            if (!_hasNavigationWorldTarget &&
+                TryGetTrackedInteractable(out InteractableObj nearTarget) && nearTarget != null &&
+                (nearTarget = AdoptSelectablePart(nearTarget)) != null &&
+                IsTargetAimableFromHere(nearTarget, AimCoachStartWithinM, out _))
+            {
+                // A Ctrl+O walking tone still running would play over the aiming help.
+                if (_isNavigationActive)
+                    StopNavigationRuntime();
+                StartAimCoach(nearTarget, afterWalk: false);
                 return;
             }
 
@@ -4753,6 +6139,12 @@ namespace DateEverythingAccess
             }
 
             _isAutoWalking = true;
+            _stallReplans = 0;
+            _doorTargetReplanPending = false;
+            _progressWaypointSet = false;
+            _doorStandPhase = DoorStandNone;
+            _doorStandAttempts = 0;
+            _doorStandDoor = null;
             LogCapsuleDimensionsOnce();
             _lastAutoWalkPosition = BetterPlayerControl.Instance != null ? BetterPlayerControl.Instance.transform.position : Vector3.zero;
             _lastAutoWalkProgressTime = Time.unscaledTime;
@@ -4790,6 +6182,15 @@ namespace DateEverythingAccess
                     0,
                     targetIsDatable: false,
                     targetInkFileName: null);
+                if (worldRoute == null && SimpleNavPlanner.ClearRuntimeBlockers() > 0)
+                    worldRoute = SimpleNavPlanner.Plan(
+                        worldStartPos,
+                        _navigationWorldTarget,
+                        _navigationWorldTargetRadius > 0f ? _navigationWorldTargetRadius : 1.25f,
+                        worldLabel,
+                        0,
+                        targetIsDatable: false,
+                        targetInkFileName: null);
                 if (worldRoute == null)
                 {
                     SimpleNavPlanner.PlanFailure why = SimpleNavPlanner.LastFailure;
@@ -4808,6 +6209,7 @@ namespace DateEverythingAccess
                 ScreenReader.Say(Loc.Get("navigation_no_objective"));
                 return false;
             }
+            target = AdoptSelectablePart(target);
             if (BetterPlayerControl.Instance == null)
             {
                 if (Main.Log != null) Main.Log.LogDebug("ToggleAutoWalk: no BetterPlayerControl for route planning");
@@ -4825,6 +6227,23 @@ namespace DateEverythingAccess
 
             bool isDatable = !string.IsNullOrWhiteSpace(target.inkFileName);
             SimpleNavRoute route = SimpleNavPlanner.Plan(startPos, targetPos, radius, goName, goId, isDatable, target.inkFileName);
+            // Learned blockers can box the player in; if they exist and the plan failed, forget them
+            // and try once more before reporting no path.
+            if (route == null && SimpleNavPlanner.ClearRuntimeBlockers() > 0)
+                route = SimpleNavPlanner.Plan(startPos, targetPos, radius, goName, goId, isDatable, target.inkFileName);
+            // An open sliding closet panel is blocked where it now sits; if that seals the closet off
+            // altogether (the gym closet, after autowalk opened its outer panel), plan as if the
+            // panels were where the game lets her walk anyway rather than give up.
+            if (route == null && SimpleNavPlanner.LastFailure == SimpleNavPlanner.PlanFailure.NoPath &&
+                SimpleNavPlanner.AnyOpenSliderPanelsBlocked)
+            {
+                SimpleNavPlanner.IgnoreOpenSliderPanels = true;
+                try { route = SimpleNavPlanner.Plan(startPos, targetPos, radius, goName, goId, isDatable, target.inkFileName); }
+                finally { SimpleNavPlanner.IgnoreOpenSliderPanels = false; }
+                if (Main.Log != null)
+                    Main.Log.LogInfo("ToggleAutoWalk: no path with open slider panels blocked; retry ignoring them " +
+                        (route != null ? "found a route" : "also failed"));
+            }
             if (route == null)
             {
                 // MULTI-PART DATABLE RETRY. A datable is often a whole assembly of InteractableObj
@@ -4855,6 +6274,60 @@ namespace DateEverythingAccess
         // the substituted part through goName/goId, or null when no sibling is routable either.
         // Ordered TALLEST-FIRST: a part's height above its supporting furniture is what lets the
         // sightline clear the counter/desk edge that occluded the original pick. See the call site.
+        // How far AdoptSelectablePart looks for a same-datable part that has a collider.
+        private const float SelectablePartMaxDistM = 6.4f;
+
+        // Some datables are split into a visible mesh with NO collider and a separate, invisible
+        // collider part that the game actually selects (the armchair blanket: SM_Blanket_0521 has
+        // no collider and a broken position; BlanketCollider_1 is what the crosshair lands on).
+        // Routing and aiming at the mesh can never succeed. Swap to the nearest same-datable part
+        // that has a collider, and make it the tracked target.
+        private InteractableObj AdoptSelectablePart(InteractableObj target)
+        {
+            if (target == null || target.gameObject == null || HasEnabledCollider(target))
+                return target;
+            string ink = target.inkFileName;
+            string internalName = target.InternalName();
+            Vector3 centre = PartCentre(target);
+            InteractableObj best = null;
+            float bestSq = SelectablePartMaxDistM * SelectablePartMaxDistM;
+            InteractableObj[] all = FindObjectsOfType<InteractableObj>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                InteractableObj c = all[i];
+                if (c == null || c == target || c.gameObject == null || !c.gameObject.activeInHierarchy) continue;
+                bool sameDatable = !string.IsNullOrEmpty(ink)
+                    ? string.Equals(c.inkFileName, ink, StringComparison.OrdinalIgnoreCase)
+                    : !string.IsNullOrEmpty(internalName) &&
+                      string.Equals(c.InternalName(), internalName, StringComparison.OrdinalIgnoreCase);
+                if (!sameDatable || !HasEnabledCollider(c)) continue;
+                float d = (PartCentre(c) - centre).sqrMagnitude;
+                if (d < bestSq) { bestSq = d; best = c; }
+            }
+            if (best == null)
+                return target;
+            if (Main.Log != null)
+                Main.Log.LogInfo("Target '" + target.gameObject.name + "' has no collider; using its selectable part '" +
+                    best.gameObject.name + "'");
+            _trackedInteractable = best;
+            _trackedInteractableId = best.Id;
+            ResetTrackedInteractableApproachTarget();
+            return best;
+        }
+
+        private static bool HasEnabledCollider(InteractableObj io)
+        {
+            Collider[] cols = io.GetComponentsInChildren<Collider>();
+            for (int i = 0; i < cols.Length; i++)
+                if (cols[i] != null && cols[i].enabled) return true;
+            return false;
+        }
+
+        private static Vector3 PartCentre(InteractableObj obj)
+        {
+            return TryGetLiveBoundsCentre(obj, out Vector3 c) ? c : obj.transform.position;
+        }
+
         private SimpleNavRoute TryPlanDatableSibling(
             InteractableObj target, Vector3 startPos, ref string goName, ref int goId)
         {
@@ -5077,12 +6550,38 @@ namespace DateEverythingAccess
             if (interactable == null)
                 return false;
 
+            // The object's own room from the data hierarchy (House/LivingRoom/...) is enough to
+            // navigate to it. Only when that fails do we look for a stand-in, and then only among
+            // parts of the SAME datable: searching the whole house let an unrelated object win (the
+            // revealed dust bunny, whose own transforms sit at the world origin, was swapped for a
+            // sofa pillow, so Ctrl+O walked to the sofa).
+            if (interactable.gameObject != null && interactable.gameObject.activeInHierarchy &&
+                !TryGetZoneNameForInteractable(interactable, out _) &&
+                TryGetHierarchyRoomForInteractable(interactable, out string hierarchyRoom))
+            {
+                resolvedInteractable = interactable;
+                zoneName = hierarchyRoom;
+                return true;
+            }
+
             var candidates = new List<InteractableObj>();
             AddUniqueComponents(candidates, new[] { interactable });
             AddUniqueComponents(candidates, interactable.GetComponentsInParent<InteractableObj>(includeInactive: true));
             AddUniqueComponents(candidates, interactable.GetComponentsInChildren<InteractableObj>(includeInactive: true));
             if (interactable.transform.root != null)
-                AddUniqueComponents(candidates, interactable.transform.root.GetComponentsInChildren<InteractableObj>(includeInactive: true));
+            {
+                string ownName = interactable.InternalName();
+                InteractableObj[] houseWide = interactable.transform.root.GetComponentsInChildren<InteractableObj>(includeInactive: true);
+                var sameDatable = new List<InteractableObj>();
+                for (int h = 0; h < houseWide.Length; h++)
+                {
+                    InteractableObj c = houseWide[h];
+                    if (c != null && !string.IsNullOrEmpty(ownName) &&
+                        string.Equals(c.InternalName(), ownName, StringComparison.OrdinalIgnoreCase))
+                        sameDatable.Add(c);
+                }
+                AddUniqueComponents(candidates, sameDatable.ToArray());
+            }
 
             float bestScore = float.MinValue;
             for (int i = 0; i < candidates.Count; i++)
@@ -5818,7 +7317,7 @@ namespace DateEverythingAccess
 
         private static string BuildNavigationTargetLabel(string zoneName, string currentZone)
         {
-            string normalizedZone = NormalizeIdentifierName(zoneName);
+            string normalizedZone = SpokenZoneName(zoneName);
             if (string.IsNullOrEmpty(normalizedZone))
                 normalizedZone = zoneName;
 
@@ -5989,6 +7488,13 @@ namespace DateEverythingAccess
             return IsWithinChatPanel(selectedObject, activeChatType, activePanelNameObject, secondaryPanelObject);
         }
 
+        private static bool _phoneMenuWasOpen;
+        // When "Phone closed" was last said. The game reports the phone open again for a moment
+        // while it finishes putting it away, which used to say "Phone menu" right after "closed".
+        private static float _phoneClosedAt = -100f;
+        private const float PhoneCloseSettleSeconds = 2f;
+        private static string _lastScreenSummaryStatic;
+
         private void AnnounceScreenSummaryIfNeeded()
         {
             if (!ModConfig.ReadScreenText)
@@ -5997,6 +7503,19 @@ namespace DateEverythingAccess
                 return;
             }
 
+            bool phoneOpen = Singleton<PhoneManager>.Instance != null && Singleton<PhoneManager>.Instance.IsPhoneMenuOpened();
+            if (_phoneMenuWasOpen && !phoneOpen)
+            {
+                ScreenReader.SayCoalesced(Loc.Get("phone_menu_closed"));
+                _phoneClosedAt = Time.unscaledTime;
+            }
+            if (!phoneOpen)
+                _phoneMenuWasOpen = false;
+            else if (!Singleton<PhoneManager>.Instance.IsPhoneAnimating() &&
+                     Time.unscaledTime - _phoneClosedAt >= PhoneCloseSettleSeconds)
+                _phoneMenuWasOpen = true;   // fully open (settled), and not the flicker after closing
+
+            _lastScreenSummaryStatic = _lastScreenSummary;
             string summary = BuildScreenSummary();
             if (summary == _lastScreenSummary)
                 return;
@@ -6108,15 +7627,16 @@ namespace DateEverythingAccess
 
         private void AnnounceDialogueIfNeeded()
         {
-            if (!ModConfig.ReadDialogueText)
-            {
-                _lastAnnouncedDialogue = null;
-                return;
-            }
-
             if (TalkingUI.Instance == null || !TalkingUI.Instance.open)
             {
                 _lastAnnouncedDialogue = null;
+                _unvoicedPendingLine = null;
+                return;
+            }
+
+            if (!ModConfig.ReadDialogueText)
+            {
+                AnnounceUnvoicedDialogueIfNeeded();
                 return;
             }
 
@@ -6136,6 +7656,66 @@ namespace DateEverythingAccess
 
             _lastAnnouncedDialogue = combined;
             ScreenReader.Say(combined, rememberAsRepeatable: true);
+        }
+
+        // UNVOICED LINES. With dialogue reading off (the cast is voiced), still read a line that
+        // the game "speaks" in text blips instead of a voice line: some characters in the Sassy
+        // Chap's content beep and boop. A new line is held briefly to hear what plays with it:
+        // a voice line means skip it, blips mean read it.
+        private string _unvoicedPendingLine;
+        private float _unvoicedPendingSince;
+        private const float UnvoicedDecideAfterSeconds = 0.35f;
+        private const float UnvoicedWaitForBlipSeconds = 2.5f;
+        private const float UnvoicedAudioSlackSeconds = 0.25f;
+
+        private void AnnounceUnvoicedDialogueIfNeeded()
+        {
+            if (!DialogueAudioWatch.BlipHooked)
+                return;
+            if (!TryGetCurrentDialogue(out string speakerName, out string dialogText))
+                return;
+            dialogText = NormalizeText(dialogText);
+            speakerName = NormalizeText(speakerName);
+            if (string.IsNullOrEmpty(dialogText))
+                return;
+            string combined = string.IsNullOrEmpty(speakerName) ? dialogText : speakerName + ". " + dialogText;
+            if (combined == _lastAnnouncedDialogue)
+                return;
+
+            float now = Time.unscaledTime;
+            if (!string.Equals(combined, _unvoicedPendingLine, StringComparison.Ordinal))
+            {
+                // A line that only grew (typing out) is the same line; keep its start time.
+                bool sameLineGrowing = _unvoicedPendingLine != null && combined.StartsWith(_unvoicedPendingLine, StringComparison.Ordinal);
+                _unvoicedPendingLine = combined;
+                if (!sameLineGrowing)
+                    _unvoicedPendingSince = now;
+                return;
+            }
+
+            float since = _unvoicedPendingSince - UnvoicedAudioSlackSeconds;
+            if (now - _unvoicedPendingSince < UnvoicedDecideAfterSeconds)
+                return;
+            if (DialogueAudioWatch.LastVoiceOverTime >= since)
+            {
+                _lastAnnouncedDialogue = combined;   // voiced: the player hears it already
+                return;
+            }
+            if (DialogueAudioWatch.LastBlipTime >= since)
+            {
+                _lastAnnouncedDialogue = combined;
+                if (Main.Log != null)
+                    Main.Log.LogInfo("Dialogue: reading an unvoiced (text-blip) line");
+                // Just the line: the speakers here are introduced aloud by the Sassy Chap, so their
+                // name before every line is noise.
+                string spoken = dialogText;
+                if (!string.IsNullOrEmpty(speakerName) && combined.StartsWith(speakerName + ". ", StringComparison.Ordinal))
+                    spoken = combined.Substring(speakerName.Length + 2);
+                ScreenReader.Say(spoken, rememberAsRepeatable: true);
+                return;
+            }
+            if (now - _unvoicedPendingSince >= UnvoicedWaitForBlipSeconds)
+                _lastAnnouncedDialogue = combined;   // nothing played with it; leave it to the game
         }
 
         private void AnnounceSelectionIfNeeded()
@@ -6494,11 +8074,32 @@ namespace DateEverythingAccess
         // Suppressed entirely while a text field or the spoken settings menu is focused so typing and
         // menu navigation aren't hijacked. Edge-detection state is advanced EVERY frame (even when
         // suppressed) so a key held down before focus leaves the field doesn't fire a stale press after.
+        // Pressing a movement key while auto-walk is running stops it, so the player can always take
+        // over, even if the game is slow to respond to Alt+O.
+        private bool _wWasDown, _aWasDown, _sWasDown, _dWasDown;
+
+        private void PollAutoWalkTakeover()
+        {
+            bool w = WasChoiceKeyPressed(KeyCode.W, 0x57, ref _wWasDown);
+            bool a = WasChoiceKeyPressed(KeyCode.A, 0x41, ref _aWasDown);
+            bool sKey = WasChoiceKeyPressed(KeyCode.S, 0x53, ref _sWasDown);
+            bool d = WasChoiceKeyPressed(KeyCode.D, 0x44, ref _dWasDown);
+            if (!_isAutoWalking || !(w || a || sKey || d))
+                return;
+            if (IsTextInputFocused())
+                return;
+            if (Main.Log != null) Main.Log.LogInfo("Auto-walk stopped by a movement key");
+            StopNavigationRuntime();
+            ScreenReader.Say(Loc.Get("navigation_autowalk_stopped"));
+        }
+
         private void PollAccessibilityShortcutKeys()
         {
+            PollAutoWalkTakeover();
             bool lookPressed = WasChoiceKeyPressed(KeyCode.L, VkL, ref _lookAroundKeyWasDown);
             bool objectPressed = WasChoiceKeyPressed(KeyCode.O, VkO, ref _objectTrackerKeyWasDown);
             bool repeatPressed = WasChoiceKeyPressed(KeyCode.BackQuote, VkBacktick, ref _repeatLastKeyWasDown);
+            bool tutorialRepeatPressed = WasChoiceKeyPressed(KeyCode.H, 0x48, ref _hKeyWasDown);
 
             // Never act on these while typing or inside the settings menu; edge state above already advanced.
             if (ModConfig.IsMenuOpen || IsTextInputFocused())
@@ -6522,6 +8123,12 @@ namespace DateEverythingAccess
             // hotkeys (e.g. Ctrl+F1 settings) and don't also fire a bare-key action.
             if (ctrl)
                 return;
+
+            if (tutorialRepeatPressed && !shift && !alt)
+            {
+                HandleModTutorialRepeat(true);
+                return;
+            }
 
             if (lookPressed && !shift && !alt)
             {
@@ -6587,6 +8194,14 @@ namespace DateEverythingAccess
 
             if (sections == null || sections.Count == 0)
             {
+                // Not on a stepper screen: PageUp/PageDown step through the bulletin board's photos
+                // while the board is selected.
+                if ((_pageDownPending || _pageUpPending) && HandleBulletinBoardPaging(_pageDownPending))
+                {
+                    _pageUpPending = false;
+                    _pageDownPending = false;
+                    return;
+                }
                 // No stepper-eligible screen (or no content yet): drop state so a fresh open starts
                 // at the top, and discard any latched press so it can't fire on the next eligible screen.
                 _sectionStepperSections = null;
@@ -7443,10 +9058,23 @@ namespace DateEverythingAccess
                 return false;
 
             TMP_InputField inputField = selectedObject.GetComponentInParent<TMP_InputField>();
+            bool onProxy = false;
+            if (!IsValidateQuestionsField(inputField))
+            {
+                // Before the player presses Enter, focus sits on the field's "Proxy" wrapper (a
+                // button that CONTAINS the input field), not on the input field itself. Without this
+                // the generic reader spoke only the value (the typed name) with no field name.
+                TMP_InputField inner = selectedObject.GetComponentInChildren<TMP_InputField>(true);
+                if (IsValidateQuestionsField(inner))
+                {
+                    inputField = inner;
+                    onProxy = true;
+                }
+            }
             if (IsValidateQuestionsField(inputField))
             {
-                announcement = BuildValidateQuestionsInputAnnouncement(inputField);
-                branch = "new_game_input";
+                announcement = BuildValidateQuestionsInputAnnouncement(inputField, includeSmallPrint: onProxy);
+                branch = onProxy ? "new_game_input_proxy" : "new_game_input";
                 return !string.IsNullOrEmpty(announcement);
             }
 
@@ -7487,15 +9115,84 @@ namespace DateEverythingAccess
 
         private static string BuildValidateQuestionsInputAnnouncement(TMP_InputField inputField)
         {
-            string label = GetValidateQuestionsFieldLabel(inputField);
+            return BuildValidateQuestionsInputAnnouncement(inputField, includeSmallPrint: false);
+        }
+
+        // "<prompt>. <value>[. <small print>]". The prompt is the text the FORM itself prints for
+        // the field ("Name", "City of Residence"), falling back to the mod's own label.
+        private static string BuildValidateQuestionsInputAnnouncement(TMP_InputField inputField, bool includeSmallPrint)
+        {
+            string label = null, smallPrint = null;
+            if (inputField != null && ValidateQuestions.Instance != null)
+                TryGetFormPrompt(inputField.transform, ValidateQuestions.Instance.transform, null, out label, out smallPrint);
+            if (string.IsNullOrEmpty(label))
+                label = GetValidateQuestionsFieldLabel(inputField);
+
             string value = NormalizeText(inputField != null ? inputField.text : null);
             if (string.IsNullOrEmpty(value))
                 value = Loc.Get("new_game_field_empty");
 
-            if (string.IsNullOrEmpty(label))
-                return value;
+            string result = string.IsNullOrEmpty(label) ? value : label + ". " + value;
+            if (includeSmallPrint && !string.IsNullOrEmpty(smallPrint))
+                result += ". " + smallPrint;
+            return result;
+        }
 
-            return label + ". " + value;
+        // The prompt a form prints for a control: walk up from `from` to the nearest ancestor whose
+        // name ends in "Label" (the form groups each question as "<Question> Label"), or to
+        // `container` when given, and read its visible texts in reading order, skipping texts that
+        // belong to an input field or to another toggle. First text = the prompt, the rest = small print.
+        private static bool TryGetFormPrompt(Transform from, Transform root, Transform container, out string label, out string smallPrint)
+        {
+            return TryGetFormPrompt(from, root, container, true, out label, out smallPrint);
+        }
+
+        private static bool TryGetFormPrompt(Transform from, Transform root, Transform container, bool includeOwnToggle,
+            out string label, out string smallPrint)
+        {
+            label = null; smallPrint = null;
+            Transform group = container;
+            if (group == null)
+            {
+                for (Transform a = from; a != null && a != root; a = a.parent)
+                {
+                    if (a.name.EndsWith("Label", StringComparison.OrdinalIgnoreCase)) { group = a; break; }
+                }
+            }
+            if (group == null) return false;
+
+            Toggle ownToggle = includeOwnToggle && from != null ? from.GetComponentInParent<Toggle>() : null;
+            var found = new List<KeyValuePair<Vector2, string>>();
+            Vector3[] tc = new Vector3[4];
+            TMP_Text[] texts = group.GetComponentsInChildren<TMP_Text>(false);
+            for (int i = 0; i < texts.Length; i++)
+            {
+                TMP_Text t = texts[i];
+                if (t == null || !t.enabled || !t.gameObject.activeInHierarchy) continue;
+                if (t.GetComponentInParent<TMP_InputField>() != null) continue;
+                Toggle owner = t.GetComponentInParent<Toggle>();
+                if (owner != null && owner != ownToggle) continue;
+                string text = NormalizeText(t.text);
+                if (string.IsNullOrEmpty(text)) continue;
+                t.rectTransform.GetWorldCorners(tc);
+                found.Add(new KeyValuePair<Vector2, string>(new Vector2(tc[0].x, tc[1].y), text));
+            }
+            if (found.Count == 0) return false;
+            found.Sort((a, b) =>
+            {
+                int byY = b.Key.y.CompareTo(a.Key.y);
+                return byY != 0 ? byY : a.Key.x.CompareTo(b.Key.x);
+            });
+            var parts = new List<string>();
+            for (int i = 0; i < found.Count; i++)
+            {
+                string v = found[i].Value.TrimEnd('.', ' ');
+                if (!parts.Contains(v)) parts.Add(v);
+            }
+            label = parts[0];
+            if (parts.Count > 1)
+                smallPrint = string.Join(". ", parts.GetRange(1, parts.Count - 1).ToArray());
+            return true;
         }
 
         private static string GetValidateQuestionsFieldLabel(TMP_InputField inputField)
@@ -7524,19 +9221,98 @@ namespace DateEverythingAccess
             {
                 string optionLabel = GetValidateQuestionsPronounOptionLabel(toggle);
                 string state = Loc.Get(toggle.isOn ? "new_game_toggle_selected" : "new_game_toggle_not_selected");
+                string prompt = Loc.Get("new_game_field_pronouns");
+                if (TryGetFormPrompt(toggle.transform, ValidateQuestions.Instance.transform, null, false, out string printed, out _) &&
+                    !string.IsNullOrEmpty(printed))
+                    prompt = printed;
                 if (string.IsNullOrEmpty(optionLabel))
-                    return Loc.Get("new_game_field_pronouns") + ". " + state;
+                    return prompt + ". " + state;
 
-                return Loc.Get("new_game_field_pronouns") + ". " + optionLabel + ". " + state;
+                return prompt + ". " + optionLabel + ". " + state;
             }
 
             if (toggle == ValidateQuestions.Instance.mandatoryToggle)
             {
                 string state = Loc.Get(toggle.isOn ? "settings_value_on" : "settings_value_off");
+                // Read the small print printed beside the box ("CHECK THIS BOX. Required to show you
+                // are committed to jumping through hoops when asked.") — the form has no field for it,
+                // so it is found by position; see FindTextBesideToggle.
+                // The box and its text share a parent group ("RandomCheckbox"); read that group.
+                // Position-based search is the fallback.
+                string beside = null;
+                if (TryGetFormPrompt(toggle.transform, ValidateQuestions.Instance.transform,
+                        toggle.transform.parent, out string groupLabel, out string groupSmall))
+                    beside = string.IsNullOrEmpty(groupSmall) ? groupLabel : groupLabel + ". " + groupSmall;
+                if (string.IsNullOrEmpty(beside))
+                    beside = FindTextBesideToggle(toggle, ValidateQuestions.Instance.transform);
+                // The wording is painted onto the form's paper texture, so usually there is no text
+                // object to find; speak the mod's copy of it.
+                if (string.IsNullOrEmpty(beside))
+                    beside = Loc.Get("new_game_confirm_small_print");
+                if (!string.IsNullOrEmpty(beside))
+                    return Loc.Get("new_game_field_confirmation") + ". " + beside + ". " + state;
                 return Loc.Get("new_game_field_confirmation") + ". " + state;
             }
 
             return null;
+        }
+
+        // Text laid out immediately to the RIGHT of a toggle, on its lines (a label or its small
+        // print), in reading order. Searches `root` for visible TMP texts that are not part of an
+        // input field or of another toggle, whose left edge sits just right of the box and whose
+        // vertical centre falls within a few box-heights of it. Null when nothing qualifies.
+        private static string _lastLoggedBesideText;
+
+        private static string FindTextBesideToggle(Toggle toggle, Transform root)
+        {
+            if (toggle == null || root == null) return null;
+            RectTransform box = toggle.transform as RectTransform;
+            if (box == null) return null;
+            Vector3[] bc = new Vector3[4];
+            box.GetWorldCorners(bc); // 0=bottom-left, 1=top-left, 2=top-right, 3=bottom-right
+            float boxLeft = bc[0].x, boxRight = bc[2].x, boxBottom = bc[0].y, boxTop = bc[1].y;
+            float h = Mathf.Max(0.0001f, boxTop - boxBottom);
+
+            var found = new List<KeyValuePair<Vector2, string>>();
+            TMP_Text[] texts = root.GetComponentsInChildren<TMP_Text>(false);
+            Vector3[] tc = new Vector3[4];
+            for (int i = 0; i < texts.Length; i++)
+            {
+                TMP_Text t = texts[i];
+                if (t == null || !t.enabled || !t.gameObject.activeInHierarchy) continue;
+                string text = NormalizeText(t.text);
+                if (string.IsNullOrEmpty(text)) continue;
+                if (t.GetComponentInParent<TMP_InputField>() != null) continue;
+                Toggle owner = t.GetComponentInParent<Toggle>();
+                if (owner != null && owner != toggle) continue;
+
+                t.rectTransform.GetWorldCorners(tc);
+                float left = tc[0].x, bottom = tc[0].y, top = tc[1].y;
+                float centerY = (top + bottom) * 0.5f;
+                bool ownChild = owner == toggle;
+                bool rightOfBox = left >= boxLeft - h * 0.5f && left - boxRight <= h * 4f;
+                bool onBoxLines = centerY <= boxTop + h * 1.5f && centerY >= boxBottom - h * 3f;
+                if (ownChild || (rightOfBox && onBoxLines))
+                    found.Add(new KeyValuePair<Vector2, string>(new Vector2(left, top), text));
+            }
+            if (found.Count == 0) return null;
+
+            // Reading order: top to bottom, then left to right.
+            found.Sort((a, b) =>
+            {
+                int byY = b.Key.y.CompareTo(a.Key.y);
+                return byY != 0 ? byY : a.Key.x.CompareTo(b.Key.x);
+            });
+            var parts = new List<string>();
+            for (int i = 0; i < found.Count; i++)
+                if (!parts.Contains(found[i].Value)) parts.Add(found[i].Value.TrimEnd('.'));
+            string joined = string.Join(". ", parts.ToArray());
+            if (!string.Equals(joined, _lastLoggedBesideText, StringComparison.Ordinal))
+            {
+                _lastLoggedBesideText = joined;
+                Main.Log?.LogInfo("FindTextBesideToggle: " + toggle.gameObject.name + " -> \"" + joined + "\"");
+            }
+            return joined;
         }
 
         private static bool IsValidateQuestionsPronounToggle(Toggle toggle)
@@ -8072,6 +9848,13 @@ namespace DateEverythingAccess
 
             if (Singleton<PhoneManager>.Instance != null && Singleton<PhoneManager>.Instance.IsPhoneMenuOpened())
             {
+                // While the phone is being put away it passes back through its home screen; don't
+                // announce "Phone menu" then (the closing is announced instead).
+                if (Singleton<PhoneManager>.Instance.IsPhoneAnimating() && _phoneMenuWasOpen)
+                    return _lastScreenSummaryStatic;
+                if (Time.unscaledTime - _phoneClosedAt < PhoneCloseSettleSeconds &&
+                    !Singleton<PhoneManager>.Instance.IsPhoneAppOpened())
+                    return null;
                 if (!Singleton<PhoneManager>.Instance.IsPhoneAppOpened())
                     return BuildPhoneHomeSummary();
                 return null;
@@ -9233,7 +11016,13 @@ namespace DateEverythingAccess
         private static bool WasChoiceKeyPressed(KeyCode keyCode, int virtualKey, ref bool wasDown)
         {
             bool isDown = (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
-            bool pressed = Input.GetKeyDown(keyCode) || (isDown && !wasDown);
+            // Two views of the same key: the live key state (seen the moment it goes down) and
+            // Unity's key-down event (which can arrive a frame later). Counting either one alone
+            // is right; counting both counted one press twice, and if a modifier had been let go
+            // in between, the second count did something else: Alt+O started auto-walk and then
+            // opened the objects list. Unity's event now only counts when the live state hadn't
+            // already seen this press (a tap too quick for it).
+            bool pressed = (isDown && !wasDown) || (!wasDown && Input.GetKeyDown(keyCode));
             wasDown = isDown;
             return pressed;
         }
@@ -9395,7 +11184,27 @@ namespace DateEverythingAccess
             if (zone == null)
                 return null;
 
-            return NormalizeIdentifierName(zone.Name);
+            return SpokenZoneName(zone.Name);
+        }
+
+        // A game camera zone as the player should hear it. The zones are numbered pieces of a
+        // room (living_room5, laundry_room2); the numbers mean nothing to the player, so they are
+        // dropped. The piano room is part of the living room. The laundry room's zones are
+        // misnamed: "laundry_room_closet" covers the main room by the closet door, and the closet
+        // itself (where Hoove is) is "laundry_room6".
+        private static string SpokenZoneName(string zoneName)
+        {
+            if (string.IsNullOrEmpty(zoneName))
+                return zoneName;
+            if (string.Equals(zoneName, "laundry_room6", StringComparison.OrdinalIgnoreCase))
+                return Loc.Get("room_laundry_closet");
+            if (string.Equals(zoneName, "laundry_room_closet", StringComparison.OrdinalIgnoreCase))
+                return Loc.Get("room_laundry_room");
+            string z = Regex.Replace(zoneName.Trim(), @"[\s_]*\d+$", string.Empty);
+            if (z.StartsWith("piano_room", StringComparison.OrdinalIgnoreCase) ||
+                z.StartsWith("pianoroom", StringComparison.OrdinalIgnoreCase))
+                z = "living_room";
+            return NormalizeIdentifierName(z);
         }
 
         private static bool TryGetCurrentTutorialObjectiveText(out string objectiveText)

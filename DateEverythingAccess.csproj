@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- Where Date Everything is installed. Override with: dotnet build -p:GameDir="X:\path\to\Date Everything",
+         or set the DATE_EVERYTHING_DIR environment variable; otherwise the default Steam folder on C:. -->
+    <GameDir Condition="'$(GameDir)' == '' and '$(DATE_EVERYTHING_DIR)' != ''">$(DATE_EVERYTHING_DIR)</GameDir>
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Date Everything</GameDir>
     <TargetFramework>net472</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
@@ -12,6 +16,7 @@
   <ItemGroup>
     <Compile Remove="decompiled\**" />
     <Compile Remove="templates\**" />
+    <Compile Remove="tester-package\**" />
     <!-- Unrelated ASP.NET scratch project that lives in the repo root; not part of the mod. -->
     <Compile Remove="Accessibility before the storm\**" />
   </ItemGroup>
@@ -38,6 +43,10 @@
        in the project root without recompiling; CardPoseDescriptions reads them from the plugin
        folder at runtime. -->
   <ItemGroup>
+    <PrismLicenseFiles Include="$(ProjectDir)lib\prism\LICENSES\**\*;$(ProjectDir)lib\prism\NOTICE.txt;$(ProjectDir)lib\prism\VERSION.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <CardPoseDescriptionFiles Include="$(ProjectDir)card_pose_descriptions.*.json" />
   </ItemGroup>
 
@@ -48,79 +57,83 @@
 
   <ItemGroup>
     <Reference Include="BepInEx">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\core\BepInEx.dll</HintPath>
+      <HintPath>$(GameDir)\BepInEx\core\BepInEx.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\core\0Harmony.dll</HintPath>
+      <HintPath>$(GameDir)\BepInEx\core\0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Assembly-CSharp-firstpass">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\Assembly-CSharp-firstpass.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\Assembly-CSharp-firstpass.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Rewired_Core">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\Rewired_Core.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\Rewired_Core.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Team17.Common">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\Team17.Common.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\Team17.Common.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\UnityEngine.UI.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.AudioModule">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.JSONSerializeModule">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\UnityEngine.JSONSerializeModule.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\UnityEngine.JSONSerializeModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.AIModule">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\UnityEngine.AIModule.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\UnityEngine.AIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Unity.TextMeshPro">
-      <HintPath>D:\SteamLibrary\steamapps\Common\Date Everything\Date Everything_Data\Managed\Unity.TextMeshPro.dll</HintPath>
+      <HintPath>$(GameDir)\Date Everything_Data\Managed\Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
 
   <Target Name="CopyToPlugins" AfterTargets="Build" Condition="'$(SkipCopyToPlugins)' != 'true'">
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\" />
-    <Copy SourceFiles="$(NavigableRegionBakeSourcePath)" DestinationFiles="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\navigable_region.bake.json" Condition="Exists('$(NavigableRegionBakeSourcePath)')" />
-    <Copy SourceFiles="@(CardPoseDescriptionFiles)" DestinationFolder="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)\BepInEx\plugins\" />
+    <Copy SourceFiles="$(NavigableRegionBakeSourcePath)" DestinationFiles="$(GameDir)\BepInEx\plugins\navigable_region.bake.json" Condition="Exists('$(NavigableRegionBakeSourcePath)')" />
+    <Copy SourceFiles="@(CardPoseDescriptionFiles)" DestinationFolder="$(GameDir)\BepInEx\plugins\" SkipUnchangedFiles="true" />
     <Message Text="Copied $(TargetFileName) to BepInEx plugins folder" Importance="High" />
+    <!-- Speech output: Prism's DLL sits next to Date Everything.exe, where the game loads it from,
+         with its license texts in a Prism-Licenses folder beside it. -->
+    <Copy SourceFiles="$(ProjectDir)lib\prism\prism.dll" DestinationFolder="$(GameDir)\" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(PrismLicenseFiles)" DestinationFiles="@(PrismLicenseFiles->'$(GameDir)\Prism-Licenses\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <!-- Wipe captured C# routes on every deploy: a new DLL or bake invalidates
          them for parity diffing (they were planned against the old planner /
          bake). Keeps c_sharp_routes/ self-limited and the parity check honest. -->
-    <RemoveDir Directories="D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\c_sharp_routes" Condition="Exists('D:\SteamLibrary\steamapps\Common\Date Everything\BepInEx\plugins\c_sharp_routes')" />
+    <RemoveDir Directories="$(GameDir)\BepInEx\plugins\c_sharp_routes" Condition="Exists('$(GameDir)\BepInEx\plugins\c_sharp_routes')" />
     <Message Text="Cleared stale c_sharp_routes captures" Importance="High" />
   </Target>
 

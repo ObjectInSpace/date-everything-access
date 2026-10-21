@@ -55,3 +55,16 @@ artifacts/navigation/sweep/
 # Local debug spew from exporter / reachability probe runs
 artifacts/navigation/_*.log
 artifacts/navigation/_*.txt
+
+# Local working files in the mod folder (not part of the project)
+backup/
+history/
+build-log.txt
+*-log.txt
+tester-crossover.log
+DateEverythingAccess-Setup.exe
+tester-package/payload.zip
+tester-package/setup-build-log.txt
+tester-package/setup.sed.txt
+*.bundle
+tester-package/*/

@@ -1,5 +1,7 @@
 # Accessibility Mod Template
 
+Current state of the project, recent work and how to build and test: see `HANDOFF.md`.
+
 ## User
 
 - Blind, screen reader user
@@ -25,11 +27,12 @@ On greeting or new project:
 - **Unity version:** `2022.3.28.7056988`
 - **CLR runtime:** `4.0.30319.42000`
 
-## Tolk DLLs - Setup Reminder
+## Speech output - Prism
 
-When setting up Tolk for a mod project, ALWAYS copy BOTH DLLs to the game directory:
-- `Tolk.dll` - screen reader bridge library
-- `nvdaControllerClient64.dll` or `nvdaControllerClient32.dll` - required for NVDA support
+Speech goes through Prism (https://github.com/ethindp/prism), wrapped in `ScreenReader.cs`.
+`lib/prism/prism.dll` (v0.18.2, Windows x64) is the only native DLL needed (NVDA support is built
+in); the build copies it next to `Date Everything.exe`, with `lib/prism/LICENSES` as
+`Prism-Licenses`. Tolk and `nvdaControllerClient64.dll` are no longer used.
 
 ## Coding Rules
 
@@ -100,4 +103,4 @@ Patterns: `docs/ACCESSIBILITY_MODDING_GUIDE.md`
 - Project file: `DateEverythingAccess.csproj`
 - Plugin GUID: `com.amock.dateeverythingaccess`
 - Target framework: `net472`
-- Tolk and `nvdaControllerClient64.dll` are installed in the game directory
+- `prism.dll` is installed in the game directory (the build copies it)
