@@ -6337,6 +6337,13 @@ namespace DateEverythingAccess
 
             int originalId = target.gameObject != null ? target.gameObject.GetInstanceID() : 0;
             InteractableObj[] all = FindObjectsOfType<InteractableObj>();
+            // Only parts in the target's own room stand in for it. Some characters are spread
+            // through the house (every cupboard is one character), and a part in another room is a
+            // different object to the player: the kitchen cookie cupboard fell back to the
+            // laundry-room cupboard. Rooms come from the data hierarchy, so a part's position
+            // (Kopi's main object sits at the world origin) doesn't matter. An object the
+            // hierarchy can't place keeps the old house-wide search.
+            bool haveRoom = TryGetHierarchyRoomForInteractable(target, out string targetRoom);
 
             // Collect the sibling parts of this datable, tallest first.
             List<InteractableObj> siblings = new List<InteractableObj>();
@@ -6347,6 +6354,9 @@ namespace DateEverythingAccess
                 if (!c.gameObject.activeInHierarchy) continue;
                 if (c.gameObject.GetInstanceID() == originalId) continue;
                 if (!string.Equals(c.inkFileName, target.inkFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (haveRoom && (!TryGetHierarchyRoomForInteractable(c, out string partRoom) ||
+                    !string.Equals(partRoom, targetRoom, StringComparison.OrdinalIgnoreCase)))
+                    continue;
                 siblings.Add(c);
             }
             if (siblings.Count == 0)
