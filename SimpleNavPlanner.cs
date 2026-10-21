@@ -162,6 +162,8 @@ namespace DateEverythingAccess
             }
 
             PruneRuntimeBlockers();
+            _planEyeHeightM = LiveCameraHeightAboveFloorM();
+            var planWatch = System.Diagnostics.Stopwatch.StartNew();
 
             // Reflect live Door.open states into per-floor freed-cell overlays so A* can route
             // through doors that are already open. Closed doors fall back to the bake's
@@ -477,80 +479,32 @@ namespace DateEverythingAccess
                     Main.Log.LogInfo("SimpleNavPlanner.Plan: strict game-ray LOS kept " + losClear.Count +
                         " standpoint(s) for target=" + (targetName ?? "<null>") + "#" + targetGameObjectId);
 
-                // NOTHING SEEN FROM 1.6 m. The sightline test looks from a 1.6 m eye, but the real
-                // camera sits far higher (the player is scaled 2x). The rose-stem inanimal on the
-                // laundry room windowsill is hidden behind the window from 1.6 m. Try again from the
-                // real camera height; if even that finds nothing, walk to the nearest spots beside it
-                // anyway, and the aim help takes over on arrival, rather than refusing to go at all.
+                // NO SIGHTLINE FROM ANYWHERE: walk to the nearest spots beside it anyway, and the aim
+                // help takes over on arrival, rather than refusing to go at all.
                 if (losClear.Count == 0)
                 {
-                    float liveEye = LiveEyeHeightM();
-                    InteractableObj retryIo = ResolveTargetInteractable(targetGameObjectId);
-                    if (liveEye > InteractionEyeHeightM + 0.5f)
+                    for (int pass = 0; pass < 2 && losClear.Count == 0; pass++)
                     {
-                        _losEyeHeightOverride = liveEye;
-                        _strictLosCollider = targetCollider;
-                        _strictLosTarget = retryIo;
-                        try
+                        for (int i = 0; i < goals.Count; i++)
                         {
-                            for (int i = 0; i < goals.Count; i++)
-                            {
-                                NodeKey g = goals[i];
-                                Vector2 rxz = goalFloor.CellToWorld(g.Ix, g.Iz);
-                                Vector3 rCell = new Vector3(rxz.x, goalFloor.FloorY + 1.0f, rxz.y);
-                                Vector3 rNear = targetCollider.ClosestPointOnBounds(rCell);
-                                float rdx = rNear.x - rCell.x, rdz = rNear.z - rCell.z;
-                                if (rdx * rdx + rdz * rdz < innerSq) continue;
-                                HashSet<string> rPassed = new HashSet<string>(StringComparer.Ordinal);
-                                float rMargin = CellLineOfSightClearanceM(goalFloor, g, targetCollider, radius, rPassed);
-                                if (rMargin < 0f) continue;
-                                losClear.Add(g);
-                                passedOf.Add(rPassed);
-                                clearanceOf.Add(rMargin);
-                                if (rMargin > bestClearance) bestClearance = rMargin;
-                                goalQuality[g] = rMargin;
-                            }
+                            NodeKey g = goals[i];
+                            Vector2 axz = goalFloor.CellToWorld(g.Ix, g.Iz);
+                            Vector3 aCell = new Vector3(axz.x, goalFloor.FloorY + 1.0f, axz.y);
+                            Vector3 aNear = targetCollider.ClosestPointOnBounds(aCell);
+                            float adx = aNear.x - aCell.x, adz = aNear.z - aCell.z;
+                            float ad2 = adx * adx + adz * adz;
+                            if (ad2 < innerSq) continue;
+                            if (pass == 0 && ad2 > ApproachOnlyWithinM * ApproachOnlyWithinM) continue;
+                            losClear.Add(g);
+                            passedOf.Add(new HashSet<string>(StringComparer.Ordinal));
+                            clearanceOf.Add(0f);
+                            goalQuality[g] = 0f;
                         }
-                        finally
-                        {
-                            _losEyeHeightOverride = 0f;
-                            _strictLosCollider = null;
-                            _strictLosTarget = null;
-                        }
-                        // These passed the game-exact test, so the lenient-mode front/back guess below
-                        // must not second-guess them (it kept only the rose stem's outdoor side).
-                        if (losClear.Count > 0 && retryIo != null)
-                            usedStrictLos = true;
-                        if (Main.Log != null)
-                            Main.Log.LogInfo("SimpleNavPlanner.Plan: sightline retry from the real camera height (" +
-                                liveEye.ToString("F2") + " m) kept " + losClear.Count + " standpoint(s) for target=" +
-                                (targetName ?? "<null>"));
                     }
-                    if (losClear.Count == 0)
-                    {
-                        for (int pass = 0; pass < 2 && losClear.Count == 0; pass++)
-                        {
-                            for (int i = 0; i < goals.Count; i++)
-                            {
-                                NodeKey g = goals[i];
-                                Vector2 axz = goalFloor.CellToWorld(g.Ix, g.Iz);
-                                Vector3 aCell = new Vector3(axz.x, goalFloor.FloorY + 1.0f, axz.y);
-                                Vector3 aNear = targetCollider.ClosestPointOnBounds(aCell);
-                                float adx = aNear.x - aCell.x, adz = aNear.z - aCell.z;
-                                float ad2 = adx * adx + adz * adz;
-                                if (ad2 < innerSq) continue;
-                                if (pass == 0 && ad2 > ApproachOnlyWithinM * ApproachOnlyWithinM) continue;
-                                losClear.Add(g);
-                                passedOf.Add(new HashSet<string>(StringComparer.Ordinal));
-                                clearanceOf.Add(0f);
-                                goalQuality[g] = 0f;
-                            }
-                        }
-                        if (losClear.Count > 0 && Main.Log != null)
-                            Main.Log.LogWarning("SimpleNavPlanner.Plan: no sightline to target=" + (targetName ?? "<null>") +
-                                " from anywhere; walking to the nearest of " + losClear.Count +
-                                " spots beside it instead (the aim help takes over there)");
-                    }
+                    if (losClear.Count > 0 && Main.Log != null)
+                        Main.Log.LogWarning("SimpleNavPlanner.Plan: no sightline to target=" + (targetName ?? "<null>") +
+                            " from anywhere; walking to the nearest of " + losClear.Count +
+                            " spots beside it instead (the aim help takes over there)");
                 }
 
                 // FRONT-APPROACH: if this object faces one way and has LOS-clear cells on BOTH its
@@ -635,7 +589,7 @@ namespace DateEverythingAccess
                     // and let GoalViewQuality's diagonal-angle term rank them. See
                     // [[project_navigation_los_camera_origin_mismatch_2026_06_14]].
                     bool targetHighMounted =
-                        (targetCollider.bounds.center.y - (goalFloor.FloorY + InteractionEyeHeightM)) > HighMountEyeRiseM;
+                        (targetCollider.bounds.center.y - (goalFloor.FloorY + SightlineEyeHeightM)) > HighMountEyeRiseM;
                     HashSet<string> containerDoorsSeen = new HashSet<string>(StringComparer.Ordinal);
                     if (bestClearance > 0f && !targetHighMounted)
                     {
@@ -878,7 +832,8 @@ namespace DateEverythingAccess
                 Main.Log.LogInfo("SimpleNavPlanner.Plan ok target=" + (targetName ?? "<null>") +
                     " waypoints=" + route.Waypoints.Count +
                     " segmentsWithDoor=" + doorSegs +
-                    " cost_m=" + totalCost.ToString("F2"));
+                    " cost_m=" + totalCost.ToString("F2") + " planMs=" + planWatch.ElapsedMilliseconds +
+                    " eyeH=" + SightlineEyeHeightM.ToString("F2"));
                 // Diagnostic: log every waypoint XYZ so we can compare against the bake PPM
                 // when the executor reports a wall-clipping route failure.
                 for (int i = 0; i < route.Waypoints.Count; i++)
@@ -2483,22 +2438,43 @@ namespace DateEverythingAccess
             return null;
         }
 
-        // Eye height (m above the floor) for the interaction line-of-sight test. The game's
-        // interaction ray originates at the player camera; ~1.6m is a standing eye height and
-        // matches where the camera sits on the player capsule.
-        private const float InteractionEyeHeightM = 1.6f;
-        // When set (> 0), the sightline test looks from this height instead (the retry from the real
-        // camera height for things hidden from 1.6 m).
-        [ThreadStatic] private static float _losEyeHeightOverride;
-        private static float SightlineEyeHeightM => _losEyeHeightOverride > 0f ? _losEyeHeightOverride : InteractionEyeHeightM;
+        // WHERE THE GAME'S RAY STARTS. Measured from the game's own interaction rays (LOS_PROBE
+        // origins paired with the player's position, 2,868 samples, 2026-10-21): the camera sits
+        // DIRECTLY above the player's feet, with no horizontal offset at any pitch (first-person),
+        // 4.86 m above the feet, about 4.76 m above the ground-floor plane. The player and house are
+        // built at 2x scale; the old 1.6 m "standing eye" was a guess, kept only so the sight audit
+        // can compare against it.
+        private const float LegacyEyeHeightM = 1.6f;
+        private const float MeasuredCameraHeightAboveFloorM = 4.76f;
+        // The camera height above the floor plane used by every sightline test in the current
+        // Plan(), read once from the live camera at the start of the plan (see Plan).
+        [ThreadStatic] private static float _planEyeHeightM;
+        private static float SightlineEyeHeightM => _planEyeHeightM > 0f ? _planEyeHeightM : MeasuredCameraHeightAboveFloorM;
         // With no sightline from anywhere, walk to spots within this distance of the target.
         private const float ApproachOnlyWithinM = 3.0f;
         private const float LookPitchMarginDeg = 8f;
         private static System.Reflection.FieldInfo _maxRotField;
         private static bool _maxRotFieldLooked;
 
-        // The live camera height above the player's feet (the capsule is scaled 2x, so the
-        // bake-era 1.6 m guess is well short), falling back to that guess.
+        // The live camera height above the floor plane the player stands on (the planner places the
+        // eye at FloorY + this), falling back to the measured height.
+        public static float LiveCameraHeightAboveFloorM()
+        {
+            BetterPlayerControl bpc = BetterPlayerControl.Instance;
+            Camera cam = Camera.main;
+            if (bpc != null && cam != null && EnsureLoaded())
+            {
+                Floor f = FloorForY(bpc.transform.position.y, StartFloorMatchToleranceM);
+                if (f != null)
+                {
+                    float h = cam.transform.position.y - f.FloorY;
+                    if (h > 0.5f && h < 10f) return h;
+                }
+            }
+            return MeasuredCameraHeightAboveFloorM;
+        }
+
+        // The live camera height above the player's feet, falling back to the measured height.
         public static float LiveEyeHeightM()
         {
             BetterPlayerControl bpc = BetterPlayerControl.Instance;
@@ -2508,7 +2484,7 @@ namespace DateEverythingAccess
                 float h = cam.transform.position.y - bpc.transform.position.y;
                 if (h > 0.5f && h < 8f) return h;
             }
-            return InteractionEyeHeightM;
+            return MeasuredCameraHeightAboveFloorM + 0.1f;
         }
 
         // How far the game lets the camera tilt up or down (BetterPlayerControl.maxrot, 70 by
@@ -2619,7 +2595,7 @@ namespace DateEverythingAccess
                 return quality;
 
             Vector2 xz = floor.CellToWorld(g.Ix, g.Iz);
-            Vector3 eye = new Vector3(xz.x, floor.FloorY + InteractionEyeHeightM, xz.y);
+            Vector3 eye = new Vector3(xz.x, floor.FloorY + SightlineEyeHeightM, xz.y);
             Vector3 aim = InteractionAimPoint(targetCollider, eye);
             float rise = aim.y - eye.y;                 // how far the target sits above eye level
             if (rise <= HighMountEyeRiseM)
@@ -2765,7 +2741,7 @@ namespace DateEverythingAccess
                 for (int n = 0; n < nearest.Count && n < 3; n++)
                 {
                     Vector2 xz = floor.CellToWorld(nearest[n].Value.Ix, nearest[n].Value.Iz);
-                    Vector3 eye = new Vector3(xz.x, floor.FloorY + InteractionEyeHeightM, xz.y);
+                    Vector3 eye = new Vector3(xz.x, floor.FloorY + SightlineEyeHeightM, xz.y);
                     Vector3 dir = (tc - eye).normalized;
                     Vector3 origin = eye - dir * 0.25f;
                     RaycastHit[] hits = Physics.RaycastAll(new Ray(origin, dir), Vector3.Distance(origin, tc) + 2f, mask);
@@ -3046,6 +3022,13 @@ namespace DateEverythingAccess
         // edge first). Ordered by preference; callers take the first that works.
         public static List<Vector3> AimCandidates(Collider targetCollider, Vector3 eye)
         {
+            return AimCandidates(targetCollider, eye, true);
+        }
+
+        // `spread`: also add the AddAimSpread points (the sight audit turns it off to reproduce the
+        // old four-point test).
+        public static List<Vector3> AimCandidates(Collider targetCollider, Vector3 eye, bool spread)
+        {
             var list = new List<Vector3>(4);
             if (targetCollider == null) return list;
             Bounds b = targetCollider.bounds;
@@ -3056,7 +3039,102 @@ namespace DateEverythingAccess
             // Midway between the centre and the face nearest the viewer (thin objects like screens).
             Vector3 near = targetCollider.ClosestPointOnBounds(eye);
             list.Add(Vector3.Lerp(b.center, near, 0.5f));
+            if (spread)
+                AddAimSpread(list, b, eye);
             return list;
+        }
+
+        // SIGHT AUDIT (sweep diagnostic). From the player's actual spot, runs the sightline test
+        // the old way (1.6 m eye, four aim points) and the new way (live camera height, plus the
+        // aim spread), each with the strict game-exact rule and the lenient fallback. The sweep
+        // logs this next to what the game actually did, so each model can be scored against the
+        // game rather than against a guess.
+        public static string AuditStandpoint(Vector3 feet, int targetGameObjectId, float radiusM)
+        {
+            try
+            {
+                if (!EnsureLoaded()) return "not ready";
+                Floor floor = FloorForY(feet.y, StartFloorMatchToleranceM);
+                Collider col = ResolveTargetCollider(targetGameObjectId);
+                if (floor == null || col == null) return "no floor or collider";
+                InteractableObj io = ResolveTargetInteractable(targetGameObjectId);
+                float liveH = LiveCameraHeightAboveFloorM();
+                Vector3 oldEye = new Vector3(feet.x, floor.FloorY + LegacyEyeHeightM, feet.z);
+                Vector3 newEye = new Vector3(feet.x, floor.FloorY + liveH, feet.z);
+                Camera cam = Camera.main;
+                string camNote = cam != null
+                    ? " realCam=(" + cam.transform.position.x.ToString("F2") + ", " + cam.transform.position.y.ToString("F2") + ", " +
+                      cam.transform.position.z.ToString("F2") + ") modelEye=(" + newEye.x.ToString("F2") + ", " + newEye.y.ToString("F2") + ", " +
+                      newEye.z.ToString("F2") + ")"
+                    : "";
+                return "old(eye " + LegacyEyeHeightM.ToString("F2") + "): " + AuditVisible(oldEye, false, col, io, radiusM) +
+                    " | new(eye " + liveH.ToString("F2") + "): " + AuditVisible(newEye, true, col, io, radiusM) + camNote;
+            }
+            catch (Exception ex)
+            {
+                return "audit failed: " + ex.Message;
+            }
+        }
+
+        private static string AuditVisible(Vector3 eye, bool spread, Collider col, InteractableObj io, float radiusM)
+        {
+            BetterPlayerControl bpc = BetterPlayerControl.Instance;
+            int mask = bpc != null ? ~(int)bpc.dateviatorIgnores : ~0;
+            const float CameraBackPullM = 0.25f;
+            List<Vector3> aims = AimCandidates(col, eye, spread);
+            bool strict = false, lenient = false;
+            if (io != null)
+            {
+                _strictLosCollider = col;
+                _strictLosTarget = io;
+                try
+                {
+                    for (int a = 0; a < aims.Count && !strict; a++)
+                    {
+                        int r = TryAimFromCell(eye, aims[a], radiusM, mask, CameraBackPullM, col, null, out _, out _, out _);
+                        strict = r == AimClear || r == AimOnTarget;
+                    }
+                }
+                finally
+                {
+                    _strictLosCollider = null;
+                    _strictLosTarget = null;
+                }
+            }
+            for (int a = 0; a < aims.Count && !lenient; a++)
+            {
+                int r = TryAimFromCell(eye, aims[a], radiusM, mask, CameraBackPullM, col, null, out _, out _, out _);
+                lenient = r == AimClear || r == AimOnTarget;
+            }
+            return "strict=" + (strict ? "seen" : "blind") + " lenient=" + (lenient ? "seen" : "blind");
+        }
+
+        // A spread of points across the collider's box (3 x 3 across, at two heights), nearest the
+        // eye first. The four fixed points above can all sit behind something while another part of
+        // the object is plainly visible: at the kitchen cutlery drawer every one of them was hidden
+        // by the counter top from the real camera height, yet the game selected the cutlery by
+        // looking at the front of the open drawer. Points in empty air are harmless: a ray that
+        // misses the object is simply not accepted.
+        private static void AddAimSpread(List<Vector3> list, Bounds b, Vector3 eye)
+        {
+            float[] across = { 0.15f, 0.5f, 0.85f };
+            float[] heights = { 0.3f, 0.75f };
+            int start = list.Count;
+            for (int ix = 0; ix < across.Length; ix++)
+                for (int iz = 0; iz < across.Length; iz++)
+                    for (int iy = 0; iy < heights.Length; iy++)
+                        list.Add(new Vector3(
+                            Mathf.Lerp(b.min.x, b.max.x, across[ix]),
+                            Mathf.Lerp(b.min.y, b.max.y, heights[iy]),
+                            Mathf.Lerp(b.min.z, b.max.z, across[iz])));
+            list.Sort(start, list.Count - start, new NearestToComparer(eye));
+        }
+
+        private sealed class NearestToComparer : IComparer<Vector3>
+        {
+            private readonly Vector3 _p;
+            public NearestToComparer(Vector3 p) { _p = p; }
+            public int Compare(Vector3 a, Vector3 b) => (a - _p).sqrMagnitude.CompareTo((b - _p).sqrMagnitude);
         }
 
         // True if a ray from `origin` along `dir` reaches the target collider first (no occluder) or

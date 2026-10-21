@@ -749,6 +749,7 @@ namespace DateEverythingAccess
                 ApplyNavigationInput(Vector3.zero, Vector3.zero);
                 GameController gc = Singleton<GameController>.Instance;
                 bool eligible = gc == null || gc.CanSelectObj(manager.activeObject);
+                LogSightAudit(route, "selected");
                 return eligible ? SweepProbeState.InRange : SweepProbeState.InRangeGated;
             }
 
@@ -764,7 +765,11 @@ namespace DateEverythingAccess
                 // occluded/clustered target the ray can't reach stays GaveUp, exactly as it would
                 // fail for a real player. See [[feedback-interaction-includes-look-and-glasses]].
                 if (HasInteractionLineOfSightToTarget(route))
+                {
+                    LogSightAudit(route, "selected(ray)");
                     return SweepProbeState.InRange;
+                }
+                LogSightAudit(route, "not-selected");
                 return SweepProbeState.GaveUp;
             }
 
@@ -774,6 +779,17 @@ namespace DateEverythingAccess
             _instance._probeSteerPoint = lookPoint;
             _instance._probeSteerActive = true;
             return SweepProbeState.Turning;
+        }
+
+        // Sight audit: what the game did at this spot, next to what the old and new planner
+        // sightline tests predict from it (SimpleNavPlanner.AuditStandpoint).
+        private static void LogSightAudit(SimpleNavRoute route, string gameResult)
+        {
+            if (Main.Log == null || route == null || BetterPlayerControl.Instance == null) return;
+            Vector3 feet = BetterPlayerControl.Instance.transform.position;
+            Main.Log.LogInfo("[sight-audit] target=" + (route.TargetName ?? "<null>") + " game=" + gameResult +
+                " feet=" + FormatVector3(feet) + " " +
+                SimpleNavPlanner.AuditStandpoint(feet, route.TargetGameObjectId, route.TargetInteractionRadius));
         }
 
         // True when the player could actually interact with the route target from where it stands,
