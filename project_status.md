@@ -31,6 +31,8 @@
 
 ## Current Phase
 
+**Current session note (2026-10-22 — three PR nav items merged after comparison):** Compared the test-branch sweep with the main sweep on the 550 objects both reached before main got trapped in a living-room pocket (armchair/sofa/time capsule): main 484 reached, test 488; 34 worse / 38 better. Of the 34: 5 broken by the camera-height sightlines (kitchen cutlery drawer, cookie cupboard), 11 a start-pocket artifact, 12 the gym closet slider stuck across its doorway (main code, both builds), 6 single stalls (noise). Merged the corner hold, clearance-3 standpoint tiers and deep operable filter to main; camera-height sightlines stay on test/nav-open-items. Selection on arrival was not compared (the test run's check was broken).
+
 **Current session note (2026-10-21, evening — coverage sweep check fixed):** The first test-branch sweep (936 objects, `artifacts
 avigation\sweepuns61021-test-nav-open-items`) could not measure selection: the sweep's interaction check never turned the camera. Two causes, found with a temporary probe log (runs `20261021-diag-camera-pitch`, `-2`): autowalk's per-physics-step steering kept running during the check and overwrote it (pitch frozen, later stuck ~63 degrees up), and the check wrote its look once per frame, which the game's own per-frame input read wipes (June's checks only worked because stale autowalk input spun the camera). Fixed: the sweep stops autowalk steering when it starts a check, and the check steers in FixedUpdate. Confirmed: first 72 checks 49 selected / 17 unconfirmed (broken build: 12 / 59). The running sweep on this build is the main baseline; then re-run test/nav-open-items (main merged in).
 

@@ -357,7 +357,28 @@ namespace DateEverythingAccess
                     LastFailure = PlanFailure.DoorMissingOperableCells;
                     return null;
                 }
-                goals = opGoals;
+                // The bake worked out the operable cells for a 0.4 m body; the real one is 0.8 m, so
+                // a cell on the edge of that set has the player's shoulder inside the door's swing
+                // (the game then won't open it — the office closet). Keep cells with a full 0.4 m of
+                // operable (or solid) ground around them when there are any.
+                List<NodeKey> deepGoals = new List<NodeKey>(opGoals.Count);
+                for (int gi = 0; gi < opGoals.Count; gi++)
+                {
+                    NodeKey og = opGoals[gi];
+                    bool deep = true;
+                    for (int ddx = -OperableMarginCells; ddx <= OperableMarginCells && deep; ddx++)
+                        for (int ddz = -OperableMarginCells; ddz <= OperableMarginCells && deep; ddz++)
+                        {
+                            int nx = og.Ix + ddx, nz = og.Iz + ddz;
+                            if (goalFloor.Navigable(nx, nz) && !operable.Contains(Floor.PackCell(nx, nz)))
+                                deep = false;
+                        }
+                    if (deep) deepGoals.Add(og);
+                }
+                goals = deepGoals.Count > 0 ? deepGoals : opGoals;
+                if (Main.Log != null)
+                    Main.Log.LogInfo("SimpleNavPlanner.Plan: door operable goals " + opGoals.Count +
+                        ", clear of the swing for the real body " + deepGoals.Count + " (door=" + targetDoor.gameObject.name + ")");
                 // A walk to a door stops on the player's side of it: never plan through the door to
                 // a spot in the room beyond (after a stall blocked the spots in front of the laundry
                 // closet, the re-plan picked ones inside the closet and walked her into the door).
@@ -653,8 +674,10 @@ namespace DateEverythingAccess
 
             List<NodeKey> path = null;
             float totalCost = 0f;
-            // Set when the door-front pass below already planned the route. (PR #1's general
-            // "body-room" goal tiers for non-door targets are held back pending evidence.)
+            // BODY-ROOM GOALS: the bake grid is dilated for a 0.4 m capsule but the player's real
+            // capsule is 0.8 m, so a goal cell hard against a counter, wall or table leaves her
+            // pressing into it at the end of the walk (the kitchen-cupboard stall). Prefer goal cells
+            // with room for the real body; fall back to tighter tiers, then to the full set.
             bool roomyPlanned = false;
 
             // DOOR TARGET: finish squarely in front of the doorway, on the player's side, so walking
@@ -698,6 +721,19 @@ namespace DateEverythingAccess
                 }
             }
 
+            for (int need = BodyGoalClearanceCells; need >= 2 && !roomyPlanned; need--)
+            {
+                List<NodeKey> roomy = GoalsWithClearance(goals, need);
+                if (roomy == null) continue;
+                if (AStar(startNode, roomy, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost, goalQuality))
+                {
+                    roomyPlanned = true;
+                    if (Main.Log != null)
+                        Main.Log.LogInfo("SimpleNavPlanner.Plan: body-room goals clearance>=" + need +
+                            " kept " + roomy.Count + "/" + goals.Count + " for target=" + (targetName ?? "<null>"));
+                    goals = roomy;
+                }
+            }
             if (!roomyPlanned &&
                 !AStar(startNode, goals, goalFloor.Label, targetPos.x, targetPos.z, out path, out totalCost, goalQuality))
             {

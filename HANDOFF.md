@@ -66,11 +66,13 @@ for the project rules.
 
 ## Open items
 
-- Open, not on main until in-game testing or the PR author's answers show they help. On the
-  branch `test/nav-open-items`: the 35-degree corner hold, the clearance-3 standpoint tiers for
-  ordinary targets, the "deep" operable-cell filter for door targets, and sightlines judged from
-  the live camera height (~5.7 m, measured) instead of 1.6 m. Only on the PR branch: the adaptive
-  turn speed-up for CrossOver (needs the author's tester).
+- Merged 2026-10-22 after sweep comparison (no breakage across 550 objects; main 484 vs test
+  488 reached): PR #1's 35-degree corner hold, clearance-3 standpoint tiers and deep operable-cell
+  filter. Still on branch `test/nav-open-items`: sightlines from the live camera height, which
+  BROKE the kitchen cutlery drawer and cookie cupboard (3 standpoints, all unreachable, vs 593 on
+  main) and needs fixing or dropping. Only on the PR branch: the adaptive turn speed-up.
+- Known, not caused by these: the gym closet's outer sliding panel can stop part-way across its
+  doorway and walks stall against it (seen in the 2026-10-21 test sweep).
 - PR #1's 4.5 m limit on stand-in parts was replaced on main by a same-room rule (the 4.5 m limit
   excluded all of Kopi's parts). The same-room rule is untested in game.
 - Decided against: PR #1's steeper clearance-penalty table (replaying 64 baseline routes showed
