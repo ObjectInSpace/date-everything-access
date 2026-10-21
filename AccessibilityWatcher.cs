@@ -652,6 +652,14 @@ namespace DateEverythingAccess
             SimpleNavBridge.BeginRoute(route);
             LastSweepDriveArrived = false;
             _instance.ResetTurnBoost();
+            // Fresh per-walk state, as ToggleAutoWalk sets for a player's walk: without this the
+            // two door step-back attempts were spent in the first legs and never came back.
+            _instance._doorStandAttempts = 0;
+            _instance._doorStandPhase = DoorStandNone;
+            _instance._doorStandDoor = null;
+            _instance._stallReplans = 0;
+            _instance._doorTargetReplanPending = false;
+            _instance._progressWaypointSet = false;
             _instance._isAutoWalking = true;
             LogCapsuleDimensionsOnce();
             _instance._lastAutoWalkPosition = BetterPlayerControl.Instance != null
