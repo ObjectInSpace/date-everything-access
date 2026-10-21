@@ -66,10 +66,13 @@ for the project rules.
 
 ## Open items
 
-- Open, from PR #1 (not merged yet; waiting on the author's evidence in the PR discussion):
-  the adaptive turn speed-up for CrossOver, the 35-degree corner hold, the 4.5 m limit on
-  stand-in parts, the clearance-3 standpoint tiers for ordinary targets, and the "deep"
-  operable-cell filter for door targets. Their code is still on the PR branch.
+- Open, not on main until in-game testing or the PR author's answers show they help. On the
+  branch `test/nav-open-items`: the 35-degree corner hold, the clearance-3 standpoint tiers for
+  ordinary targets, the "deep" operable-cell filter for door targets, and sightlines judged from
+  the live camera height (~5.7 m, measured) instead of 1.6 m. Only on the PR branch: the adaptive
+  turn speed-up for CrossOver (needs the author's tester).
+- PR #1's 4.5 m limit on stand-in parts was replaced on main by a same-room rule (the 4.5 m limit
+  excluded all of Kopi's parts). The same-room rule is untested in game.
 - Decided against: PR #1's steeper clearance-penalty table (replaying 64 baseline routes showed
   no change in wall clearance or route length).
 
