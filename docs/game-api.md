@@ -217,8 +217,10 @@ How the shipped `navigable_region.bake.json` is made, and the evidence it matche
   `scripts\validate_los.py` agrees with all 976 rays of the two standing-camera runs (884 + 92) and
   1,749 of 1,830 in `20261021-test-nav-open-items`: the 81 others are upstairs rays the game stopped
   on an upstairs ceiling (78) or a closed door (3). The export keeps no collider whose bottom is
-  above 19.4 m (upstairs ceilings are at about 25.5 m) and no doors, so the offline check cannot
-  judge rays that would reach those.
+  above 19.4 m (upstairs ceilings are at about 25.5 m). Doors are exported separately (`Doors`:
+  36 doors with closed-pose columns and open-pose footprints for the bake) rather than as static
+  colliders, because they move; the checker reads only the static colliders and the probe line
+  does not record door state, so it cannot judge rays that reach a ceiling or a door.
 - Known data gaps: the export's 76 "MeshGuidUnresolved" mesh colliders use Unity's built-in meshes
   (75 Plane, resource 10209; 1 Cube, 10202), which a rip cannot export. They are decorations
   (picture glass on walls, floor and ceiling shadow planes, desk papers, a wall shadow behind the

@@ -100,8 +100,9 @@ for the project rules.
 - Baking: `python scripts\bake_navigable_region.py` (writes
   `artifacts\navigation\navigable_region.bake.json`, which ships with the mod).
 - `python scripts\validate_los.py --log <LogOutput.log>` replays the game's logged interaction rays
-  against the export. It cannot judge rays that reach an upstairs ceiling or a door, which the
-  export leaves out (`docs\game-api.md` "Navigation data").
+  against the export's static colliders. It cannot judge rays that reach an upstairs ceiling (above
+  the export's height cap) or a door (exported separately, state not logged) (`docs\game-api.md`
+  "Navigation data").
 - The offline planner and simulator were retired on 2026-10-21; navigation is tested in game.
   The coverage sweep (Ctrl+Alt+F8) visits every object in the bake's roster; results go to
   `BepInEx\plugins\coverage_sweep\<run-id>\sweep_results.json`.
