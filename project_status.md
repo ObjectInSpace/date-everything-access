@@ -104,9 +104,6 @@ radius, 6.2 m tall standing) and needs an in-game sweep before it is merged. See
   in the log), not from code alone.
 - `TranslationManager.GetTranslation` reads the text-language setting but always returns English,
   so the mod keeps its own localization.
-- The asset rip (16 May 2026) predates the installed game build (June 2026). The current bake is
-  made from it, so it lacks the June patch's four new solid boxes (kitchen and upstairs hall) and
-  keeps 20 frame-glass colliders the patch disabled. A new rip is being made.
 - 76 mesh colliders use Unity's built-in Plane/Cube meshes, which a rip cannot export; all are
   decorations that do not affect walking. One mesh fails to parse and is missing from the blockers.
 

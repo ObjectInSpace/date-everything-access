@@ -56,8 +56,9 @@ for the project rules.
     sweep crouched (camera 4.86 m above the feet instead of 5.76 m, shorter capsule, slower). The
     sweep key is now Ctrl+Alt+F8, and the sweep logs and says whether the player is crouched.
   - `decompiled\` was three months older than the installed game (March against June 2026); it is
-    now the installed build. The asset rip (May 2026) also predates the game build, so the mod logs
-    the live player values (`[player-probe]`) rather than trusting the rip.
+    now the installed build. The asset rip (May 2026) also predated it; the scene was ripped again
+    from the installed build and the navigation data rebuilt (only the June upstairs hall box
+    changes the bake, 15 cells). The mod logs the live player values (`[player-probe]`).
   - The crawlspace test now asks the bake which floor the player is on (it was a hand-set
     y < -3.5); the bake puts the same 12 objects there.
   - Obsolete documents and broken analysis scripts were deleted.
@@ -81,12 +82,26 @@ for the project rules.
 
 ## Navigation tools
 
-- Rebuilding the navigation data: `scripts\Export-SceneBlockerData.ps1` (blockers from the
-  AssetRipper scene; writes `artifacts\navigation\thirdpersongreybox-blockers.json`, copy it to
-  `thirdpersongreybox-blockers.COLUMNS.json` too), then `python scripts\bake_navigable_region.py`
-  (writes `artifacts\navigation\navigable_region.bake.json`, which ships with the mod).
+- Ripping the scene (after a game update that changes the house), with AssetRipper 1.3.12 (free):
+  1. Copy the game folder to the SSD, keeping in `Date Everything_Data\StreamingAssets\aa\StandaloneWindows64`
+     only the bundles in `scripts\rip_scene_bundles.json` (regenerate the list with
+     `scripts\rip_scene_bundles.py` if the scene bundle changed). Not under the Windows Temp folder:
+     it gets cleaned mid-run.
+  2. In `AssetRipper.Settings.json` set `ScriptExportMode` to 1 (Hybrid) and `ScriptContentLevel` to 2.
+  3. `AssetRipper.GUI.Premium.exe --headless --port 47129`, then POST `path=<trimmed folder>` to
+     `http://localhost:47129/LoadFolder` and `path=<output folder>` to `/Export/UnityProject`
+     (urlencoded form). About 2 minutes, 4.1 GB. The kept rip is
+     `D:\Root\AssetRipper\rip-2026-10-21`.
+- Exporting: set `DATE_EVERYTHING_RIP` to the rip's `ExportedProject` folder, then run
+  `scripts\Export-SceneBlockerData.ps1` first (about 4 minutes; the interactables export reads its
+  output), `Export-SceneNavigationData.ps1`, `Export-SceneWalkableSurfaceData.ps1` and
+  `Export-SceneInteractables.ps1`. Copy `artifacts\navigation\thirdpersongreybox-blockers.json` to
+  `thirdpersongreybox-blockers.COLUMNS.json`.
+- Baking: `python scripts\bake_navigable_region.py` (writes
+  `artifacts\navigation\navigable_region.bake.json`, which ships with the mod).
 - `python scripts\validate_los.py --log <LogOutput.log>` replays the game's logged interaction rays
-  against the export.
+  against the export. It cannot judge rays that reach an upstairs ceiling or a door, which the
+  export leaves out (`docs\game-api.md` "Navigation data").
 - The offline planner and simulator were retired on 2026-10-21; navigation is tested in game.
   The coverage sweep (Ctrl+Alt+F8) visits every object in the bake's roster; results go to
   `BepInEx\plugins\coverage_sweep\<run-id>\sweep_results.json`.
@@ -99,12 +114,6 @@ for the project rules.
 - Branch `audit/ground-truth` (this audit) needs an in-game sweep before merging: the new bake
   (0.8 m body, full height) changes every route. Compare it with a sweep of the current build,
   both run standing (not crouched).
-- The asset rip (16 May 2026) is older than the installed game (house scene and collider-mesh bundles
-  rewritten 11 June). Read directly from the current bundle, 22,051 of 22,219 scene objects are
-  unchanged; the June patch added four solid boxes (`House/Kitchen/Collider_1/2/3`,
-  `House/UpstairsHall/Collider`; all but `Collider_1` reach into the standing player's height) and
-  disabled 20 picture-frame glass colliders. The current bake is made from the May rip, so it lacks
-  these. A new rip is running; then re-export and re-bake.
 - Untested in game: the eased final approach (autowalk's last 0.7 m and the door stand-back walk now
   scale their input to the live walk speed, so the top speed setting, 0.4 m per physics step, can't
   overshoot the 0.3 m stop point), and the "crouched at the lowest speed setting cannot move"

@@ -1694,8 +1694,8 @@ namespace DateEverythingAccess
         }
 
         // One-time diagnostic: log the player's live body and movement values, read from the game
-        // rather than from the asset rip (the May 2026 rip predates the June game build: its Player.prefab
-        // has camerarotmultiplier 620, the current build's has 50). The capsule radius scales by
+        // rather than from an asset rip, which a game update can leave behind (the May 2026 rip had
+        // camerarotmultiplier 620; the June build has 50). The capsule radius scales by
         // the larger horizontal lossyScale axis (the root is scaled 2x: radius 0.4 local = 0.8 m), the
         // height by the vertical one. docs/game-api.md "Player body, camera and movement" is built
         // from these lines.

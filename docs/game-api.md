@@ -20,10 +20,16 @@ next to each fact. Mod design choices are not game facts and live in the code, n
   input actions (keyboard Interact/Examine, ChatHistory, the *Mouse actions).
 - Serialized values (prefab fields, collider sizes) override the field initializers seen in the
   decompiled code. The Player values below were read from the installed build's own
-  `base_leftovers_prefab_assets_all.bundle` (UnityPy) and match the live logs. The AssetRipper export
-  (`D:\Root\AssetRipper\1.3.12-premium\extracted\Ripped\ExportedProject`, 16 May 2026) predates
-  the June build: its Player.prefab has `camerarotmultiplier` 620 where the current build has 50, and
-  its house scene lacks the June changes listed under "Navigation data".
+  `base_leftovers_prefab_assets_all.bundle` (UnityPy) and match the live logs.
+- The AssetRipper export (`D:\Root\AssetRipper\rip-2026-10-21\ExportedProject`) was ripped on
+  2026-10-21 from the installed June build with AssetRipper 1.3.12 (free edition is enough; the
+  premium copy has expired). The export scripts read it from the `DATE_EVERYTHING_RIP` environment
+  variable. Rip with Script Export Mode **Hybrid**: the DLL mode gives the game's scripts new GUIDs,
+  and the interactables export matches `InteractableObj` and `UniqueId` by GUID. The house scene
+  needs only the 22 bundles in `scripts\rip_scene_bundles.json` (from `scripts\rip_scene_bundles.py`);
+  rip a copy of the game folder whose `StreamingAssets\aa\StandaloneWindows64` holds just those,
+  because the full game does not fit in memory (`HANDOFF.md` "Navigation tools").
+  The older 16 May rip predated the build (`camerarotmultiplier` 620 against 50 now).
 - Game bundles can be read directly with UnityPy (installed for Python) without a rip: the house
   scene is `StreamingAssets\aa\StandaloneWindows64\base_scene_thirdpersongreybox_scenes_all.bundle`.
 - `BepInEx\LogOutput.log`: the mod logs `[INPUTMAP]` (live key bindings at startup),
@@ -182,8 +188,10 @@ text field or the mod settings menu has focus).
 
 How the shipped `navigable_region.bake.json` is made, and the evidence it matches the game.
 
-- Scene: `ThirdPersonGreybox.unity` from the AssetRipper export (16 May 2026; it predates the
-  June game build, so serialized values used by the mod are confirmed live where it matters).
+- Scene: `ThirdPersonGreybox.unity` from the AssetRipper export of the installed build
+  (2026-10-21). Against the earlier May export, the only scene changes that reach the bake are the
+  June patch's: an upstairs hall box (`House/UpstairsHall/Collider`, 15 cells less navigable) and
+  three kitchen boxes (`House/Kitchen/Collider_1/2/3`, over cells that were already blocked).
 - Doorways: the 16 `OcclusionPortal`s are 3.7 m wide and 8 m tall (local size 3.7 x 0.8 x 8,
   rotated upright; `thirdpersongreybox-navigation-data.json`). The body (1.6 m wide) fits them all.
 - Blockers (`scripts\Export-SceneBlockerData.ps1`): every active, enabled, non-trigger collider on
@@ -206,14 +214,16 @@ How the shipped `navigable_region.bake.json` is made, and the evidence it matche
   from the nearest occupied cell edge (peak of 470 of 1,865 near-wall positions; the face lies 0-0.1 m
   inside that cell), and almost every closer position is by a door, under overhead geometry that the
   crouched sweeps passed beneath, or by a moving object;
-  `scripts\validate_los.py` agrees with all 976 logged interaction rays.
+  `scripts\validate_los.py` agrees with all 976 rays of the two standing-camera runs (884 + 92) and
+  1,749 of 1,830 in `20261021-test-nav-open-items`: the 81 others are upstairs rays the game stopped
+  on an upstairs ceiling (78) or a closed door (3). The export keeps no collider whose bottom is
+  above 19.4 m (upstairs ceilings are at about 25.5 m) and no doors, so the offline check cannot
+  judge rays that would reach those.
 - Known data gaps: the export's 76 "MeshGuidUnresolved" mesh colliders use Unity's built-in meshes
   (75 Plane, resource 10209; 1 Cube, 10202), which a rip cannot export. They are decorations
   (picture glass on walls, floor and ceiling shadow planes, desk papers, a wall shadow behind the
   bedroom wall) and do not affect walking. One mesh fails to parse
-  (`SM_Cabinet_4_Drawer_MODEL_UPDATE`) and is missing from the blockers. The rip also predates
-  the June patch: the bake lacks the four solid boxes it added (`House/Kitchen/Collider_1/2/3`,
-  `House/UpstairsHall/Collider`) and still has 20 picture-frame glass colliders the patch disabled. In the
+  (`SM_Cabinet_4_Drawer_MODEL_UPDATE`, in this rip too) and is missing from the blockers. In the
   crawlspace, `Beams_Crawlspace` hangs 1.2-5.5 m above the floor over most of it, so the bake leaves
   only about 400 standing cells there; how the game plays down there is untested.
 
