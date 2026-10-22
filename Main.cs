@@ -314,7 +314,8 @@ namespace DateEverythingAccess
 
             if (hotkeyId == CoverageSweepHotkeyId)
             {
-                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || !IsModifierKeyDown(0x12))
+                // Ctrl+Alt, no Shift: Left Shift is the game's crouch toggle.
+                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x12) || IsModifierKeyDown(0x10))
                     return;
 
                 Logger.LogInfo("Coverage sweep hotkey detected");
