@@ -105,6 +105,10 @@ for the project rules.
   `House/UpstairsHall/Collider`; all but `Collider_1` reach into the standing player's height) and
   disabled 20 picture-frame glass colliders. The current bake is made from the May rip, so it lacks
   these. A new rip is running; then re-export and re-bake.
+- Untested in game: the eased final approach (autowalk's last 0.7 m and the door stand-back walk now
+  scale their input to the live walk speed, so the top speed setting, 0.4 m per physics step, can't
+  overshoot the 0.3 m stop point), and the "crouched at the lowest speed setting cannot move"
+  message. Worth a run at Movement Speed 40 and at 10.
 - Untested: walking in the crawlspace. Its beams hang 1.2-5.5 m above the floor over most of it,
   so the bake leaves only about 400 standing cells there.
 - Merged 2026-10-21 after a sweep comparison (550 objects; main 484 vs test 488 reached): PR #1's

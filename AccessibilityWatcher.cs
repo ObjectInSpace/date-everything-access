@@ -2071,6 +2071,9 @@ namespace DateEverythingAccess
                     Mathf.Clamp(localDirection.x, -1f, 1f), 0f,
                     Mathf.Clamp(localDirection.z, -1f, 1f)).normalized
                 : Vector3.zero;
+            // Ease the last stretch so a fast speed setting can't step over the stop point.
+            if (closeRangeSettle)
+                move *= ApproachMoveScale(toFinal.magnitude);
             Vector3 look = new Vector3(LookAxisForError(turnDeg, 0f), 0f, 0f);
 
             // Hold position while the segment's door is mid-swing — walking into a moving
@@ -2647,7 +2650,7 @@ namespace DateEverythingAccess
                 // Walk there without turning, so she still faces the door when it opens.
                 Vector3 local = playerTransform.InverseTransformDirection(toStand.normalized);
                 Vector3 standMove = new Vector3(local.x, 0f, local.z);
-                standMove = standMove.sqrMagnitude > 1e-6f ? standMove.normalized : Vector3.zero;
+                standMove = standMove.sqrMagnitude > 1e-6f ? standMove.normalized * ApproachMoveScale(toStand.magnitude) : Vector3.zero;
                 ApplyNavigationInput(standMove, Vector3.zero);
                 _lastAutoWalkMove = standMove;
                 _lastAutoWalkLook = Vector3.zero;
@@ -2802,6 +2805,49 @@ namespace DateEverythingAccess
         private const float TurnGainPerStep = 0.2f;        // fraction of the remaining error per physics step
         private const float TravelAimDeadzoneDeg = 2f;      // good enough to walk toward a waypoint
         private const float FinalAimDeadzoneDeg = 0.4f;     // tight enough to land the crosshair on a small prop
+
+        // WALK SPEED. The player sets it (Movement Speed slider 10-40, read from the game's settings
+        // menu asset), so it is read live, never assumed. While walking the game moves the player at
+        // BetterPlayerControl.speed / 2 m/s (FixedUpdate zeroes the velocity, then lerps halfway to
+        // speed * input), and SetSpeed() makes speed = movementSpeed * 40, minus speedReduction (10)
+        // when crouched: 5-20 m/s standing, 0-15 m/s crouched.
+        private static float LiveWalkSpeedMps()
+        {
+            BetterPlayerControl bpc = BetterPlayerControl.Instance;
+            return bpc != null ? Mathf.Max(0f, bpc.speed * 0.5f) : 0f;
+        }
+
+        // The speed the next walk will have, from the live setting (bpc.speed is only refreshed when
+        // movement starts, so it can be stale before a walk). Returns false when it can't be read.
+        private static FieldInfo _speedReductionField;
+        private static bool TryGetNextWalkSpeedMps(out float mps)
+        {
+            mps = 0f;
+            BetterPlayerControl bpc = BetterPlayerControl.Instance;
+            if (bpc == null || T17.Services.Services.GameSettings == null) return false;
+            float speed = T17.Services.Services.GameSettings.GetFloat("movementSpeed", 0.5f) * 40f;
+            if (bpc.crouched)
+            {
+                if (_speedReductionField == null)
+                    _speedReductionField = typeof(BetterPlayerControl).GetField("speedReduction", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (_speedReductionField == null) return false;
+                speed -= (float)_speedReductionField.GetValue(bpc);
+            }
+            mps = Mathf.Max(0f, speed * 0.5f);
+            return true;
+        }
+
+        // Input magnitude for the last approach to a stop point `distM` away, so that one frame's
+        // travel at the live speed can't carry the player past it (at the top speed setting she
+        // covers 0.4 m per physics step, more than the 0.3 m stop radius). Never below the game's
+        // dead zone: FixedUpdate ignores input under 0.2.
+        private const float GameMoveDeadZone = 0.2f;
+        private static float ApproachMoveScale(float distM)
+        {
+            float perFrame = LiveWalkSpeedMps() * Mathf.Max(Time.deltaTime, Time.fixedDeltaTime);
+            if (perFrame <= 1e-4f) return 1f;
+            return Mathf.Clamp(distM / perFrame, GameMoveDeadZone, 1f);
+        }
 
         private static float CameraRotDegPerStep()
         {
@@ -6316,6 +6362,14 @@ namespace DateEverythingAccess
                 if (_isNavigationActive)
                     StopNavigationRuntime();
                 StartAimCoach(nearTarget, afterWalk: false);
+                return;
+            }
+
+            // Crouched at the lowest Movement Speed setting the game gives her no speed at all
+            // (speed = setting x 40 - 10 = 0), so a walk could never move: say why instead.
+            if (TryGetNextWalkSpeedMps(out float nextWalkMps) && nextWalkMps <= 0.01f)
+            {
+                ScreenReader.Say(Loc.Get("navigation_crouched_cannot_move"));
                 return;
             }
 

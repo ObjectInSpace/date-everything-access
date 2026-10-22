@@ -47,7 +47,9 @@ namespace DateEverythingAccess
         private const float LoopSampleIntervalSeconds = 0.5f;
         private const int LoopSampleWindow = 16;          // 16 samples × 0.5s = 8s
         private const float LoopRadiusMeters = 1.5f;
-        // Budget ceiling per route: cost_m / 1.5 + 5s. A safety net, not the primary signal.
+        // Budget ceiling per route: cost_m / 1.5 + 5s. A safety net, not the primary signal. 1.5 m/s is
+        // well under the slowest standing walk (5 m/s at the lowest Movement Speed setting), but a
+        // crouched player below slider 13 is slower than that (the sweep warns when crouched).
         private const float BudgetMetersPerSecond = 1.5f;
         private const float BudgetSlackSeconds = 5f;
         // Door-failed detector: if any tagged door on the current segment is still closed

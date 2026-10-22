@@ -72,6 +72,15 @@ below), confirmed by the live `[capsule-probe]` and camera measurements.
   `HKCU\Software\SassyChap\Date Everything`, `MGSettings`). On this PC (2026-08-14 save):
   `cameraSENSITIVITY` 0.5 (so `camerarotspeed` 25, as logged), `movementSpeed` 0.625 (12.5 m/s, 0.25 m
   per physics step), `cameraFieldOfView` 102. Read live values, never assume the defaults.
+- Setting ranges (the settings menu's slider limits, read from the game's own UI asset in all six
+  copies of `SettingsMenu`): Movement Speed slider 10-40, stored as slider / 40 (0.25-1.0), and the
+  slider value IS `speed`: 5-20 m/s standing (0.1-0.4 m per physics step), 0-15 m/s crouched, so a
+  crouched player at the lowest setting cannot move. Camera Sensitivity slider 1-10, stored as
+  slider / 10 (0.1-1.0; the default 1.0 is the maximum): 5-50 degrees per physics step. Field of View
+  60-120 (default 70). Invert Y only flips the arrow keys' pitch input; it does not touch values
+  written to `look` directly. The mod reads the live values (`LiveWalkSpeedMps`,
+  `TryGetNextWalkSpeedMps`, `CameraRotDegPerStep` in AccessibilityWatcher) and eases its last
+  approach so a fast setting can't step over a stop point.
 - The player is a non-kinematic `Rigidbody` moved by velocity; walls stop it through ordinary
   Unity contacts (it slides along them). There is no capsule cast or custom collision helper.
 - `BetterPlayerControl.Move(position, rotation)` teleports (kinematic toggle around the write).
