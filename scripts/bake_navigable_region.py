@@ -38,9 +38,11 @@ OUT_PNG_DIR = REPO / "artifacts/navigation"
 # [capsule-probe] log line: one CapsuleCollider on the player root, local radius 0.4, height 2.5,
 # centre y 1.849827, and the root is scaled 2x. In the world that is a radius of 0.8 m, spanning
 # 1.2 m to 6.2 m above the feet while standing (crouched: height 1.6 local, 1.2 m to 4.4 m).
-# Checked against 4,957 logged player positions: the body slides along walls with its centre about
-# 0.8 m from the collider faces, and the exported wall geometry matches the game's own raycast hits
-# to within 3 cm. (Until 2026-10-21 this was 0.40, justified as "0.2 x 2"; there is no 0.2 in the
+# Checked against logged player positions: on a 0.1 m raster of the geometry at the capsule's height,
+# the body's centre stops 0.65-0.80 m from the nearest occupied cell edge (the peak: 470 of 1,865
+# positions near walls; the face lies 0-0.1 m inside that cell), and almost every closer position is
+# by a door, under overhead geometry the crouched sweeps passed beneath, or by a moving object. The
+# exported wall geometry matches the game's own raycast hits to within 3 cm (90% of 291 hits). (Until 2026-10-21 this was 0.40, justified as "0.2 x 2"; there is no 0.2 in the
 # prefab, and routes planned for a 0.4 m body kept putting the real one against walls and jambs.)
 CAPSULE_R = 0.80
 # Top of the standing capsule above the feet: (1.849827 + 2.5 / 2) x 2 = 6.2 m. Anything in

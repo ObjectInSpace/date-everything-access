@@ -44,9 +44,9 @@ for the project rules.
   every fact the mod states about the game was checked against the installed build, the asset
   rip and the logs, and `docs\game-api.md` was rebuilt from those checks. Main results:
   - The player's body is a capsule of radius 0.8 m reaching 1.2 to 6.2 m above the feet when
-    standing (Player.prefab: radius 0.4 local on a root scaled 2x; confirmed live and by 4,957
-    logged positions). The bake now uses 0.8 m and the full height (it used 0.4 m and 2.5 m). The
-    planner's compensations for the old 0.4 m bake (deep operable cells, body-room goal tiers, a
+    standing (Player.prefab: radius 0.4 local on a root scaled 2x; confirmed in the current build's
+    files, live, and by logged positions stopping 0.7-0.9 m from walls). The bake now uses 0.8 m
+    and the full height (it used 0.4 m and 2.5 m). The planner's compensations for the old 0.4 m bake (deep operable cells, body-room goal tiers, a
     0.4 m door-leaf margin) are gone, and door stand distances follow the live body radius.
   - The blocker exporter covered whole triangle bounding boxes, dropped every collider with a top
     below 0.35 m (all of the crawlspace) or a bottom above 15 m, and stopped its height bands at
@@ -99,6 +99,12 @@ for the project rules.
 - Branch `audit/ground-truth` (this audit) needs an in-game sweep before merging: the new bake
   (0.8 m body, full height) changes every route. Compare it with a sweep of the current build,
   both run standing (not crouched).
+- The asset rip (16 May 2026) is older than the installed game (house scene and collider-mesh bundles
+  rewritten 11 June). Read directly from the current bundle, 22,051 of 22,219 scene objects are
+  unchanged; the June patch added four solid boxes (`House/Kitchen/Collider_1/2/3`,
+  `House/UpstairsHall/Collider`; all but `Collider_1` reach into the standing player's height) and
+  disabled 20 picture-frame glass colliders. The current bake is made from the May rip, so it lacks
+  these. A new rip is running; then re-export and re-bake.
 - Untested: walking in the crawlspace. Its beams hang 1.2-5.5 m above the floor over most of it,
   so the bake leaves only about 400 standing cells there.
 - Merged 2026-10-21 after a sweep comparison (550 objects; main 484 vs test 488 reached): PR #1's
@@ -107,7 +113,7 @@ for the project rules.
   adaptive turn speed-up (for CrossOver) with two safeguards: turns
   are only measured while the player is in control, and every autowalk / aiming session starts at
   normal strength. The turn check fires on Windows too (all four logged checks on 2026-10-21 turned
-  5-20% of what was asked); the cause is not known.
+  4-20% of what was asked); the cause is not known.
 - Known, not caused by these: the gym closet's outer sliding panel can stop part-way across its
   doorway and walks stall against it (seen in the 2026-10-21 test sweep).
 - PR #1's 4.5 m limit on stand-in parts was replaced on main by a same-room rule (the 4.5 m limit

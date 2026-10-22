@@ -995,9 +995,9 @@ function Get-ColumnSpans {
 
     # Each cell is covered only if a triangle's XZ projection really overlaps its square. (An
     # earlier version also covered every cell a triangle's BOUNDING BOX touched, for every
-    # triangle: diagonal faces covered their whole bounding square and axis-aligned walls gained
-    # the neighbouring cell, putting raster wall faces ~0.35 m in front of the real collider,
-    # measured against 4,957 logged player positions.) Implemented in ColumnRaster (top of file).
+    # triangle: diagonal faces covered their whole bounding square and axis-aligned walls could gain
+    # the neighbouring cell. Measured effect on the 2026-10-21 bake: about 1.5% more navigable cells
+    # (95,351 vs 93,974 at the old 0.4 m radius).) Implemented in ColumnRaster (top of file).
     return [ColumnRaster]::GetColumnSpans($WorldVerts, $Triangles, $CellSize, [double[]]@($CapsuleBandPairs))
 }
 

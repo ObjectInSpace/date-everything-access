@@ -1694,8 +1694,8 @@ namespace DateEverythingAccess
         }
 
         // One-time diagnostic: log the player's live body and movement values, read from the game
-        // rather than from the asset rip (the May 2026 rip predates the June game build, and e.g. its
-        // camerarotmultiplier does not match the live camerarotspeed). The capsule radius scales by
+        // rather than from the asset rip (the May 2026 rip predates the June game build: its Player.prefab
+        // has camerarotmultiplier 620, the current build's has 50). The capsule radius scales by
         // the larger horizontal lossyScale axis (the root is scaled 2x: radius 0.4 local = 0.8 m), the
         // height by the vertical one. docs/game-api.md "Player body, camera and movement" is built
         // from these lines.
@@ -2825,7 +2825,7 @@ namespace DateEverythingAccess
         // step), and the real turn can be far smaller. Seen under CrossOver on a
         // Mac (a 0.04 look command held for four seconds barely moved her, so autowalk never lined up
         // with the next waypoint and timed out), and on Windows too: all four checks logged on
-        // 2026-10-21 turned 5-20% of what was asked. The cause is not established. So we watch what
+        // 2026-10-21 turned 4-20% of what was asked. The cause is not established. So we watch what
         // the turn actually does: every TurnCheckSeconds, if she was asked to turn a fair way and
         // turned less than a quarter of it, the gain goes up 2.5x (up to TurnBoostMax); if a boosted
         // turn overshoots to the other side, it backs off.

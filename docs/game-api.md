@@ -19,17 +19,22 @@ next to each fact. Mod design choices are not game facts and live in the code, n
   Regenerate it after a game update: the March 2026 decompile it replaced was missing the June
   input actions (keyboard Interact/Examine, ChatHistory, the *Mouse actions).
 - Serialized values (prefab fields, collider sizes) override the field initializers seen in the
-  decompiled code. They come from the AssetRipper export
-  (`D:\Root\AssetRipper\1.3.12-premium\extracted\Ripped\ExportedProject`) and are confirmed live
-  where noted.
+  decompiled code. The Player values below were read from the installed build's own
+  `base_leftovers_prefab_assets_all.bundle` (UnityPy) and match the live logs. The AssetRipper export
+  (`D:\Root\AssetRipper\1.3.12-premium\extracted\Ripped\ExportedProject`, 16 May 2026) predates
+  the June build: its Player.prefab has `camerarotmultiplier` 620 where the current build has 50, and
+  its house scene lacks the June changes listed under "Navigation data".
+- Game bundles can be read directly with UnityPy (installed for Python) without a rip: the house
+  scene is `StreamingAssets\aa\StandaloneWindows64\base_scene_thirdpersongreybox_scenes_all.bundle`.
 - `BepInEx\LogOutput.log`: the mod logs `[INPUTMAP]` (live key bindings at startup),
   `[capsule-probe]` (live player collider), `LOS_PROBE` (the game's interaction ray) and
   `SimpleNav route frame ... player=(...)` (live player position).
 
 ## Player body, camera and movement
 
-All from `BetterPlayerControl` (decompiled) and `Assets/GameObject/Player.prefab` (ripped),
-confirmed by the live `[capsule-probe]` and camera measurements.
+All from `BetterPlayerControl` (decompiled) and the Player prefab as stored in the installed build
+(`base_leftovers_prefab_assets_all.bundle`, read with UnityPy; identical to the May rip in every value
+below), confirmed by the live `[capsule-probe]` and camera measurements.
 
 - The player root is scaled 2x (`m_LocalScale {2,2,2}`; live `lossyScale=(2,2,2)`). Every local
   size below doubles in the world.
@@ -100,6 +105,10 @@ From `Door` and `SlidingDoor`.
 - `SlidingDoor.Interact()` does nothing while `moving` or `stateLock`.
 - Passage doors live under the scene path `/MultiRoom/Doors/`; every other `Door` / `SlidingDoor`
   is a container (cupboard, fridge, breaker box) opened in place.
+- The office doorway also holds `Doors_Office_Locked`, a locked variant swapped with `Doors_Office`
+  by `TutorialController` (`MovingDateable.MoveDateable("MovingOfficeDoor", "locked"/"unlocked")`).
+  The scene file has it active, so the export blocks the doorway with it; the bake's `Doors_Office`
+  freed cells reopen a lane through it when that door is open.
 
 ## Input
 
@@ -176,10 +185,16 @@ How the shipped `navigable_region.bake.json` is made, and the evidence it matche
   `Door.cs` collision gates).
 - Evidence (2026-10-21, sweep logs in `artifacts\navigation\sweep\runs`): live raycast hits on walls
   land on raster-blocked cells within 3 cm (90% of 291 hit points; the rest are doors, which move);
-  logged player positions pile up about 0.8 m from wall faces (the body sliding along them);
+  on a 0.1 m raster of the geometry at the capsule's height, logged player positions stop 0.65-0.80 m
+  from the nearest occupied cell edge (peak of 470 of 1,865 near-wall positions; the face lies 0-0.1 m
+  inside that cell), and almost every closer position is by a door, under overhead geometry that the
+  crouched sweeps passed beneath, or by a moving object;
   `scripts\validate_los.py` agrees with all 976 logged interaction rays.
-- Known data gaps: 76 mesh colliders whose mesh GUID does not resolve in the rip and one mesh that
-  fails to parse (`SM_Cabinet_4_Drawer_MODEL_UPDATE`) are missing from the blockers. In the
+- Known data gaps: the 76 mesh colliders whose meshes live in `patch1_leftovers_model_assets_all.bundle`
+  are not linked in the rip (exactly the export's 76 "MeshGuidUnresolved"), and one mesh fails to parse
+  (`SM_Cabinet_4_Drawer_MODEL_UPDATE`); they are missing from the blockers. The rip also predates
+  the June patch: the bake lacks the four solid boxes it added (`House/Kitchen/Collider_1/2/3`,
+  `House/UpstairsHall/Collider`) and still has 20 picture-frame glass colliders the patch disabled. In the
   crawlspace, `Beams_Crawlspace` hangs 1.2-5.5 m above the floor over most of it, so the bake leaves
   only about 400 standing cells there; how the game plays down there is untested.
 

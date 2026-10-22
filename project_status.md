@@ -104,10 +104,11 @@ radius, 6.2 m tall standing) and needs an in-game sweep before it is merged. See
   in the log), not from code alone.
 - `TranslationManager.GetTranslation` reads the text-language setting but always returns English,
   so the mod keeps its own localization.
-- The asset rip (May 2026) predates the installed game build (June 2026); serialized values from
-  it are confirmed live before use.
-- 76 mesh colliders' meshes do not resolve in the asset rip, and one fails to parse; they are
-  missing from the navigation blockers.
+- The asset rip (16 May 2026) predates the installed game build (June 2026). The current bake is
+  made from it, so it lacks the June patch's four new solid boxes (kitchen and upstairs hall) and
+  keeps 20 frame-glass colliders the patch disabled. A new rip is being made.
+- The 76 mesh colliders whose meshes live in `patch1_leftovers_model_assets_all.bundle` are not
+  linked in the rip, and one mesh fails to parse; they are missing from the navigation blockers.
 
 ## Architecture Decisions
 
