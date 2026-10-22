@@ -13,7 +13,7 @@ true now. Build, test and recent-work details are in `HANDOFF.md`; facts about t
 - **Runtime:** CLR 4.0.30319.42000 / target framework net472
 - **Game directory:** found by `scripts\Find-GameDir.ps1` (this PC: D:\SteamLibrary\steamapps\Common\Date Everything)
 - **Speech:** Prism v0.18.2 (`lib\prism`), NVDA built in; Windows voice when no screen reader runs
-- **Mod version:** 1.2 (`Main.cs`)
+- **Mod version:** 1.3 (`Main.cs`)
 - **User experience level:** A Lot
 - **User game familiarity:** Very well
 

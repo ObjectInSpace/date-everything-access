@@ -1,0 +1,39 @@
+Date Everything Access Portable Package
+Third-Party Notices
+
+This portable package redistributes third-party runtime components that are
+required to run the accessibility mod in Date Everything!.
+
+Included third-party components:
+
+1. BepInEx
+   - Purpose: Unity mod loader runtime
+   - Upstream: https://github.com/BepInEx/BepInEx
+   - Documentation: https://docs.bepinex.dev/
+   - License: LGPL-2.1
+
+2. Prism (The Platform-agnostic Reader Interface for Speech and Messages)
+   - File: prism.dll (version 0.18.2, Windows x64 release build)
+   - Purpose: speech output through the running screen reader (NVDA, JAWS and
+     others) or the Windows voice
+   - Upstream: https://github.com/ethindp/prism
+   - License: Mozilla Public License 2.0. The source code is available from
+     the upstream repository above.
+   - Prism includes code from other projects (simdutf, Moderncom, dr_wav,
+     concurrentqueue, {fmt}, Highway and the NVDA controller client
+     definitions, among others). Their license texts, and Prism's own, are in
+     the Prism-Licenses folder next to prism.dll; see Prism-Licenses\NOTICE.txt.
+
+This package includes only the runtime files needed to launch the mod with the
+tested local setup. It does not include game code or game assets.
+
+Included third-party text content:
+
+3. Date Everything Wiki - character appearance descriptions
+   - File: card_pose_descriptions.en.json
+   - Purpose: spoken descriptions of the datable pose cards
+   - Source: https://dateeverything.wiki.gg/
+   - License: Creative Commons Attribution-ShareAlike 4.0 (CC-BY-SA 4.0)
+     https://creativecommons.org/licenses/by-sa/4.0/
+   - The appearance descriptions in card_pose_descriptions.en.json are quoted
+     from the Date Everything Wiki and remain licensed under CC-BY-SA 4.0.
