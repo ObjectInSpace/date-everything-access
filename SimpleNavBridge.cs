@@ -104,6 +104,24 @@ namespace DateEverythingAccess
         public static Vector3 FinalWaypoint =>
             _waypoints != null && _waypoints.Count > 0 ? _waypoints[_waypoints.Count - 1] : Vector3.zero;
 
+        /// <summary>
+        /// Horizontal distance to the final waypoint, or +infinity unless the player is on the
+        /// last segment and on the final waypoint's level (the same guards as arrival). Under an
+        /// upstairs standpoint the plain XZ distance is near zero: the close-range settle took
+        /// that as "nearly there" at the foot of the stairs and jittered in place (sweep
+        /// 2026-10-22, the Bobby Pin).
+        /// </summary>
+        public static float FinalWaypointFlatDistance(Vector3 playerPos)
+        {
+            if (_waypoints == null || _waypoints.Count == 0 || _waypointIndex < _waypoints.Count - 1)
+                return float.PositiveInfinity;
+            Vector3 finalWp = _waypoints[_waypoints.Count - 1];
+            if (Mathf.Abs(playerPos.y - finalWp.y) > ArrivalMaxYDeltaM)
+                return float.PositiveInfinity;
+            float dx = finalWp.x - playerPos.x, dz = finalWp.z - playerPos.z;
+            return Mathf.Sqrt(dx * dx + dz * dz);
+        }
+
         // Cross-track error (m) above which the player is "off the corridor" and pure
         // pursuit must steer it BACK onto the line rather than further along it. Pure
         // pursuit only converges when the lookahead exceeds the cross-track error; when

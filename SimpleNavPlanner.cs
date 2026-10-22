@@ -1481,15 +1481,18 @@ namespace DateEverythingAccess
                     Bounds b = col.bounds;
                     Floor f = FloorForY(b.min.y, FloorMatchToleranceM + 1.0f);
                     if (f == null) continue;
-                    bool stuckAcross = IsSliderStillAcrossItsOpening(door.gameObject.name, b);
+                    string acrossOpening = SlidingOpeningUnderPanel(sliders, b);
                     if (Main.Log != null)
                         Main.Log.LogInfo("SimpleNavPlanner open slider panel " + door.gameObject.name + "/" + col.gameObject.name +
                             " x " + b.min.x.ToString("F2") + ".." + b.max.x.ToString("F2") +
                             " z " + b.min.z.ToString("F2") + ".." + b.max.z.ToString("F2") +
-                            (stuckAcross ? " (stuck across its doorway: planned as a door to re-open)" : ""));
-                    // A panel that hit the player and stopped still covers its doorway; plan through
-                    // it as a door, and autowalk shuts and re-opens it from a clear spot on the way.
-                    if (stuckAcross) continue;
+                            (acrossOpening != null ? " (across the " + acrossOpening + " doorway: planned as a panel to slide aside)" : ""));
+                    // A panel lying across a sliding doorway, its own (it hit the player and stopped)
+                    // or its partner's (closet pairs: each panel opens over the other's half; with the
+                    // bedroom's left closet outer panel open, the inner door's opening is covered
+                    // entirely and the closet was no_path), is planned through: autowalk slides it
+                    // aside from a clear spot on the way.
+                    if (acrossOpening != null) continue;
                     f.WorldToCell(b.min.x - SliderPanelPadM, b.min.z - SliderPanelPadM, out int ix0, out int iz0);
                     f.WorldToCell(b.max.x + SliderPanelPadM, b.max.z + SliderPanelPadM, out int ix1, out int iz1);
                     for (int ix = ix0; ix <= ix1; ix++)
@@ -3938,8 +3941,21 @@ namespace DateEverythingAccess
         private static int SliderTrackClearCells => CellsForM(PlayerBodyRadiusM);
         private const float SliderStuckOverlapFraction = 0.6f;
 
-        // True when an "open" sliding panel still lies across most of its own doorway: it hit the
-        // player and stopped instead of sliding aside. Measured along the doorway's long axis.
+        // The sliding doorway (by door name) that this panel lies across, or null.
+        private static string SlidingOpeningUnderPanel(SlidingDoor[] sliders, Bounds panel)
+        {
+            for (int i = 0; i < sliders.Length; i++)
+            {
+                SlidingDoor s = sliders[i];
+                if (s == null || s.gameObject == null) continue;
+                if (IsSliderStillAcrossItsOpening(s.gameObject.name, panel)) return s.gameObject.name;
+            }
+            return null;
+        }
+
+        // True when a sliding panel lies across most of door `doorName`'s doorway: an "open" panel
+        // that hit the player and stopped instead of sliding aside, or the partner panel of a closet
+        // pair. Measured along the doorway's long axis.
         public static bool IsSliderStillAcrossItsOpening(string doorName, Bounds panel)
         {
             if (string.IsNullOrEmpty(doorName) || !EnsureLoaded()) return false;

@@ -52,57 +52,100 @@ Current coverage includes:
 
 WHAT'S NEW IN 1.3
 =================
+The biggest update since 1.0: speech through Prism, aiming help, and auto-walk
+rebuilt around the player's real size and eye height, plus many smaller fixes.
+Thanks to Cricket for the speech, aiming help, mod tutorial and many of the
+auto-walk and object-list changes.
+
 Speech
-- Speech now goes through the Prism library instead of Tolk. It works with
-  NVDA, JAWS and other screen readers, notices if you start or quit your
-  screen reader while playing, and uses the Windows voice when none is
-  running.
+- Speech goes through the Prism library instead of Tolk. It works with NVDA,
+  JAWS and other screen readers, notices if you start or quit your screen
+  reader while playing, and uses the Windows voice when none is running.
 - Characters who speak in beeps instead of a voice line have their lines read
-  aloud. New-game form fields and their small print are read, and closing the
-  phone menu is announced.
+  aloud.
+- The new-game form reads its fields and their small print.
+- Closing the phone menu is announced.
 
 Aiming help
-- Alt+O next to an object, or auto-walk arriving without the object selected,
-  talks you onto it ("a little up", "far left and down", "step back"), with an
-  automatic fine finish in the last few degrees.
+- Press Alt+O next to an object, or let auto-walk arrive without the object
+  selected, and the mod talks you onto it ("a little up", "far left and down",
+  "step back"). It finishes the last few degrees itself.
 - The accessibility settings (Ctrl+F1) have an "Aiming help" choice: spoken
-  directions (the default) or the original aiming tone.
+  directions (the default) or the original aiming tone. Starting it stops a
+  running Ctrl+O guidance tone.
 
-Auto-walk
-- Auto-walk now plans for the player's real size and eye height, measured in
-  the current version of the game, and its map of the house was rebuilt from
-  the game's June update. Routes keep a proper distance from walls and
-  furniture, and "can I see it from here" checks use the game's own
-  interaction ray from where the camera really is.
-- Doors: auto-walk follows a door's real locked state, stands clear of the
-  door's whole swing before opening it, reopens doors and sliding panels left
-  stuck half open, and finishes a walk to a door facing through the doorway.
-- Getting stuck: auto-walk works out what it bumped into and plans around it.
-  Pressing W, A, S or D stops auto-walk so you can take over.
-- Steering is smoother on sharp corners and turns at the right speed on
-  machines where looking around is slow.
+Auto-walk: where it takes you
+- Routes are planned for the player's real body, about twice as wide and much
+  taller than the mod assumed before, so routes keep a proper distance from
+  walls and furniture.
+- The map of the house was rebuilt from the current game, including the June
+  update's changes.
+- "Can I see it from here" checks use the game's own interaction ray from
+  where the camera really is, aimed at several points across the object. Spots
+  that would need a steeper look than the camera allows are skipped.
 - The stairs are walked up and down along the steps.
-- The last stretch of a walk slows down to your movement speed setting, so it
-  stops where it should even at the fastest setting.
-- If you are crouched at the lowest movement speed setting, where the game
-  does not let you move, auto-walk says so instead of trying.
+- When one piece of a character can't be reached, auto-walk tries another
+  piece of the same character in the same room only.
 
-Objectives and the known-objects list
+Auto-walk: how it moves
+- Steering is recalculated every physics step, so turning no longer wobbles
+  and corners are taken cleanly.
+- On machines where looking around turns slowly (seen under CrossOver),
+  turning speeds up to compensate.
+- The last stretch of a walk slows to your movement speed setting, so it stops
+  where it should even at the fastest setting.
+- If you are crouched at the lowest movement speed setting, where the game
+  does not let you move at all, auto-walk says so instead of trying.
+- Pressing W, A, S or D stops auto-walk so you can take over.
+
+Auto-walk: doors
+- Auto-walk follows a door's real locked state.
+- It stands clear of a door's whole swing before opening it (this fixed
+  leaving the office in the tutorial, and the laundry closet door that refused
+  to open).
+- Doors and sliding panels left stuck half open are closed and reopened from a
+  clear spot.
+- The paired sliding doors of the upstairs closets (gym and bedroom), which
+  open over each other, are slid out of the way when one is in the path. These
+  closets could trap auto-walk or make their contents unreachable.
+- Walks go through the middle of doorways, and a walk to a door ends facing
+  through it.
+
+Auto-walk: when something is in the way
+- If auto-walk bumps into something the map does not know about, it works out
+  what it hit, marks it, and plans a new route (up to three times per walk).
+
+Finding things
 - Ctrl+O first offers a situational datable close by, then undiscovered
   datables in the room you are in, then the nearest room with an undiscovered
   datable.
-- Starting a new game starts with an empty known-objects list (discoveries
-  from other saves are no longer carried over). Passage doors are always
-  listed, rooms are grouped by floor, and cupboards are grouped.
-- The trap door, the crawlspace ladder and the attic stay hidden from the list
-  until you have found them, and the laundry closet has its proper name.
-- The game camera no longer moves while the list is open.
+- A new game starts with an empty known-objects list; discoveries from your
+  other saves are no longer carried over.
+- In the known-objects list (O), passage doors are always listed, rooms are
+  grouped by floor, and cupboards are grouped. The game camera no longer moves
+  while the list is open.
+- The crawlspace trap door and its ladder stay out of the list and the room
+  scan until the office closet rug has been moved (or you are in the
+  crawlspace), and the attic stays hidden until you have found it.
+- The laundry closet has its proper name, and the key box is listed in the
+  upstairs hall instead of Bathroom 2.
 
 Other
 - A spoken mod tutorial runs alongside the game's own; H repeats the latest
   tip.
-- While focused on the bulletin board in the office, PageUp and PageDown step
-  through the photos on it.
+- On the office bulletin board, PageUp and PageDown step through the photos.
+- The package ships Prism instead of Tolk, and reinstalling with Install-
+  DateEverythingAccess.ps1 no longer nests a second BepInEx folder inside the
+  first.
+- The mod's log lists the keyboard layout and key bindings at startup, which
+  helps when keys misbehave on someone's setup.
+
+Known limitations
+- Some objects can be walked to, but the game does not select them from where
+  auto-walk stops: chiefly things inside cupboards and drawers, ceiling
+  lights, smoke alarms and vents. Aiming help can usually finish the job.
+- The crawlspace has very little standing room under its beams; walking there
+  has not been tested much.
 
 WHAT'S NEW IN 1.2
 =================

@@ -1996,6 +1996,12 @@ namespace DateEverythingAccess
             // ...except the TARGET door of a door route: autowalk never opens the door it is taking
             // the player to. She stops at the doorway facing it, and the player chooses: open it,
             // walk through, or use the Dateviators on it (Dorian).
+            if (_doorStandPhase == DoorStandNone && segmentHasDoor && !SimpleNavBridge.ActiveDoor.IsSwing)
+            {
+                DoorPortal across = SliderPanelAcross(playerPos, target, SimpleNavBridge.ActiveDoor);
+                if (across != null && !IsRouteTargetDoorWithFrame(route, across, playerPos))
+                    BeginDoorStand(across, playerTransform, playerPos, "sliding panel across the way", playerPos, target);
+            }
             if (_doorStandPhase != DoorStandNone && _doorStandDoor != null)
             {
                 // Handling a door already (possibly one the stall recovery handed over).
@@ -2061,10 +2067,8 @@ namespace DateEverythingAccess
             // as the body catches up), and it CONVERGES. So the follower genuinely lands on the goal
             // cell; if it still can't, the no-progress watchdog reports a real failure rather than
             // the loose radius hiding it. See [[project-navigation-verify-los-gap-2026-06-16]].
-            Vector3 toFinal = SimpleNavBridge.FinalWaypoint - playerPos;
-            toFinal.y = 0f;
-            bool closeRangeSettle = SimpleNavBridge.FinalWaypoint != Vector3.zero &&
-                                    toFinal.sqrMagnitude <= CloseRangeSettleM * CloseRangeSettleM;
+            float finalDistM = SimpleNavBridge.FinalWaypointFlatDistance(playerPos);
+            bool closeRangeSettle = finalDistM <= CloseRangeSettleM;
             bool headingAligned = closeRangeSettle || facing >= AutoWalkFacingGateCosThreshold;
             Vector3 move = headingAligned
                 ? new Vector3(
@@ -2073,7 +2077,7 @@ namespace DateEverythingAccess
                 : Vector3.zero;
             // Ease the last stretch so a fast speed setting can't step over the stop point.
             if (closeRangeSettle)
-                move *= ApproachMoveScale(toFinal.magnitude);
+                move *= ApproachMoveScale(finalDistM);
             Vector3 look = new Vector3(LookAxisForError(turnDeg, 0f), 0f, 0f);
 
             // Hold position while the segment's door is mid-swing — walking into a moving
@@ -2547,9 +2551,91 @@ namespace DateEverythingAccess
             return SimpleNavPlanner.IsInDoorSwing(door.gameObject.name, playerPos);
         }
 
+        // BYPASS SLIDING PANELS. A sliding panel opens by sliding over the next part of the opening:
+        // the gym closet's two panels each cover the other's half when open. So the panel in the way
+        // is not always the segment's tagged door. With both gym closet panels open the whole doorway
+        // was covered, the walk checked only the tagged (open) panel, and every route from the gym
+        // stalled there (sweep 2026-10-22, 218 results). This finds the panel physically across the
+        // way from `from` to `to` (live collider bounds), so it can be slid aside.
+        private static SlidingDoor[] _slidersCache;
+        private static float _slidersCacheTime = float.NegativeInfinity;
+        private const float SlidersCacheSeconds = 5f;
+        private const float PanelAcrossLengthPadM = 0.3f;   // past a panel's end she still clips it
+        private const float PanelAcrossDepthPadM = 0.2f;
+
+        // `segmentDoor` shut across the way is left to the normal opening on arrival.
+        private static DoorPortal SliderPanelAcross(Vector3 from, Vector3 to, DoorPortal segmentDoor)
+        {
+            if (_slidersCache == null || Time.unscaledTime - _slidersCacheTime > SlidersCacheSeconds)
+            {
+                _slidersCache = FindObjectsOfType<SlidingDoor>();
+                _slidersCacheTime = Time.unscaledTime;
+            }
+            for (int i = 0; i < _slidersCache.Length; i++)
+            {
+                SlidingDoor sd = _slidersCache[i];
+                if (sd == null || sd.gameObject == null || sd.locked) continue;
+                DoorPortal p = DoorPortal.For(sd);
+                if (SimpleNavBridge.IsDoorMoving(p) || (!p.open && p.SameAs(segmentDoor))) continue;
+                if (IsPanelAcross(p, from, to)) return p;
+            }
+            return null;
+        }
+
+        private static bool IsPanelAcross(DoorPortal door, Vector3 from, Vector3 to)
+        {
+            Collider c = door != null ? door.GetComponent() : null;
+            if (c == null || !c.enabled || c.isTrigger) return false;
+            Bounds b = c.bounds;
+            // Same floor: the panel spans her body's height band.
+            if (b.max.y < from.y || b.min.y > from.y + 3f) return false;
+            bool longX = b.size.x >= b.size.z;
+            float padX = longX ? PanelAcrossLengthPadM : PanelAcrossDepthPadM;
+            float padZ = longX ? PanelAcrossDepthPadM : PanelAcrossLengthPadM;
+            return SegmentHitsRectXZ(from.x, from.z, to.x, to.z,
+                b.min.x - padX, b.min.z - padZ, b.max.x + padX, b.max.z + padZ);
+        }
+
+        // Liang-Barsky clip of the segment against the rectangle.
+        private static bool SegmentHitsRectXZ(float x0, float z0, float x1, float z1,
+            float minX, float minZ, float maxX, float maxZ)
+        {
+            float t0 = 0f, t1 = 1f, dx = x1 - x0, dz = z1 - z0;
+            float[] p = { -dx, dx, -dz, dz };
+            float[] q = { x0 - minX, maxX - x0, z0 - minZ, maxZ - z0 };
+            for (int i = 0; i < 4; i++)
+            {
+                if (Mathf.Abs(p[i]) < 1e-6f)
+                {
+                    if (q[i] < 0f) return false;
+                    continue;
+                }
+                float r = q[i] / p[i];
+                if (p[i] < 0f) { if (r > t1) return false; if (r > t0) t0 = r; }
+                else { if (r < t0) return false; if (r < t1) t1 = r; }
+            }
+            return true;
+        }
+
+        // Set while stand-back is sliding a panel out of the way (rather than opening a door): done
+        // as soon as the panel no longer lies across this leg, whichever way it ended up.
+        private bool _doorStandPanelAcross;
+        private Vector3 _doorStandLegFrom, _doorStandLegTo;
+
+        private bool BeginDoorStand(DoorPortal door, Transform playerTransform, Vector3 playerPos, string why,
+            Vector3 panelLegFrom, Vector3 panelLegTo)
+        {
+            if (!BeginDoorStand(door, playerTransform, playerPos, why)) return false;
+            _doorStandPanelAcross = true;
+            _doorStandLegFrom = panelLegFrom;
+            _doorStandLegTo = panelLegTo;
+            return true;
+        }
+
         // Start stand-back-and-open for `door`. `why` is for the log.
         private bool BeginDoorStand(DoorPortal door, Transform playerTransform, Vector3 playerPos, string why)
         {
+            _doorStandPanelAcross = false;
             if (door == null || door.gameObject == null || door.locked ||
                 _doorStandAttempts >= DoorStandMaxAttempts)
                 return false;
@@ -2611,8 +2697,11 @@ namespace DateEverythingAccess
                     return false;
             }
 
-            bool stuckNow = IsDoorStuck(door);
-            if ((door.open && !stuckNow) || SimpleNavBridge.IsDoorMoving(door))
+            bool stuckNow = _doorStandPanelAcross
+                ? IsPanelAcross(door, _doorStandLegFrom, _doorStandLegTo)
+                : IsDoorStuck(door);
+            bool cleared = _doorStandPanelAcross ? !stuckNow : door.open && !stuckNow;
+            if (cleared || SimpleNavBridge.IsDoorMoving(door))
             {
                 if (SimpleNavBridge.IsDoorMoving(door))
                 {
@@ -2624,7 +2713,8 @@ namespace DateEverythingAccess
                     _doorStandPhase = DoorStandNone;
                     _doorStandDoor = null;
                     if (Main.Log != null)
-                        Main.Log.LogInfo("SimpleNav door opened from standing back: door=" + door.gameObject.name + " — re-planning");
+                        Main.Log.LogInfo("SimpleNav door " + (_doorStandPanelAcross ? "panel slid out of the way" : "opened") +
+                            " from standing back: door=" + door.gameObject.name + " — re-planning");
                     if (!TryPlanAndInstallSimpleNavRoute())
                     {
                         StopNavigationRuntime();
@@ -2679,13 +2769,17 @@ namespace DateEverythingAccess
                     _doorStandToggled = true;   // shut it once; never keep flapping it
                     _doorStandLastToggle = Time.unscaledTime;
                     if (Main.Log != null)
-                        Main.Log.LogInfo("SimpleNav shutting door stuck half open to reopen it: door=" + door.gameObject.name);
+                        Main.Log.LogInfo(_doorStandPanelAcross
+                            ? "SimpleNav sliding panel across the way aside: door=" + door.gameObject.name + " open=" + door.open
+                            : "SimpleNav shutting door stuck half open to reopen it: door=" + door.gameObject.name);
                     try { door.Interact(); } catch (Exception ex) { if (Main.Log != null) Main.Log.LogWarning("SimpleNav close stuck door threw: " + ex.Message); }
                     _doorStandPhaseStart = Time.unscaledTime;   // give the close and reopen their time
                 }
                 return true;
             }
-            SimpleNavBridge.TryOpenDoorIfNeeded(door, playerPos);
+            // A panel slid aside once is done with: opening it again could slide it back across.
+            if (!_doorStandPanelAcross)
+                SimpleNavBridge.TryOpenDoorIfNeeded(door, playerPos);
             return true;
         }
 

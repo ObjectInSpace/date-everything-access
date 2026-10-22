@@ -126,6 +126,13 @@ From `Door` and `SlidingDoor`.
   `collidedWithPlayer` is true, and a moving leaf stops when `collidedWithPlayer && stopOnCollision`:
   a player standing in the swing stops the door.
 - `SlidingDoor.Interact()` does nothing while `moving` or `stateLock`.
+- The closets upstairs (gym, bedroom left, bedroom right) have two sliding panels on parallel
+  tracks, and a panel opens by sliding over its partner's half of the opening. With both open, the
+  whole opening can be covered (the gym closet, 2026-10-22 sweep); measured from the bake's door
+  cells and the live panel bounds, the bedroom left outer panel open covers all of the inner door's
+  opening, the bedroom right inner panel 75% of the outer's, the gym inner panel 74% of the outer's.
+  `open` says nothing about which half is clear: the planner plans through a panel lying across a
+  sliding doorway, and autowalk slides aside whichever panel's live collider lies across its path.
 - Passage doors live under the scene path `/MultiRoom/Doors/`; every other `Door` / `SlidingDoor`
   is a container (cupboard, fridge, breaker box) opened in place.
 - The office doorway also holds `Doors_Office_Locked`, a locked variant swapped with `Doors_Office`
