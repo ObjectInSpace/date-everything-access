@@ -64,6 +64,14 @@ below), confirmed by the live `[capsule-probe]` and camera measurements.
   `Lerp(0, speed * input, 0.5)`, so horizontal speed is `speed / 2`. `SetSpeed()` sets
   `speed = movementSpeed setting (default 0.5) * 40`, so **10 m/s** at default settings; crouched
   `(speed - 10) / 2`; `SpeedBoost()` multiplies by 1.25. Inputs under 0.2 magnitude count as no input.
+- Turning: `camerarotspeed = cameraSENSITIVITY setting (default 1) * camerarotmultiplier (50)`; each
+  physics step the body yaws by up to `look.x * camerarotspeed` degrees and the camera pitches by
+  `look.z * camerarotspeed`, both eased over `easingTime` (0.045 s).
+- Player settings are saved in `%USERPROFILE%\AppData\LocalLow\SassyChap\Date Everything\<SteamID>\0_Settings.sav`
+  (JSON after a short binary header; graphics settings are separate, in the registry under
+  `HKCU\Software\SassyChap\Date Everything`, `MGSettings`). On this PC (2026-08-14 save):
+  `cameraSENSITIVITY` 0.5 (so `camerarotspeed` 25, as logged), `movementSpeed` 0.625 (12.5 m/s, 0.25 m
+  per physics step), `cameraFieldOfView` 102. Read live values, never assume the defaults.
 - The player is a non-kinematic `Rigidbody` moved by velocity; walls stop it through ordinary
   Unity contacts (it slides along them). There is no capsule cast or custom collision helper.
 - `BetterPlayerControl.Move(position, rotation)` teleports (kinematic toggle around the write).
