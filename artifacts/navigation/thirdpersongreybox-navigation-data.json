@@ -1,6 +1,6 @@
 {
-  "ScenePath": "D:\\root\\AssetRipper\\1.3.12\\extracted\\Ripped\\ExportedProject\\Assets\\ThirdPersonGreybox.unity",
-  "GeneratedAt": "2026-05-21T12:33:36.7097490-04:00",
+  "ScenePath": "C:\\Users\\amock\\RipWork\\rip-hybrid\\ExportedProject\\Assets\\ThirdPersonGreybox.unity",
+  "GeneratedAt": "2026-10-21T23:31:03.5852626-04:00",
   "Counts": {
     "CameraSpaces": 169,
     "DoorObjects": 277,
@@ -3224,8 +3224,8 @@
   "DoorObjects": [
     {
       "Name": "AtticDoor_11_MASTER",
-      "Id": 387,
-      "TransformId": 24394,
+      "Id": 386,
+      "TransformId": 24433,
       "Position": {
         "x": -0.019804,
         "y": 16.805756,
@@ -3260,8 +3260,8 @@
     },
     {
       "Name": "AtticDoor_11_MODEL_UPDATE",
-      "Id": 239,
-      "TransformId": 39408,
+      "Id": 238,
+      "TransformId": 39448,
       "Position": {
         "x": -0.151815,
         "y": 12.823668,
@@ -3296,8 +3296,8 @@
     },
     {
       "Name": "AtticDoor_11_MODEL_UPDATE",
-      "Id": 2100,
-      "TransformId": 35667,
+      "Id": 2103,
+      "TransformId": 35707,
       "Position": {
         "x": 9.838,
         "y": -0.631,
@@ -3332,8 +3332,8 @@
     },
     {
       "Name": "AtticDoor_11_MODEL_UPDATE",
-      "Id": 12096,
-      "TransformId": 23471,
+      "Id": 12118,
+      "TransformId": 23510,
       "Position": {
         "x": 3.939,
         "y": -0.624088,
@@ -3368,8 +3368,8 @@
     },
     {
       "Name": "AtticDoor_11_MODEL_UPDATE",
-      "Id": 15798,
-      "TransformId": 27904,
+      "Id": 15826,
+      "TransformId": 27944,
       "Position": {
         "x": 3.686999,
         "y": 12.817912,
@@ -3401,7 +3401,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 62147,
+        "ComponentId": 62294,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -3410,8 +3410,8 @@
     },
     {
       "Name": "AtticDoor_11_MODEL_UPDATE",
-      "Id": 15866,
-      "TransformId": 25204,
+      "Id": 15895,
+      "TransformId": 25243,
       "Position": {
         "x": 3.815047,
         "y": 15.923321,
@@ -3446,8 +3446,8 @@
     },
     {
       "Name": "AtticDoor_11_MODEL_UPDATE",
-      "Id": 17198,
-      "TransformId": 23886,
+      "Id": 17230,
+      "TransformId": 23925,
       "Position": {
         "x": -0.023767,
         "y": 15.929077,
@@ -3482,8 +3482,8 @@
     },
     {
       "Name": "AtticDoor_11_MODEL_UPDATE",
-      "Id": 21849,
-      "TransformId": 30106,
+      "Id": 21889,
+      "TransformId": 30146,
       "Position": {
         "x": 3.815047,
         "y": 15.923321,
@@ -3518,8 +3518,8 @@
     },
     {
       "Name": "AtticDoor_11_MODEL_UPDATE",
-      "Id": 21932,
-      "TransformId": 32692,
+      "Id": 21972,
+      "TransformId": 32732,
       "Position": {
         "x": 3.686999,
         "y": 12.817912,
@@ -3554,8 +3554,8 @@
     },
     {
       "Name": "AtticDoor_11_TRS",
-      "Id": 2201,
-      "TransformId": 43753,
+      "Id": 2204,
+      "TransformId": 43796,
       "Position": {
         "x": 4.134,
         "y": 3.358,
@@ -3590,8 +3590,8 @@
     },
     {
       "Name": "AtticDoor_11_TRS",
-      "Id": 3267,
-      "TransformId": 40212,
+      "Id": 3271,
+      "TransformId": 40252,
       "Position": {
         "x": 3.836999,
         "y": 16.799999,
@@ -3626,8 +3626,8 @@
     },
     {
       "Name": "AtticDoor_11_TRS",
-      "Id": 9183,
-      "TransformId": 40225,
+      "Id": 9200,
+      "TransformId": 40265,
       "Position": {
         "x": -32.592499,
         "y": -0.581527,
@@ -3662,8 +3662,8 @@
     },
     {
       "Name": "AtticDoor_11_TRS",
-      "Id": 9563,
-      "TransformId": 34161,
+      "Id": 9582,
+      "TransformId": 34201,
       "Position": {
         "x": 3.836999,
         "y": 16.799999,
@@ -3698,8 +3698,8 @@
     },
     {
       "Name": "AtticDoor_11_TRS",
-      "Id": 11835,
-      "TransformId": 30283,
+      "Id": 11857,
+      "TransformId": 30323,
       "Position": {
         "x": -0.019805,
         "y": 16.805756,
@@ -3734,8 +3734,8 @@
     },
     {
       "Name": "AtticDoor_11_TRS",
-      "Id": 11853,
-      "TransformId": 31845,
+      "Id": 11875,
+      "TransformId": 31885,
       "Position": {
         "x": 1.66,
         "y": -3.996,
@@ -3770,8 +3770,8 @@
     },
     {
       "Name": "AtticDoor_knobs_11_TRS",
-      "Id": 5179,
-      "TransformId": 37089,
+      "Id": 5188,
+      "TransformId": 37129,
       "Position": {
         "x": 3.815047,
         "y": 15.923321,
@@ -3806,8 +3806,8 @@
     },
     {
       "Name": "AtticDoor_knobs_11_TRS",
-      "Id": 11461,
-      "TransformId": 41682,
+      "Id": 11483,
+      "TransformId": 41723,
       "Position": {
         "x": 3.815047,
         "y": 15.923321,
@@ -3842,8 +3842,8 @@
     },
     {
       "Name": "AtticDoor_knobs_11_TRS",
-      "Id": 21253,
-      "TransformId": 37346,
+      "Id": 21292,
+      "TransformId": 37386,
       "Position": {
         "x": -0.023767,
         "y": 15.929077,
@@ -3878,8 +3878,8 @@
     },
     {
       "Name": "AtticDoors",
-      "Id": 5220,
-      "TransformId": 31256,
+      "Id": 5229,
+      "TransformId": 31296,
       "Position": {
         "x": 3.69,
         "y": 12.824811,
@@ -3914,8 +3914,8 @@
     },
     {
       "Name": "BackDoorPivot",
-      "Id": 10854,
-      "TransformId": 27085,
+      "Id": 10876,
+      "TransformId": 27125,
       "Position": {
         "x": -32.668499,
         "y": 4.249041,
@@ -3947,7 +3947,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 64820,
+        "ComponentId": 64987,
         "DoorOpenType": "2",
         "OverrideNodeLock": false,
         "Locked": true,
@@ -3956,8 +3956,8 @@
     },
     {
       "Name": "Boxes_Attic_SouthNearDoor",
-      "Id": 16309,
-      "TransformId": 36413,
+      "Id": 16339,
+      "TransformId": 36453,
       "Position": {
         "x": 21.0,
         "y": 13.5,
@@ -3992,8 +3992,8 @@
     },
     {
       "Name": "BreakerBox_Door_MODEL_UPDATE",
-      "Id": 15842,
-      "TransformId": 23996,
+      "Id": 15870,
+      "TransformId": 24035,
       "Position": {
         "x": -0.952085,
         "y": 17.890871,
@@ -4025,7 +4025,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 61991,
+        "ComponentId": 62137,
         "DoorOpenType": "1",
         "OverrideNodeLock": false,
         "Locked": false,
@@ -4034,8 +4034,8 @@
     },
     {
       "Name": "BreakerBox_Door_TRS",
-      "Id": 201,
-      "TransformId": 40363,
+      "Id": 200,
+      "TransformId": 40403,
       "Position": {
         "x": -0.952085,
         "y": 17.890871,
@@ -4070,8 +4070,8 @@
     },
     {
       "Name": "Cabinet_Bathroom1_Sink",
-      "Id": 12873,
-      "TransformId": 40147,
+      "Id": 12898,
+      "TransformId": 40187,
       "Position": {
         "x": -4.091811,
         "y": 1.00333,
@@ -4103,7 +4103,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 59247,
+        "ComponentId": 59374,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -4112,8 +4112,8 @@
     },
     {
       "Name": "Camera_DorianAtticDoor1",
-      "Id": 11952,
-      "TransformId": 43540,
+      "Id": 11974,
+      "TransformId": 43583,
       "Position": {
         "x": -4.249802,
         "y": 18.261999,
@@ -4148,8 +4148,8 @@
     },
     {
       "Name": "Camera_DorianAtticDoor2",
-      "Id": 10144,
-      "TransformId": 27963,
+      "Id": 10164,
+      "TransformId": 28003,
       "Position": {
         "x": 12.111662,
         "y": 18.261999,
@@ -4184,8 +4184,8 @@
     },
     {
       "Name": "Camera_DorianBackDoor",
-      "Id": 15178,
-      "TransformId": 27378,
+      "Id": 15205,
+      "TransformId": 27418,
       "Position": {
         "x": -25.539013,
         "y": 3.92,
@@ -4220,8 +4220,8 @@
     },
     {
       "Name": "Camera_DorianBathroom2Door1",
-      "Id": 22402,
-      "TransformId": 35600,
+      "Id": 22442,
+      "TransformId": 35640,
       "Position": {
         "x": -25.406582,
         "y": 17.84,
@@ -4256,8 +4256,8 @@
     },
     {
       "Name": "Camera_DorianBathroom2Door2",
-      "Id": 20343,
-      "TransformId": 33774,
+      "Id": 20379,
+      "TransformId": 33814,
       "Position": {
         "x": -25.461765,
         "y": 17.84,
@@ -4292,8 +4292,8 @@
     },
     {
       "Name": "Camera_DorianBathroomDoor1",
-      "Id": 9201,
-      "TransformId": 26454,
+      "Id": 9218,
+      "TransformId": 26494,
       "Position": {
         "x": -0.028381,
         "y": 4.17,
@@ -4328,8 +4328,8 @@
     },
     {
       "Name": "Camera_DorianBathroomDoor2",
-      "Id": 10473,
-      "TransformId": 26501,
+      "Id": 10494,
+      "TransformId": 26541,
       "Position": {
         "x": 0.523441,
         "y": 4.17,
@@ -4364,8 +4364,8 @@
     },
     {
       "Name": "Camera_DorianBedroomClosetDoor1",
-      "Id": 12833,
-      "TransformId": 38701,
+      "Id": 12858,
+      "TransformId": 38741,
       "Position": {
         "x": -10.53503,
         "y": 18.02,
@@ -4400,8 +4400,8 @@
     },
     {
       "Name": "Camera_DorianBedroomClosetDoor2",
-      "Id": 1551,
-      "TransformId": 26010,
+      "Id": 1553,
+      "TransformId": 26049,
       "Position": {
         "x": -10.53503,
         "y": 18.02,
@@ -4436,8 +4436,8 @@
     },
     {
       "Name": "Camera_DorianBedroomDoor1",
-      "Id": 21318,
-      "TransformId": 31165,
+      "Id": 21357,
+      "TransformId": 31205,
       "Position": {
         "x": -12.604355,
         "y": 17.84,
@@ -4472,8 +4472,8 @@
     },
     {
       "Name": "Camera_DorianBedroomDoor2",
-      "Id": 6112,
-      "TransformId": 30512,
+      "Id": 6125,
+      "TransformId": 30552,
       "Position": {
         "x": -11.997356,
         "y": 17.84,
@@ -4508,8 +4508,8 @@
     },
     {
       "Name": "Camera_DorianGymClosetDoor1",
-      "Id": 7173,
-      "TransformId": 23001,
+      "Id": 7188,
+      "TransformId": 23040,
       "Position": {
         "x": -10.53503,
         "y": 18.02,
@@ -4544,8 +4544,8 @@
     },
     {
       "Name": "Camera_DorianGymClosetDoor2",
-      "Id": 1435,
-      "TransformId": 40844,
+      "Id": 1437,
+      "TransformId": 40884,
       "Position": {
         "x": 1.831253,
         "y": 18.02,
@@ -4580,8 +4580,8 @@
     },
     {
       "Name": "Camera_DorianGymDoor1",
-      "Id": 17578,
-      "TransformId": 31450,
+      "Id": 17611,
+      "TransformId": 31490,
       "Position": {
         "x": -7.748341,
         "y": 17.84,
@@ -4616,8 +4616,8 @@
     },
     {
       "Name": "Camera_DorianGymDoor2",
-      "Id": 18965,
-      "TransformId": 41359,
+      "Id": 18999,
+      "TransformId": 41400,
       "Position": {
         "x": -7.748341,
         "y": 17.84,
@@ -4652,8 +4652,8 @@
     },
     {
       "Name": "Camera_DorianGymDoor3",
-      "Id": 8584,
-      "TransformId": 29348,
+      "Id": 8600,
+      "TransformId": 29388,
       "Position": {
         "x": -25.406582,
         "y": 17.84,
@@ -4688,8 +4688,8 @@
     },
     {
       "Name": "Camera_DorianGymDoor4",
-      "Id": 13333,
-      "TransformId": 30837,
+      "Id": 13358,
+      "TransformId": 30877,
       "Position": {
         "x": -24.58437,
         "y": 17.84,
@@ -4724,8 +4724,8 @@
     },
     {
       "Name": "Camera_DorianIronDoor",
-      "Id": 736,
-      "TransformId": 39627,
+      "Id": 735,
+      "TransformId": 39667,
       "Position": {
         "x": -24.319492,
         "y": 5.13,
@@ -4760,8 +4760,8 @@
     },
     {
       "Name": "Camera_DorianOfficeClosetDoor1",
-      "Id": 18563,
-      "TransformId": 33953,
+      "Id": 18597,
+      "TransformId": 33993,
       "Position": {
         "x": 9.35808,
         "y": 4.17,
@@ -4799,8 +4799,8 @@
     },
     {
       "Name": "Camera_DorianOfficeClosetDoor2",
-      "Id": 2353,
-      "TransformId": 22700,
+      "Id": 2356,
+      "TransformId": 22739,
       "Position": {
         "x": -1.07132,
         "y": 4.17,
@@ -4835,8 +4835,8 @@
     },
     {
       "Name": "Camera_DorianOfficeDoor1",
-      "Id": 7646,
-      "TransformId": 40228,
+      "Id": 7661,
+      "TransformId": 40268,
       "Position": {
         "x": 7.757801,
         "y": 4.17,
@@ -4874,8 +4874,8 @@
     },
     {
       "Name": "Camera_DorianOfficeDoor2",
-      "Id": 497,
-      "TransformId": 37230,
+      "Id": 496,
+      "TransformId": 37270,
       "Position": {
         "x": 8.309622,
         "y": 4.17,
@@ -4910,8 +4910,8 @@
     },
     {
       "Name": "Camera_DorianTrapdoor1",
-      "Id": 15158,
-      "TransformId": 34839,
+      "Id": 15185,
+      "TransformId": 34879,
       "Position": {
         "x": 3.288059,
         "y": 4.17,
@@ -4946,8 +4946,8 @@
     },
     {
       "Name": "Camera_DorianTrapdoor2",
-      "Id": 16562,
-      "TransformId": 24758,
+      "Id": 16592,
+      "TransformId": 24797,
       "Position": {
         "x": 3.288059,
         "y": -7.03,
@@ -4982,8 +4982,8 @@
     },
     {
       "Name": "Camera_FrontDoor",
-      "Id": 7674,
-      "TransformId": 26047,
+      "Id": 7689,
+      "TransformId": 26086,
       "Position": {
         "x": 13.894039,
         "y": 4.352,
@@ -5021,8 +5021,8 @@
     },
     {
       "Name": "Camera_StairsDown",
-      "Id": 11529,
-      "TransformId": 32009,
+      "Id": 11551,
+      "TransformId": 32049,
       "Position": {
         "x": -1.104427,
         "y": 15.167,
@@ -5057,8 +5057,8 @@
     },
     {
       "Name": "Camera_StairsUp",
-      "Id": 15084,
-      "TransformId": 40193,
+      "Id": 15111,
+      "TransformId": 40233,
       "Position": {
         "x": 6.488617,
         "y": 9.688999,
@@ -5093,8 +5093,8 @@
     },
     {
       "Name": "Camera_Trapdoor",
-      "Id": 14028,
-      "TransformId": 36033,
+      "Id": 14054,
+      "TransformId": 36073,
       "Position": {
         "x": 2.035427,
         "y": 3.455,
@@ -5129,8 +5129,8 @@
     },
     {
       "Name": "CargoStairs",
-      "Id": 9639,
-      "TransformId": 29664,
+      "Id": 9659,
+      "TransformId": 29704,
       "Position": {
         "x": 104.560165,
         "y": 9.615212,
@@ -5165,8 +5165,8 @@
     },
     {
       "Name": "CeilingStairsFix1",
-      "Id": 21303,
-      "TransformId": 33819,
+      "Id": 21342,
+      "TransformId": 33859,
       "Position": {
         "x": 2.817,
         "y": 18.1075,
@@ -5201,8 +5201,8 @@
     },
     {
       "Name": "CeilingStairsFix2",
-      "Id": 12630,
-      "TransformId": 32032,
+      "Id": 12654,
+      "TransformId": 32072,
       "Position": {
         "x": 13.4169,
         "y": 18.1632,
@@ -5237,8 +5237,8 @@
     },
     {
       "Name": "Cupboards_Laundry_DoorL",
-      "Id": 7392,
-      "TransformId": 30243,
+      "Id": 7407,
+      "TransformId": 30283,
       "Position": {
         "x": -28.250999,
         "y": 6.97,
@@ -5273,8 +5273,8 @@
     },
     {
       "Name": "Cupboards_Laundry_DoorR",
-      "Id": 15325,
-      "TransformId": 38685,
+      "Id": 15352,
+      "TransformId": 38725,
       "Position": {
         "x": -28.250999,
         "y": 6.97,
@@ -5309,8 +5309,8 @@
     },
     {
       "Name": "Dishwasher_Door_Grp_MODEL_UPDATE",
-      "Id": 723,
-      "TransformId": 33087,
+      "Id": 722,
+      "TransformId": 33127,
       "Position": {
         "x": -29.046364,
         "y": 1.16044,
@@ -5345,8 +5345,8 @@
     },
     {
       "Name": "DishwasherDoorCollider",
-      "Id": 13259,
-      "TransformId": 36753,
+      "Id": 13284,
+      "TransformId": 36793,
       "Position": {
         "x": -30.345964,
         "y": 1.104663,
@@ -5381,8 +5381,8 @@
     },
     {
       "Name": "Door_Attic_Cam",
-      "Id": 19905,
-      "TransformId": 40165,
+      "Id": 19940,
+      "TransformId": 40205,
       "Position": {
         "x": 3.364209,
         "y": 18.523857,
@@ -5417,8 +5417,8 @@
     },
     {
       "Name": "Door_frame_Front_MODEL_UPDATE",
-      "Id": 1598,
-      "TransformId": 25183,
+      "Id": 1600,
+      "TransformId": 25222,
       "Position": {
         "x": 23.696079,
         "y": 3.992781,
@@ -5453,8 +5453,8 @@
     },
     {
       "Name": "Door_frame_Front_MODEL_UPDATE",
-      "Id": 3518,
-      "TransformId": 26249,
+      "Id": 3523,
+      "TransformId": 26289,
       "Position": {
         "x": 23.696079,
         "y": 3.992781,
@@ -5489,8 +5489,8 @@
     },
     {
       "Name": "Door_frame_Front_TRS",
-      "Id": 18789,
-      "TransformId": 34466,
+      "Id": 18823,
+      "TransformId": 34506,
       "Position": {
         "x": 23.696079,
         "y": 3.992781,
@@ -5525,8 +5525,8 @@
     },
     {
       "Name": "Door_frame_Front_TRS",
-      "Id": 20493,
-      "TransformId": 38925,
+      "Id": 20530,
+      "TransformId": 38965,
       "Position": {
         "x": 23.696079,
         "y": 3.992781,
@@ -5561,8 +5561,8 @@
     },
     {
       "Name": "Door_Front_BrokenGlass_MODEL_UPDATE",
-      "Id": 13949,
-      "TransformId": 37219,
+      "Id": 13975,
+      "TransformId": 37259,
       "Position": {
         "x": -2E-06,
         "y": 0.0,
@@ -5597,8 +5597,8 @@
     },
     {
       "Name": "Door_Front_BrokenGlass_TRS",
-      "Id": 3590,
-      "TransformId": 25498,
+      "Id": 3595,
+      "TransformId": 25537,
       "Position": {
         "x": 23.48324,
         "y": 3.719162,
@@ -5633,8 +5633,8 @@
     },
     {
       "Name": "Door_Front_MODEL_UPDATE",
-      "Id": 5631,
-      "TransformId": 42389,
+      "Id": 5642,
+      "TransformId": 42431,
       "Position": {
         "x": 23.493803,
         "y": 3.719162,
@@ -5669,8 +5669,8 @@
     },
     {
       "Name": "Door_Front_TRS",
-      "Id": 6963,
-      "TransformId": 41493,
+      "Id": 6978,
+      "TransformId": 41534,
       "Position": {
         "x": 23.483242,
         "y": 3.719162,
@@ -5705,8 +5705,8 @@
     },
     {
       "Name": "Door_Grp",
-      "Id": 21718,
-      "TransformId": 23606,
+      "Id": 21757,
+      "TransformId": 23645,
       "Position": {
         "x": -29.322426,
         "y": 1.438126,
@@ -5741,8 +5741,8 @@
     },
     {
       "Name": "Door_Grp_MODEL_UPDATE",
-      "Id": 19408,
-      "TransformId": 29848,
+      "Id": 19443,
+      "TransformId": 29888,
       "Position": {
         "x": -8.950992,
         "y": -0.575883,
@@ -5777,8 +5777,8 @@
     },
     {
       "Name": "DoorBroken_Cam",
-      "Id": 21283,
-      "TransformId": 30572,
+      "Id": 21322,
+      "TransformId": 30612,
       "Position": {
         "x": 14.86831,
         "y": 4.846083,
@@ -5813,8 +5813,8 @@
     },
     {
       "Name": "DoorKnob_Front_BrokenGlass_MODEL_UPDATE",
-      "Id": 22533,
-      "TransformId": 39938,
+      "Id": 22573,
+      "TransformId": 39978,
       "Position": {
         "x": 23.29524,
         "y": 3.154872,
@@ -5849,8 +5849,8 @@
     },
     {
       "Name": "DoorKnob_Front_BrokenGlass_TRS",
-      "Id": 5485,
-      "TransformId": 42563,
+      "Id": 5495,
+      "TransformId": 42605,
       "Position": {
         "x": 23.591541,
         "y": 3.154872,
@@ -5885,8 +5885,8 @@
     },
     {
       "Name": "Doorknob_Front_MODEL_UPDATE",
-      "Id": 1747,
-      "TransformId": 39628,
+      "Id": 1750,
+      "TransformId": 39668,
       "Position": {
         "x": 23.295094,
         "y": 3.154872,
@@ -5921,8 +5921,8 @@
     },
     {
       "Name": "Doorknob_Front_TRS",
-      "Id": 8772,
-      "TransformId": 22840,
+      "Id": 8788,
+      "TransformId": 22879,
       "Position": {
         "x": 23.591394,
         "y": 3.154872,
@@ -5958,7 +5958,7 @@
     {
       "Name": "DoorParticle",
       "Id": 976,
-      "TransformId": 26699,
+      "TransformId": 26739,
       "Position": {
         "x": 23.49395,
         "y": 3.719162,
@@ -5993,8 +5993,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 1671,
-      "TransformId": 37287,
+      "Id": 1674,
+      "TransformId": 37327,
       "Position": {
         "x": -4.526314,
         "y": 12.824811,
@@ -6029,8 +6029,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 3290,
-      "TransformId": 33029,
+      "Id": 3294,
+      "TransformId": 33069,
       "Position": {
         "x": -4.207658,
         "y": 12.824811,
@@ -6065,8 +6065,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 6122,
-      "TransformId": 31756,
+      "Id": 6135,
+      "TransformId": 31796,
       "Position": {
         "x": -4.544,
         "y": 12.824811,
@@ -6101,8 +6101,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 6968,
-      "TransformId": 38928,
+      "Id": 6983,
+      "TransformId": 38968,
       "Position": {
         "x": -11.424,
         "y": -0.617448,
@@ -6137,8 +6137,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 7747,
-      "TransformId": 35238,
+      "Id": 7762,
+      "TransformId": 35278,
       "Position": {
         "x": -32.849998,
         "y": -0.577,
@@ -6173,8 +6173,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 9595,
-      "TransformId": 23786,
+      "Id": 9615,
+      "TransformId": 23825,
       "Position": {
         "x": -4.526314,
         "y": 12.824811,
@@ -6209,8 +6209,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 10471,
-      "TransformId": 26717,
+      "Id": 10492,
+      "TransformId": 26757,
       "Position": {
         "x": 2.11,
         "y": -0.617448,
@@ -6245,8 +6245,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 10551,
-      "TransformId": 24215,
+      "Id": 10572,
+      "TransformId": 24254,
       "Position": {
         "x": -4.526314,
         "y": 12.824811,
@@ -6281,8 +6281,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 11349,
-      "TransformId": 27710,
+      "Id": 11371,
+      "TransformId": 27750,
       "Position": {
         "x": -6.166,
         "y": 12.824811,
@@ -6317,8 +6317,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 12510,
-      "TransformId": 35024,
+      "Id": 12533,
+      "TransformId": 35064,
       "Position": {
         "x": 1.341,
         "y": 12.824811,
@@ -6353,8 +6353,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 13230,
-      "TransformId": 26651,
+      "Id": 13255,
+      "TransformId": 26691,
       "Position": {
         "x": -1.502208,
         "y": -0.654272,
@@ -6389,8 +6389,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 13673,
-      "TransformId": 35257,
+      "Id": 13698,
+      "TransformId": 35297,
       "Position": {
         "x": 4.036,
         "y": -0.617448,
@@ -6425,8 +6425,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 14686,
-      "TransformId": 27660,
+      "Id": 14712,
+      "TransformId": 27700,
       "Position": {
         "x": -4.237556,
         "y": 12.824811,
@@ -6461,8 +6461,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 16565,
-      "TransformId": 36125,
+      "Id": 16595,
+      "TransformId": 36165,
       "Position": {
         "x": 9.845,
         "y": -0.617448,
@@ -6497,8 +6497,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 17333,
-      "TransformId": 35655,
+      "Id": 17366,
+      "TransformId": 35695,
       "Position": {
         "x": -23.153,
         "y": 12.824811,
@@ -6533,8 +6533,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 19074,
-      "TransformId": 32384,
+      "Id": 19109,
+      "TransformId": 32424,
       "Position": {
         "x": -23.663,
         "y": 12.824811,
@@ -6569,8 +6569,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 20121,
-      "TransformId": 26042,
+      "Id": 20157,
+      "TransformId": 26081,
       "Position": {
         "x": -10.724,
         "y": 12.824811,
@@ -6605,8 +6605,8 @@
     },
     {
       "Name": "DoorParticle",
-      "Id": 21131,
-      "TransformId": 38367,
+      "Id": 21170,
+      "TransformId": 38407,
       "Position": {
         "x": 3.837,
         "y": 16.799999,
@@ -6641,8 +6641,8 @@
     },
     {
       "Name": "DoorParticle_1",
-      "Id": 21232,
-      "TransformId": 40576,
+      "Id": 21271,
+      "TransformId": 40616,
       "Position": {
         "x": -15.599,
         "y": -0.617448,
@@ -6677,8 +6677,8 @@
     },
     {
       "Name": "DoorRegular_Cam",
-      "Id": 14755,
-      "TransformId": 29451,
+      "Id": 14781,
+      "TransformId": 29491,
       "Position": {
         "x": 14.868313,
         "y": 4.846083,
@@ -6713,8 +6713,8 @@
     },
     {
       "Name": "Doors",
-      "Id": 12972,
-      "TransformId": 35016,
+      "Id": 12997,
+      "TransformId": 35056,
       "Position": {
         "x": 0.0,
         "y": 0.0,
@@ -6749,8 +6749,8 @@
     },
     {
       "Name": "Doors_Attic_Locked",
-      "Id": 246,
-      "TransformId": 24507,
+      "Id": 245,
+      "TransformId": 24546,
       "Position": {
         "x": 3.837,
         "y": 16.799999,
@@ -6785,8 +6785,8 @@
     },
     {
       "Name": "Doors_Attic_Unlocked",
-      "Id": 6646,
-      "TransformId": 30815,
+      "Id": 6661,
+      "TransformId": 30855,
       "Position": {
         "x": 3.837,
         "y": 16.799999,
@@ -6821,8 +6821,8 @@
     },
     {
       "Name": "Doors_Attic_Unlocking",
-      "Id": 1816,
-      "TransformId": 22996,
+      "Id": 1819,
+      "TransformId": 23035,
       "Position": {
         "x": 1.91,
         "y": 17.524811,
@@ -6857,8 +6857,8 @@
     },
     {
       "Name": "Doors_Bathroom1",
-      "Id": 9913,
-      "TransformId": 42103,
+      "Id": 9933,
+      "TransformId": 42144,
       "Position": {
         "x": 2.11,
         "y": -0.617448,
@@ -6890,7 +6890,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 66677,
+        "ComponentId": 66854,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -6899,8 +6899,8 @@
     },
     {
       "Name": "Doors_Bedroom",
-      "Id": 18304,
-      "TransformId": 27639,
+      "Id": 18338,
+      "TransformId": 27679,
       "Position": {
         "x": -10.724,
         "y": 12.824811,
@@ -6932,7 +6932,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 66675,
+        "ComponentId": 66852,
         "DoorOpenType": "2",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -6941,8 +6941,8 @@
     },
     {
       "Name": "Doors_Bedroom_Bathroom",
-      "Id": 10007,
-      "TransformId": 41053,
+      "Id": 10027,
+      "TransformId": 41093,
       "Position": {
         "x": -23.663,
         "y": 12.824811,
@@ -6974,7 +6974,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 66670,
+        "ComponentId": 66847,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -6983,8 +6983,8 @@
     },
     {
       "Name": "Doors_Bedroom_ClosetLeft_Inner",
-      "Id": 20530,
-      "TransformId": 35291,
+      "Id": 20567,
+      "TransformId": 35331,
       "Position": {
         "x": -4.544,
         "y": 12.824811,
@@ -7019,8 +7019,8 @@
     },
     {
       "Name": "Doors_Bedroom_ClosetLeft_Outer",
-      "Id": 21413,
-      "TransformId": 41706,
+      "Id": 21452,
+      "TransformId": 41747,
       "Position": {
         "x": -4.526314,
         "y": 12.824811,
@@ -7055,8 +7055,8 @@
     },
     {
       "Name": "Doors_Bedroom_ClosetRight_Inner",
-      "Id": 16683,
-      "TransformId": 30433,
+      "Id": 16713,
+      "TransformId": 30473,
       "Position": {
         "x": -4.543,
         "y": 12.824811,
@@ -7091,8 +7091,8 @@
     },
     {
       "Name": "Doors_Bedroom_ClosetRight_Outer",
-      "Id": 2279,
-      "TransformId": 42315,
+      "Id": 2282,
+      "TransformId": 42356,
       "Position": {
         "x": -4.526314,
         "y": 12.824811,
@@ -7127,8 +7127,8 @@
     },
     {
       "Name": "Doors_FrontDoor",
-      "Id": 16747,
-      "TransformId": 37457,
+      "Id": 16778,
+      "TransformId": 37497,
       "Position": {
         "x": 23.493803,
         "y": 3.719162,
@@ -7163,8 +7163,8 @@
     },
     {
       "Name": "Doors_FrontDoor_Broken",
-      "Id": 7382,
-      "TransformId": 30232,
+      "Id": 7397,
+      "TransformId": 30272,
       "Position": {
         "x": 23.49395,
         "y": 3.719162,
@@ -7199,8 +7199,8 @@
     },
     {
       "Name": "Doors_FrontDoor_Frame",
-      "Id": 6185,
-      "TransformId": 30039,
+      "Id": 6198,
+      "TransformId": 30079,
       "Position": {
         "x": 23.696079,
         "y": 3.992781,
@@ -7235,8 +7235,8 @@
     },
     {
       "Name": "Doors_FrontDoor_Frame_1",
-      "Id": 10769,
-      "TransformId": 31015,
+      "Id": 10791,
+      "TransformId": 31055,
       "Position": {
         "x": 23.696079,
         "y": 3.992781,
@@ -7271,8 +7271,8 @@
     },
     {
       "Name": "Doors_Gym_Bathroom",
-      "Id": 1763,
-      "TransformId": 39686,
+      "Id": 1766,
+      "TransformId": 39726,
       "Position": {
         "x": -23.153,
         "y": 12.824811,
@@ -7304,7 +7304,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 66676,
+        "ComponentId": 66853,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -7313,8 +7313,8 @@
     },
     {
       "Name": "Doors_Gym_ClosetInner",
-      "Id": 17579,
-      "TransformId": 43719,
+      "Id": 17612,
+      "TransformId": 43762,
       "Position": {
         "x": -4.56,
         "y": 12.824811,
@@ -7349,8 +7349,8 @@
     },
     {
       "Name": "Doors_Gym_ClosetOuter",
-      "Id": 3624,
-      "TransformId": 34120,
+      "Id": 3629,
+      "TransformId": 34160,
       "Position": {
         "x": -4.526314,
         "y": 12.824811,
@@ -7385,8 +7385,8 @@
     },
     {
       "Name": "Doors_Gym_Hall",
-      "Id": 3393,
-      "TransformId": 38591,
+      "Id": 3397,
+      "TransformId": 38631,
       "Position": {
         "x": -6.166,
         "y": 12.824811,
@@ -7418,7 +7418,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 66674,
+        "ComponentId": 66851,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -7427,8 +7427,8 @@
     },
     {
       "Name": "Doors_Laundry",
-      "Id": 195,
-      "TransformId": 40964,
+      "Id": 194,
+      "TransformId": 41004,
       "Position": {
         "x": -15.599,
         "y": -0.617448,
@@ -7460,7 +7460,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 66672,
+        "ComponentId": 66849,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -7469,8 +7469,8 @@
     },
     {
       "Name": "Doors_Laundry_Closet",
-      "Id": 16402,
-      "TransformId": 42715,
+      "Id": 16432,
+      "TransformId": 42757,
       "Position": {
         "x": -11.424,
         "y": -0.617448,
@@ -7502,7 +7502,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 63891,
+        "ComponentId": 64053,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -7511,8 +7511,8 @@
     },
     {
       "Name": "Doors_Office",
-      "Id": 674,
-      "TransformId": 26192,
+      "Id": 673,
+      "TransformId": 26232,
       "Position": {
         "x": 9.845,
         "y": -0.617448,
@@ -7544,7 +7544,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 66678,
+        "ComponentId": 66855,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -7553,8 +7553,8 @@
     },
     {
       "Name": "Doors_Office_Closet",
-      "Id": 20689,
-      "TransformId": 40778,
+      "Id": 20727,
+      "TransformId": 40818,
       "Position": {
         "x": 4.036,
         "y": -0.617448,
@@ -7586,7 +7586,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 66671,
+        "ComponentId": 66848,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -7595,8 +7595,8 @@
     },
     {
       "Name": "Doors_Office_ClosetLocked",
-      "Id": 11389,
-      "TransformId": 31687,
+      "Id": 11411,
+      "TransformId": 31727,
       "Position": {
         "x": 4.134,
         "y": 3.358,
@@ -7631,8 +7631,8 @@
     },
     {
       "Name": "Doors_Office_Locked",
-      "Id": 21016,
-      "TransformId": 43925,
+      "Id": 21055,
+      "TransformId": 43968,
       "Position": {
         "x": 1.66,
         "y": -3.996,
@@ -7667,8 +7667,8 @@
     },
     {
       "Name": "Doors_UpperHall_Electric",
-      "Id": 20453,
-      "TransformId": 36970,
+      "Id": 20489,
+      "TransformId": 37010,
       "Position": {
         "x": 1.341,
         "y": 12.824811,
@@ -7700,7 +7700,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 66673,
+        "ComponentId": 66850,
         "DoorOpenType": "2",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -7709,8 +7709,8 @@
     },
     {
       "Name": "EmptyReggieDoor",
-      "Id": 13773,
-      "TransformId": 41809,
+      "Id": 13798,
+      "TransformId": 41850,
       "Position": {
         "x": 0.0,
         "y": 0.0,
@@ -7745,8 +7745,8 @@
     },
     {
       "Name": "FiretruckStairs",
-      "Id": 11195,
-      "TransformId": 31113,
+      "Id": 11217,
+      "TransformId": 31153,
       "Position": {
         "x": 107.391228,
         "y": 11.685863,
@@ -7781,8 +7781,8 @@
     },
     {
       "Name": "FiretruckStairs1",
-      "Id": 8153,
-      "TransformId": 32788,
+      "Id": 8169,
+      "TransformId": 32828,
       "Position": {
         "x": 107.391228,
         "y": 15.616839,
@@ -7817,8 +7817,8 @@
     },
     {
       "Name": "FrontDoor",
-      "Id": 1795,
-      "TransformId": 43288,
+      "Id": 1798,
+      "TransformId": 43331,
       "Position": {
         "x": 0.0,
         "y": 0.0,
@@ -7853,8 +7853,8 @@
     },
     {
       "Name": "LightOcclusion_UpstairsHall",
-      "Id": 5675,
-      "TransformId": 28074,
+      "Id": 5686,
+      "TransformId": 28114,
       "Position": {
         "x": -6.68,
         "y": 19.0,
@@ -7889,8 +7889,8 @@
     },
     {
       "Name": "LightOcclusion_UpstairsHall",
-      "Id": 5676,
-      "TransformId": 28073,
+      "Id": 5687,
+      "TransformId": 28113,
       "Position": {
         "x": -6.68,
         "y": 19.0,
@@ -7925,8 +7925,8 @@
     },
     {
       "Name": "LightOcclusion_UpstairsHall",
-      "Id": 7655,
-      "TransformId": 29641,
+      "Id": 7670,
+      "TransformId": 29681,
       "Position": {
         "x": -6.68,
         "y": 19.0,
@@ -7961,8 +7961,8 @@
     },
     {
       "Name": "LightOcclusion_UpstairsHall",
-      "Id": 10609,
-      "TransformId": 32837,
+      "Id": 10630,
+      "TransformId": 32877,
       "Position": {
         "x": -6.68,
         "y": 19.0,
@@ -7997,8 +7997,8 @@
     },
     {
       "Name": "LightOcclusion_UpstairsHall",
-      "Id": 10610,
-      "TransformId": 32836,
+      "Id": 10631,
+      "TransformId": 32876,
       "Position": {
         "x": -6.68,
         "y": 19.0,
@@ -8033,8 +8033,8 @@
     },
     {
       "Name": "LightOcclusion_UpstairsHall",
-      "Id": 10719,
-      "TransformId": 32716,
+      "Id": 10741,
+      "TransformId": 32756,
       "Position": {
         "x": -6.68,
         "y": 19.0,
@@ -8069,8 +8069,8 @@
     },
     {
       "Name": "LightOcclusion_UpstairsHall",
-      "Id": 10720,
-      "TransformId": 32717,
+      "Id": 10742,
+      "TransformId": 32757,
       "Position": {
         "x": -6.68,
         "y": 19.0,
@@ -8105,8 +8105,8 @@
     },
     {
       "Name": "LightOcclusion_UpstairsHall",
-      "Id": 14754,
-      "TransformId": 36883,
+      "Id": 14780,
+      "TransformId": 36923,
       "Position": {
         "x": -6.68,
         "y": 19.0,
@@ -8141,8 +8141,8 @@
     },
     {
       "Name": "LightOcclusion_UpstairsHall",
-      "Id": 19640,
-      "TransformId": 41602,
+      "Id": 19675,
+      "TransformId": 41643,
       "Position": {
         "x": -6.68,
         "y": 19.0,
@@ -8177,8 +8177,8 @@
     },
     {
       "Name": "LightOcclusion_UpstairsHall",
-      "Id": 19641,
-      "TransformId": 41601,
+      "Id": 19676,
+      "TransformId": 41642,
       "Position": {
         "x": -6.68,
         "y": 19.0,
@@ -8213,8 +8213,8 @@
     },
     {
       "Name": "Lights_UpstairsHall",
-      "Id": 3199,
-      "TransformId": 37662,
+      "Id": 3203,
+      "TransformId": 37702,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8249,8 +8249,8 @@
     },
     {
       "Name": "Lights_UpstairsHall",
-      "Id": 3200,
-      "TransformId": 37663,
+      "Id": 3204,
+      "TransformId": 37703,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8285,8 +8285,8 @@
     },
     {
       "Name": "Lights_UpstairsHall",
-      "Id": 8192,
-      "TransformId": 40846,
+      "Id": 8208,
+      "TransformId": 40886,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8321,8 +8321,8 @@
     },
     {
       "Name": "Lights_UpstairsHall",
-      "Id": 12283,
-      "TransformId": 23241,
+      "Id": 12305,
+      "TransformId": 23280,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8357,8 +8357,8 @@
     },
     {
       "Name": "Lights_UpstairsHall",
-      "Id": 12284,
-      "TransformId": 23242,
+      "Id": 12306,
+      "TransformId": 23281,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8393,8 +8393,8 @@
     },
     {
       "Name": "Lights_UpstairsHall",
-      "Id": 12480,
-      "TransformId": 23069,
+      "Id": 12503,
+      "TransformId": 23108,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8429,8 +8429,8 @@
     },
     {
       "Name": "Lights_UpstairsHall",
-      "Id": 12481,
-      "TransformId": 23070,
+      "Id": 12504,
+      "TransformId": 23109,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8465,8 +8465,8 @@
     },
     {
       "Name": "Lights_UpstairsHall",
-      "Id": 15650,
-      "TransformId": 25365,
+      "Id": 15678,
+      "TransformId": 25404,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8501,8 +8501,8 @@
     },
     {
       "Name": "Lights_UpstairsHall",
-      "Id": 17284,
-      "TransformId": 29501,
+      "Id": 17316,
+      "TransformId": 29541,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8537,8 +8537,8 @@
     },
     {
       "Name": "Lights_UpstairsHall",
-      "Id": 17285,
-      "TransformId": 29502,
+      "Id": 17317,
+      "TransformId": 29542,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8573,8 +8573,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_OFF",
-      "Id": 3912,
-      "TransformId": 27553,
+      "Id": 3917,
+      "TransformId": 27593,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8609,8 +8609,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_OFF",
-      "Id": 3913,
-      "TransformId": 27554,
+      "Id": 3918,
+      "TransformId": 27594,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8645,8 +8645,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_OFF",
-      "Id": 7520,
-      "TransformId": 28431,
+      "Id": 7535,
+      "TransformId": 28471,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8681,8 +8681,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_OFF",
-      "Id": 11574,
-      "TransformId": 35158,
+      "Id": 11596,
+      "TransformId": 35198,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8717,8 +8717,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_OFF",
-      "Id": 11575,
-      "TransformId": 35157,
+      "Id": 11597,
+      "TransformId": 35197,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8753,8 +8753,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_OFF",
-      "Id": 11820,
-      "TransformId": 34998,
+      "Id": 11842,
+      "TransformId": 35038,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8789,8 +8789,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_OFF",
-      "Id": 11821,
-      "TransformId": 34997,
+      "Id": 11843,
+      "TransformId": 35037,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8825,8 +8825,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_OFF",
-      "Id": 14978,
-      "TransformId": 38148,
+      "Id": 15005,
+      "TransformId": 38188,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8861,8 +8861,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_OFF",
-      "Id": 17971,
-      "TransformId": 41197,
+      "Id": 18004,
+      "TransformId": 41238,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8897,8 +8897,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_OFF",
-      "Id": 17972,
-      "TransformId": 41198,
+      "Id": 18005,
+      "TransformId": 41239,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8933,8 +8933,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_ON",
-      "Id": 2979,
-      "TransformId": 23758,
+      "Id": 2983,
+      "TransformId": 23797,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -8969,8 +8969,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_ON",
-      "Id": 9394,
-      "TransformId": 32602,
+      "Id": 9412,
+      "TransformId": 32642,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -9005,8 +9005,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_ON",
-      "Id": 9395,
-      "TransformId": 32603,
+      "Id": 9413,
+      "TransformId": 32643,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -9041,8 +9041,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_ON",
-      "Id": 12135,
-      "TransformId": 35350,
+      "Id": 12157,
+      "TransformId": 35390,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -9077,8 +9077,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_ON",
-      "Id": 12136,
-      "TransformId": 35351,
+      "Id": 12158,
+      "TransformId": 35391,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -9113,8 +9113,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_ON",
-      "Id": 18312,
-      "TransformId": 41563,
+      "Id": 18346,
+      "TransformId": 41604,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -9149,8 +9149,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_ON",
-      "Id": 18313,
-      "TransformId": 41562,
+      "Id": 18347,
+      "TransformId": 41603,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -9185,8 +9185,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_ON",
-      "Id": 18455,
-      "TransformId": 41314,
+      "Id": 18489,
+      "TransformId": 41355,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -9221,8 +9221,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_ON",
-      "Id": 18456,
-      "TransformId": 41313,
+      "Id": 18490,
+      "TransformId": 41354,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -9257,8 +9257,8 @@
     },
     {
       "Name": "Lights_UpstairsHall_ON",
-      "Id": 20581,
-      "TransformId": 43967,
+      "Id": 20618,
+      "TransformId": 44010,
       "Position": {
         "x": -12.0,
         "y": 18.0,
@@ -9293,8 +9293,8 @@
     },
     {
       "Name": "OfficeDoors",
-      "Id": 5470,
-      "TransformId": 26227,
+      "Id": 5480,
+      "TransformId": 26267,
       "Position": {
         "x": 0.08,
         "y": 0.0,
@@ -9329,8 +9329,8 @@
     },
     {
       "Name": "OfficeDoorsCloset",
-      "Id": 5579,
-      "TransformId": 36716,
+      "Id": 5589,
+      "TransformId": 36756,
       "Position": {
         "x": 0.04,
         "y": 0.0,
@@ -9365,8 +9365,8 @@
     },
     {
       "Name": "OffroadCargoDoor",
-      "Id": 14515,
-      "TransformId": 31147,
+      "Id": 14541,
+      "TransformId": 31187,
       "Position": {
         "x": 77.634857,
         "y": 6.008719,
@@ -9401,8 +9401,8 @@
     },
     {
       "Name": "PF_FaucetWater_DownstairsBathroom",
-      "Id": 14642,
-      "TransformId": 41291,
+      "Id": 14668,
+      "TransformId": 41332,
       "Position": {
         "x": -5.499166,
         "y": 3.668364,
@@ -9437,8 +9437,8 @@
     },
     {
       "Name": "ShowerDoor",
-      "Id": 16044,
-      "TransformId": 25554,
+      "Id": 16073,
+      "TransformId": 25593,
       "Position": {
         "x": 3.552636,
         "y": 4.037094,
@@ -9470,7 +9470,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 61722,
+        "ComponentId": 61866,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -9479,8 +9479,8 @@
     },
     {
       "Name": "SM_AirFryer_Door_MODEL_UPDATE",
-      "Id": 18825,
-      "TransformId": 25640,
+      "Id": 18859,
+      "TransformId": 25679,
       "Position": {
         "x": -8.190657,
         "y": 2.865969,
@@ -9515,8 +9515,8 @@
     },
     {
       "Name": "SM_Ceiling_Shadow_Stairs",
-      "Id": 13361,
-      "TransformId": 30954,
+      "Id": 13386,
+      "TransformId": 30994,
       "Position": {
         "x": 7.43,
         "y": 25.465,
@@ -9551,8 +9551,8 @@
     },
     {
       "Name": "SM_Ceiling_Shadow_Upstairs",
-      "Id": 17582,
-      "TransformId": 26807,
+      "Id": 17615,
+      "TransformId": 26847,
       "Position": {
         "x": -15.2,
         "y": 26.5,
@@ -9587,8 +9587,8 @@
     },
     {
       "Name": "SM_Cupboard_Laundry_Door_2_MODEL_UPDATE",
-      "Id": 4442,
-      "TransformId": 31353,
+      "Id": 4450,
+      "TransformId": 31393,
       "Position": {
         "x": -28.505629,
         "y": 6.951356,
@@ -9620,7 +9620,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 60551,
+        "ComponentId": 60687,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -9629,8 +9629,8 @@
     },
     {
       "Name": "SM_Cupboard_Laundry_Door_2_MODEL_UPDATE",
-      "Id": 18037,
-      "TransformId": 33654,
+      "Id": 18071,
+      "TransformId": 33694,
       "Position": {
         "x": -28.505629,
         "y": 6.951356,
@@ -9662,7 +9662,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 60803,
+        "ComponentId": 60941,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -9671,8 +9671,8 @@
     },
     {
       "Name": "SM_Dishwasher_Door_MODEL_UPDATE",
-      "Id": 9962,
-      "TransformId": 31288,
+      "Id": 9982,
+      "TransformId": 31328,
       "Position": {
         "x": -29.030245,
         "y": -0.157717,
@@ -9707,8 +9707,8 @@
     },
     {
       "Name": "SM_Dishwasher_Door_Towel_MODEL",
-      "Id": 4455,
-      "TransformId": 22707,
+      "Id": 4463,
+      "TransformId": 22746,
       "Position": {
         "x": -28.943691,
         "y": 2.257348,
@@ -9743,8 +9743,8 @@
     },
     {
       "Name": "SM_Door_14_3",
-      "Id": 21368,
-      "TransformId": 30328,
+      "Id": 21407,
+      "TransformId": 30368,
       "Position": {
         "x": -4.526314,
         "y": 12.824811,
@@ -9779,8 +9779,8 @@
     },
     {
       "Name": "SM_Door_15_3",
-      "Id": 16706,
-      "TransformId": 24189,
+      "Id": 16736,
+      "TransformId": 24228,
       "Position": {
         "x": -4.526314,
         "y": 12.824811,
@@ -9815,8 +9815,8 @@
     },
     {
       "Name": "SM_Door_16_3",
-      "Id": 8312,
-      "TransformId": 43339,
+      "Id": 8328,
+      "TransformId": 43382,
       "Position": {
         "x": -4.526314,
         "y": 12.824811,
@@ -9851,8 +9851,8 @@
     },
     {
       "Name": "SM_Door_Back_Frame",
-      "Id": 10313,
-      "TransformId": 34855,
+      "Id": 10333,
+      "TransformId": 34895,
       "Position": {
         "x": -32.849998,
         "y": -0.577,
@@ -9887,8 +9887,8 @@
     },
     {
       "Name": "SM_Doorframe_Big_1",
-      "Id": 12511,
-      "TransformId": 24524,
+      "Id": 12534,
+      "TransformId": 24563,
       "Position": {
         "x": -17.190723,
         "y": 0.0,
@@ -9923,8 +9923,8 @@
     },
     {
       "Name": "SM_Doorframe_Big_2",
-      "Id": 13807,
-      "TransformId": 28279,
+      "Id": 13833,
+      "TransformId": 28319,
       "Position": {
         "x": -22.019663,
         "y": 0.0,
@@ -9959,8 +9959,8 @@
     },
     {
       "Name": "SM_Doorframe_Big_3",
-      "Id": 12002,
-      "TransformId": 26050,
+      "Id": 12024,
+      "TransformId": 26089,
       "Position": {
         "x": -26.476213,
         "y": 0.0,
@@ -9995,8 +9995,8 @@
     },
     {
       "Name": "SM_Doorframe_Big_4",
-      "Id": 16732,
-      "TransformId": 34020,
+      "Id": 16762,
+      "TransformId": 34060,
       "Position": {
         "x": -4.205285,
         "y": 12.79716,
@@ -10031,8 +10031,8 @@
     },
     {
       "Name": "SM_Doorframe_Big_5",
-      "Id": 15610,
-      "TransformId": 43184,
+      "Id": 15638,
+      "TransformId": 43227,
       "Position": {
         "x": -4.205285,
         "y": 12.79716,
@@ -10067,8 +10067,8 @@
     },
     {
       "Name": "SM_Doorframe_Big_6",
-      "Id": 1238,
-      "TransformId": 37550,
+      "Id": 1239,
+      "TransformId": 37590,
       "Position": {
         "x": -4.205285,
         "y": 12.79716,
@@ -10103,8 +10103,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_1",
-      "Id": 20222,
-      "TransformId": 31662,
+      "Id": 20258,
+      "TransformId": 31702,
       "Position": {
         "x": 8.047862,
         "y": -0.617448,
@@ -10139,8 +10139,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_10",
-      "Id": 17475,
-      "TransformId": 33573,
+      "Id": 17508,
+      "TransformId": 33613,
       "Position": {
         "x": -8.013697,
         "y": 12.824811,
@@ -10175,8 +10175,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_11",
-      "Id": 7315,
-      "TransformId": 28819,
+      "Id": 7330,
+      "TransformId": 28859,
       "Position": {
         "x": -0.51955,
         "y": 12.824811,
@@ -10211,8 +10211,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_12",
-      "Id": 4350,
-      "TransformId": 34328,
+      "Id": 4357,
+      "TransformId": 34368,
       "Position": {
         "x": 3.841573,
         "y": 12.824811,
@@ -10247,8 +10247,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_13",
-      "Id": 5955,
-      "TransformId": 36508,
+      "Id": 5968,
+      "TransformId": 36548,
       "Position": {
         "x": -8.152414,
         "y": 12.824811,
@@ -10283,8 +10283,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_2",
-      "Id": 16940,
-      "TransformId": 33456,
+      "Id": 16971,
+      "TransformId": 33496,
       "Position": {
         "x": 3.96745,
         "y": -0.617448,
@@ -10319,8 +10319,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_3",
-      "Id": 5633,
-      "TransformId": 35228,
+      "Id": 5644,
+      "TransformId": 35268,
       "Position": {
         "x": 0.272059,
         "y": -0.617448,
@@ -10355,8 +10355,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_4",
-      "Id": 8789,
-      "TransformId": 29766,
+      "Id": 8805,
+      "TransformId": 29806,
       "Position": {
         "x": -17.428417,
         "y": -0.617448,
@@ -10391,8 +10391,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_5",
-      "Id": 13183,
-      "TransformId": 34727,
+      "Id": 13208,
+      "TransformId": 34767,
       "Position": {
         "x": -13.263297,
         "y": -0.617448,
@@ -10427,8 +10427,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_6",
-      "Id": 5209,
-      "TransformId": 32726,
+      "Id": 5218,
+      "TransformId": 32766,
       "Position": {
         "x": 18.451712,
         "y": -0.617448,
@@ -10463,8 +10463,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_7",
-      "Id": 4417,
-      "TransformId": 38819,
+      "Id": 4425,
+      "TransformId": 38859,
       "Position": {
         "x": -12.55891,
         "y": 12.824811,
@@ -10499,8 +10499,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_8",
-      "Id": 18782,
-      "TransformId": 38617,
+      "Id": 18816,
+      "TransformId": 38657,
       "Position": {
         "x": -25.490656,
         "y": 12.824811,
@@ -10535,8 +10535,8 @@
     },
     {
       "Name": "SM_Doorframe_Small_9",
-      "Id": 4515,
-      "TransformId": 31140,
+      "Id": 4523,
+      "TransformId": 31180,
       "Position": {
         "x": -24.993027,
         "y": 12.824811,
@@ -10571,8 +10571,8 @@
     },
     {
       "Name": "SM_Dryer_Door",
-      "Id": 4752,
-      "TransformId": 33604,
+      "Id": 4761,
+      "TransformId": 33644,
       "Position": {
         "x": -20.794468,
         "y": 5.428115,
@@ -10607,8 +10607,8 @@
     },
     {
       "Name": "SM_Fridge_Door_1_MODEL_UPDATE",
-      "Id": 3774,
-      "TransformId": 34926,
+      "Id": 3779,
+      "TransformId": 34966,
       "Position": {
         "x": -9.853671,
         "y": 4.727766,
@@ -10640,7 +10640,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 58975,
+        "ComponentId": 59101,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -10649,8 +10649,8 @@
     },
     {
       "Name": "SM_Fridge_Door_1_MODEL_UPDATE",
-      "Id": 6319,
-      "TransformId": 39101,
+      "Id": 6334,
+      "TransformId": 39141,
       "Position": {
         "x": -9.853671,
         "y": 4.727766,
@@ -10685,8 +10685,8 @@
     },
     {
       "Name": "SM_Fridge_Door_2_MODEL_UPDATE",
-      "Id": 5562,
-      "TransformId": 30037,
+      "Id": 5572,
+      "TransformId": 30077,
       "Position": {
         "x": -9.853668,
         "y": 4.727766,
@@ -10718,7 +10718,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 59610,
+        "ComponentId": 59740,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -10727,8 +10727,8 @@
     },
     {
       "Name": "SM_Fridge_Door_2_MODEL_UPDATE",
-      "Id": 20143,
-      "TransformId": 41879,
+      "Id": 20179,
+      "TransformId": 41920,
       "Position": {
         "x": -9.853668,
         "y": 4.727766,
@@ -10763,8 +10763,8 @@
     },
     {
       "Name": "SM_IronCupboard_Door_MODEL_UPDATE",
-      "Id": 1199,
-      "TransformId": 40834,
+      "Id": 1200,
+      "TransformId": 40874,
       "Position": {
         "x": -25.053772,
         "y": 5.507751,
@@ -10796,7 +10796,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 62376,
+        "ComponentId": 62526,
         "DoorOpenType": "1",
         "OverrideNodeLock": false,
         "Locked": false,
@@ -10805,8 +10805,8 @@
     },
     {
       "Name": "SM_IronCupboard_Door_MODEL_UPDATE",
-      "Id": 2331,
-      "TransformId": 28592,
+      "Id": 2334,
+      "TransformId": 28632,
       "Position": {
         "x": -25.053772,
         "y": 5.507751,
@@ -10841,8 +10841,8 @@
     },
     {
       "Name": "SM_IronCupboard_Door_MODEL_UPDATE",
-      "Id": 3084,
-      "TransformId": 28303,
+      "Id": 3088,
+      "TransformId": 28343,
       "Position": {
         "x": -25.035992,
         "y": 5.507751,
@@ -10877,8 +10877,8 @@
     },
     {
       "Name": "SM_Kitchen_Cupboard_Door_1_MODEL_UPDATE",
-      "Id": 7930,
-      "TransformId": 37188,
+      "Id": 7945,
+      "TransformId": 37228,
       "Position": {
         "x": -30.15979,
         "y": 6.949398,
@@ -10910,7 +10910,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 64907,
+        "ComponentId": 65075,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -10919,8 +10919,8 @@
     },
     {
       "Name": "SM_Kitchen_Cupboard_Door_5_MODEL_UPDATE",
-      "Id": 4180,
-      "TransformId": 28117,
+      "Id": 4186,
+      "TransformId": 28157,
       "Position": {
         "x": -9.440451,
         "y": 6.943306,
@@ -10952,7 +10952,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 59005,
+        "ComponentId": 59132,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -10961,8 +10961,8 @@
     },
     {
       "Name": "SM_Kitchen_Cupboard_Door_7_MODEL_UPDATE",
-      "Id": 4874,
-      "TransformId": 26346,
+      "Id": 4883,
+      "TransformId": 26386,
       "Position": {
         "x": -9.424873,
         "y": 6.936124,
@@ -10994,7 +10994,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 62364,
+        "ComponentId": 62513,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -11003,8 +11003,8 @@
     },
     {
       "Name": "SM_Kitchen_Cupboard_Door_9_MODEL_UPDATE",
-      "Id": 6777,
-      "TransformId": 24056,
+      "Id": 6792,
+      "TransformId": 24095,
       "Position": {
         "x": -10.335303,
         "y": 1.075706,
@@ -11036,7 +11036,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 60988,
+        "ComponentId": 61128,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -11045,8 +11045,8 @@
     },
     {
       "Name": "SM_Kitchen_Cupboard_Door_9_MODEL_UPDATE",
-      "Id": 15130,
-      "TransformId": 43134,
+      "Id": 15157,
+      "TransformId": 43177,
       "Position": {
         "x": -10.530601,
         "y": 1.081,
@@ -11078,7 +11078,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 65948,
+        "ComponentId": 66120,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -11087,8 +11087,8 @@
     },
     {
       "Name": "SM_Kithcen_Cupboard_Door_12_MODEL_UPDATE",
-      "Id": 14482,
-      "TransformId": 36081,
+      "Id": 14508,
+      "TransformId": 36121,
       "Position": {
         "x": -10.530001,
         "y": 1.185487,
@@ -11120,7 +11120,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 64882,
+        "ComponentId": 65049,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -11129,8 +11129,8 @@
     },
     {
       "Name": "SM_Kithcen_Cupboard_Door_12_MODEL_UPDATE",
-      "Id": 19386,
-      "TransformId": 42295,
+      "Id": 19421,
+      "TransformId": 42336,
       "Position": {
         "x": -10.348999,
         "y": 1.272726,
@@ -11162,7 +11162,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 65458,
+        "ComponentId": 65627,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -11171,8 +11171,8 @@
     },
     {
       "Name": "SM_Kithcen_Cupboard_Door_2_MODEL_UPDATE",
-      "Id": 17624,
-      "TransformId": 22798,
+      "Id": 17657,
+      "TransformId": 22837,
       "Position": {
         "x": -30.15379,
         "y": 6.950398,
@@ -11204,7 +11204,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 61599,
+        "ComponentId": 61743,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -11213,8 +11213,8 @@
     },
     {
       "Name": "SM_Kithcen_Cupboard_Door_8_MODEL_UPDATE",
-      "Id": 12227,
-      "TransformId": 35051,
+      "Id": 12249,
+      "TransformId": 35091,
       "Position": {
         "x": -9.424732,
         "y": 6.938056,
@@ -11246,7 +11246,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 66717,
+        "ComponentId": 66894,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -11255,8 +11255,8 @@
     },
     {
       "Name": "SM_Kithcen_Cupboard_Door_8_MODEL_UPDATE",
-      "Id": 15401,
-      "TransformId": 37871,
+      "Id": 15428,
+      "TransformId": 37911,
       "Position": {
         "x": -9.419873,
         "y": 6.936124,
@@ -11288,7 +11288,7 @@
         }
       ],
       "DoorComponent": {
-        "ComponentId": 60264,
+        "ComponentId": 60399,
         "DoorOpenType": "1",
         "OverrideNodeLock": true,
         "Locked": false,
@@ -11297,8 +11297,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsBathroom",
-      "Id": 2096,
-      "TransformId": 24104,
+      "Id": 2099,
+      "TransformId": 24143,
       "Position": {
         "x": -3.328323,
         "y": 4.531246,
@@ -11333,8 +11333,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsBathroom",
-      "Id": 2097,
-      "TransformId": 24105,
+      "Id": 2100,
+      "TransformId": 24144,
       "Position": {
         "x": -3.328323,
         "y": 4.531246,
@@ -11369,8 +11369,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsBathroom",
-      "Id": 2223,
-      "TransformId": 24247,
+      "Id": 2226,
+      "TransformId": 24286,
       "Position": {
         "x": -3.328323,
         "y": 4.531246,
@@ -11405,8 +11405,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsBathroom",
-      "Id": 2224,
-      "TransformId": 24248,
+      "Id": 2227,
+      "TransformId": 24287,
       "Position": {
         "x": -3.328323,
         "y": 4.531246,
@@ -11441,8 +11441,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsBathroom",
-      "Id": 4739,
-      "TransformId": 27229,
+      "Id": 4748,
+      "TransformId": 27269,
       "Position": {
         "x": -3.328323,
         "y": 4.531246,
@@ -11477,8 +11477,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsBathroom",
-      "Id": 8550,
-      "TransformId": 30371,
+      "Id": 8566,
+      "TransformId": 30411,
       "Position": {
         "x": -3.328323,
         "y": 4.531246,
@@ -11513,8 +11513,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsBathroom",
-      "Id": 8551,
-      "TransformId": 30370,
+      "Id": 8567,
+      "TransformId": 30410,
       "Position": {
         "x": -3.328323,
         "y": 4.531246,
@@ -11549,8 +11549,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsBathroom",
-      "Id": 16930,
-      "TransformId": 38498,
+      "Id": 16961,
+      "TransformId": 38538,
       "Position": {
         "x": -3.328323,
         "y": 4.531246,
@@ -11585,8 +11585,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsBathroom",
-      "Id": 16931,
-      "TransformId": 38497,
+      "Id": 16962,
+      "TransformId": 38537,
       "Position": {
         "x": -3.328323,
         "y": 4.531246,
@@ -11621,8 +11621,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsBathroom",
-      "Id": 17527,
-      "TransformId": 39031,
+      "Id": 17560,
+      "TransformId": 39071,
       "Position": {
         "x": -3.328323,
         "y": 4.531246,
@@ -11657,8 +11657,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsHall",
-      "Id": 5012,
-      "TransformId": 31975,
+      "Id": 5021,
+      "TransformId": 32015,
       "Position": {
         "x": 14.753781,
         "y": 4.531246,
@@ -11693,8 +11693,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsHall",
-      "Id": 5013,
-      "TransformId": 31974,
+      "Id": 5022,
+      "TransformId": 32014,
       "Position": {
         "x": 14.753781,
         "y": 4.531246,
@@ -11729,8 +11729,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsHall",
-      "Id": 8304,
-      "TransformId": 22812,
+      "Id": 8320,
+      "TransformId": 22851,
       "Position": {
         "x": 14.753781,
         "y": 4.531246,
@@ -11765,8 +11765,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsHall",
-      "Id": 11272,
-      "TransformId": 25834,
+      "Id": 11294,
+      "TransformId": 25873,
       "Position": {
         "x": 14.753781,
         "y": 4.531246,
@@ -11801,8 +11801,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsHall",
-      "Id": 11273,
-      "TransformId": 25833,
+      "Id": 11295,
+      "TransformId": 25872,
       "Position": {
         "x": 14.753781,
         "y": 4.531246,
@@ -11837,8 +11837,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsHall",
-      "Id": 11434,
-      "TransformId": 25943,
+      "Id": 11456,
+      "TransformId": 25982,
       "Position": {
         "x": 14.753781,
         "y": 4.531246,
@@ -11873,8 +11873,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsHall",
-      "Id": 11435,
-      "TransformId": 25944,
+      "Id": 11457,
+      "TransformId": 25983,
       "Position": {
         "x": 14.753781,
         "y": 4.531246,
@@ -11909,8 +11909,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsHall",
-      "Id": 15447,
-      "TransformId": 43329,
+      "Id": 15474,
+      "TransformId": 43372,
       "Position": {
         "x": 14.753781,
         "y": 4.531246,
@@ -11945,8 +11945,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsHall",
-      "Id": 19023,
-      "TransformId": 34716,
+      "Id": 19057,
+      "TransformId": 34756,
       "Position": {
         "x": 14.753781,
         "y": 4.531246,
@@ -11981,8 +11981,8 @@
     },
     {
       "Name": "SM_LightSwitch_DownstairsHall",
-      "Id": 19024,
-      "TransformId": 34715,
+      "Id": 19058,
+      "TransformId": 34755,
       "Position": {
         "x": 14.753781,
         "y": 4.531246,
@@ -12017,8 +12017,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsBathroom",
-      "Id": 1317,
-      "TransformId": 40246,
+      "Id": 1319,
+      "TransformId": 40286,
       "Position": {
         "x": -28.02,
         "y": 18.486118,
@@ -12053,8 +12053,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsBathroom",
-      "Id": 1318,
-      "TransformId": 40245,
+      "Id": 1320,
+      "TransformId": 40285,
       "Position": {
         "x": -28.02,
         "y": 18.486118,
@@ -12089,8 +12089,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsBathroom",
-      "Id": 1415,
-      "TransformId": 40052,
+      "Id": 1417,
+      "TransformId": 40092,
       "Position": {
         "x": -28.02,
         "y": 18.486118,
@@ -12125,8 +12125,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsBathroom",
-      "Id": 1416,
-      "TransformId": 40053,
+      "Id": 1418,
+      "TransformId": 40093,
       "Position": {
         "x": -28.02,
         "y": 18.486118,
@@ -12161,8 +12161,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsBathroom",
-      "Id": 3980,
-      "TransformId": 42676,
+      "Id": 3985,
+      "TransformId": 42718,
       "Position": {
         "x": -28.02,
         "y": 18.486118,
@@ -12197,8 +12197,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsBathroom",
-      "Id": 6517,
-      "TransformId": 34009,
+      "Id": 6532,
+      "TransformId": 34049,
       "Position": {
         "x": -28.02,
         "y": 18.486118,
@@ -12233,8 +12233,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsBathroom",
-      "Id": 6518,
-      "TransformId": 34008,
+      "Id": 6533,
+      "TransformId": 34048,
       "Position": {
         "x": -28.02,
         "y": 18.486118,
@@ -12269,8 +12269,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsBathroom",
-      "Id": 14937,
-      "TransformId": 31279,
+      "Id": 14964,
+      "TransformId": 31319,
       "Position": {
         "x": -28.02,
         "y": 18.486118,
@@ -12305,8 +12305,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsBathroom",
-      "Id": 14938,
-      "TransformId": 31278,
+      "Id": 14965,
+      "TransformId": 31318,
       "Position": {
         "x": -28.02,
         "y": 18.486118,
@@ -12341,8 +12341,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsBathroom",
-      "Id": 19824,
-      "TransformId": 25144,
+      "Id": 19859,
+      "TransformId": 25183,
       "Position": {
         "x": -28.02,
         "y": 18.486118,
@@ -12378,7 +12378,7 @@
     {
       "Name": "SM_LightSwitch_UpstairsHallway",
       "Id": 1033,
-      "TransformId": 32138,
+      "TransformId": 32178,
       "Position": {
         "x": -4.233835,
         "y": 18.486118,
@@ -12413,8 +12413,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsHallway",
-      "Id": 4282,
-      "TransformId": 29082,
+      "Id": 4289,
+      "TransformId": 29122,
       "Position": {
         "x": -4.233835,
         "y": 18.486118,
@@ -12449,8 +12449,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsHallway",
-      "Id": 4283,
-      "TransformId": 29083,
+      "Id": 4290,
+      "TransformId": 29123,
       "Position": {
         "x": -4.233835,
         "y": 18.486118,
@@ -12485,8 +12485,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsHallway",
-      "Id": 4398,
-      "TransformId": 28850,
+      "Id": 4406,
+      "TransformId": 28890,
       "Position": {
         "x": -4.233835,
         "y": 18.486118,
@@ -12521,8 +12521,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsHallway",
-      "Id": 4399,
-      "TransformId": 28849,
+      "Id": 4407,
+      "TransformId": 28889,
       "Position": {
         "x": -4.233835,
         "y": 18.486118,
@@ -12557,8 +12557,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsHallway",
-      "Id": 9380,
-      "TransformId": 22784,
+      "Id": 9398,
+      "TransformId": 22823,
       "Position": {
         "x": -4.233835,
         "y": 18.486118,
@@ -12593,8 +12593,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsHallway",
-      "Id": 9381,
-      "TransformId": 22783,
+      "Id": 9399,
+      "TransformId": 22822,
       "Position": {
         "x": -4.233835,
         "y": 18.486118,
@@ -12629,8 +12629,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsHallway",
-      "Id": 12030,
-      "TransformId": 41795,
+      "Id": 12052,
+      "TransformId": 41836,
       "Position": {
         "x": -4.233835,
         "y": 18.486118,
@@ -12665,8 +12665,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsHallway",
-      "Id": 12031,
-      "TransformId": 41794,
+      "Id": 12053,
+      "TransformId": 41835,
       "Position": {
         "x": -4.233835,
         "y": 18.486118,
@@ -12701,8 +12701,8 @@
     },
     {
       "Name": "SM_LightSwitch_UpstairsHallway",
-      "Id": 22515,
-      "TransformId": 35701,
+      "Id": 22555,
+      "TransformId": 35741,
       "Position": {
         "x": -4.233835,
         "y": 18.486118,
@@ -12737,8 +12737,8 @@
     },
     {
       "Name": "SM_Microwave_Door_MODEL_UPDATE",
-      "Id": 14633,
-      "TransformId": 29530,
+      "Id": 14659,
+      "TransformId": 29570,
       "Position": {
         "x": -8.908218,
         "y": 3.443758,
@@ -12773,8 +12773,8 @@
     },
     {
       "Name": "SM_Minibar_Door_1_MODEL_UPDATE",
-      "Id": 16311,
-      "TransformId": 24206,
+      "Id": 16341,
+      "TransformId": 24245,
       "Position": {
         "x": -29.402029,
         "y": 1.430285,
@@ -12809,8 +12809,8 @@
     },
     {
       "Name": "SM_Minibar_Door_2_MODEL_UPDATE",
-      "Id": 12984,
-      "TransformId": 29007,
+      "Id": 13009,
+      "TransformId": 29047,
       "Position": {
         "x": -29.409603,
         "y": 1.430264,
@@ -12845,8 +12845,8 @@
     },
     {
       "Name": "SM_Oven_Door_MODEL_UPDATE",
-      "Id": 13495,
-      "TransformId": 40642,
+      "Id": 13520,
+      "TransformId": 40682,
       "Position": {
         "x": -10.568001,
         "y": 0.113372,
@@ -12881,8 +12881,8 @@
     },
     {
       "Name": "SM_Safe_Door_MODEL_UPDATE",
-      "Id": 21166,
-      "TransformId": 32052,
+      "Id": 21205,
+      "TransformId": 32092,
       "Position": {
         "x": 17.51026,
         "y": 14.727601,
@@ -12920,8 +12920,8 @@
     },
     {
       "Name": "SM_Safe_Door_MODEL_UPDATE",
-      "Id": 21313,
-      "TransformId": 32256,
+      "Id": 21352,
+      "TransformId": 32296,
       "Position": {
         "x": 17.51026,
         "y": 14.727601,
@@ -12959,8 +12959,8 @@
     },
     {
       "Name": "SM_Safe_Door_TRS",
-      "Id": 17991,
-      "TransformId": 24143,
+      "Id": 18024,
+      "TransformId": 24182,
       "Position": {
         "x": 17.51026,
         "y": 14.727601,
@@ -12998,8 +12998,8 @@
     },
     {
       "Name": "SM_Safe_Door_TRS",
-      "Id": 18891,
-      "TransformId": 23629,
+      "Id": 18925,
+      "TransformId": 23668,
       "Position": {
         "x": 17.51026,
         "y": 14.727601,
@@ -13037,8 +13037,8 @@
     },
     {
       "Name": "SM_Sink_Bathroom_1_Door_MODEL_UPDATE",
-      "Id": 16482,
-      "TransformId": 29496,
+      "Id": 16512,
+      "TransformId": 29536,
       "Position": {
         "x": -4.111951,
         "y": 1.002109,
@@ -13073,8 +13073,8 @@
     },
     {
       "Name": "SM_Stairs_Ceiling_fix",
-      "Id": 21187,
-      "TransformId": 22882,
+      "Id": 21226,
+      "TransformId": 22921,
       "Position": {
         "x": 2.5931,
         "y": 23.885,
@@ -13109,8 +13109,8 @@
     },
     {
       "Name": "SM_TrapDoor_Handle_MODEL_UPDATE",
-      "Id": 10225,
-      "TransformId": 42404,
+      "Id": 10245,
+      "TransformId": 42446,
       "Position": {
         "x": 0.213888,
         "y": -0.544009,
@@ -13145,8 +13145,8 @@
     },
     {
       "Name": "SM_TrapDoor_MODEL_UPDATE",
-      "Id": 5133,
-      "TransformId": 44038,
+      "Id": 5142,
+      "TransformId": 44081,
       "Position": {
         "x": -3.510606,
         "y": -0.590163,
@@ -13181,8 +13181,8 @@
     },
     {
       "Name": "SM_Washer_Door",
-      "Id": 9471,
-      "TransformId": 36224,
+      "Id": 9490,
+      "TransformId": 36264,
       "Position": {
         "x": -20.800114,
         "y": 1.484203,
@@ -13217,8 +13217,8 @@
     },
     {
       "Name": "Stairs",
-      "Id": 21623,
-      "TransformId": 39989,
+      "Id": 21662,
+      "TransformId": 40029,
       "Position": {
         "x": 2.579899,
         "y": -0.557445,
@@ -13253,8 +13253,8 @@
     },
     {
       "Name": "Stairs Special bumper",
-      "Id": 14719,
-      "TransformId": 25302,
+      "Id": 14745,
+      "TransformId": 25341,
       "Position": {
         "x": 2.579899,
         "y": -0.557445,
@@ -13289,8 +13289,8 @@
     },
     {
       "Name": "Trapdoor",
-      "Id": 9733,
-      "TransformId": 33358,
+      "Id": 9753,
+      "TransformId": 33398,
       "Position": {
         "x": -1.502208,
         "y": -0.584272,
@@ -13325,8 +13325,8 @@
     },
     {
       "Name": "UpstairsHall",
-      "Id": 4287,
-      "TransformId": 23142,
+      "Id": 4294,
+      "TransformId": 23181,
       "Position": {
         "x": 0.0,
         "y": 0.0,
@@ -13361,8 +13361,8 @@
     },
     {
       "Name": "UpstairsHallWall",
-      "Id": 16040,
-      "TransformId": 40677,
+      "Id": 16069,
+      "TransformId": 40717,
       "Position": {
         "x": 0.0,
         "y": 0.0,
@@ -13399,8 +13399,8 @@
   "CameraObjects": [
     {
       "Name": "Camera_ArmaCrawlspace",
-      "Id": 3937,
-      "TransformId": 23205,
+      "Id": 3942,
+      "TransformId": 23244,
       "Position": {
         "x": -2.932056,
         "y": -5.476,
@@ -13433,8 +13433,8 @@
     },
     {
       "Name": "Camera_ArttAttic",
-      "Id": 8645,
-      "TransformId": 33768,
+      "Id": 8661,
+      "TransformId": 33808,
       "Position": {
         "x": 10.24099,
         "y": 15.65,
@@ -13467,8 +13467,8 @@
     },
     {
       "Name": "Camera_ArttBathroomWall",
-      "Id": 12787,
-      "TransformId": 30161,
+      "Id": 12812,
+      "TransformId": 30201,
       "Position": {
         "x": -2.93647,
         "y": 6.33,
@@ -13501,8 +13501,8 @@
     },
     {
       "Name": "Camera_ArttBedroomWall",
-      "Id": 17986,
-      "TransformId": 28121,
+      "Id": 18019,
+      "TransformId": 28161,
       "Position": {
         "x": -12.665054,
         "y": 18.1,
@@ -13535,8 +13535,8 @@
     },
     {
       "Name": "Camera_ArttFireplacePiano",
-      "Id": 9945,
-      "TransformId": 26043,
+      "Id": 9965,
+      "TransformId": 26082,
       "Position": {
         "x": -12.411221,
         "y": 7.29,
@@ -13569,8 +13569,8 @@
     },
     {
       "Name": "Camera_ArttFireplaceShip",
-      "Id": 5237,
-      "TransformId": 22777,
+      "Id": 5247,
+      "TransformId": 22816,
       "Position": {
         "x": 4.689682,
         "y": 7.86,
@@ -13603,8 +13603,8 @@
     },
     {
       "Name": "Camera_Attic Space",
-      "Id": 14017,
-      "TransformId": 36022,
+      "Id": 14043,
+      "TransformId": 36062,
       "Position": {
         "x": 14.423786,
         "y": 15.889999,
@@ -13637,8 +13637,8 @@
     },
     {
       "Name": "Camera_Attic2",
-      "Id": 13166,
-      "TransformId": 23482,
+      "Id": 13191,
+      "TransformId": 23521,
       "Position": {
         "x": 9.507071,
         "y": 16.43,
@@ -13671,8 +13671,8 @@
     },
     {
       "Name": "Camera_Attic3",
-      "Id": 5496,
-      "TransformId": 33170,
+      "Id": 5506,
+      "TransformId": 33210,
       "Position": {
         "x": 9.981636,
         "y": 18.299999,
@@ -13705,8 +13705,8 @@
     },
     {
       "Name": "Camera_Attic4",
-      "Id": 7401,
-      "TransformId": 26181,
+      "Id": 7416,
+      "TransformId": 26221,
       "Position": {
         "x": 14.423786,
         "y": 16.57,
@@ -13739,8 +13739,8 @@
     },
     {
       "Name": "Camera_Attic5",
-      "Id": 18291,
-      "TransformId": 43798,
+      "Id": 18325,
+      "TransformId": 43841,
       "Position": {
         "x": 18.076836,
         "y": 17.718,
@@ -13773,8 +13773,8 @@
     },
     {
       "Name": "Camera_Attic6",
-      "Id": 1502,
-      "TransformId": 26897,
+      "Id": 1504,
+      "TransformId": 26937,
       "Position": {
         "x": 17.315323,
         "y": 18.27,
@@ -13807,8 +13807,8 @@
     },
     {
       "Name": "Camera_AtticWindow",
-      "Id": 10736,
-      "TransformId": 35923,
+      "Id": 10758,
+      "TransformId": 35963,
       "Position": {
         "x": 14.705214,
         "y": 18.0,
@@ -13841,8 +13841,8 @@
     },
     {
       "Name": "Camera_Bathroom_1",
-      "Id": 14011,
-      "TransformId": 36016,
+      "Id": 14037,
+      "TransformId": 36056,
       "Position": {
         "x": 0.893162,
         "y": 4.894,
@@ -13875,8 +13875,8 @@
     },
     {
       "Name": "Camera_Bathroom_2",
-      "Id": 13882,
-      "TransformId": 27204,
+      "Id": 13908,
+      "TransformId": 27244,
       "Position": {
         "x": 2.968002,
         "y": 5.367,
@@ -13909,8 +13909,8 @@
     },
     {
       "Name": "Camera_Bathroom_3",
-      "Id": 18756,
-      "TransformId": 32887,
+      "Id": 18790,
+      "TransformId": 32927,
       "Position": {
         "x": -2.583305,
         "y": 5.367,
@@ -13943,8 +13943,8 @@
     },
     {
       "Name": "Camera_Bathroom2",
-      "Id": 14018,
-      "TransformId": 36023,
+      "Id": 14044,
+      "TransformId": 36063,
       "Position": {
         "x": -23.751125,
         "y": 18.23,
@@ -13977,8 +13977,8 @@
     },
     {
       "Name": "Camera_Bathroom2_2",
-      "Id": 6806,
-      "TransformId": 39337,
+      "Id": 6821,
+      "TransformId": 39377,
       "Position": {
         "x": -29.578342,
         "y": 18.23,
@@ -14011,8 +14011,8 @@
     },
     {
       "Name": "Camera_Bathroom2_3",
-      "Id": 1821,
-      "TransformId": 40453,
+      "Id": 1824,
+      "TransformId": 40493,
       "Position": {
         "x": -25.334843,
         "y": 18.872,
@@ -14045,8 +14045,8 @@
     },
     {
       "Name": "Camera_Bathroom2_4",
-      "Id": 16828,
-      "TransformId": 31292,
+      "Id": 16859,
+      "TransformId": 31332,
       "Position": {
         "x": -22.934425,
         "y": 18.389999,
@@ -14079,8 +14079,8 @@
     },
     {
       "Name": "Camera_Bathroom2_5",
-      "Id": 15163,
-      "TransformId": 34072,
+      "Id": 15190,
+      "TransformId": 34112,
       "Position": {
         "x": -25.042377,
         "y": 18.872,
@@ -14113,8 +14113,8 @@
     },
     {
       "Name": "Camera_BeauQuest",
-      "Id": 8989,
-      "TransformId": 33137,
+      "Id": 9006,
+      "TransformId": 33177,
       "Position": {
         "x": -3.444145,
         "y": -6.995,
@@ -14147,8 +14147,8 @@
     },
     {
       "Name": "Camera_Bedroom",
-      "Id": 14019,
-      "TransformId": 36024,
+      "Id": 14045,
+      "TransformId": 36064,
       "Position": {
         "x": -12.212563,
         "y": 17.4,
@@ -14182,7 +14182,7 @@
     {
       "Name": "Camera_Bedroom10",
       "Id": 834,
-      "TransformId": 38541,
+      "TransformId": 38581,
       "Position": {
         "x": -7.676605,
         "y": 18.43,
@@ -14215,8 +14215,8 @@
     },
     {
       "Name": "Camera_Bedroom2",
-      "Id": 16667,
-      "TransformId": 42253,
+      "Id": 16697,
+      "TransformId": 42294,
       "Position": {
         "x": -11.438362,
         "y": 17.455,
@@ -14249,8 +14249,8 @@
     },
     {
       "Name": "Camera_Bedroom3",
-      "Id": 3012,
-      "TransformId": 24620,
+      "Id": 3016,
+      "TransformId": 24659,
       "Position": {
         "x": -25.511425,
         "y": 17.455,
@@ -14283,8 +14283,8 @@
     },
     {
       "Name": "Camera_Bedroom4",
-      "Id": 12617,
-      "TransformId": 42677,
+      "Id": 12641,
+      "TransformId": 42719,
       "Position": {
         "x": -25.511425,
         "y": 17.455,
@@ -14317,8 +14317,8 @@
     },
     {
       "Name": "Camera_Bedroom5",
-      "Id": 9936,
-      "TransformId": 31615,
+      "Id": 9956,
+      "TransformId": 31655,
       "Position": {
         "x": -24.269833,
         "y": 17.455,
@@ -14351,8 +14351,8 @@
     },
     {
       "Name": "Camera_Bedroom6",
-      "Id": 12222,
-      "TransformId": 43655,
+      "Id": 12244,
+      "TransformId": 43698,
       "Position": {
         "x": -13.029255,
         "y": 17.455,
@@ -14385,8 +14385,8 @@
     },
     {
       "Name": "Camera_Bedroom7",
-      "Id": 14612,
-      "TransformId": 35534,
+      "Id": 14638,
+      "TransformId": 35574,
       "Position": {
         "x": -14.855782,
         "y": 17.455,
@@ -14419,8 +14419,8 @@
     },
     {
       "Name": "Camera_Bedroom8",
-      "Id": 9680,
-      "TransformId": 37648,
+      "Id": 9700,
+      "TransformId": 37688,
       "Position": {
         "x": -18.392948,
         "y": 18.43,
@@ -14453,8 +14453,8 @@
     },
     {
       "Name": "Camera_Bedroom9",
-      "Id": 15699,
-      "TransformId": 40632,
+      "Id": 15727,
+      "TransformId": 40672,
       "Position": {
         "x": -16.301552,
         "y": 18.690001,
@@ -14487,8 +14487,8 @@
     },
     {
       "Name": "Camera_BedroomCloset",
-      "Id": 10338,
-      "TransformId": 39992,
+      "Id": 10358,
+      "TransformId": 40032,
       "Position": {
         "x": -16.025639,
         "y": 18.85,
@@ -14521,8 +14521,8 @@
     },
     {
       "Name": "Camera_BeverlyBeverage",
-      "Id": 4717,
-      "TransformId": 35539,
+      "Id": 4726,
+      "TransformId": 35579,
       "Position": {
         "x": -16.809227,
         "y": 5.32,
@@ -14555,8 +14555,8 @@
     },
     {
       "Name": "Camera_Bulletin",
-      "Id": 5971,
-      "TransformId": 30788,
+      "Id": 5984,
+      "TransformId": 30828,
       "Position": {
         "x": 14.247202,
         "y": 4.89,
@@ -14589,8 +14589,8 @@
     },
     {
       "Name": "Camera_Carousel",
-      "Id": 12126,
-      "TransformId": 43040,
+      "Id": 12148,
+      "TransformId": 43083,
       "Position": {
         "x": 18.998375,
         "y": 5.12,
@@ -14623,8 +14623,8 @@
     },
     {
       "Name": "Camera_Crawlspace",
-      "Id": 18088,
-      "TransformId": 24812,
+      "Id": 18122,
+      "TransformId": 24851,
       "Position": {
         "x": -1.330124,
         "y": -6.31,
@@ -14657,8 +14657,8 @@
     },
     {
       "Name": "Camera_Crawlspace2",
-      "Id": 2741,
-      "TransformId": 32339,
+      "Id": 2745,
+      "TransformId": 32379,
       "Position": {
         "x": 5.865059,
         "y": -6.31,
@@ -14691,8 +14691,8 @@
     },
     {
       "Name": "Camera_Crawlspace3",
-      "Id": 13550,
-      "TransformId": 41443,
+      "Id": 13575,
+      "TransformId": 41484,
       "Position": {
         "x": 1.632599,
         "y": -6.31,
@@ -14725,8 +14725,8 @@
     },
     {
       "Name": "Camera_DaemonOutside",
-      "Id": 12240,
-      "TransformId": 28407,
+      "Id": 12262,
+      "TransformId": 28447,
       "Position": {
         "x": 187.15448,
         "y": 5.87,
@@ -14759,8 +14759,8 @@
     },
     {
       "Name": "Camera_Dining Room",
-      "Id": 14020,
-      "TransformId": 36025,
+      "Id": 14046,
+      "TransformId": 36065,
       "Position": {
         "x": -18.387985,
         "y": 4.196,
@@ -14793,8 +14793,8 @@
     },
     {
       "Name": "Camera_Dining Room2",
-      "Id": 3380,
-      "TransformId": 32436,
+      "Id": 3384,
+      "TransformId": 32476,
       "Position": {
         "x": -18.431576,
         "y": 4.196,
@@ -14827,8 +14827,8 @@
     },
     {
       "Name": "Camera_Dining Room3",
-      "Id": 18468,
-      "TransformId": 41848,
+      "Id": 18502,
+      "TransformId": 41889,
       "Position": {
         "x": -31.244839,
         "y": 4.196,
@@ -14861,8 +14861,8 @@
     },
     {
       "Name": "Camera_Dining Room4",
-      "Id": 635,
-      "TransformId": 37528,
+      "Id": 634,
+      "TransformId": 37568,
       "Position": {
         "x": -15.62281,
         "y": 4.68,
@@ -14895,8 +14895,8 @@
     },
     {
       "Name": "Camera_Dining Room5",
-      "Id": 9752,
-      "TransformId": 37247,
+      "Id": 9772,
+      "TransformId": 37287,
       "Position": {
         "x": -26.51022,
         "y": 4.196,
@@ -14929,8 +14929,8 @@
     },
     {
       "Name": "Camera_Dining Room6",
-      "Id": 10530,
-      "TransformId": 22895,
+      "Id": 10551,
+      "TransformId": 22934,
       "Position": {
         "x": -19.761463,
         "y": 4.196,
@@ -14963,8 +14963,8 @@
     },
     {
       "Name": "Camera_Dining Room7",
-      "Id": 14859,
-      "TransformId": 36150,
+      "Id": 14886,
+      "TransformId": 36190,
       "Position": {
         "x": -29.379681,
         "y": 4.196,
@@ -14997,8 +14997,8 @@
     },
     {
       "Name": "Camera_Dining Room8",
-      "Id": 18131,
-      "TransformId": 25440,
+      "Id": 18165,
+      "TransformId": 25479,
       "Position": {
         "x": -29.545231,
         "y": 4.196,
@@ -15031,8 +15031,8 @@
     },
     {
       "Name": "Camera_DorianAtticDoor1",
-      "Id": 11952,
-      "TransformId": 43540,
+      "Id": 11974,
+      "TransformId": 43583,
       "Position": {
         "x": -4.249802,
         "y": 18.261999,
@@ -15065,8 +15065,8 @@
     },
     {
       "Name": "Camera_DorianAtticDoor2",
-      "Id": 10144,
-      "TransformId": 27963,
+      "Id": 10164,
+      "TransformId": 28003,
       "Position": {
         "x": 12.111662,
         "y": 18.261999,
@@ -15099,8 +15099,8 @@
     },
     {
       "Name": "Camera_DorianBackDoor",
-      "Id": 15178,
-      "TransformId": 27378,
+      "Id": 15205,
+      "TransformId": 27418,
       "Position": {
         "x": -25.539013,
         "y": 3.92,
@@ -15133,8 +15133,8 @@
     },
     {
       "Name": "Camera_DorianBathroom2Door1",
-      "Id": 22402,
-      "TransformId": 35600,
+      "Id": 22442,
+      "TransformId": 35640,
       "Position": {
         "x": -25.406582,
         "y": 17.84,
@@ -15167,8 +15167,8 @@
     },
     {
       "Name": "Camera_DorianBathroom2Door2",
-      "Id": 20343,
-      "TransformId": 33774,
+      "Id": 20379,
+      "TransformId": 33814,
       "Position": {
         "x": -25.461765,
         "y": 17.84,
@@ -15201,8 +15201,8 @@
     },
     {
       "Name": "Camera_DorianBathroomDoor1",
-      "Id": 9201,
-      "TransformId": 26454,
+      "Id": 9218,
+      "TransformId": 26494,
       "Position": {
         "x": -0.028381,
         "y": 4.17,
@@ -15235,8 +15235,8 @@
     },
     {
       "Name": "Camera_DorianBathroomDoor2",
-      "Id": 10473,
-      "TransformId": 26501,
+      "Id": 10494,
+      "TransformId": 26541,
       "Position": {
         "x": 0.523441,
         "y": 4.17,
@@ -15269,8 +15269,8 @@
     },
     {
       "Name": "Camera_DorianBedroomClosetDoor1",
-      "Id": 12833,
-      "TransformId": 38701,
+      "Id": 12858,
+      "TransformId": 38741,
       "Position": {
         "x": -10.53503,
         "y": 18.02,
@@ -15303,8 +15303,8 @@
     },
     {
       "Name": "Camera_DorianBedroomClosetDoor2",
-      "Id": 1551,
-      "TransformId": 26010,
+      "Id": 1553,
+      "TransformId": 26049,
       "Position": {
         "x": -10.53503,
         "y": 18.02,
@@ -15337,8 +15337,8 @@
     },
     {
       "Name": "Camera_DorianBedroomDoor1",
-      "Id": 21318,
-      "TransformId": 31165,
+      "Id": 21357,
+      "TransformId": 31205,
       "Position": {
         "x": -12.604355,
         "y": 17.84,
@@ -15371,8 +15371,8 @@
     },
     {
       "Name": "Camera_DorianBedroomDoor2",
-      "Id": 6112,
-      "TransformId": 30512,
+      "Id": 6125,
+      "TransformId": 30552,
       "Position": {
         "x": -11.997356,
         "y": 17.84,
@@ -15405,8 +15405,8 @@
     },
     {
       "Name": "Camera_DorianGymClosetDoor1",
-      "Id": 7173,
-      "TransformId": 23001,
+      "Id": 7188,
+      "TransformId": 23040,
       "Position": {
         "x": -10.53503,
         "y": 18.02,
@@ -15439,8 +15439,8 @@
     },
     {
       "Name": "Camera_DorianGymClosetDoor2",
-      "Id": 1435,
-      "TransformId": 40844,
+      "Id": 1437,
+      "TransformId": 40884,
       "Position": {
         "x": 1.831253,
         "y": 18.02,
@@ -15473,8 +15473,8 @@
     },
     {
       "Name": "Camera_DorianGymDoor1",
-      "Id": 17578,
-      "TransformId": 31450,
+      "Id": 17611,
+      "TransformId": 31490,
       "Position": {
         "x": -7.748341,
         "y": 17.84,
@@ -15507,8 +15507,8 @@
     },
     {
       "Name": "Camera_DorianGymDoor2",
-      "Id": 18965,
-      "TransformId": 41359,
+      "Id": 18999,
+      "TransformId": 41400,
       "Position": {
         "x": -7.748341,
         "y": 17.84,
@@ -15541,8 +15541,8 @@
     },
     {
       "Name": "Camera_DorianGymDoor3",
-      "Id": 8584,
-      "TransformId": 29348,
+      "Id": 8600,
+      "TransformId": 29388,
       "Position": {
         "x": -25.406582,
         "y": 17.84,
@@ -15575,8 +15575,8 @@
     },
     {
       "Name": "Camera_DorianGymDoor4",
-      "Id": 13333,
-      "TransformId": 30837,
+      "Id": 13358,
+      "TransformId": 30877,
       "Position": {
         "x": -24.58437,
         "y": 17.84,
@@ -15609,8 +15609,8 @@
     },
     {
       "Name": "Camera_DorianIronDoor",
-      "Id": 736,
-      "TransformId": 39627,
+      "Id": 735,
+      "TransformId": 39667,
       "Position": {
         "x": -24.319492,
         "y": 5.13,
@@ -15643,8 +15643,8 @@
     },
     {
       "Name": "Camera_DorianLaundry1",
-      "Id": 15352,
-      "TransformId": 42134,
+      "Id": 15379,
+      "TransformId": 42175,
       "Position": {
         "x": -17.686623,
         "y": 3.92,
@@ -15677,8 +15677,8 @@
     },
     {
       "Name": "Camera_DorianLaundry2",
-      "Id": 17960,
-      "TransformId": 30791,
+      "Id": 17993,
+      "TransformId": 30831,
       "Position": {
         "x": -17.123764,
         "y": 3.92,
@@ -15711,8 +15711,8 @@
     },
     {
       "Name": "Camera_DorianLaundryCloset1",
-      "Id": 6512,
-      "TransformId": 40351,
+      "Id": 6527,
+      "TransformId": 40391,
       "Position": {
         "x": -13.564522,
         "y": 3.92,
@@ -15745,8 +15745,8 @@
     },
     {
       "Name": "Camera_DorianOfficeClosetDoor1",
-      "Id": 18563,
-      "TransformId": 33953,
+      "Id": 18597,
+      "TransformId": 33993,
       "Position": {
         "x": 9.35808,
         "y": 4.17,
@@ -15779,8 +15779,8 @@
     },
     {
       "Name": "Camera_DorianOfficeClosetDoor2",
-      "Id": 2353,
-      "TransformId": 22700,
+      "Id": 2356,
+      "TransformId": 22739,
       "Position": {
         "x": -1.07132,
         "y": 4.17,
@@ -15813,8 +15813,8 @@
     },
     {
       "Name": "Camera_DorianOfficeDoor1",
-      "Id": 7646,
-      "TransformId": 40228,
+      "Id": 7661,
+      "TransformId": 40268,
       "Position": {
         "x": 7.757801,
         "y": 4.17,
@@ -15847,8 +15847,8 @@
     },
     {
       "Name": "Camera_DorianOfficeDoor2",
-      "Id": 497,
-      "TransformId": 37230,
+      "Id": 496,
+      "TransformId": 37270,
       "Position": {
         "x": 8.309622,
         "y": 4.17,
@@ -15881,8 +15881,8 @@
     },
     {
       "Name": "Camera_DorianTrapdoor1",
-      "Id": 15158,
-      "TransformId": 34839,
+      "Id": 15185,
+      "TransformId": 34879,
       "Position": {
         "x": 3.288059,
         "y": 4.17,
@@ -15915,8 +15915,8 @@
     },
     {
       "Name": "Camera_DorianTrapdoor2",
-      "Id": 16562,
-      "TransformId": 24758,
+      "Id": 16592,
+      "TransformId": 24797,
       "Position": {
         "x": 3.288059,
         "y": -7.03,
@@ -15949,8 +15949,8 @@
     },
     {
       "Name": "Camera_DorianUpperHallCloset1",
-      "Id": 7735,
-      "TransformId": 32835,
+      "Id": 7750,
+      "TransformId": 32875,
       "Position": {
         "x": -0.64642,
         "y": 18.18,
@@ -15983,8 +15983,8 @@
     },
     {
       "Name": "Camera_Doug",
-      "Id": 14818,
-      "TransformId": 37399,
+      "Id": 14844,
+      "TransformId": 37439,
       "Position": {
         "x": -20.224995,
         "y": 4.76,
@@ -16017,8 +16017,8 @@
     },
     {
       "Name": "Camera_Ending",
-      "Id": 7616,
-      "TransformId": 41375,
+      "Id": 7631,
+      "TransformId": 41416,
       "Position": {
         "x": 24.770412,
         "y": 4.94,
@@ -16051,8 +16051,8 @@
     },
     {
       "Name": "Camera_EndingSam",
-      "Id": 10853,
-      "TransformId": 38976,
+      "Id": 10875,
+      "TransformId": 39016,
       "Position": {
         "x": 24.770412,
         "y": 4.94,
@@ -16085,8 +16085,8 @@
     },
     {
       "Name": "Camera_EndingVal",
-      "Id": 18933,
-      "TransformId": 33012,
+      "Id": 18967,
+      "TransformId": 33052,
       "Position": {
         "x": 24.770412,
         "y": 4.94,
@@ -16119,8 +16119,8 @@
     },
     {
       "Name": "camera_fix",
-      "Id": 1878,
-      "TransformId": 27767,
+      "Id": 1881,
+      "TransformId": 27807,
       "Position": {
         "x": -213.577194,
         "y": 2.67,
@@ -16153,8 +16153,8 @@
     },
     {
       "Name": "camera_fix_drone_crash",
-      "Id": 16081,
-      "TransformId": 25155,
+      "Id": 16110,
+      "TransformId": 25194,
       "Position": {
         "x": 7.526035,
         "y": 4.97,
@@ -16187,8 +16187,8 @@
     },
     {
       "Name": "Camera_FrontDoor",
-      "Id": 7674,
-      "TransformId": 26047,
+      "Id": 7689,
+      "TransformId": 26086,
       "Position": {
         "x": 13.894039,
         "y": 4.352,
@@ -16221,8 +16221,8 @@
     },
     {
       "Name": "Camera_Gym",
-      "Id": 14013,
-      "TransformId": 36018,
+      "Id": 14039,
+      "TransformId": 36058,
       "Position": {
         "x": -20.329834,
         "y": 17.449999,
@@ -16255,8 +16255,8 @@
     },
     {
       "Name": "Camera_Gym_2",
-      "Id": 4677,
-      "TransformId": 44000,
+      "Id": 4686,
+      "TransformId": 44043,
       "Position": {
         "x": -26.162571,
         "y": 18.139999,
@@ -16289,8 +16289,8 @@
     },
     {
       "Name": "Camera_Gym_3",
-      "Id": 11541,
-      "TransformId": 39329,
+      "Id": 11563,
+      "TransformId": 39369,
       "Position": {
         "x": -25.494877,
         "y": 18.139999,
@@ -16323,8 +16323,8 @@
     },
     {
       "Name": "Camera_Gym_4",
-      "Id": 4864,
-      "TransformId": 27820,
+      "Id": 4873,
+      "TransformId": 27860,
       "Position": {
         "x": -11.279991,
         "y": 18.139999,
@@ -16357,8 +16357,8 @@
     },
     {
       "Name": "Camera_Gym_5",
-      "Id": 16107,
-      "TransformId": 37194,
+      "Id": 16136,
+      "TransformId": 37234,
       "Position": {
         "x": -11.958729,
         "y": 18.199999,
@@ -16391,8 +16391,8 @@
     },
     {
       "Name": "Camera_Gym_6",
-      "Id": 13096,
-      "TransformId": 43459,
+      "Id": 13121,
+      "TransformId": 43502,
       "Position": {
         "x": -21.543839,
         "y": 18.969999,
@@ -16425,8 +16425,8 @@
     },
     {
       "Name": "Camera_Gym_7",
-      "Id": 13743,
-      "TransformId": 33517,
+      "Id": 13768,
+      "TransformId": 33557,
       "Position": {
         "x": -12.736794,
         "y": 18.139999,
@@ -16459,8 +16459,8 @@
     },
     {
       "Name": "Camera_Gym_8",
-      "Id": 21855,
-      "TransformId": 41488,
+      "Id": 21895,
+      "TransformId": 41529,
       "Position": {
         "x": -6.721954,
         "y": 18.199999,
@@ -16493,8 +16493,8 @@
     },
     {
       "Name": "Camera_Gym_Closet",
-      "Id": 14021,
-      "TransformId": 36026,
+      "Id": 14047,
+      "TransformId": 36066,
       "Position": {
         "x": -0.447762,
         "y": 18.042,
@@ -16527,8 +16527,8 @@
     },
     {
       "Name": "Camera_Gym_Closet2",
-      "Id": 7617,
-      "TransformId": 40139,
+      "Id": 7632,
+      "TransformId": 40179,
       "Position": {
         "x": -1.915604,
         "y": 18.042,
@@ -16561,8 +16561,8 @@
     },
     {
       "Name": "Camera_Gym_Closet3",
-      "Id": 7555,
-      "TransformId": 29044,
+      "Id": 7570,
+      "TransformId": 29084,
       "Position": {
         "x": -2.743336,
         "y": 17.949999,
@@ -16595,8 +16595,8 @@
     },
     {
       "Name": "Camera_Hallway",
-      "Id": 14000,
-      "TransformId": 36005,
+      "Id": 14026,
+      "TransformId": 36045,
       "Position": {
         "x": 22.615004,
         "y": 4.352,
@@ -16629,8 +16629,8 @@
     },
     {
       "Name": "Camera_Hallway_Arma",
-      "Id": 15136,
-      "TransformId": 36539,
+      "Id": 15163,
+      "TransformId": 36579,
       "Position": {
         "x": 5.837467,
         "y": 9.952,
@@ -16663,8 +16663,8 @@
     },
     {
       "Name": "Camera_Hallway2",
-      "Id": 8881,
-      "TransformId": 32912,
+      "Id": 8898,
+      "TransformId": 32952,
       "Position": {
         "x": 17.59013,
         "y": 4.58,
@@ -16697,8 +16697,8 @@
     },
     {
       "Name": "Camera_Hallway3",
-      "Id": 5816,
-      "TransformId": 29543,
+      "Id": 5828,
+      "TransformId": 29583,
       "Position": {
         "x": 15.930256,
         "y": 4.24,
@@ -16731,8 +16731,8 @@
     },
     {
       "Name": "Camera_Hallway4",
-      "Id": 20970,
-      "TransformId": 43680,
+      "Id": 21008,
+      "TransformId": 43723,
       "Position": {
         "x": 13.323456,
         "y": 4.352,
@@ -16765,8 +16765,8 @@
     },
     {
       "Name": "Camera_Hallway5",
-      "Id": 2945,
-      "TransformId": 39771,
+      "Id": 2949,
+      "TransformId": 39811,
       "Position": {
         "x": 14.258242,
         "y": 4.522,
@@ -16799,8 +16799,8 @@
     },
     {
       "Name": "Camera_Hallway6",
-      "Id": 16326,
-      "TransformId": 24631,
+      "Id": 16356,
+      "TransformId": 24670,
       "Position": {
         "x": 14.258242,
         "y": 4.522,
@@ -16833,8 +16833,8 @@
     },
     {
       "Name": "Camera_Hallway7",
-      "Id": 15106,
-      "TransformId": 34704,
+      "Id": 15133,
+      "TransformId": 34744,
       "Position": {
         "x": -3.322742,
         "y": 4.522,
@@ -16867,8 +16867,8 @@
     },
     {
       "Name": "Camera_HectorHVAC",
-      "Id": 5163,
-      "TransformId": 29698,
+      "Id": 5172,
+      "TransformId": 29738,
       "Position": {
         "x": 11.013538,
         "y": 15.360001,
@@ -16901,8 +16901,8 @@
     },
     {
       "Name": "Camera_Kitchen",
-      "Id": 14009,
-      "TransformId": 36014,
+      "Id": 14035,
+      "TransformId": 36054,
       "Position": {
         "x": -16.180149,
         "y": 3.367,
@@ -16935,8 +16935,8 @@
     },
     {
       "Name": "Camera_Kitchen_Tutorial",
-      "Id": 13247,
-      "TransformId": 36529,
+      "Id": 13272,
+      "TransformId": 36569,
       "Position": {
         "x": -11.004078,
         "y": 5.48,
@@ -16969,8 +16969,8 @@
     },
     {
       "Name": "Camera_Kitchen2",
-      "Id": 16534,
-      "TransformId": 29880,
+      "Id": 16564,
+      "TransformId": 29920,
       "Position": {
         "x": -17.223091,
         "y": 3.367,
@@ -17003,8 +17003,8 @@
     },
     {
       "Name": "Camera_Kitchen3",
-      "Id": 5020,
-      "TransformId": 42158,
+      "Id": 5029,
+      "TransformId": 42199,
       "Position": {
         "x": -21.041687,
         "y": 4.15,
@@ -17037,8 +17037,8 @@
     },
     {
       "Name": "Camera_Kitchen4",
-      "Id": 17612,
-      "TransformId": 33269,
+      "Id": 17645,
+      "TransformId": 33309,
       "Position": {
         "x": -22.890282,
         "y": 4.15,
@@ -17071,8 +17071,8 @@
     },
     {
       "Name": "Camera_Kitchen5",
-      "Id": 16235,
-      "TransformId": 39978,
+      "Id": 16265,
+      "TransformId": 40018,
       "Position": {
         "x": -19.48555,
         "y": 4.15,
@@ -17105,8 +17105,8 @@
     },
     {
       "Name": "Camera_KitchenCake",
-      "Id": 13162,
-      "TransformId": 23078,
+      "Id": 13187,
+      "TransformId": 23117,
       "Position": {
         "x": -19.262619,
         "y": 4.15,
@@ -17139,8 +17139,8 @@
     },
     {
       "Name": "Camera_KitchenRonald",
-      "Id": 16124,
-      "TransformId": 27264,
+      "Id": 16153,
+      "TransformId": 27304,
       "Position": {
         "x": -20.892693,
         "y": 4.15,
@@ -17173,8 +17173,8 @@
     },
     {
       "Name": "Camera_Laundry Room",
-      "Id": 14007,
-      "TransformId": 36012,
+      "Id": 14033,
+      "TransformId": 36052,
       "Position": {
         "x": -16.726452,
         "y": 4.98,
@@ -17207,8 +17207,8 @@
     },
     {
       "Name": "Camera_Laundry Room_Closet",
-      "Id": 6945,
-      "TransformId": 44138,
+      "Id": 6960,
+      "TransformId": 44181,
       "Position": {
         "x": -13.189285,
         "y": 4.98,
@@ -17241,8 +17241,8 @@
     },
     {
       "Name": "Camera_Laundry Room2",
-      "Id": 18235,
-      "TransformId": 27929,
+      "Id": 18269,
+      "TransformId": 27969,
       "Position": {
         "x": -25.042377,
         "y": 4.98,
@@ -17275,8 +17275,8 @@
     },
     {
       "Name": "Camera_Laundry Room3",
-      "Id": 14706,
-      "TransformId": 37314,
+      "Id": 14732,
+      "TransformId": 37354,
       "Position": {
         "x": -22.22258,
         "y": 4.98,
@@ -17309,8 +17309,8 @@
     },
     {
       "Name": "Camera_Laundry Room4",
-      "Id": 17631,
-      "TransformId": 38931,
+      "Id": 17664,
+      "TransformId": 38971,
       "Position": {
         "x": -20.28569,
         "y": 4.98,
@@ -17343,8 +17343,8 @@
     },
     {
       "Name": "Camera_Laundry Room5",
-      "Id": 13219,
-      "TransformId": 32600,
+      "Id": 13244,
+      "TransformId": 32640,
       "Position": {
         "x": -28.397449,
         "y": 4.98,
@@ -17377,8 +17377,8 @@
     },
     {
       "Name": "Camera_Laundry Room6",
-      "Id": 5510,
-      "TransformId": 33154,
+      "Id": 5520,
+      "TransformId": 33194,
       "Position": {
         "x": -12.642982,
         "y": 4.98,
@@ -17411,8 +17411,8 @@
     },
     {
       "Name": "Camera_Living Room",
-      "Id": 14023,
-      "TransformId": 36028,
+      "Id": 14049,
+      "TransformId": 36068,
       "Position": {
         "x": 19.31843,
         "y": 4.67,
@@ -17445,8 +17445,8 @@
     },
     {
       "Name": "Camera_Living Room_Tutorial",
-      "Id": 17976,
-      "TransformId": 33977,
+      "Id": 18009,
+      "TransformId": 34017,
       "Position": {
         "x": 19.539158,
         "y": 5.573,
@@ -17479,8 +17479,8 @@
     },
     {
       "Name": "Camera_Living Room10",
-      "Id": 7629,
-      "TransformId": 23740,
+      "Id": 7644,
+      "TransformId": 23779,
       "Position": {
         "x": 15.097008,
         "y": 4.67,
@@ -17513,8 +17513,8 @@
     },
     {
       "Name": "Camera_Living Room11",
-      "Id": 21343,
-      "TransformId": 24009,
+      "Id": 21382,
+      "TransformId": 24048,
       "Position": {
         "x": 18.871456,
         "y": 4.67,
@@ -17547,8 +17547,8 @@
     },
     {
       "Name": "Camera_Living Room2",
-      "Id": 17036,
-      "TransformId": 27353,
+      "Id": 17067,
+      "TransformId": 27393,
       "Position": {
         "x": 2.736237,
         "y": 4.67,
@@ -17581,8 +17581,8 @@
     },
     {
       "Name": "Camera_LivingRoom3",
-      "Id": 4932,
-      "TransformId": 39872,
+      "Id": 4941,
+      "TransformId": 39912,
       "Position": {
         "x": 17.701597,
         "y": 4.67,
@@ -17615,8 +17615,8 @@
     },
     {
       "Name": "Camera_LivingRoom4",
-      "Id": 10778,
-      "TransformId": 28176,
+      "Id": 10800,
+      "TransformId": 28216,
       "Position": {
         "x": 7.410152,
         "y": 4.34,
@@ -17649,8 +17649,8 @@
     },
     {
       "Name": "Camera_LivingRoom5",
-      "Id": 9484,
-      "TransformId": 31329,
+      "Id": 9503,
+      "TransformId": 31369,
       "Position": {
         "x": 7.294273,
         "y": 4.909,
@@ -17683,8 +17683,8 @@
     },
     {
       "Name": "Camera_LivingRoom6",
-      "Id": 16286,
-      "TransformId": 38772,
+      "Id": 16316,
+      "TransformId": 38812,
       "Position": {
         "x": 4.689682,
         "y": 5.67,
@@ -17717,8 +17717,8 @@
     },
     {
       "Name": "Camera_LivingRoom7",
-      "Id": 11784,
-      "TransformId": 28826,
+      "Id": 11806,
+      "TransformId": 28866,
       "Position": {
         "x": 17.707115,
         "y": 5.67,
@@ -17751,8 +17751,8 @@
     },
     {
       "Name": "Camera_LivingRoom8",
-      "Id": 15238,
-      "TransformId": 28105,
+      "Id": 15265,
+      "TransformId": 28145,
       "Position": {
         "x": 4.551727,
         "y": 5.96,
@@ -17785,8 +17785,8 @@
     },
     {
       "Name": "Camera_LivingRoom9",
-      "Id": 18263,
-      "TransformId": 30041,
+      "Id": 18297,
+      "TransformId": 30081,
       "Position": {
         "x": -4.476051,
         "y": 5.97,
@@ -17819,8 +17819,8 @@
     },
     {
       "Name": "Camera_Lucinda",
-      "Id": 14103,
-      "TransformId": 39669,
+      "Id": 14129,
+      "TransformId": 39709,
       "Position": {
         "x": 194.802704,
         "y": 4.77,
@@ -17853,8 +17853,8 @@
     },
     {
       "Name": "Camera_Office",
-      "Id": 14025,
-      "TransformId": 36030,
+      "Id": 14051,
+      "TransformId": 36070,
       "Position": {
         "x": 16.327566,
         "y": 4.217,
@@ -17887,8 +17887,8 @@
     },
     {
       "Name": "Camera_Office_1Love",
-      "Id": 5876,
-      "TransformId": 31881,
+      "Id": 5889,
+      "TransformId": 31921,
       "Position": {
         "x": 6.81419,
         "y": 7.47,
@@ -17921,8 +17921,8 @@
     },
     {
       "Name": "Camera_Office_2Friend",
-      "Id": 6214,
-      "TransformId": 33994,
+      "Id": 6227,
+      "TransformId": 34034,
       "Position": {
         "x": 6.81419,
         "y": 7.47,
@@ -17955,8 +17955,8 @@
     },
     {
       "Name": "Camera_Office_3Hate",
-      "Id": 3235,
-      "TransformId": 29087,
+      "Id": 3239,
+      "TransformId": 29127,
       "Position": {
         "x": 6.81419,
         "y": 3.124,
@@ -17989,8 +17989,8 @@
     },
     {
       "Name": "Camera_Office2",
-      "Id": 6139,
-      "TransformId": 39014,
+      "Id": 6152,
+      "TransformId": 39054,
       "Position": {
         "x": 5.407047,
         "y": 4.37,
@@ -18023,8 +18023,8 @@
     },
     {
       "Name": "Camera_Office3",
-      "Id": 2308,
-      "TransformId": 36743,
+      "Id": 2311,
+      "TransformId": 36783,
       "Position": {
         "x": 16.846275,
         "y": 4.37,
@@ -18057,8 +18057,8 @@
     },
     {
       "Name": "Camera_Office4",
-      "Id": 8672,
-      "TransformId": 30351,
+      "Id": 8688,
+      "TransformId": 30391,
       "Position": {
         "x": 21.927986,
         "y": 4.37,
@@ -18091,8 +18091,8 @@
     },
     {
       "Name": "Camera_Office5",
-      "Id": 3260,
-      "TransformId": 38243,
+      "Id": 3264,
+      "TransformId": 38283,
       "Position": {
         "x": 7.702618,
         "y": 4.37,
@@ -18125,8 +18125,8 @@
     },
     {
       "Name": "Camera_Office6",
-      "Id": 14528,
-      "TransformId": 27156,
+      "Id": 14554,
+      "TransformId": 27196,
       "Position": {
         "x": 7.537075,
         "y": 5.16,
@@ -18159,8 +18159,8 @@
     },
     {
       "Name": "Camera_Office7",
-      "Id": 11140,
-      "TransformId": 43746,
+      "Id": 11162,
+      "TransformId": 43789,
       "Position": {
         "x": 12.11718,
         "y": 5.16,
@@ -18193,8 +18193,8 @@
     },
     {
       "Name": "Camera_Office8",
-      "Id": 13058,
-      "TransformId": 35281,
+      "Id": 13083,
+      "TransformId": 35321,
       "Position": {
         "x": 9.35808,
         "y": 5.66,
@@ -18227,8 +18227,8 @@
     },
     {
       "Name": "Camera_Office9",
-      "Id": 535,
-      "TransformId": 22913,
+      "Id": 534,
+      "TransformId": 22952,
       "Position": {
         "x": 13.093901,
         "y": 4.89,
@@ -18261,8 +18261,8 @@
     },
     {
       "Name": "Camera_OfficeCloset",
-      "Id": 20406,
-      "TransformId": 35383,
+      "Id": 20442,
+      "TransformId": 35423,
       "Position": {
         "x": 2.035427,
         "y": 5.01,
@@ -18295,8 +18295,8 @@
     },
     {
       "Name": "Camera_Outside",
-      "Id": 15641,
-      "TransformId": 33868,
+      "Id": 15669,
+      "TransformId": 33908,
       "Position": {
         "x": 24.875256,
         "y": 4.883,
@@ -18329,8 +18329,8 @@
     },
     {
       "Name": "Camera_Outside_Tutorial",
-      "Id": 10243,
-      "TransformId": 23098,
+      "Id": 10263,
+      "TransformId": 23137,
       "Position": {
         "x": 49.072563,
         "y": 4.51,
@@ -18363,8 +18363,8 @@
     },
     {
       "Name": "Camera_Piano Room",
-      "Id": 14024,
-      "TransformId": 36029,
+      "Id": 14050,
+      "TransformId": 36069,
       "Position": {
         "x": -14.927521,
         "y": 4.137,
@@ -18397,8 +18397,8 @@
     },
     {
       "Name": "Camera_Piano Room10",
-      "Id": 11240,
-      "TransformId": 24621,
+      "Id": 11262,
+      "TransformId": 24660,
       "Position": {
         "x": -19.06065,
         "y": 5.47,
@@ -18431,8 +18431,8 @@
     },
     {
       "Name": "Camera_Piano Room11",
-      "Id": 13915,
-      "TransformId": 28025,
+      "Id": 13941,
+      "TransformId": 28065,
       "Position": {
         "x": -8.200832,
         "y": 5.47,
@@ -18465,8 +18465,8 @@
     },
     {
       "Name": "Camera_Piano Room2",
-      "Id": 8452,
-      "TransformId": 26942,
+      "Id": 8468,
+      "TransformId": 26982,
       "Position": {
         "x": -26.173611,
         "y": 4.137,
@@ -18499,8 +18499,8 @@
     },
     {
       "Name": "Camera_Piano Room3",
-      "Id": 1855,
-      "TransformId": 26921,
+      "Id": 1858,
+      "TransformId": 26961,
       "Position": {
         "x": -28.292599,
         "y": 4.29,
@@ -18533,8 +18533,8 @@
     },
     {
       "Name": "Camera_Piano Room4",
-      "Id": 14113,
-      "TransformId": 31428,
+      "Id": 14139,
+      "TransformId": 31468,
       "Position": {
         "x": -17.223091,
         "y": 4.137,
@@ -18567,8 +18567,8 @@
     },
     {
       "Name": "Camera_Piano Room5",
-      "Id": 2774,
-      "TransformId": 35608,
+      "Id": 2778,
+      "TransformId": 35648,
       "Position": {
         "x": -24.595409,
         "y": 4.82,
@@ -18601,8 +18601,8 @@
     },
     {
       "Name": "Camera_Piano Room6",
-      "Id": 14207,
-      "TransformId": 40042,
+      "Id": 14233,
+      "TransformId": 40082,
       "Position": {
         "x": -9.161003,
         "y": 4.137,
@@ -18635,8 +18635,8 @@
     },
     {
       "Name": "Camera_Piano Room7",
-      "Id": 11105,
-      "TransformId": 37276,
+      "Id": 11127,
+      "TransformId": 37316,
       "Position": {
         "x": -13.989426,
         "y": 4.137,
@@ -18669,8 +18669,8 @@
     },
     {
       "Name": "Camera_Piano Room8",
-      "Id": 10800,
-      "TransformId": 33261,
+      "Id": 10822,
+      "TransformId": 33301,
       "Position": {
         "x": -28.998928,
         "y": 4.51,
@@ -18704,7 +18704,7 @@
     {
       "Name": "Camera_Piano Room9",
       "Id": 929,
-      "TransformId": 33759,
+      "TransformId": 33799,
       "Position": {
         "x": -21.681797,
         "y": 5.47,
@@ -18737,8 +18737,8 @@
     },
     {
       "Name": "Camera_StairsDown",
-      "Id": 11529,
-      "TransformId": 32009,
+      "Id": 11551,
+      "TransformId": 32049,
       "Position": {
         "x": -1.104427,
         "y": 15.167,
@@ -18771,8 +18771,8 @@
     },
     {
       "Name": "Camera_StairsUp",
-      "Id": 15084,
-      "TransformId": 40193,
+      "Id": 15111,
+      "TransformId": 40233,
       "Position": {
         "x": 6.488617,
         "y": 9.688999,
@@ -18805,8 +18805,8 @@
     },
     {
       "Name": "Camera_TouchGrassEnding",
-      "Id": 16318,
-      "TransformId": 42120,
+      "Id": 16348,
+      "TransformId": 42161,
       "Position": {
         "x": 34.741798,
         "y": 4.85,
@@ -18839,8 +18839,8 @@
     },
     {
       "Name": "Camera_Trapdoor",
-      "Id": 14028,
-      "TransformId": 36033,
+      "Id": 14054,
+      "TransformId": 36073,
       "Position": {
         "x": 2.035427,
         "y": 3.455,
@@ -18873,8 +18873,8 @@
     },
     {
       "Name": "Camera_UpperHallway",
-      "Id": 14006,
-      "TransformId": 36011,
+      "Id": 14032,
+      "TransformId": 36051,
       "Position": {
         "x": -8.537445,
         "y": 17.969999,
@@ -18907,8 +18907,8 @@
     },
     {
       "Name": "Camera_UpperHallway2",
-      "Id": 4363,
-      "TransformId": 30779,
+      "Id": 4371,
+      "TransformId": 30819,
       "Position": {
         "x": -0.866039,
         "y": 18.261999,
@@ -18941,8 +18941,8 @@
     },
     {
       "Name": "Camera_UpperHallway3",
-      "Id": 3011,
-      "TransformId": 31591,
+      "Id": 3015,
+      "TransformId": 31631,
       "Position": {
         "x": -0.006306,
         "y": 17.593,
@@ -18975,8 +18975,8 @@
     },
     {
       "Name": "Camera_UpperHallway3_Shelley",
-      "Id": 1324,
-      "TransformId": 41674,
+      "Id": 1326,
+      "TransformId": 41715,
       "Position": {
         "x": -0.006306,
         "y": 17.593,
@@ -19009,8 +19009,8 @@
     },
     {
       "Name": "Camera_UpperHallway4",
-      "Id": 10699,
-      "TransformId": 32701,
+      "Id": 10721,
+      "TransformId": 32741,
       "Position": {
         "x": -8.874054,
         "y": 17.969999,
@@ -19043,8 +19043,8 @@
     },
     {
       "Name": "Camera_UpperHallway5",
-      "Id": 18551,
-      "TransformId": 34322,
+      "Id": 18585,
+      "TransformId": 34362,
       "Position": {
         "x": -12.482956,
         "y": 18.17,
@@ -19077,8 +19077,8 @@
     },
     {
       "Name": "Camera_UpperHallway6",
-      "Id": 17063,
-      "TransformId": 24960,
+      "Id": 17094,
+      "TransformId": 24999,
       "Position": {
         "x": -11.533825,
         "y": 17.969999,
@@ -19111,8 +19111,8 @@
     },
     {
       "Name": "Camera_UpperHallway7",
-      "Id": 7826,
-      "TransformId": 25939,
+      "Id": 7841,
+      "TransformId": 25978,
       "Position": {
         "x": -11.39035,
         "y": 17.969999,
@@ -19145,8 +19145,8 @@
     },
     {
       "Name": "Camera_UpperHallway8",
-      "Id": 9120,
-      "TransformId": 35280,
+      "Id": 9137,
+      "TransformId": 35320,
       "Position": {
         "x": -11.335175,
         "y": 17.969999,
@@ -19179,8 +19179,8 @@
     },
     {
       "Name": "Camera_Yacht",
-      "Id": 6983,
-      "TransformId": 28132,
+      "Id": 6998,
+      "TransformId": 28172,
       "Position": {
         "x": -45.823925,
         "y": 10.62,
@@ -19215,7 +19215,7 @@
   "Teleporters": [
     {
       "Name": "CrawlspaceLadder",
-      "Id": 6039,
+      "Id": 6052,
       "IsCrawlspace": true,
       "Position": {
         "x": -0.078,
@@ -19233,9 +19233,9 @@
         "z": 0.0
       },
       "LocationDown": {
-        "Id": 17272,
+        "Id": 17304,
         "Name": "Crawlspace Exit Position",
-        "TransformId": 33623,
+        "TransformId": 33663,
         "Position": {
           "x": -1.6172,
           "y": -9.59,
@@ -19247,12 +19247,12 @@
           "z": 0.0,
           "w": -0.707107
         },
-        "ParentTransformId": 30216
+        "ParentTransformId": 30256
       },
       "LocationUp": {
-        "Id": 22385,
+        "Id": 22425,
         "Name": "Crawlspace Enter Position",
-        "TransformId": 31017,
+        "TransformId": 31057,
         "Position": {
           "x": 2.3972,
           "y": -0.395999,
@@ -19264,7 +19264,7 @@
           "z": 0.0,
           "w": 0.707107
         },
-        "ParentTransformId": 30216
+        "ParentTransformId": 30256
       },
       "CameraGoingDown": null,
       "CameraGoingUp": null
@@ -19272,8 +19272,8 @@
   ],
   "OcclusionPortals": [
     {
-      "ComponentId": 51190,
-      "GameObjectId": 2279,
+      "ComponentId": 51242,
+      "GameObjectId": 2282,
       "GameObjectName": "Doors_Bedroom_ClosetRight_Outer",
       "IsOpen": true,
       "Center": {
@@ -19302,7 +19302,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 2279,
+      "ParentDoorGameObjectId": 2282,
       "ParentDoorName": "Doors_Bedroom_ClosetRight_Outer",
       "ContainingZones": "bedroom_closet",
       "NearestZones": [
@@ -19325,8 +19325,8 @@
       ]
     },
     {
-      "ComponentId": 51191,
-      "GameObjectId": 20530,
+      "ComponentId": 51243,
+      "GameObjectId": 20567,
       "GameObjectName": "Doors_Bedroom_ClosetLeft_Inner",
       "IsOpen": true,
       "Center": {
@@ -19355,7 +19355,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 20530,
+      "ParentDoorGameObjectId": 20567,
       "ParentDoorName": "Doors_Bedroom_ClosetLeft_Inner",
       "ContainingZones": "bedroom_closet",
       "NearestZones": [
@@ -19378,8 +19378,8 @@
       ]
     },
     {
-      "ComponentId": 51192,
-      "GameObjectId": 195,
+      "ComponentId": 51244,
+      "GameObjectId": 194,
       "GameObjectName": "Doors_Laundry",
       "IsOpen": false,
       "Center": {
@@ -19408,7 +19408,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 195,
+      "ParentDoorGameObjectId": 194,
       "ParentDoorName": "Doors_Laundry",
       "ContainingZones": null,
       "NearestZones": [
@@ -19431,8 +19431,8 @@
       ]
     },
     {
-      "ComponentId": 51193,
-      "GameObjectId": 3393,
+      "ComponentId": 51245,
+      "GameObjectId": 3397,
       "GameObjectName": "Doors_Gym_Hall",
       "IsOpen": false,
       "Center": {
@@ -19461,7 +19461,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 3393,
+      "ParentDoorGameObjectId": 3397,
       "ParentDoorName": "Doors_Gym_Hall",
       "ContainingZones": null,
       "NearestZones": [
@@ -19484,8 +19484,8 @@
       ]
     },
     {
-      "ComponentId": 51194,
-      "GameObjectId": 17579,
+      "ComponentId": 51246,
+      "GameObjectId": 17612,
       "GameObjectName": "Doors_Gym_ClosetInner",
       "IsOpen": true,
       "Center": {
@@ -19514,7 +19514,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 17579,
+      "ParentDoorGameObjectId": 17612,
       "ParentDoorName": "Doors_Gym_ClosetInner",
       "ContainingZones": null,
       "NearestZones": [
@@ -19537,8 +19537,8 @@
       ]
     },
     {
-      "ComponentId": 51195,
-      "GameObjectId": 3624,
+      "ComponentId": 51247,
+      "GameObjectId": 3629,
       "GameObjectName": "Doors_Gym_ClosetOuter",
       "IsOpen": true,
       "Center": {
@@ -19567,7 +19567,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 3624,
+      "ParentDoorGameObjectId": 3629,
       "ParentDoorName": "Doors_Gym_ClosetOuter",
       "ContainingZones": null,
       "NearestZones": [
@@ -19590,8 +19590,8 @@
       ]
     },
     {
-      "ComponentId": 51196,
-      "GameObjectId": 10007,
+      "ComponentId": 51248,
+      "GameObjectId": 10027,
       "GameObjectName": "Doors_Bedroom_Bathroom",
       "IsOpen": false,
       "Center": {
@@ -19620,7 +19620,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 10007,
+      "ParentDoorGameObjectId": 10027,
       "ParentDoorName": "Doors_Bedroom_Bathroom",
       "ContainingZones": null,
       "NearestZones": [
@@ -19643,8 +19643,8 @@
       ]
     },
     {
-      "ComponentId": 51197,
-      "GameObjectId": 20453,
+      "ComponentId": 51249,
+      "GameObjectId": 20489,
       "GameObjectName": "Doors_UpperHall_Electric",
       "IsOpen": false,
       "Center": {
@@ -19673,7 +19673,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 20453,
+      "ParentDoorGameObjectId": 20489,
       "ParentDoorName": "Doors_UpperHall_Electric",
       "ContainingZones": null,
       "NearestZones": [
@@ -19696,8 +19696,8 @@
       ]
     },
     {
-      "ComponentId": 51198,
-      "GameObjectId": 18304,
+      "ComponentId": 51250,
+      "GameObjectId": 18338,
       "GameObjectName": "Doors_Bedroom",
       "IsOpen": false,
       "Center": {
@@ -19726,7 +19726,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 18304,
+      "ParentDoorGameObjectId": 18338,
       "ParentDoorName": "Doors_Bedroom",
       "ContainingZones": null,
       "NearestZones": [
@@ -19749,8 +19749,8 @@
       ]
     },
     {
-      "ComponentId": 51199,
-      "GameObjectId": 16402,
+      "ComponentId": 51251,
+      "GameObjectId": 16432,
       "GameObjectName": "Doors_Laundry_Closet",
       "IsOpen": false,
       "Center": {
@@ -19779,7 +19779,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 16402,
+      "ParentDoorGameObjectId": 16432,
       "ParentDoorName": "Doors_Laundry_Closet",
       "ContainingZones": null,
       "NearestZones": [
@@ -19802,8 +19802,8 @@
       ]
     },
     {
-      "ComponentId": 51200,
-      "GameObjectId": 1763,
+      "ComponentId": 51252,
+      "GameObjectId": 1766,
       "GameObjectName": "Doors_Gym_Bathroom",
       "IsOpen": false,
       "Center": {
@@ -19832,7 +19832,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 1763,
+      "ParentDoorGameObjectId": 1766,
       "ParentDoorName": "Doors_Gym_Bathroom",
       "ContainingZones": null,
       "NearestZones": [
@@ -19855,8 +19855,8 @@
       ]
     },
     {
-      "ComponentId": 51201,
-      "GameObjectId": 21413,
+      "ComponentId": 51253,
+      "GameObjectId": 21452,
       "GameObjectName": "Doors_Bedroom_ClosetLeft_Outer",
       "IsOpen": true,
       "Center": {
@@ -19885,7 +19885,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 21413,
+      "ParentDoorGameObjectId": 21452,
       "ParentDoorName": "Doors_Bedroom_ClosetLeft_Outer",
       "ContainingZones": "bedroom_closet",
       "NearestZones": [
@@ -19908,8 +19908,8 @@
       ]
     },
     {
-      "ComponentId": 51202,
-      "GameObjectId": 9913,
+      "ComponentId": 51254,
+      "GameObjectId": 9933,
       "GameObjectName": "Doors_Bathroom1",
       "IsOpen": false,
       "Center": {
@@ -19938,7 +19938,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 9913,
+      "ParentDoorGameObjectId": 9933,
       "ParentDoorName": "Doors_Bathroom1",
       "ContainingZones": null,
       "NearestZones": [
@@ -19961,8 +19961,8 @@
       ]
     },
     {
-      "ComponentId": 51203,
-      "GameObjectId": 20689,
+      "ComponentId": 51255,
+      "GameObjectId": 20727,
       "GameObjectName": "Doors_Office_Closet",
       "IsOpen": false,
       "Center": {
@@ -19991,7 +19991,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 20689,
+      "ParentDoorGameObjectId": 20727,
       "ParentDoorName": "Doors_Office_Closet",
       "ContainingZones": null,
       "NearestZones": [
@@ -20014,8 +20014,8 @@
       ]
     },
     {
-      "ComponentId": 51204,
-      "GameObjectId": 16683,
+      "ComponentId": 51256,
+      "GameObjectId": 16713,
       "GameObjectName": "Doors_Bedroom_ClosetRight_Inner",
       "IsOpen": true,
       "Center": {
@@ -20044,7 +20044,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 16683,
+      "ParentDoorGameObjectId": 16713,
       "ParentDoorName": "Doors_Bedroom_ClosetRight_Inner",
       "ContainingZones": "bedroom_closet",
       "NearestZones": [
@@ -20067,8 +20067,8 @@
       ]
     },
     {
-      "ComponentId": 51205,
-      "GameObjectId": 674,
+      "ComponentId": 51257,
+      "GameObjectId": 673,
       "GameObjectName": "Doors_Office",
       "IsOpen": false,
       "Center": {
@@ -20097,7 +20097,7 @@
         "y": 0.8,
         "z": 8.0
       },
-      "ParentDoorGameObjectId": 674,
+      "ParentDoorGameObjectId": 673,
       "ParentDoorName": "Doors_Office",
       "ContainingZones": null,
       "NearestZones": [

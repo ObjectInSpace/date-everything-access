@@ -359,6 +359,7 @@ namespace DateEverythingAccess
             Add("room_scan_direction_ahead_left", "Ahead left");
             Add("navigation_target_in_current_room", "Current room");
             Add("navigation_autowalk_started", "Auto-walk started.");
+            Add("navigation_crouched_cannot_move", "You are crouched, and at this movement speed setting you cannot move while crouched. Press Left Shift to stand, or raise Movement Speed in the game's settings.");
             Add("navigation_autowalk_stopped", "Auto-walk stopped.");
             // Interaction feedback: state changes that only have visual feedback in the base
             // game (no distinct sound conveys the resulting state). See InteractionFeedbackPatches.
@@ -581,6 +582,7 @@ namespace DateEverythingAccess
             AddJa("room_scan_direction_ahead_left", "左前");
             AddJa("navigation_target_in_current_room", "現在の部屋");
             AddJa("navigation_autowalk_started", "オートウォークを開始しました。");
+            AddJa("navigation_crouched_cannot_move", "しゃがんでいます。この移動速度の設定では、しゃがんだまま移動できません。左Shiftで立つか、ゲームの設定で移動速度を上げてください。");
             AddJa("navigation_autowalk_stopped", "オートウォークを停止しました。");
             AddJa("thermostat_room_temp", "常温。");
             AddJa("thermostat_cold", "冷房。");

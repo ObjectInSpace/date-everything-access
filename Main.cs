@@ -14,7 +14,7 @@ namespace DateEverythingAccess
     {
         internal const string Guid = "com.amock.dateeverythingaccess";
         internal const string Name = "Date Everything Access";
-        internal const string Version = "1.2";
+        internal const string Version = "1.3";
     }
 
     [BepInPlugin(PluginMetadata.Guid, PluginMetadata.Name, PluginMetadata.Version)]
@@ -230,7 +230,7 @@ namespace DateEverythingAccess
                 registered += TryRegisterHotkey(HelpHotkeyId, VkF1, "F1") ? 1 : 0;
                 registered += TryRegisterHotkey(DebugHotkeyId, VkF9, "F9") ? 1 : 0;
                 registered += TryRegisterHotkey(SettingsHotkeyId, ModControl | ModNoRepeat, VkF1, "Ctrl+F1") ? 1 : 0;
-                registered += TryRegisterHotkey(CoverageSweepHotkeyId, ModControl | ModShift | ModAlt | ModNoRepeat, VkF8, "Ctrl+Alt+Shift+F8") ? 1 : 0;
+                registered += TryRegisterHotkey(CoverageSweepHotkeyId, ModControl | ModAlt | ModNoRepeat, VkF8, "Ctrl+Alt+F8") ? 1 : 0;
                 Logger.LogInfo("Background hotkey message loop active (" + registered + " hotkey(s) registered)");
 
                 NativeMessage message;
@@ -314,7 +314,8 @@ namespace DateEverythingAccess
 
             if (hotkeyId == CoverageSweepHotkeyId)
             {
-                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x10) || !IsModifierKeyDown(0x12))
+                // Ctrl+Alt, no Shift: Left Shift is the game's crouch toggle.
+                if (!IsModifierKeyDown(0x11) || !IsModifierKeyDown(0x12) || IsModifierKeyDown(0x10))
                     return;
 
                 Logger.LogInfo("Coverage sweep hotkey detected");

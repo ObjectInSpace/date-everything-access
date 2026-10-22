@@ -19,7 +19,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$ScenePath = "D:\root\AssetRipper\1.3.12-premium\extracted\Ripped\ExportedProject\Assets\ThirdPersonGreybox.unity",
+    [string]$ScenePath = "$env:DATE_EVERYTHING_RIP\Assets\ThirdPersonGreybox.unity",
     [string]$OutputPath = ".\artifacts\navigation\thirdpersongreybox-interactables.json",
     [string]$InteractableObjScriptGuid = "be0aae912dc4cf5f4134485b9d59d925",
 
@@ -41,6 +41,12 @@ param(
     # {fileID: 0} in YAML, so we read the separate UniqueId component, keyed by m_GameObject.
     [string]$UniqueIdScriptGuid = "12777a490c61f440cac51efbf097dbe3"
 )
+
+# The AssetRipper export of the game (its ExportedProject folder) comes from DATE_EVERYTHING_RIP
+# unless the paths are passed explicitly. Rip again after a game update (HANDOFF.md).
+if (-not (Test-Path -LiteralPath $ScenePath)) {
+    throw "Scene not found at '$ScenePath'. Set DATE_EVERYTHING_RIP to the AssetRipper ExportedProject folder (for example D:\Root\AssetRipper\rip-2026-10-21\ExportedProject) or pass -ScenePath."
+}
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"

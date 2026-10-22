@@ -1,25 +1,10 @@
 """Shared offline line-of-sight geometry: collider model, ray-vs-shape tests,
-ClosestPointOnBounds, target-collider resolution, and the per-cell interaction
-LOS test.
+ClosestPointOnBounds and target-collider resolution.
 
-This is the parity-proven raycaster (validate_los.py reached 71/71 against the
-in-game LOS_PROBE rays — see [[project_navigation_offline_los_validator_2026_06_13]]).
-validate_los.py (the in-game-ray parity gate) imports from here. The offline planner
-(plan_object_route.py) that also used it, through the synthetic-eye goal filter
-below, was retired on 2026-10-21; that filter is kept only as reference.
-
-Two consumers, two DIFFERENT rays — intentional, don't conflate:
-  - validate_los.py replays the GAME's live-camera interaction ray (origin = camera
-    pulled back 0.25m, dir = camera forward) and casts to +inf, because the game's
-    Physics.Raycast is uncapped and blocks if the first hit isn't the target even
-    when that occluder sits beyond the InteractionRadius.
-  - the planner's goal filter (cell_has_los_to_target, below) is the SYNTHETIC eye:
-    a hypothetical player standing on a candidate goal cell, eye at FloorY+1.6m,
-    looking at the target collider's nearest bounds point, casting only to that
-    surface (dist + EYE_SURFACE_EPSILON). It answers "is anything between this
-    standpoint and the target", which is the right question for goal selection.
-    EXACT mirror of SimpleNavPlanner.CellHasLineOfSightToTarget (eye 1.6, aim
-    ClosestPointOnBounds, rim 0.9, cast dist+0.05).
+This is the parity-proven raycaster: validate_los.py, which imports from here, replays the
+GAME's live interaction rays (origin = camera pulled back 0.25 m, dir = camera forward, cast to
++inf because the game's Physics.Raycast is uncapped) and reached 100% agreement with the in-game
+LOS_PROBE verdicts.
 
 Fidelity (Stage 1, same as validate_los): Box/Sphere/Capsule colliders exact
 (OBB/sphere/capsule ray tests); Mesh colliders as AABB (conservative — over-blocks,
@@ -38,26 +23,6 @@ BLOCKERS = ROOT / "artifacts/navigation/thirdpersongreybox-blockers.json"
 # Unity built-in layer that Physics.Raycast ignores by default. Used as the fallback
 # exclusion when no per-run mask is supplied.
 IGNORE_RAYCAST_LAYER = 2
-
-# Synthetic-eye LOS constants — MIRROR SimpleNavPlanner.cs exactly:
-#   InteractionEyeHeightM (1.6): standing eye height where the camera sits.
-#   InteractionRimFractionM (0.9): a standpoint's sightline must be within this
-#     fraction of the interaction radius (not edge-grazing out at the rim).
-# Keep these in lockstep with the C# constants of the same name.
-INTERACTION_EYE_HEIGHT_M = 1.6
-INTERACTION_RIM_FRACTION = 0.9
-# View-quality (goal-pick tiebreak) constants — keep in lockstep with the C# constants of
-# the same name in SimpleNavPlanner. A target more than HIGH_MOUNT_EYE_RISE_M above the eye
-# is "high-mounted" and gets a diagonal-angle bonus that rewards a stand-back sightline over
-# standing directly underneath (near-vertical, camera-pose self-occlusion). The bonus grows
-# with the sightline's deviation from vertical, saturating at DIAGONAL_ANGLE_SATURATION_RAD
-# (~35°), scaled by DIAGONAL_QUALITY_WEIGHT_M.
-HIGH_MOUNT_EYE_RISE_M = 0.8
-DIAGONAL_ANGLE_SATURATION_RAD = 0.61
-DIAGONAL_QUALITY_WEIGHT_M = 0.30
-# Cast slightly past the aim point so a hit exactly on the target surface still
-# registers (C# uses dist + 0.05f).
-EYE_SURFACE_EPSILON = 0.05
 
 EPS = 1e-6
 
@@ -323,7 +288,7 @@ def build_collider(b, allow_trigger=False):
         # over-claims their true shape (chairs, plants, railings). With triangles we do an
         # exact ray-vs-triangle test; the AABB still serves as the broad-phase pre-reject in
         # first_hit. Flat walls/slabs have no LosGeometry and stay AABB (their box IS their
-        # shape). See docs/los-mesh-triangle-export-scope.md.
+        # shape).
         fp = b.get("Footprint") or {}
         lg = fp.get("LosGeometry")
         if lg and lg.get("Kind") == "Triangles" and lg.get("Verts"):
@@ -537,176 +502,3 @@ def resolve_target_collider(target_path, colliders_by_path=None, colliders=None)
         if best is None or key < (best[0], best[1]):
             best = (rel, dist2, c)
     return best[2] if best else None
-
-
-# ---------- per-cell synthetic-eye interaction LOS ----------
-
-def _is_operable_container_door(c, container_door_paths):
-    """True if collider c belongs to an operable CONTAINER door (cupboard/fridge/breaker)
-    the LOS rescue may see PAST. Identified by exact transform PATH membership in
-    `container_door_paths` (the bake's container_operable_only door colliders), NOT by
-    loose AABB geometry — so we can never false-clear past a door the real mesh wouldn't.
-    Mirror of SimpleNavPlanner.OperableContainerDoorName (which uses the live Door/SlidingDoor
-    component instead). See [[project_navigation_container_doors_baked_2026_06_14]]."""
-    if not container_door_paths:
-        return False
-    p = getattr(c, "path", None)
-    if not p:
-        return False
-    if p in container_door_paths:
-        return True
-    # The door's collider may sit on a child of the named door transform (panel nested
-    # under the door root), so accept a descendant path too — mirror of C#
-    # GetComponentInParent<Door>() walking up from the hit collider.
-    for dp in container_door_paths:
-        if p == dp or p.startswith(dp + "/") or dp.startswith(p + "/"):
-            return True
-    return False
-
-
-def cell_has_los_to_target(eye_xz, floor_y, target_collider, radius_m, occluders,
-                           container_door_paths=None, passed_container_doors=None):
-    """Mirror of SimpleNavPlanner.CellHasLineOfSightToTarget. True if a player standing
-    on this cell has a SOLID interaction line to the target:
-      (1) eye at (cell XZ, floor_y + 1.6m) aimed at the target's nearest bounds point;
-      (2) that sightline is within radius * 0.9 (not edge-grazing the rim);
-      (3) the first occluder the ray hits IS the target collider (or its hierarchy) —
-          i.e. nothing blocks the line to the surface.
-    `occluders` is the full collider set (the target's own collider may be among them;
-    a self/child/parent hit counts as clear). Conservative: returns False on degenerate
-    input, never inventing LOS.
-
-    CONTAINER-DOOR RESCUE (mirror of the C# rescue): when `passed_container_doors` is a
-    set, a collider that is an operable container door (path in `container_door_paths`) is
-    treated as TRANSPARENT — the ray sees past it — and its path is recorded so the caller
-    can tag it to be opened on arrival. With `passed_container_doors=None` the strict
-    first-hit rule applies (normal goal selection)."""
-    if target_collider is None:
-        return False
-    eye = (eye_xz[0], floor_y + INTERACTION_EYE_HEIGHT_M, eye_xz[1])
-    aim = interaction_aim_point(target_collider, eye)
-    dir3 = vsub(aim, eye)
-    dist = vlen(dir3)
-    if dist <= 0.0001:
-        return True  # standing essentially on the target — nothing to occlude
-    # Rim gate, measured HORIZONTALLY (XZ only): "not standing too far ACROSS the floor from
-    # the object." A ceiling light / high-mounted prop has a large UNAVOIDABLE vertical gap;
-    # counting it in the rim distance rejected every cell (look + dateviator beam still count
-    # as interaction). The full-3D sightline below is still used for the occlusion raycast.
-    # Mirror of SimpleNavPlanner.CellHasLineOfSightToTarget.
-    horiz_dist = math.hypot(aim[0] - eye[0], aim[2] - eye[2])
-    if radius_m > 0.0 and horiz_dist > radius_m * INTERACTION_RIM_FRACTION:
-        return False
-    rd = vmul(dir3, 1.0 / dist)
-    max_dist = dist + EYE_SURFACE_EPSILON
-    # Nearest occluder on the SHORT eye->surface span, with the Stage-1 loose-AABB rule:
-    # a mesh-AABB whose hit is at t~0 (eye inside its loose bounds) is UNTRUSTWORTHY here —
-    # the eye standing this close to the target is typically skimming a thin wall whose
-    # real triangles the ray passes through (the in-game synthetic eye uses exact meshes
-    # and clears it). We skip such hits rather than over-block. Convex box/sphere/capsule
-    # origin-inside hits are still honored via point_inside_collider in the broad-phase.
-    # See [[project_navigation_offline_los_validator_2026_06_13]] (Stage-2 boundary).
-    best_t, best_c = None, None
-    for c in occluders:
-        if _is_structural_slab(c):
-            continue  # floor/ceiling shell — look up/down past it (mirror of C# IsStructuralSlab)
-        ta = ray_aabb(eye, rd, c.aabb_lo, c.aabb_hi)
-        if ta is None or ta > max_dist:
-            continue
-        if ta <= EPS and point_inside_collider(eye, c):
-            continue  # convex collider the eye is inside — Unity wouldn't hit it
-        t = ray_collider(eye, rd, c)
-        if t is None or t > max_dist:
-            continue
-        if t <= EPS and c.kind == "aabb":
-            continue  # loose mesh-AABB enveloping the eye — untrustworthy at Stage 1
-        if passed_container_doors is not None and _is_operable_container_door(c, container_door_paths):
-            # See past an operable container door; record it so the caller opens it on
-            # arrival. Skip only if it isn't the target itself (a container that IS the
-            # target must still be hit). Mirror of the C# rescue's pass-through.
-            if _is_self_or_relative(c.path, target_collider.path) is None \
-                    and _is_self_or_relative(target_collider.path, c.path) is None:
-                passed_container_doors.add(c.path)
-                continue
-        if best_t is None or t < best_t:
-            best_t, best_c = t, c
-    if best_c is None:
-        return True  # nothing between eye and target surface — clear line
-    # Clear iff the first thing hit is the target collider, its strict hierarchy, a collider
-    # sharing the target's furniture UNIT (its own supporting desk/counter/shelf — a sibling
-    # subtree under the unit node), OR a CO-LOCATED PRESET DUPLICATE of the target. The last
-    # case fixes wall-mounted lights/switches: every fixture exists once per lighting preset
-    # (PV_/PF_Lighting_*), so the occluder set holds ~10-20 copies of SM_LightSwitch_Kitchen at
-    # the IDENTICAL world position under different preset prefixes. The resolved target is ONE
-    # preset's copy; the ray hits a SIBLING preset's copy first (distance 0 from the target), and
-    # the path-prefix relation check fails on the differing preset prefix — so the switch occluded
-    # ITSELF and reported no_los from point-blank range. A hit with the same leaf name whose
-    # collider center coincides with the target's IS the target. See
-    # [[feedback_no_collider_is_missing_data_not_pass]] (light/preset thread).
-    return _is_self_or_relative(best_c.path, target_collider.path) is not None \
-        or _is_self_or_relative(target_collider.path, best_c.path) is not None \
-        or _shares_furniture_unit(best_c.path, target_collider.path) \
-        or _is_colocated_duplicate(best_c, target_collider)
-
-
-# Same-position preset duplicate tolerance: the export captures every lighting-preset copy of a
-# fixture at the IDENTICAL transform, so co-located copies are 0.000m apart. A tight epsilon keeps
-# this from ever matching a genuinely different same-name object elsewhere in the house.
-_COLOCATED_EPS_M = 0.05
-
-
-def _is_colocated_duplicate(hit_c, target_c):
-    """True if hit_c is a preset duplicate of target_c: same collider leaf name AND their centers
-    coincide (within _COLOCATED_EPS_M). Lighting presets (PV_/PF_Lighting_*) each carry a full copy
-    of every fixture at the same world position; the planner resolves one copy as the target but the
-    ray may hit a sibling copy first. Treating a co-located same-name hit as the target prevents a
-    fixture from occluding itself via its own preset duplicates."""
-    if hit_c is None or target_c is None:
-        return False
-    if hit_c.path.rsplit("/", 1)[-1] != target_c.path.rsplit("/", 1)[-1]:
-        return False
-    hc = _collider_center(hit_c)
-    tc = _collider_center(target_c)
-    if hc is None or tc is None:
-        return False
-    return vlen(vsub(hc, tc)) <= _COLOCATED_EPS_M
-
-
-def _collider_center(c):
-    """A collider's world center: the oriented `center` for box/sphere/capsule, else the AABB
-    center (mesh/aabb colliders have center=None but always carry aabb_lo/hi)."""
-    ctr = getattr(c, "center", None)
-    if ctr is not None:
-        return ctr
-    lo = getattr(c, "aabb_lo", None)
-    hi = getattr(c, "aabb_hi", None)
-    if lo is None or hi is None:
-        return None
-    return ((lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5, (lo[2] + hi[2]) * 0.5)
-
-
-def goal_view_quality(eye_xz, floor_y, target_collider):
-    """View-quality score (higher = better) for parking the player on this cell to interact
-    with `target_collider`. Mirror of SimpleNavPlanner.GoalViewQuality. The offline planner
-    has no graded side-clearance margin (its LOS test is boolean), so the clearance term is 0
-    and the score is the height-aware DIAGONAL bonus only: for an ABOVE-EYE target it rewards a
-    sightline whose elevation is below vertical (a stand-back diagonal up-look) over standing
-    directly underneath. For a roughly eye-level target the bonus is 0, so ordinary objects keep
-    score 0 and the goal pick falls back to closest, exactly as before.
-
-    Note: the C# score adds max(0, side-clearance margin) which has no offline analogue, so the
-    two scores are not bit-identical — but for HIGH MOUNTS (where the C# prune is skipped and
-    every cell's margin is uniform) the diagonal term alone reproduces the same goal ORDERING,
-    which is what the route-parity check compares."""
-    if target_collider is None:
-        return 0.0
-    eye = (eye_xz[0], floor_y + INTERACTION_EYE_HEIGHT_M, eye_xz[1])
-    aim = interaction_aim_point(target_collider, eye)
-    rise = aim[1] - eye[1]
-    if rise <= HIGH_MOUNT_EYE_RISE_M:
-        return 0.0  # not high-mounted — no diagonal preference
-    horiz = math.hypot(aim[0] - eye[0], aim[2] - eye[2])
-    elevation = math.atan2(rise, max(horiz, 1e-3))   # 0=horizontal, π/2=straight up
-    from_vertical = (math.pi * 0.5) - elevation       # 0=vertical (bad), larger=more diagonal
-    diagonal = max(0.0, min(1.0, from_vertical / DIAGONAL_ANGLE_SATURATION_RAD))
-    return diagonal * DIAGONAL_QUALITY_WEIGHT_M

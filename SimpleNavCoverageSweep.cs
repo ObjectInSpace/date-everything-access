@@ -28,7 +28,8 @@ namespace DateEverythingAccess
     //
     // It stamps the player's cell + 4-neighbour ring into a per-floor verified-reachable bitmap.
     //
-    // Toggle hotkey: Ctrl+Alt+Shift+F8 (wired in Main.cs).
+    // Toggle hotkey: Ctrl+Alt+F8 (wired in Main.cs). No Shift: Left Shift is the game's crouch
+    // toggle, and the old Ctrl+Alt+Shift+F8 chord left every sweep running crouched.
     //
     // Results emit to <run folder>/sweep_results.json (see DefaultSweepSourceDir). Outcomes are flat:
     // arrived, no_path, skipped_already_covered, stalled (autowalk gave up), looped (circled a
@@ -46,7 +47,9 @@ namespace DateEverythingAccess
         private const float LoopSampleIntervalSeconds = 0.5f;
         private const int LoopSampleWindow = 16;          // 16 samples × 0.5s = 8s
         private const float LoopRadiusMeters = 1.5f;
-        // Budget ceiling per route: cost_m / 1.5 + 5s. A safety net, not the primary signal.
+        // Budget ceiling per route: cost_m / 1.5 + 5s. A safety net, not the primary signal. 1.5 m/s is
+        // well under the slowest standing walk (5 m/s at the lowest Movement Speed setting), but a
+        // crouched player below slider 13 is slower than that (the sweep warns when crouched).
         private const float BudgetMetersPerSecond = 1.5f;
         private const float BudgetSlackSeconds = 5f;
         // Door-failed detector: if any tagged door on the current segment is still closed
@@ -180,7 +183,7 @@ namespace DateEverythingAccess
         private static readonly Dictionary<string, bool[]> _verified =
             new Dictionary<string, bool[]>(StringComparer.OrdinalIgnoreCase);
 
-        /// <summary>Toggle the sweep on/off. Wired to the Ctrl+Alt+Shift+F8 hotkey.</summary>
+        /// <summary>Toggle the sweep on/off. Wired to the Ctrl+Alt+F8 hotkey.</summary>
         public static void RequestToggle()
         {
             if (_phase == Phase.Idle) StartSweep();
@@ -281,10 +284,14 @@ namespace DateEverythingAccess
             // the reverse direction too is a later pass; one direction is the simple first cut.)
             ForceCloseAllDoors();
             bool objectMode = string.Equals(_manifest.mode, "objects", StringComparison.OrdinalIgnoreCase);
+            // A crouched player has a shorter capsule (3.2 m instead of 5.0 m), a camera 0.9 m lower
+            // and less speed, so a crouched run does not measure what a standing player gets.
+            bool crouched = BetterPlayerControl.Instance != null && BetterPlayerControl.Instance.crouched;
             if (Main.Log != null) Main.Log.LogInfo("SimpleNavCoverageSweep: started, mode=" +
-                (_manifest.mode ?? "dispersed") + " entries=" + _manifest.entries.Length);
+                (_manifest.mode ?? "dispersed") + " entries=" + _manifest.entries.Length + " crouched=" + crouched);
             ScreenReader.Say((objectMode ? "Object reachability sweep started, " : "Coverage sweep started, ")
-                + _manifest.entries.Length + (objectMode ? " objects" : " routes"), remember: false);
+                + _manifest.entries.Length + (objectMode ? " objects" : " routes")
+                + (crouched ? ". You are crouched; press Left Shift to stand" : ""), remember: false);
         }
 
         private static void AbortSweep(string reason)
@@ -317,18 +324,18 @@ namespace DateEverythingAccess
             // Make sure any previous run is fully torn down.
             try { SimpleNavBridge.EndStep(); } catch { }
 
-            // Record offline-planner verdicts once, up front, and treat them as visited so the
-            // nearest-object picker never selects them (the offline planner already said no_path).
+            // A hand-made manifest may carry precomputed verdicts (entries whose status is not "ok",
+            // as the retired offline planner wrote them): record those once, up front, and treat them
+            // as visited so the nearest-object picker never selects them. The bake-roster manifest
+            // marks every entry "ok", so this does nothing there.
             for (; _entryIndex < _manifest.entries.Length; _entryIndex++)
             {
                 var e = _manifest.entries[_entryIndex];
                 if (e == null) continue;
                 if (string.Equals(e.status, "ok", StringComparison.Ordinal)) continue;
-                // Upgradeable offline no_path (no_collider / no_los) with a resolvable target:
-                // do NOT veto it up front. Leave it unvisited so the picker drives it and the
-                // LIVE planner decides — the offline raycaster can't see a collider the live
-                // component-walk resolves, nor live physics LOS. Only record the offline verdict
-                // for genuinely-unrouteable entries. See
+                // A precomputed no_path flagged drive_offline_no_path (no_collider / no_los) with a
+                // resolvable target is NOT vetoed: it stays unvisited so the live planner decides,
+                // since only the live game resolves every collider and real physics sightlines. See
                 // [[project-navigation-no-collider-root-cause-2026-06-17]].
                 if (e.drive_offline_no_path && e.object_xyz != null && e.object_xyz.Length >= 3)
                     continue;

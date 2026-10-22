@@ -21,13 +21,14 @@
 #       * name matches ramp pattern -> "ramp"
 #       * vertical extent <= 0.25 m -> "step-up"
 #       * otherwise (0.25 m < extent <= 0.5 m, no name hint) -> "ramp"
-#     The 0.25 m step-up threshold matches the player controller's implicit
-#     step-up tolerance (BetterPlayerControl ground-clamp at heightdist = 0.25).
+#     The 0.25 m step-up threshold is only a label for diagnostics. (The game's
+#     ground ray starts heightdist = 2 m above the feet, serialized in Player.prefab,
+#     so the player physically rides up onto much taller things.)
 #     We cannot distinguish a single-sloped ramp face from a multi-step
 #     staircase from AABB alone; the 0.5 m extent threshold is the cutover.
 #   - Slope/vertical-extent gating is intentionally NOT applied here. The
 #     player controller is Rigidbody-based with no slope limit -- any surface
-#     the capsule (r=0.4 m, h=2.5 m) physically clears is walkable. Real
+#     the capsule (r=0.8 m, 6.2 m tall standing) physically clears is walkable. Real
 #     clearance is the baker's job (it has blocker geometry too); the exporter
 #     just emits surface candidates with diagnostic SlopeKind labels.
 #   - ContainingZones is emitted as an empty array; the downstream baker joins
@@ -38,10 +39,10 @@
 [CmdletBinding()]
 param(
     [Parameter()]
-    [string]$ScenePath = "D:\root\AssetRipper\1.3.12-premium\extracted\Ripped\ExportedProject\Assets\ThirdPersonGreybox.unity",
+    [string]$ScenePath = "$env:DATE_EVERYTHING_RIP\Assets\ThirdPersonGreybox.unity",
 
     [Parameter()]
-    [string]$MeshAssetRoot = "D:\root\AssetRipper\1.3.12-premium\extracted\Ripped\ExportedProject\Assets\Mesh",
+    [string]$MeshAssetRoot = "$env:DATE_EVERYTHING_RIP\Assets\Mesh",
 
     [Parameter()]
     [string]$MeshGuidIndexCachePath = ".\artifacts\navigation\mesh_guid_index.cache.json",
@@ -89,6 +90,12 @@ param(
     # [[project-navigation-stairs-missing-from-bake-2026-06-15]].
     [int[]]$SkipMeshLayers = @(31)
 )
+
+# The AssetRipper export of the game (its ExportedProject folder) comes from DATE_EVERYTHING_RIP
+# unless the paths are passed explicitly. Rip again after a game update (HANDOFF.md).
+if (-not (Test-Path -LiteralPath $ScenePath)) {
+    throw "Scene not found at '$ScenePath'. Set DATE_EVERYTHING_RIP to the AssetRipper ExportedProject folder (for example D:\Root\AssetRipper\rip-2026-10-21\ExportedProject) or pass -ScenePath."
+}
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"

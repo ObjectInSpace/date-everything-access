@@ -183,9 +183,9 @@ namespace DateEverythingAccess
                     return cur + toEnd.normalized * remaining;
                 }
                 // CORNER HOLD. Don't let the lookahead slide around a SHARP corner: steering at a
-                // point past the vertex makes the player cut the corner along a chord, and with the
-                // player's real 0.8m body radius (the bake only reserves 0.4m) that chord drags a
-                // shoulder into the door jamb or furniture edge the route was bending around. For a
+                // point past the vertex makes the player cut the corner along a chord that was never
+                // checked against the bake (only the route's own segments are), so the body's
+                // shoulder can catch the door jamb or furniture edge the route was bending around. For a
                 // sharp turn, aim at the vertex itself; once the player reaches it the projection
                 // moves onto the next segment and the lookahead resumes there.
                 if (seg + 2 < _waypoints.Count && IsSharpCornerXZ(cur, segEnd, _waypoints[seg + 2]))
@@ -845,7 +845,7 @@ namespace DateEverythingAccess
             }
             else
             {
-                // Mirror the game's in-range test (BetterPlayerControl.cs:499):
+                // Mirror the game's in-range test (BetterPlayerControl.Update):
                 //   Distance(door.collider.ClosestPointOnBounds(camPos), camPos) < InteractionRadius
                 Vector3 origin = Camera.main != null ? Camera.main.transform.position : playerPos;
                 Collider doorCol = door.GetComponent();

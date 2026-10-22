@@ -59,15 +59,15 @@ Patterns: `docs/ACCESSIBILITY_MODDING_GUIDE.md`
 ## Error Handling
 
 - Null-safety with logging: never fail silently. Log via `DebugLogger` and announce via `ScreenReader`.
-- Use try/catch only for reflection and external calls such as Tolk or unstable game APIs. Use null checks for normal code.
+- Use try/catch only for reflection and external calls such as Prism or unstable game APIs. Use null checks for normal code.
 - `DebugLogger` should always exist and only become active in debug mode.
 
 ## Before Implementation
 
 1. Gate check: Tier 1 analysis must be complete before Phase 2. If game key bindings are not documented in `docs/game-api.md`, stop and do that first.
-2. Search `decompiled/` for real class and method names. Never guess.
+2. Search `decompiled/` for real class and method names. Never guess. It must be the installed game's code: regenerate it after a game update (`docs/game-api.md`, "Sources of truth").
 3. Check `docs/game-api.md` for keys, methods, and patterns.
-4. Only use safe mod keys from `docs/game-api.md`.
+4. Only use safe mod keys from `docs/game-api.md` ("Mod keys"). Never put Left Shift in a mod chord: it toggles the game's crouch.
 5. For files over 500 lines, use targeted search before reading the whole file.
 
 ## Session and Context Management
@@ -83,7 +83,7 @@ Patterns: `docs/ACCESSIBILITY_MODDING_GUIDE.md`
 
 - `project_status.md` - central tracking
 - `docs/ACCESSIBILITY_MODDING_GUIDE.md` - code patterns
-- `docs/technical-reference.md` - BepInEx, Harmony, Tolk
+- `docs/technical-reference.md` - BepInEx, Harmony (generic template guide; its Tolk sections do not apply, this project speaks through Prism)
 - `docs/unity-reflection-guide.md` - reflection patterns
 - `docs/state-management-guide.md` - multiple handlers
 - `docs/localization-guide.md` - localization
