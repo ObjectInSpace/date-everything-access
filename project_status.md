@@ -107,8 +107,8 @@ radius, 6.2 m tall standing) and needs an in-game sweep before it is merged. See
 - The asset rip (16 May 2026) predates the installed game build (June 2026). The current bake is
   made from it, so it lacks the June patch's four new solid boxes (kitchen and upstairs hall) and
   keeps 20 frame-glass colliders the patch disabled. A new rip is being made.
-- The 76 mesh colliders whose meshes live in `patch1_leftovers_model_assets_all.bundle` are not
-  linked in the rip, and one mesh fails to parse; they are missing from the navigation blockers.
+- 76 mesh colliders use Unity's built-in Plane/Cube meshes, which a rip cannot export; all are
+  decorations that do not affect walking. One mesh fails to parse and is missing from the blockers.
 
 ## Architecture Decisions
 

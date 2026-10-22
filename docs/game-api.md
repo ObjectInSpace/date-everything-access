@@ -207,9 +207,11 @@ How the shipped `navigable_region.bake.json` is made, and the evidence it matche
   inside that cell), and almost every closer position is by a door, under overhead geometry that the
   crouched sweeps passed beneath, or by a moving object;
   `scripts\validate_los.py` agrees with all 976 logged interaction rays.
-- Known data gaps: the 76 mesh colliders whose meshes live in `patch1_leftovers_model_assets_all.bundle`
-  are not linked in the rip (exactly the export's 76 "MeshGuidUnresolved"), and one mesh fails to parse
-  (`SM_Cabinet_4_Drawer_MODEL_UPDATE`); they are missing from the blockers. The rip also predates
+- Known data gaps: the export's 76 "MeshGuidUnresolved" mesh colliders use Unity's built-in meshes
+  (75 Plane, resource 10209; 1 Cube, 10202), which a rip cannot export. They are decorations
+  (picture glass on walls, floor and ceiling shadow planes, desk papers, a wall shadow behind the
+  bedroom wall) and do not affect walking. One mesh fails to parse
+  (`SM_Cabinet_4_Drawer_MODEL_UPDATE`) and is missing from the blockers. The rip also predates
   the June patch: the bake lacks the four solid boxes it added (`House/Kitchen/Collider_1/2/3`,
   `House/UpstairsHall/Collider`) and still has 20 picture-frame glass colliders the patch disabled. In the
   crawlspace, `Beams_Crawlspace` hangs 1.2-5.5 m above the floor over most of it, so the bake leaves
