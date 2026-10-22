@@ -108,11 +108,39 @@ def stair_collider_segments(blockers, source_path):
     return []
 
 
-def landing_from_slice(floor, segments, floor_y):
+def stair_band(fp, body_radius_m):
+    """The stair run's cross-axis band the body centre can occupy: the footprint's shorter
+    axis shrunk by the body radius on each side. Returns ("x"|"z", lo, hi), or None when the
+    footprint is narrower than the body. The run itself goes along the longer axis (the
+    house stairs: 21.6 m along X, 6.1 m across Z, treads z -5.83..-0.10 in the mesh)."""
+    if fp["MaxX"] - fp["MinX"] >= fp["MaxZ"] - fp["MinZ"]:
+        axis, lo, hi = "z", fp["MinZ"], fp["MaxZ"]
+    else:
+        axis, lo, hi = "x", fp["MinX"], fp["MaxX"]
+    lo, hi = lo + body_radius_m, hi - body_radius_m
+    return (axis, lo, hi) if lo <= hi else None
+
+
+def _in_band(band, x, z):
+    if band is None:
+        return True
+    axis, lo, hi = band
+    v = z if axis == "z" else x
+    return lo <= v <= hi
+
+
+def landing_from_slice(floor, segments, floor_y, band=None):
     """The stair landing on `floor`: centroid of the stair collider's slice segments
-    nearest that floor's Y, snapped to the nearest navigable cell. Falls back to None
-    if no slice near that plane or no navigable cell nearby. This finds the true END
-    of the stair run on each floor (bottom vs top), not the footprint centre."""
+    nearest that floor's Y, snapped to the nearest navigable cell in line with the run
+    (`band`). Falls back to None if no slice near that plane or no such cell nearby. This
+    finds the true END of the stair run on each floor (bottom vs top), not the footprint
+    centre.
+
+    Why the band: the nearest navigable cell is not always in front of the treads. With
+    the 0.8 m body, the hall beside the stairs' open side (z 0.6-1.8, past the low
+    "Stairs Special bumper") is nearer the bottom slice than the cells in front of the
+    bottom step, so the landing went there and autowalk walked along the stairs under
+    them instead of up them (in-game log 2026-10-22)."""
     pts = []
     for ax, az, bx, bz, py in segments:
         if abs(py - floor_y) <= STAIR_SLICE_PLANE_TOL:
@@ -135,13 +163,15 @@ def landing_from_slice(floor, segments, floor_y):
                     continue
                 ix, iz = ccx + dx, ccz + dz
                 if 0 <= ix < nx and 0 <= iz < nz and rows[ix][iz] == 'N':
-                    return (ix, iz, ox + (ix + 0.5) * cs, oz + (iz + 0.5) * cs)
+                    cx, cz = ox + (ix + 0.5) * cs, oz + (iz + 0.5) * cs
+                    if _in_band(band, cx, cz):
+                        return (ix, iz, cx, cz)
     return None
 
 
 def _nearest_navigable_xz(floor, x, z, max_radius_m=3.0):
     """Spiral out from (x,z) to the nearest navigable cell center on `floor`. Returns
-    (cx, cz) or None. Same search as landing_from_slice, factored for ramp snapping."""
+    (cx, cz) or None. Same search as landing_from_slice; used for the teleporter ends."""
     frame = floor["frame"]
     ox, oz, cs = frame["origin_x"], frame["origin_z"], frame["cell_size"]
     nx, nz = frame["nx"], frame["nz"]
@@ -159,20 +189,18 @@ def _nearest_navigable_xz(floor, x, z, max_radius_m=3.0):
     return None
 
 
-def ramp_path_between_landings(g_world, u_world, gy, uy, ground=None, upper=None):
+def ramp_path_between_landings(g_world, u_world, gy, uy, band=None):
     """Synthesize an ordered bottom->top polyline of (x, y, z) points between the two
-    resolved stair landings by linear interpolation in X, Z, and Y, then SNAP each
-    interior point's XZ onto the nearest navigable cell of whichever floor frame its
-    Y is closest to.
+    resolved stair landings by linear interpolation in X, Z, and Y, keeping each interior
+    point inside the run's cross-axis band (`stair_band`). Endpoints are the resolved
+    landings (already navigable) and are left exact so the path meets the floor-plane A*
+    nodes.
 
-    Why snap: the straight bottom->top line can clip non-navigable cells near a
-    landing — at the Date Everything stairs the top run enters the railing-bounded
-    stairwell void (cells at z>=-1.0 are blocked) before the floor drops, so the top
-    interior points land on blocked cells and the follower stalls at the seam
-    (confirmed 2026-06-13, [[project-navigation-offline-validation-2026-06-13]]).
-    Snapping pulls those points back onto the walkable hallway band so the follower
-    has a reachable line. Endpoints are the resolved landings (already navigable) and
-    are left exact so the path still meets the floor-plane A* nodes.
+    Interior points are ON the stairs, between the floors, so they are not snapped to
+    either floor's navigable cells: the nearest such cell beside the stairs is the hall
+    under their open side (the 2026-10-22 0.8 m bake put four of them there, at z 1.3,
+    outside the treads' z -5.83..-0.10, and autowalk walked under the stairs going up and
+    off their side coming down).
 
     WHY interpolate instead of trace the collider: the blocker export only slices the
     stair collider at the two FLOOR planes (PlaneY ∈ {ground, upper}) — there is no
@@ -198,15 +226,13 @@ def ramp_path_between_landings(g_world, u_world, gy, uy, ground=None, upper=None
         x = round(gx + (ux - gx) * t, 3)
         y = round(gy + (uy - gy) * t, 3)
         z = round(gz + (uz - gz) * t, 3)
-        # Snap interior points onto navigable cells; endpoints stay exact (they ARE
-        # the resolved, already-navigable landings and the A* seam nodes).
         is_endpoint = (i == 0 or i == n - 1)
-        if not is_endpoint and ground is not None and upper is not None:
-            # Snap on whichever floor frame this point's Y is nearer.
-            floor = ground if abs(y - gy) <= abs(y - uy) else upper
-            snapped = _nearest_navigable_xz(floor, x, z)
-            if snapped is not None:
-                x, z = round(snapped[0], 3), round(snapped[1], 3)
+        if not is_endpoint and band is not None:
+            axis, lo, hi = band
+            if axis == "z":
+                z = round(min(max(z, lo), hi), 3)
+            else:
+                x = round(min(max(x, lo), hi), 3)
         path.append([x, y, z])
     return path
 
@@ -224,6 +250,7 @@ def main():
 
     gy = ground["floor_y"]
     uy = upper["floor_y"]
+    body_radius_m = bake["params"]["capsule_radius_m"]
 
     # Find spanning candidate surfaces
     candidates = []
@@ -252,8 +279,9 @@ def main():
         # Prefer slice-plane landings (true ends of the stair run); fall back to the
         # footprint-centre method only if the collider has no usable slice segments.
         segments = stair_collider_segments(blockers, s.get("Path", ""))
-        g_cell = landing_from_slice(ground, segments, gy) if segments else None
-        u_cell = landing_from_slice(upper, segments, uy) if segments else None
+        band = stair_band(fp, body_radius_m)
+        g_cell = landing_from_slice(ground, segments, gy, band) if segments else None
+        u_cell = landing_from_slice(upper, segments, uy, band) if segments else None
         landing_source = "slice_plane"
         if g_cell is None:
             g_cell = navigable_cell_in_footprint(ground, fp); landing_source = "footprint_center"
@@ -290,7 +318,7 @@ def main():
         # walks up, so it has a real XZ-progressing line instead of one diagonal jump
         # across the stairwell (the cause of the stair loop/stall). Falls back to the
         # bare two-endpoint edge when the slices are too coarse to improve on it.
-        ramp_path = ramp_path_between_landings((gcx, gcz), (ucx, ucz), gy, uy, ground, upper)
+        ramp_path = ramp_path_between_landings((gcx, gcz), (ucx, ucz), gy, uy, band)
         if ramp_path:
             edge_record["path"] = ramp_path
         # Cost estimate: length along the ramp polyline if we have one, else the
